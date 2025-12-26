@@ -44,13 +44,23 @@
       "Bash(npm run quality:*)",
       "Bash(npm:*)",
       "Bash(rm:*)",
-      "Read(//Users/jwu/Dev/**)"
+      "Read(//Users/jwu/Dev/**)",
+      "Bash(mkdir:*)",
+      "Bash(mv:*)",
+      "Bash(npx husky init:*)",
+      "Bash(/tmp/test-stackmemory/node_modules/.bin/stackmemory --help)",
+      "WebFetch(domain:linear.app)",
+      "Bash(grep:*)",
+      "Bash(sed:*)",
+      "Bash(npx tsc:*)",
+      "Bash(git reset:*)"
     ],
     "deny": [],
     "ask": [],
     "additionalDirectories": [
       "/Users/jwu/.stackmemory",
-      "/Users/jwu/Library/Application"
+      "/Users/jwu/Library/Application",
+      "/private/tmp"
     ]
   }
 }

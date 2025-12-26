@@ -249,7 +249,7 @@ export class LinearAuthManager {
       const tokensData = readFileSync(this.tokensPath, 'utf8');
       return JSON.parse(tokensData);
     } catch (error) {
-      logger.error('Failed to load Linear tokens:', error);
+      logger.error('Failed to load Linear tokens:', error as Error);
       return null;
     }
   }

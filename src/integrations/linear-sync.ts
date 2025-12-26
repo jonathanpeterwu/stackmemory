@@ -148,7 +148,7 @@ export class LinearSyncEngine {
     updated: number;
     errors: string[];
   }> {
-    const result = { created: 0, updated: 0, errors: [] };
+    const result = { created: 0, updated: 0, errors: [] as string[] };
 
     // Get unsynced tasks from StackMemory
     const unsyncedTasks = this.getUnsyncedTasks();
@@ -223,7 +223,16 @@ export class LinearSyncEngine {
     conflicts: Array<{ taskId: string; linearId: string; reason: string }>;
     errors: string[];
   }> {
-    const result = { created: 0, updated: 0, conflicts: [], errors: [] };
+    const result = {
+      created: 0,
+      updated: 0,
+      conflicts: [] as Array<{
+        taskId: string;
+        linearId: string;
+        reason: string;
+      }>,
+      errors: [] as string[],
+    };
 
     // For now, we'll focus on updating existing mapped tasks
     // Creating new StackMemory tasks from Linear issues would require frame context

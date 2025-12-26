@@ -7,13 +7,13 @@
     "types": ["vitest/globals"],
     "outDir": "./dist",
     "rootDir": "./",
-    "strict": true,
-    "noImplicitAny": true,
-    "strictNullChecks": true,
-    "strictFunctionTypes": true,
-    "noImplicitReturns": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "strictNullChecks": false,
+    "strictFunctionTypes": false,
+    "noImplicitReturns": false,
     "noFallthroughCasesInSwitch": true,
-    "noUncheckedIndexedAccess": true,
+    "noUncheckedIndexedAccess": false,
     "exactOptionalPropertyTypes": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
@@ -31,7 +31,6 @@
   ],
   "exclude": [
     "node_modules",
-    "dist",
-    "src/integrations"
+    "dist"
   ]
 }

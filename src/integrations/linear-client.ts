@@ -82,10 +82,13 @@ export class LinearClient {
       );
     }
 
-    const result = await response.json();
+    const result = (await response.json()) as {
+      data?: T;
+      errors?: Array<{ message: string }>;
+    };
 
     if (result.errors) {
-      logger.error('Linear GraphQL errors:', result.errors);
+      logger.error('Linear GraphQL errors:', result.errors as any);
       throw new Error(`Linear GraphQL error: ${result.errors[0].message}`);
     }
 
@@ -344,7 +347,7 @@ export class LinearClient {
         throw new Error('No teams found');
       }
 
-      return result.teams.nodes[0];
+      return result.teams.nodes[0]!;
     }
   }
 
