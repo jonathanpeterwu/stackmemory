@@ -51,6 +51,10 @@
     "mcp:dev": "tsx src/mcp/mcp-server.ts",
     "status": "node dist/scripts/status.js",
     "status:dev": "tsx scripts/status.ts",
+    "linear:setup": "node dist/src/cli/cli.js linear setup",
+    "linear:status": "node dist/src/cli/cli.js linear status",
+    "linear:config": "node dist/src/cli/cli.js linear config --show",
+    "linear:auto-sync": "node dist/src/cli/cli.js linear auto-sync --start",
     "prepare": "husky"
   },
   "dependencies": {
