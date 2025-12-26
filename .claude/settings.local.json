@@ -43,7 +43,8 @@
       "Bash(npm login:*)",
       "Bash(npm run quality:*)",
       "Bash(npm:*)",
-      "Bash(rm:*)"
+      "Bash(rm:*)",
+      "Read(//Users/jwu/Dev/**)"
     ],
     "deny": [],
     "ask": [],

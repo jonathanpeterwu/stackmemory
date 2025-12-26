@@ -1,0 +1,60 @@
+{
+  "project": "StackMemory - Lossless Call-Stack Memory Runtime",
+  "version": "0.1.0",
+  "status": "development",
+  "progress": {
+    "phase": "MVP Implementation", 
+    "completion": "65%",
+    "current_sprint": "Frame Management & Context Assembly"
+  },
+  "completed": [
+    "Project structure consolidation",
+    "Logger utility with file output", 
+    "Error handling with StackMemoryError class",
+    "PRD with product vision",
+    "Technical architecture design", 
+    "SQLite schema design",
+    "MCP integration contract",
+    "Core MCP server with basic tools",
+    "Frame manager with call-stack implementation",
+    "Frame lifecycle (create, close, digest generation)",
+    "Event and anchor management",
+    "Hot stack context assembly"
+  ],
+  "in_progress": [
+    "Context assembly algorithm refinement",
+    "Integration testing"
+  ],
+  "todo": [
+    "Complete MCP server core functionality",
+    "Implement frame management system",
+    "Add context assembly algorithm",
+    "Build event ingestion pipeline",
+    "Create digest generation",
+    "Add SQLite persistence layer",
+    "Write comprehensive tests",
+    "Build installation scripts",
+    "Create CLI interface",
+    "Add performance monitoring"
+  ],
+  "architecture": {
+    "core_files": {
+      "mcp_server": "src/mcp-server.ts",
+      "logger": "src/logger.ts", 
+      "error_handler": "src/error-handler.ts",
+      "database": "src/database.ts",
+      "context_assembler": "src/context-assembler.ts",
+      "frame_manager": "src/frame-manager.ts"
+    },
+    "database": "SQLite (.stackmemory/local-context.db)",
+    "integration": "MCP tool for Claude Code"
+  },
+  "next_milestone": "Working MCP server with basic frame/event storage",
+  "blockers": [],
+  "decisions": [
+    "Use SQLite for local-first approach",
+    "Implement as MCP server for Claude Code integration", 
+    "Call-stack memory model over linear chat",
+    "Lossless event storage with digest summaries"
+  ]
+}

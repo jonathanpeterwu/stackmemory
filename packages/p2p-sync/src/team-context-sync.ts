@@ -246,10 +246,13 @@ export class TeamContextManager {
     
     // Notify team of completion
     this.p2pSync.updateFrame(frameId, {
-      status: 'completed',
-      summary,
-      learnings,
-      completed_at: Date.now()
+      content: {
+        ...this.p2pSync.getFrame(frameId)?.content,
+        status: 'completed',
+        summary,
+        learnings,
+        completed_at: Date.now()
+      }
     });
     
     this.activeFrames.delete(frameId);
@@ -444,10 +447,10 @@ export class TeamContextManager {
     }, 3600000); // Every hour
   }
 
-  private syncSharedContext(): void {
+  private async syncSharedContext(): Promise<void> {
     // P2P sync handles the actual synchronization
     // This method processes received updates
-    const stats = this.p2pSync.sync();
+    const stats = await this.p2pSync.sync();
     console.log(`Synced with ${stats.connectedPeers} peers`);
   }
 

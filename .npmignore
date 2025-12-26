@@ -1,0 +1,52 @@
+# Source files
+src/
+tsconfig.json
+*.ts
+!dist/**/*.ts
+
+# Development files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# Tests
+test/
+tests/
+*.test.*
+*.spec.*
+coverage/
+
+# Build tools
+scripts/
+attention-scoring/
+p2p-sync/
+mcp-server/
+
+# Environment & configs
+.env
+.env.*
+.claude/
+.stackmemory/
+
+# Git
+.git/
+.gitignore
+
+# Documentation source
+BEADS_INTEGRATION.md
+TECHNICAL_ARCHITECTURE.md
+ML_SYSTEM_INSIGHTS.md
+AGENTS*.md
+PRD.md
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+
+# Cache
+node_modules/
+.cache/
+.turbo/

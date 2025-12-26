@@ -7,6 +7,7 @@
 
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
+import { z } from 'zod';
 import AttentionTracker, { ContextItem } from './attention-tracker';
 import { TeamContextManager } from '../../p2p-sync/src/team-context-sync';
 
@@ -54,7 +55,13 @@ export class SmartStackMemoryMCP {
 
   private setupHandlers() {
     // Main context retrieval with attention tracking
-    this.server.setRequestHandler('tools/call', async (request) => {
+    this.server.setRequestHandler(z.object({
+      method: z.literal('tools/call'),
+      params: z.object({
+        name: z.string(),
+        arguments: z.record(z.unknown())
+      })
+    }), async (request) => {
       if (request.params.name === 'get_context') {
         return this.getSmartContext(request.params.arguments);
       }
@@ -64,7 +71,13 @@ export class SmartStackMemoryMCP {
     });
 
     // Feedback handler for reinforcement learning
-    this.server.setRequestHandler('feedback', async (request) => {
+    this.server.setRequestHandler(z.object({
+      method: z.literal('feedback'),
+      params: z.object({
+        responseId: z.string(),
+        helpful: z.boolean()
+      })
+    }), async (request) => {
       const { responseId, helpful } = request.params;
       await this.attentionTracker.reinforcementUpdate({
         responseId,
@@ -239,7 +252,7 @@ export class SmartStackMemoryMCP {
     const maxInfluence = Math.max(...heatmap.influences);
     const scale = 10;
     
-    heatmap.positions.forEach((pos, i) => {
+    heatmap.positions.forEach((pos: number, i: number) => {
       const influence = heatmap.influences[i];
       const bars = Math.round((influence / maxInfluence) * scale);
       const bar = '█'.repeat(bars) + '░'.repeat(scale - bars);

@@ -1,11 +1,35 @@
 {
-  "name": "@stackmemory/mcp-server",
+  "name": "@stackmemoryai/mcp-server",
   "version": "0.1.0",
   "description": "MCP server for semantic stack-based LLM context management",
   "main": "dist/index.js",
   "type": "module",
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stackmemoryai/stackmemory.git",
+    "directory": "mcp-server"
+  },
+  "homepage": "https://github.com/stackmemoryai/stackmemory/tree/main/mcp-server",
+  "bugs": {
+    "url": "https://github.com/stackmemoryai/stackmemory/issues"
+  },
+  "author": "StackMemory AI",
+  "license": "MIT",
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "ai",
+    "context",
+    "semantic",
+    "llm"
+  ],
   "scripts": {
     "build": "tsc",
+    "prepublishOnly": "npm run build",
     "dev": "tsx src/index.ts",
     "start": "node dist/index.js",
     "db:setup": "tsx src/setup-db.ts"

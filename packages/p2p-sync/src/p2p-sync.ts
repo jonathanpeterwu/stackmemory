@@ -23,7 +23,7 @@ import nacl from 'tweetnacl';
 export class P2PSync {
   private peers: Map<string, SimplePeer.Instance> = new Map();
   private db: Database.Database;
-  private socket: Socket;
+  private socket!: Socket;
   private userId: string;
   private teamId: string;
   private syncQueue: Map<string, SyncItem[]> = new Map();
@@ -230,7 +230,7 @@ export class P2PSync {
     return clock;
   }
 
-  private incrementClock(): VectorClock {
+  public incrementClock(): VectorClock {
     this.db.prepare(
       'INSERT OR REPLACE INTO vector_clock (peer_id, clock) VALUES (?, ?)'
     ).run(this.userId, this.getOwnClock() + 1);
@@ -334,7 +334,7 @@ export class P2PSync {
     });
   }
 
-  private getFrame(frameId: string): Frame | null {
+  public getFrame(frameId: string): Frame | null {
     const row = this.db.prepare(
       'SELECT content FROM frames WHERE frame_id = ? AND deleted = FALSE'
     ).get(frameId) as any;
@@ -433,6 +433,15 @@ export class P2PSync {
     });
     
     tx();
+  }
+
+  private sendRequestedFrames(peerId: string, frameIds: string[]) {
+    const frames = frameIds.map(id => this.getFrame(id)).filter(f => f !== null) as Frame[];
+    this.sendToPeer(peerId, {
+      type: 'frames_response',
+      frames,
+      timestamp: Date.now()
+    });
   }
 
   // ============================================
@@ -598,7 +607,7 @@ interface SyncItem {
 }
 
 interface SyncMessage {
-  type: 'clock_sync' | 'sync_batch' | 'frame_update' | 'request_frames';
+  type: 'clock_sync' | 'sync_batch' | 'frame_update' | 'request_frames' | 'frames_response';
   [key: string]: any;
 }
 
