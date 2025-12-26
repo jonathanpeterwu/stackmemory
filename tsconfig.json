@@ -4,14 +4,22 @@
     "module": "ES2022",
     "moduleResolution": "node",
     "lib": ["ES2022"],
+    "types": ["vitest/globals"],
     "outDir": "./dist",
     "rootDir": "./",
     "strict": true,
+    "noImplicitAny": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "noImplicitReturns": true,
+    "noFallthroughCasesInSwitch": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": false,
     "esModuleInterop": true,
     "skipLibCheck": true,
     "forceConsistentCasingInFileNames": true,
     "resolveJsonModule": true,
-    "allowJs": true,
+    "allowJs": false,
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
@@ -19,13 +27,11 @@
   },
   "include": [
     "src/**/*",
-    "scripts/**/*",
-    "mcp-server/**/*",
-    "p2p-sync/**/*",
-    "attention-scoring/**/*"
+    "scripts/**/*"
   ],
   "exclude": [
     "node_modules",
-    "dist"
+    "dist",
+    "src/integrations"
   ]
 }

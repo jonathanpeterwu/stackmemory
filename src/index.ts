@@ -3,10 +3,18 @@
  * Main entry point for the StackMemory package
  */
 
-export { FrameManager, type FrameType, type FrameState } from './frame-manager.js';
-export { logger, Logger, LogLevel } from './logger.js';
-export { StackMemoryError, ErrorCode, ErrorHandler } from './error-handler.js';
-export { default as LocalStackMemoryMCP } from './mcp-server.js';
+export {
+  FrameManager,
+  type FrameType,
+  type FrameState,
+} from './core/frame-manager.js';
+export { logger, Logger, LogLevel } from './core/logger.js';
+export {
+  StackMemoryError,
+  ErrorCode,
+  ErrorHandler,
+} from './core/error-handler.js';
+export { default as LocalStackMemoryMCP } from './mcp/mcp-server.js';
 
 // Re-export key types
 export interface StackMemoryConfig {

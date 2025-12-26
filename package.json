@@ -1,11 +1,11 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Lossless, project-scoped memory for AI tools",
   "type": "module",
   "main": "dist/src/index.js",
   "bin": {
-    "stackmemory": "dist/src/cli.js"
+    "stackmemory": "dist/src/cli/cli.js"
   },
   "types": "dist/src/index.d.ts",
   "files": [
@@ -37,13 +37,21 @@
     "setup": "npm install && npm run build && npm run init",
     "init": "node dist/scripts/initialize.js",
     "build": "tsc",
+    "lint": "eslint src/**/*.ts scripts/**/*.ts",
+    "lint:fix": "eslint src/**/*.ts scripts/**/*.ts --fix",
+    "lint:autofix": "node scripts/fix-lint-loop.cjs",
+    "format": "prettier --write src/**/*.ts scripts/**/*.ts",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:run": "vitest run",
     "prepublishOnly": "npm run build",
-    "dev": "tsx watch src/mcp-server.ts",
-    "mcp:start": "node dist/mcp-server.js",
-    "mcp:dev": "tsx src/mcp-server.ts",
-    "test:attention": "tsx scripts/test-attention.ts",
-    "analyze": "tsx scripts/analyze-context.ts",
-    "status": "tsx scripts/status.ts"
+    "quality": "npm run lint && npm run test:run && npm run build",
+    "dev": "tsx watch src/mcp/mcp-server.ts",
+    "mcp:start": "node dist/src/mcp/mcp-server.js",
+    "mcp:dev": "tsx src/mcp/mcp-server.ts",
+    "status": "node dist/scripts/status.js",
+    "status:dev": "tsx scripts/status.ts",
+    "prepare": "husky"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^0.5.0",
@@ -63,7 +71,26 @@
     "@types/node": "^20.10.6",
     "@types/simple-peer": "^9.11.8",
     "@types/uuid": "^10.0.0",
+    "@typescript-eslint/eslint-plugin": "^8.50.1",
+    "@typescript-eslint/parser": "^8.50.1",
+    "@vitest/ui": "^4.0.16",
+    "eslint": "^9.39.2",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-prettier": "^5.5.4",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.2.7",
+    "prettier": "^3.7.4",
     "tsx": "^4.7.0",
-    "typescript": "^5.3.3"
+    "typescript": "^5.3.3",
+    "vitest": "^4.0.16"
+  },
+  "lint-staged": {
+    "*.{ts,js}": [
+      "npm run lint:autofix",
+      "prettier --write"
+    ],
+    "*.ts": [
+      "vitest related --run"
+    ]
   }
 }

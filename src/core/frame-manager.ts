@@ -9,7 +9,13 @@ import { logger } from './logger.js';
 import { StackMemoryError, ErrorCode } from './error-handler.js';
 
 // Frame types based on architecture
-export type FrameType = 'task' | 'subtask' | 'tool_scope' | 'review' | 'write' | 'debug';
+export type FrameType =
+  | 'task'
+  | 'subtask'
+  | 'tool_scope'
+  | 'review'
+  | 'write'
+  | 'debug';
 export type FrameState = 'active' | 'closed';
 
 export interface Frame {
@@ -44,7 +50,13 @@ export interface FrameContext {
 export interface Anchor {
   anchor_id: string;
   frame_id: string;
-  type: 'FACT' | 'DECISION' | 'CONSTRAINT' | 'INTERFACE_CONTRACT' | 'TODO' | 'RISK';
+  type:
+    | 'FACT'
+    | 'DECISION'
+    | 'CONSTRAINT'
+    | 'INTERFACE_CONTRACT'
+    | 'TODO'
+    | 'RISK';
   text: string;
   priority: number;
   metadata: Record<string, any>;
@@ -55,7 +67,15 @@ export interface Event {
   frame_id: string;
   run_id: string;
   seq: number;
-  event_type: 'user_message' | 'assistant_message' | 'tool_call' | 'tool_result' | 'decision' | 'constraint' | 'artifact' | 'observation';
+  event_type:
+    | 'user_message'
+    | 'assistant_message'
+    | 'tool_call'
+    | 'tool_result'
+    | 'decision'
+    | 'constraint'
+    | 'artifact'
+    | 'observation';
   payload: Record<string, any>;
   ts: number;
 }
@@ -128,29 +148,34 @@ export class FrameManager {
 
   private loadActiveStack() {
     // Load currently active frames for this run
-    const activeFrames = this.db.prepare(`
+    const activeFrames = this.db
+      .prepare(
+        `
       SELECT frame_id, parent_frame_id, depth
       FROM frames
       WHERE run_id = ? AND state = 'active'
       ORDER BY depth ASC
-    `).all(this.currentRunId) as Frame[];
+    `
+      )
+      .all(this.currentRunId) as Frame[];
 
     // Rebuild stack order
     this.activeStack = this.buildStackOrder(activeFrames);
-    
-    logger.info('Loaded active stack', { 
-      runId: this.currentRunId, 
+
+    logger.info('Loaded active stack', {
+      runId: this.currentRunId,
       stackDepth: this.activeStack.length,
-      activeFrames: this.activeStack
+      activeFrames: this.activeStack,
     });
   }
 
-  private buildStackOrder(frames: Pick<Frame, 'frame_id' | 'parent_frame_id' | 'depth'>[]): string[] {
+  private buildStackOrder(
+    frames: Pick<Frame, 'frame_id' | 'parent_frame_id' | 'depth'>[]
+  ): string[] {
     const stack: string[] = [];
-    const frameMap = new Map(frames.map(f => [f.frame_id, f]));
-    
+
     // Find root frame (no parent)
-    const rootFrame = frames.find(f => !f.parent_frame_id);
+    const rootFrame = frames.find((f) => !f.parent_frame_id);
     if (!rootFrame) return [];
 
     // Build stack by following parent-child relationships
@@ -158,7 +183,9 @@ export class FrameManager {
     stack.push(currentFrame.frame_id);
 
     while (currentFrame) {
-      const childFrame = frames.find(f => f.parent_frame_id === currentFrame.frame_id);
+      const childFrame = frames.find(
+        (f) => f.parent_frame_id === currentFrame.frame_id
+      );
       if (!childFrame) break;
       stack.push(childFrame.frame_id);
       currentFrame = childFrame;
@@ -180,7 +207,10 @@ export class FrameManager {
     const parentFrameId = options.parentFrameId || this.getCurrentFrameId();
     const depth = parentFrameId ? this.getFrameDepth(parentFrameId) + 1 : 0;
 
-    const frame: Omit<Frame, 'outputs' | 'digest_text' | 'digest_json' | 'closed_at'> = {
+    const frame: Omit<
+      Frame,
+      'outputs' | 'digest_text' | 'digest_json' | 'closed_at'
+    > = {
       frame_id: frameId,
       run_id: this.currentRunId,
       project_id: this.projectId,
@@ -190,25 +220,29 @@ export class FrameManager {
       name: options.name,
       state: 'active',
       inputs: options.inputs || {},
-      created_at: Math.floor(Date.now() / 1000)
+      created_at: Math.floor(Date.now() / 1000),
     };
 
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO frames (
         frame_id, run_id, project_id, parent_frame_id, depth, type, name, state, inputs, created_at
       ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      frame.frame_id,
-      frame.run_id,
-      frame.project_id,
-      frame.parent_frame_id,
-      frame.depth,
-      frame.type,
-      frame.name,
-      frame.state,
-      JSON.stringify(frame.inputs),
-      frame.created_at
-    );
+    `
+      )
+      .run(
+        frame.frame_id,
+        frame.run_id,
+        frame.project_id,
+        frame.parent_frame_id,
+        frame.depth,
+        frame.type,
+        frame.name,
+        frame.state,
+        JSON.stringify(frame.inputs),
+        frame.created_at
+      );
 
     // Push to active stack
     this.activeStack.push(frameId);
@@ -219,7 +253,7 @@ export class FrameManager {
       name: options.name,
       depth,
       parentFrameId,
-      stackDepth: this.activeStack.length
+      stackDepth: this.activeStack.length,
     });
 
     return frameId;
@@ -231,17 +265,25 @@ export class FrameManager {
   public closeFrame(frameId?: string, outputs?: Record<string, any>): void {
     const targetFrameId = frameId || this.getCurrentFrameId();
     if (!targetFrameId) {
-      throw new StackMemoryError(ErrorCode.OPERATION_FAILED, 'No active frame to close');
+      throw new StackMemoryError(
+        ErrorCode.OPERATION_FAILED,
+        'No active frame to close'
+      );
     }
 
     // Get frame details
     const frame = this.getFrame(targetFrameId);
     if (!frame) {
-      throw new StackMemoryError(ErrorCode.OPERATION_FAILED, `Frame not found: ${targetFrameId}`);
+      throw new StackMemoryError(
+        ErrorCode.OPERATION_FAILED,
+        `Frame not found: ${targetFrameId}`
+      );
     }
 
     if (frame.state === 'closed') {
-      logger.warn('Attempted to close already closed frame', { frameId: targetFrameId });
+      logger.warn('Attempted to close already closed frame', {
+        frameId: targetFrameId,
+      });
       return;
     }
 
@@ -250,7 +292,9 @@ export class FrameManager {
     const finalOutputs = { ...outputs, ...digest.structured };
 
     // Update frame to closed state
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       UPDATE frames
       SET state = 'closed',
           outputs = ?,
@@ -258,15 +302,17 @@ export class FrameManager {
           digest_json = ?,
           closed_at = unixepoch()
       WHERE frame_id = ?
-    `).run(
-      JSON.stringify(finalOutputs),
-      digest.text,
-      JSON.stringify(digest.structured),
-      targetFrameId
-    );
+    `
+      )
+      .run(
+        JSON.stringify(finalOutputs),
+        digest.text,
+        JSON.stringify(digest.structured),
+        targetFrameId
+      );
 
     // Remove from active stack
-    this.activeStack = this.activeStack.filter(id => id !== targetFrameId);
+    this.activeStack = this.activeStack.filter((id) => id !== targetFrameId);
 
     // Close all child frames recursively
     this.closeChildFrames(targetFrameId);
@@ -276,17 +322,21 @@ export class FrameManager {
       name: frame.name,
       duration: Math.floor(Date.now() / 1000) - frame.created_at,
       digestLength: digest.text.length,
-      stackDepth: this.activeStack.length
+      stackDepth: this.activeStack.length,
     });
   }
 
   private closeChildFrames(parentFrameId: string) {
-    const children = this.db.prepare(`
+    const children = this.db
+      .prepare(
+        `
       SELECT frame_id FROM frames
       WHERE parent_frame_id = ? AND state = 'active'
-    `).all(parentFrameId) as { frame_id: string }[];
+    `
+      )
+      .all(parentFrameId) as { frame_id: string }[];
 
-    children.forEach(child => {
+    children.forEach((child) => {
       this.closeFrame(child.frame_id);
     });
   }
@@ -294,32 +344,43 @@ export class FrameManager {
   /**
    * Generate digest for a frame
    */
-  private generateDigest(frameId: string): { text: string; structured: Record<string, any> } {
+  private generateDigest(frameId: string): {
+    text: string;
+    structured: Record<string, any>;
+  } {
     const frame = this.getFrame(frameId);
     const events = this.getFrameEvents(frameId);
     const anchors = this.getFrameAnchors(frameId);
 
     if (!frame) {
-      throw new StackMemoryError(ErrorCode.OPERATION_FAILED, `Cannot generate digest: frame not found ${frameId}`);
+      throw new StackMemoryError(
+        ErrorCode.OPERATION_FAILED,
+        `Cannot generate digest: frame not found ${frameId}`
+      );
     }
 
     // Extract key information
-    const decisions = anchors.filter(a => a.type === 'DECISION');
-    const constraints = anchors.filter(a => a.type === 'CONSTRAINT');
-    const risks = anchors.filter(a => a.type === 'RISK');
-    
-    const toolCalls = events.filter(e => e.event_type === 'tool_call');
-    const artifacts = events.filter(e => e.event_type === 'artifact');
+    const decisions = anchors.filter((a) => a.type === 'DECISION');
+    const constraints = anchors.filter((a) => a.type === 'CONSTRAINT');
+    const risks = anchors.filter((a) => a.type === 'RISK');
+
+    const toolCalls = events.filter((e) => e.event_type === 'tool_call');
+    const artifacts = events.filter((e) => e.event_type === 'artifact');
 
     // Generate structured digest
     const structured = {
       result: frame.name,
-      decisions: decisions.map(d => ({ id: d.anchor_id, text: d.text })),
-      constraints: constraints.map(c => ({ id: c.anchor_id, text: c.text })),
-      risks: risks.map(r => ({ id: r.anchor_id, text: r.text })),
-      artifacts: artifacts.map(a => ({ kind: a.payload.kind || 'unknown', ref: a.payload.ref })),
+      decisions: decisions.map((d) => ({ id: d.anchor_id, text: d.text })),
+      constraints: constraints.map((c) => ({ id: c.anchor_id, text: c.text })),
+      risks: risks.map((r) => ({ id: r.anchor_id, text: r.text })),
+      artifacts: artifacts.map((a) => ({
+        kind: a.payload.kind || 'unknown',
+        ref: a.payload.ref,
+      })),
       tool_calls_count: toolCalls.length,
-      duration_seconds: frame.closed_at ? frame.closed_at - frame.created_at : 0
+      duration_seconds: frame.closed_at
+        ? frame.closed_at - frame.created_at
+        : 0,
     };
 
     // Generate text summary
@@ -328,23 +389,27 @@ export class FrameManager {
     return { text, structured };
   }
 
-  private generateDigestText(frame: Frame, structured: any, eventCount: number): string {
+  private generateDigestText(
+    frame: Frame,
+    structured: any,
+    eventCount: number
+  ): string {
     let summary = `Completed: ${frame.name}\n`;
-    
+
     if (structured.decisions.length > 0) {
       summary += `\nDecisions made:\n${structured.decisions.map((d: any) => `- ${d.text}`).join('\n')}`;
     }
-    
+
     if (structured.constraints.length > 0) {
       summary += `\nConstraints established:\n${structured.constraints.map((c: any) => `- ${c.text}`).join('\n')}`;
     }
-    
+
     if (structured.risks.length > 0) {
       summary += `\nRisks identified:\n${structured.risks.map((r: any) => `- ${r.text}`).join('\n')}`;
     }
 
     summary += `\nActivity: ${eventCount} events, ${structured.tool_calls_count} tool calls`;
-    
+
     if (structured.duration_seconds > 0) {
       summary += `, ${Math.floor(structured.duration_seconds / 60)}m ${structured.duration_seconds % 60}s duration`;
     }
@@ -362,23 +427,30 @@ export class FrameManager {
   ): string {
     const targetFrameId = frameId || this.getCurrentFrameId();
     if (!targetFrameId) {
-      throw new StackMemoryError(ErrorCode.OPERATION_FAILED, 'No active frame for event');
+      throw new StackMemoryError(
+        ErrorCode.OPERATION_FAILED,
+        'No active frame for event'
+      );
     }
 
     const eventId = uuidv4();
     const seq = this.getNextEventSequence(targetFrameId);
 
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO events (event_id, run_id, frame_id, seq, event_type, payload)
       VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      eventId,
-      this.currentRunId,
-      targetFrameId,
-      seq,
-      eventType,
-      JSON.stringify(payload)
-    );
+    `
+      )
+      .run(
+        eventId,
+        this.currentRunId,
+        targetFrameId,
+        seq,
+        eventType,
+        JSON.stringify(payload)
+      );
 
     return eventId;
   }
@@ -395,23 +467,30 @@ export class FrameManager {
   ): string {
     const targetFrameId = frameId || this.getCurrentFrameId();
     if (!targetFrameId) {
-      throw new StackMemoryError(ErrorCode.OPERATION_FAILED, 'No active frame for anchor');
+      throw new StackMemoryError(
+        ErrorCode.OPERATION_FAILED,
+        'No active frame for anchor'
+      );
     }
 
     const anchorId = uuidv4();
 
-    this.db.prepare(`
+    this.db
+      .prepare(
+        `
       INSERT INTO anchors (anchor_id, frame_id, project_id, type, text, priority, metadata)
       VALUES (?, ?, ?, ?, ?, ?, ?)
-    `).run(
-      anchorId,
-      targetFrameId,
-      this.projectId,
-      type,
-      text,
-      priority,
-      JSON.stringify(metadata)
-    );
+    `
+      )
+      .run(
+        anchorId,
+        targetFrameId,
+        this.projectId,
+        type,
+        text,
+        priority,
+        JSON.stringify(metadata)
+      );
 
     return anchorId;
   }
@@ -420,22 +499,24 @@ export class FrameManager {
    * Get hot stack context for current active frames
    */
   public getHotStackContext(maxEvents: number = 20): FrameContext[] {
-    return this.activeStack.map(frameId => {
-      const frame = this.getFrame(frameId);
-      if (!frame) return null;
+    return this.activeStack
+      .map((frameId) => {
+        const frame = this.getFrame(frameId);
+        if (!frame) return null;
 
-      return {
-        frameId,
-        header: {
-          goal: frame.name,
-          constraints: this.extractConstraints(frame.inputs),
-          definitions: frame.inputs.definitions
-        },
-        anchors: this.getFrameAnchors(frameId),
-        recentEvents: this.getFrameEvents(frameId, maxEvents),
-        activeArtifacts: this.getActiveArtifacts(frameId)
-      };
-    }).filter(Boolean) as FrameContext[];
+        return {
+          frameId,
+          header: {
+            goal: frame.name,
+            constraints: this.extractConstraints(frame.inputs),
+            definitions: frame.inputs.definitions,
+          },
+          anchors: this.getFrameAnchors(frameId),
+          recentEvents: this.getFrameEvents(frameId, maxEvents),
+          activeArtifacts: this.getActiveArtifacts(frameId),
+        };
+      })
+      .filter(Boolean) as FrameContext[];
   }
 
   /**
@@ -443,7 +524,7 @@ export class FrameManager {
    */
   public getActiveFramePath(): Frame[] {
     return this.activeStack
-      .map(frameId => this.getFrame(frameId))
+      .map((frameId) => this.getFrame(frameId))
       .filter(Boolean) as Frame[];
   }
 
@@ -461,10 +542,14 @@ export class FrameManager {
     return frame?.depth || 0;
   }
 
-  private getFrame(frameId: string): Frame | undefined {
-    const row = this.db.prepare(`
+  public getFrame(frameId: string): Frame | undefined {
+    const row = this.db
+      .prepare(
+        `
       SELECT * FROM frames WHERE frame_id = ?
-    `).get(frameId) as any;
+    `
+      )
+      .get(frameId) as any;
 
     if (!row) return undefined;
 
@@ -472,53 +557,63 @@ export class FrameManager {
       ...row,
       inputs: JSON.parse(row.inputs || '{}'),
       outputs: JSON.parse(row.outputs || '{}'),
-      digest_json: JSON.parse(row.digest_json || '{}')
+      digest_json: JSON.parse(row.digest_json || '{}'),
     };
   }
 
-  private getFrameEvents(frameId: string, limit?: number): Event[] {
-    const query = limit 
+  public getFrameEvents(frameId: string, limit?: number): Event[] {
+    const query = limit
       ? `SELECT * FROM events WHERE frame_id = ? ORDER BY seq DESC LIMIT ?`
       : `SELECT * FROM events WHERE frame_id = ? ORDER BY seq ASC`;
-    
+
     const params = limit ? [frameId, limit] : [frameId];
     const rows = this.db.prepare(query).all(...params) as any[];
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       ...row,
-      payload: JSON.parse(row.payload)
+      payload: JSON.parse(row.payload),
     }));
   }
 
   private getFrameAnchors(frameId: string): Anchor[] {
-    const rows = this.db.prepare(`
+    const rows = this.db
+      .prepare(
+        `
       SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC
-    `).all(frameId) as any[];
+    `
+      )
+      .all(frameId) as any[];
 
-    return rows.map(row => ({
+    return rows.map((row) => ({
       ...row,
-      metadata: JSON.parse(row.metadata || '{}')
+      metadata: JSON.parse(row.metadata || '{}'),
     }));
   }
 
   private getNextEventSequence(frameId: string): number {
-    const result = this.db.prepare(`
+    const result = this.db
+      .prepare(
+        `
       SELECT MAX(seq) as max_seq FROM events WHERE frame_id = ?
-    `).get(frameId) as { max_seq: number | null };
+    `
+      )
+      .get(frameId) as { max_seq: number | null };
 
     return (result.max_seq || 0) + 1;
   }
 
-  private extractConstraints(inputs: Record<string, any>): string[] | undefined {
+  private extractConstraints(
+    inputs: Record<string, any>
+  ): string[] | undefined {
     return inputs.constraints;
   }
 
   private getActiveArtifacts(frameId: string): string[] {
     const artifacts = this.getFrameEvents(frameId)
-      .filter(e => e.event_type === 'artifact')
-      .map(e => e.payload.ref)
+      .filter((e) => e.event_type === 'artifact')
+      .map((e) => e.payload.ref)
       .filter(Boolean);
-    
+
     return artifacts;
   }
 }

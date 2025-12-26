@@ -9,7 +9,7 @@ export enum LogLevel {
   ERROR = 0,
   WARN = 1,
   INFO = 2,
-  DEBUG = 3
+  DEBUG = 3,
 }
 
 interface LogEntry {
@@ -44,7 +44,8 @@ export class Logger {
 
     // Set up log file if in debug mode or if specified
     if (this.logLevel === LogLevel.DEBUG || process.env.STACKMEMORY_LOG_FILE) {
-      this.logFile = process.env.STACKMEMORY_LOG_FILE || 
+      this.logFile =
+        process.env.STACKMEMORY_LOG_FILE ||
         path.join(process.env.HOME || '.', '.stackmemory', 'logs', 'cli.log');
       this.ensureLogDirectory();
     }
@@ -82,9 +83,9 @@ export class Logger {
     if (entry.level <= this.logLevel) {
       const levelNames = ['ERROR', 'WARN', 'INFO', 'DEBUG'];
       const levelName = levelNames[entry.level] || 'UNKNOWN';
-      
+
       const consoleMessage = `[${entry.timestamp}] ${levelName}: ${entry.message}`;
-      
+
       if (entry.level === LogLevel.ERROR) {
         console.error(consoleMessage);
         if (entry.error) {
@@ -98,13 +99,17 @@ export class Logger {
     }
   }
 
-  error(message: string, error?: Error, context?: Record<string, unknown>): void {
+  error(
+    message: string,
+    error?: Error,
+    context?: Record<string, unknown>
+  ): void {
     this.writeLog({
       timestamp: new Date().toISOString(),
       level: LogLevel.ERROR,
       message,
       context,
-      error
+      error,
     });
   }
 
@@ -113,7 +118,7 @@ export class Logger {
       timestamp: new Date().toISOString(),
       level: LogLevel.WARN,
       message,
-      context
+      context,
     });
   }
 
@@ -122,7 +127,7 @@ export class Logger {
       timestamp: new Date().toISOString(),
       level: LogLevel.INFO,
       message,
-      context
+      context,
     });
   }
 
@@ -131,7 +136,7 @@ export class Logger {
       timestamp: new Date().toISOString(),
       level: LogLevel.DEBUG,
       message,
-      context
+      context,
     });
   }
 }
