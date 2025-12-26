@@ -5,8 +5,8 @@
 
 import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
-import { logger } from './logger';
-import { StackMemoryError, ErrorCode } from './error-handler';
+import { logger } from './logger.js';
+import { StackMemoryError, ErrorCode } from './error-handler.js';
 
 // Frame types based on architecture
 export type FrameType = 'task' | 'subtask' | 'tool_scope' | 'review' | 'write' | 'debug';

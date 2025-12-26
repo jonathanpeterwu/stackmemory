@@ -5,8 +5,8 @@
  */
 
 import { program } from 'commander';
-import { logger } from './logger';
-import { FrameManager } from './frame-manager';
+import { logger } from './logger.js';
+import { FrameManager } from './frame-manager.js';
 import Database from 'better-sqlite3';
 import { join, resolve } from 'path';
 import { existsSync, mkdirSync } from 'fs';

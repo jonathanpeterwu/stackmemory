@@ -2,7 +2,7 @@
  * Comprehensive error handling for StackMemory CLI
  */
 
-import { logger } from './logger';
+import { logger } from './logger.js';
 
 export enum ErrorCode {
   // Authentication errors
