@@ -67,7 +67,7 @@ export class LinearClient {
     const response = await fetch(`${this.baseUrl}/graphql`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${this.config.apiKey}`,
+        Authorization: this.config.apiKey,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -77,8 +77,13 @@ export class LinearClient {
     });
 
     if (!response.ok) {
+      const errorText = await response.text();
+      logger.error(
+        'Linear API error response:',
+        new Error(`${response.status}: ${errorText}`)
+      );
       throw new Error(
-        `Linear API error: ${response.status} ${response.statusText}`
+        `Linear API error: ${response.status} ${response.statusText} - ${errorText}`
       );
     }
 

@@ -70,17 +70,27 @@ export class LinearSyncEngine {
     this.authManager = authManager;
     this.config = config;
 
-    // Get token and initialize Linear client
-    const tokens = this.authManager.loadTokens();
-    if (!tokens) {
-      throw new Error(
-        'Linear authentication tokens not found. Run "stackmemory linear setup" first.'
-      );
-    }
+    // Check for API key from environment variable first
+    const apiKey = process.env.LINEAR_API_KEY;
 
-    this.linearClient = new LinearClient({
-      apiKey: tokens.accessToken,
-    });
+    if (apiKey) {
+      // Use API key from environment
+      this.linearClient = new LinearClient({
+        apiKey: apiKey,
+      });
+    } else {
+      // Fall back to OAuth tokens
+      const tokens = this.authManager.loadTokens();
+      if (!tokens) {
+        throw new Error(
+          'Linear API key or authentication tokens not found. Set LINEAR_API_KEY environment variable or run "stackmemory linear setup" first.'
+        );
+      }
+
+      this.linearClient = new LinearClient({
+        apiKey: tokens.accessToken,
+      });
+    }
 
     this.loadMappings();
   }
@@ -106,9 +116,12 @@ export class LinearSyncEngine {
     };
 
     try {
-      // Get valid token and update client
-      const token = await this.authManager.getValidToken();
-      this.linearClient = new LinearClient({ apiKey: token });
+      // Update client with valid token if not using environment API key
+      const apiKey = process.env.LINEAR_API_KEY;
+      if (!apiKey) {
+        const token = await this.authManager.getValidToken();
+        this.linearClient = new LinearClient({ apiKey: token });
+      }
 
       // Get team info if not configured
       if (!this.config.defaultTeamId) {

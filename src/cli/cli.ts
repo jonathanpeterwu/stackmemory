@@ -236,9 +236,10 @@ linearCommand
 
       const authManager = new LinearAuthManager(projectRoot);
 
-      if (!authManager.isConfigured()) {
+      // Check for API key from environment first
+      if (!process.env.LINEAR_API_KEY && !authManager.isConfigured()) {
         console.log(
-          '❌ Linear not configured. Run "stackmemory linear setup" first.'
+          '❌ Linear not configured. Set LINEAR_API_KEY environment variable or run "stackmemory linear setup" first.'
         );
         return;
       }
