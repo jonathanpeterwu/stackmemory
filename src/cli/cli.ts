@@ -22,14 +22,23 @@ import {
   stopAutoSync,
 } from '../integrations/linear-auto-sync.js';
 import { LinearConfigManager } from '../integrations/linear-config.js';
+import { UpdateChecker } from '../core/update-checker.js';
+import { ProgressTracker } from '../core/progress-tracker.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
+const VERSION = '0.2.4';
+
+// Check for updates on CLI startup
+UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
+  // Silently ignore errors
+});
+
 program
   .name('stackmemory')
   .description('Lossless memory runtime for AI coding tools')
-  .version('0.1.0');
+  .version(VERSION);
 
 program
   .command('init')
@@ -72,6 +81,9 @@ program
         );
         return;
       }
+
+      // Check for updates and display if available
+      await UpdateChecker.checkForUpdates(VERSION);
 
       const db = new Database(dbPath);
       const frameManager = new FrameManager(db, 'cli-project');
@@ -263,11 +275,23 @@ linearCommand
 
       const result = await linearSync.sync();
 
+      // Track progress
+      const progress = new ProgressTracker(projectRoot);
+
       if (result.success) {
         console.log('✅ Sync completed successfully!');
         console.log(`   To Linear: ${result.synced.toLinear} created`);
         console.log(`   From Linear: ${result.synced.fromLinear} created`);
         console.log(`   Updated: ${result.synced.updated}`);
+
+        // Update progress tracker
+        progress.updateLinearStatus({
+          lastSync: new Date().toISOString(),
+          tasksSynced:
+            result.synced.toLinear +
+            result.synced.fromLinear +
+            result.synced.updated,
+        });
 
         if (result.conflicts.length > 0) {
           console.log(`\n⚠️ Conflicts detected: ${result.conflicts.length}`);
@@ -588,6 +612,44 @@ linearCommand
     } catch (error) {
       logger.error('Linear config command failed', error as Error);
       console.error('❌ Config failed:', (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('update-check')
+  .description('Check for StackMemory updates')
+  .action(async () => {
+    try {
+      console.log('🔍 Checking for updates...');
+      await UpdateChecker.forceCheck(VERSION);
+    } catch (error) {
+      logger.error('Update check failed', error as Error);
+      console.error('❌ Update check failed:', (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('progress')
+  .description('Show current progress and recent changes')
+  .action(async () => {
+    try {
+      const projectRoot = process.cwd();
+      const dbPath = join(projectRoot, '.stackmemory', 'context.db');
+
+      if (!existsSync(dbPath)) {
+        console.log(
+          '❌ StackMemory not initialized. Run "stackmemory init" first.'
+        );
+        return;
+      }
+
+      const progress = new ProgressTracker(projectRoot);
+      console.log(progress.getSummary());
+    } catch (error) {
+      logger.error('Failed to show progress', error as Error);
+      console.error('❌ Failed to show progress:', (error as Error).message);
       process.exit(1);
     }
   });

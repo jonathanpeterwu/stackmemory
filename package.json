@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.2.2",
+  "version": "0.2.4",
   "description": "Lossless, project-scoped memory for AI tools",
   "type": "module",
   "main": "dist/src/index.js",
