@@ -1,4 +1,4 @@
-# Source files
+# Source files (only ship dist)
 src/
 tsconfig.json
 *.ts
@@ -10,6 +10,12 @@ tsconfig.json
 *.swp
 *.swo
 *~
+.eslintrc*
+.prettierrc*
+vitest.config.ts
+.nvmrc
+.node-version
+*.bak
 
 # Tests
 test/
@@ -18,8 +24,10 @@ tests/
 *.spec.*
 coverage/
 
-# Build tools
-scripts/
+# Scripts (keep essential ones)
+scripts/fix-*.js
+scripts/update-*.js
+scripts/reorganize-*.sh
 attention-scoring/
 p2p-sync/
 mcp-server/
@@ -27,6 +35,7 @@ mcp-server/
 # Environment & configs
 .env
 .env.*
+!.env.example
 .claude/
 .stackmemory/
 
@@ -34,19 +43,34 @@ mcp-server/
 .git/
 .gitignore
 
-# Documentation source
+# Documentation
+docs/archives/
+FOLDER_REORGANIZATION.md
+MIGRATION_GUIDE.md
 BEADS_INTEGRATION.md
 TECHNICAL_ARCHITECTURE.md
 ML_SYSTEM_INSIGHTS.md
 AGENTS*.md
 PRD.md
 
+# Deployment configs
+config/docker/
+config/environments/
+config/nixpacks.toml
+config/railway.json
+
 # Logs
 *.log
 npm-debug.log*
 yarn-debug.log*
+.lint-fix-log.json
 
 # Cache
 node_modules/
 .cache/
 .turbo/
+
+# Local data
+*.db
+*.db-journal
+*.tsbuildinfo
