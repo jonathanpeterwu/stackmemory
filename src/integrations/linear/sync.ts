@@ -3,6 +3,8 @@
  * Handles syncing tasks between StackMemory and Linear
  */
 
+import { readFileSync, writeFileSync, existsSync } from 'fs';
+import { join } from 'path';
 import { logger } from '../../core/monitoring/logger.js';
 import {
   PebblesTask,
@@ -56,15 +58,24 @@ export class LinearSyncEngine {
   private authManager: LinearAuthManager;
   private config: SyncConfig;
   private mappings: Map<string, TaskMapping> = new Map();
+  private projectRoot: string;
+  private mappingsPath: string;
 
   constructor(
     taskStore: PebblesTaskStore,
     authManager: LinearAuthManager,
-    config: SyncConfig
+    config: SyncConfig,
+    projectRoot?: string
   ) {
     this.taskStore = taskStore;
     this.authManager = authManager;
     this.config = config;
+    this.projectRoot = projectRoot || process.cwd();
+    this.mappingsPath = join(
+      this.projectRoot,
+      '.stackmemory',
+      'linear-mappings.json'
+    );
 
     // Check for API key from environment variable first
     const apiKey = process.env.LINEAR_API_KEY;
@@ -89,6 +100,13 @@ export class LinearSyncEngine {
     }
 
     this.loadMappings();
+  }
+
+  /**
+   * Update sync configuration
+   */
+  updateConfig(newConfig: Partial<SyncConfig>): void {
+    this.config = { ...this.config, ...newConfig };
   }
 
   /**
@@ -252,9 +270,12 @@ export class LinearSyncEngine {
       errors: [] as string[],
     };
 
-    // For now, we'll focus on updating existing mapped tasks
-    // Creating new StackMemory tasks from Linear issues would require frame context
+    // First, import any new issues from Linear that aren't mapped yet
+    const importResult = await this.importFromLinear();
+    result.created = importResult.imported;
+    result.errors.push(...importResult.errors);
 
+    // Then update existing mapped tasks
     for (const [taskId, mapping] of this.mappings) {
       try {
         const linearIssue = await this.linearClient.getIssue(mapping.linearId);
@@ -552,14 +573,172 @@ export class LinearSyncEngine {
   // Persistence for mappings
 
   private loadMappings(): void {
-    // In a full implementation, this would load from a file or database
-    // For now, start with empty mappings
     this.mappings.clear();
+
+    if (existsSync(this.mappingsPath)) {
+      try {
+        const data = readFileSync(this.mappingsPath, 'utf8');
+        const mappingsArray: TaskMapping[] = JSON.parse(data);
+        for (const mapping of mappingsArray) {
+          this.mappings.set(mapping.stackmemoryId, mapping);
+        }
+        logger.info(`Loaded ${this.mappings.size} task mappings from disk`);
+      } catch (error) {
+        logger.warn('Failed to load mappings, starting fresh');
+      }
+    }
   }
 
   private saveMappings(): void {
-    // In a full implementation, this would save to a file or database
-    logger.info(`Saved ${this.mappings.size} task mappings`);
+    try {
+      const mappingsArray = Array.from(this.mappings.values());
+      writeFileSync(this.mappingsPath, JSON.stringify(mappingsArray, null, 2));
+      logger.info(`Saved ${this.mappings.size} task mappings to disk`);
+    } catch (error) {
+      logger.error('Failed to save mappings:', error as Error);
+    }
+  }
+
+  /**
+   * Import all issues from Linear to local task store
+   */
+  async importFromLinear(): Promise<{
+    imported: number;
+    skipped: number;
+    errors: string[];
+  }> {
+    const result = { imported: 0, skipped: 0, errors: [] as string[] };
+
+    try {
+      // Get team info
+      if (!this.config.defaultTeamId) {
+        const team = await this.linearClient.getTeam();
+        this.config.defaultTeamId = team.id;
+        logger.info(`Using Linear team: ${team.name} (${team.key})`);
+      }
+
+      // Fetch all issues from Linear (excluding completed/cancelled)
+      const issues = await this.linearClient.getIssues({
+        teamId: this.config.defaultTeamId,
+        limit: 100,
+      });
+
+      logger.info(`Found ${issues.length} issues in Linear`);
+
+      // Build reverse mapping (linearId -> stackmemoryId)
+      const linearIdToTaskId = new Map<string, string>();
+      for (const [taskId, mapping] of this.mappings) {
+        linearIdToTaskId.set(mapping.linearId, taskId);
+      }
+
+      for (const issue of issues) {
+        try {
+          // Skip if already mapped
+          if (linearIdToTaskId.has(issue.id)) {
+            result.skipped++;
+            continue;
+          }
+
+          // Create local task from Linear issue
+          const taskId = await this.createTaskFromLinearIssue(issue);
+
+          if (taskId) {
+            // Create mapping
+            const mapping: TaskMapping = {
+              stackmemoryId: taskId,
+              linearId: issue.id,
+              linearIdentifier: issue.identifier,
+              lastSyncTimestamp: Date.now(),
+              lastLinearUpdate: issue.updatedAt,
+              lastStackMemoryUpdate: Date.now(),
+            };
+            this.mappings.set(taskId, mapping);
+            result.imported++;
+            logger.info(`Imported ${issue.identifier}: ${issue.title}`);
+          }
+        } catch (error) {
+          result.errors.push(
+            `Failed to import ${issue.identifier}: ${String(error)}`
+          );
+          logger.error(`Failed to import ${issue.identifier}:`, error as Error);
+        }
+      }
+
+      this.saveMappings();
+    } catch (error) {
+      result.errors.push(`Import failed: ${String(error)}`);
+      logger.error('Linear import failed:', error as Error);
+    }
+
+    return result;
+  }
+
+  /**
+   * Create a local task from a Linear issue
+   */
+  private async createTaskFromLinearIssue(
+    issue: LinearIssue
+  ): Promise<string | null> {
+    try {
+      const priority = this.mapLinearPriorityToLocal(issue.priority);
+
+      // Build description with Linear context
+      let description = issue.description || '';
+      description += `\n\n---\n**Linear:** ${issue.identifier} | ${issue.url}`;
+
+      // Extract labels (handle both array and {nodes: [...]} formats)
+      const labels = Array.isArray(issue.labels)
+        ? issue.labels
+        : (issue.labels as unknown as { nodes: Array<{ name: string }> })
+            ?.nodes || [];
+      const tags = labels.map((l) => l.name);
+      if (tags.length === 0) tags.push('linear');
+
+      // Create the task via the task store
+      const taskId = this.taskStore.createTask({
+        title: `[${issue.identifier}] ${issue.title}`,
+        description,
+        priority,
+        frameId: 'linear-import',
+        tags,
+        estimatedEffort: issue.estimate ? issue.estimate * 60 : undefined,
+      });
+
+      // Update status if not pending
+      const status = this.mapLinearStateToStatus(issue.state.type);
+      if (status !== 'pending') {
+        this.taskStore.updateTaskStatus(
+          taskId,
+          status,
+          `Imported from Linear as ${status}`
+        );
+      }
+
+      return taskId;
+    } catch (error) {
+      logger.error(
+        `Failed to create task from Linear issue ${issue.identifier}: ${String(error)}`
+      );
+      return null;
+    }
+  }
+
+  /**
+   * Map Linear priority (0-4) to local TaskPriority
+   */
+  private mapLinearPriorityToLocal(priority: number): TaskPriority {
+    switch (priority) {
+      case 1:
+        return 'urgent';
+      case 2:
+        return 'high';
+      case 3:
+        return 'medium';
+      case 4:
+        return 'low';
+      default:
+        return 'medium';
+    }
   }
 }
 
@@ -569,7 +748,7 @@ export class LinearSyncEngine {
 export const DEFAULT_SYNC_CONFIG: SyncConfig = {
   enabled: false,
   direction: 'bidirectional',
-  autoSync: false,
+  autoSync: true,
   conflictResolution: 'newest_wins',
   syncInterval: 15, // minutes
 };

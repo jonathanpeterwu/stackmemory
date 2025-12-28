@@ -15,6 +15,7 @@ import {
   createErrorHandler,
 } from '../errors/index.js';
 import { retry, withTimeout } from '../errors/recovery.js';
+import { sessionManager, FrameQueryMode } from '../session/index.js';
 
 // Frame types based on architecture
 export type FrameType =
@@ -91,15 +92,32 @@ export interface Event {
 export class FrameManager {
   private db: Database.Database;
   private currentRunId: string;
+  private sessionId: string;
   private projectId: string;
   private activeStack: string[] = []; // Stack of active frame IDs
+  private queryMode: FrameQueryMode = FrameQueryMode.PROJECT_ACTIVE;
 
   constructor(db: Database.Database, projectId: string, runId?: string) {
     this.db = db;
     this.projectId = projectId;
-    this.currentRunId = runId || uuidv4();
+    
+    // Use session manager for run ID if available
+    const session = sessionManager.getCurrentSession();
+    if (session) {
+      this.currentRunId = session.runId;
+      this.sessionId = session.sessionId;
+    } else {
+      this.currentRunId = runId || uuidv4();
+      this.sessionId = this.currentRunId; // Fallback for legacy behavior
+    }
+    
     this.initializeSchema();
     this.loadActiveStack();
+  }
+
+  setQueryMode(mode: FrameQueryMode): void {
+    this.queryMode = mode;
+    this.loadActiveStack(); // Reload with new mode
   }
 
   private initializeSchema() {
@@ -189,17 +207,54 @@ export class FrameManager {
     });
 
     try {
-      // Load currently active frames for this run
-      const activeFrames = this.db
-        .prepare(
-          `
-        SELECT frame_id, parent_frame_id, depth
-        FROM frames
-        WHERE run_id = ? AND state = 'active'
-        ORDER BY depth ASC
-      `
-        )
-        .all(this.currentRunId) as Frame[];
+      let query: string;
+      let params: any[];
+
+      // Build query based on query mode
+      switch (this.queryMode) {
+        case FrameQueryMode.ALL_ACTIVE:
+          query = `
+            SELECT frame_id, parent_frame_id, depth
+            FROM frames
+            WHERE state = 'active'
+            ORDER BY created_at DESC, depth ASC
+          `;
+          params = [];
+          break;
+          
+        case FrameQueryMode.PROJECT_ACTIVE:
+          query = `
+            SELECT frame_id, parent_frame_id, depth, run_id
+            FROM frames
+            WHERE state = 'active' AND project_id = ?
+            ORDER BY created_at DESC, depth ASC
+          `;
+          params = [this.projectId];
+          break;
+          
+        case FrameQueryMode.HISTORICAL:
+          query = `
+            SELECT frame_id, parent_frame_id, depth
+            FROM frames
+            WHERE project_id = ?
+            ORDER BY created_at DESC, depth ASC
+          `;
+          params = [this.projectId];
+          break;
+          
+        case FrameQueryMode.CURRENT_SESSION:
+        default:
+          query = `
+            SELECT frame_id, parent_frame_id, depth
+            FROM frames
+            WHERE run_id = ? AND state = 'active'
+            ORDER BY depth ASC
+          `;
+          params = [this.currentRunId];
+          break;
+      }
+
+      const activeFrames = this.db.prepare(query).all(...params) as Frame[];
 
       // Rebuild stack order
       this.activeStack = this.buildStackOrder(activeFrames);
@@ -208,11 +263,13 @@ export class FrameManager {
         runId: this.currentRunId,
         stackDepth: this.activeStack.length,
         activeFrames: this.activeStack,
+        queryMode: this.queryMode,
       });
     } catch (error) {
       const dbError = errorHandler(error, {
-        query: 'SELECT frame_id, parent_frame_id, depth FROM frames',
+        query: 'Frame loading query',
         runId: this.currentRunId,
+        queryMode: this.queryMode,
       });
       
       if (dbError instanceof DatabaseError) {

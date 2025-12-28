@@ -8,6 +8,8 @@ export async function displayAnalyticsDashboard(
   const service = new AnalyticsService(projectPath || process.cwd());
 
   try {
+    // Sync from task store before displaying
+    await service.syncFromTaskStore();
     const state = await service.getDashboardState();
     const { metrics, recentTasks, teamMetrics } = state;
 
@@ -84,7 +86,7 @@ export async function displayAnalyticsDashboard(
       });
     }
 
-    console.log(chalk.gray('\n─'.repeat(50)));
+    console.log(chalk.gray('\n' + '─'.repeat(50)));
     console.log(
       chalk.gray(`Last updated: ${state.lastUpdated.toLocaleString()}`)
     );

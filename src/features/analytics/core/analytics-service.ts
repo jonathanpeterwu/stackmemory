@@ -1,5 +1,7 @@
 import { MetricsQueries } from '../queries/metrics-queries.js';
 import { LinearClient } from '../../../integrations/linear/client.js';
+import { PebblesTaskStore } from '../../tasks/pebbles-task-store.js';
+import Database from 'better-sqlite3';
 import {
   TaskMetrics,
   TeamMetrics,
@@ -15,18 +17,39 @@ import os from 'os';
 export class AnalyticsService {
   private metricsQueries: MetricsQueries;
   private linearClient?: LinearClient;
+  private taskStore?: PebblesTaskStore;
   private dbPath: string;
+  private projectPath: string;
   private updateCallbacks: Set<(state: DashboardState) => void> = new Set();
 
   constructor(projectPath?: string) {
-    const basePath = projectPath || process.cwd();
-    this.dbPath = path.join(basePath, '.stackmemory', 'analytics.db');
+    this.projectPath = projectPath || process.cwd();
+    this.dbPath = path.join(this.projectPath, '.stackmemory', 'analytics.db');
 
     this.ensureDirectoryExists();
     this.metricsQueries = new MetricsQueries(this.dbPath);
 
+    // Initialize task store for syncing
+    this.initializeTaskStore();
+
     if (process.env.LINEAR_API_KEY) {
       this.initializeLinearIntegration();
+    }
+  }
+
+  private initializeTaskStore(): void {
+    try {
+      const contextDbPath = path.join(
+        this.projectPath,
+        '.stackmemory',
+        'context.db'
+      );
+      if (fs.existsSync(contextDbPath)) {
+        const db = new Database(contextDbPath);
+        this.taskStore = new PebblesTaskStore(this.projectPath, db);
+      }
+    } catch (error) {
+      console.error('Failed to initialize task store:', error);
     }
   }
 
@@ -55,19 +78,129 @@ export class AnalyticsService {
   }
 
   async syncLinearTasks(): Promise<void> {
-    if (!this.linearClient) return;
+    // First sync from task store (which includes Linear-synced tasks)
+    await this.syncFromTaskStore();
+
+    // Then try direct Linear sync if client available
+    if (this.linearClient) {
+      try {
+        const issues = await this.linearClient.getIssues({ limit: 100 });
+        for (const issue of issues) {
+          const task: TaskAnalytics = {
+            id: issue.id,
+            title: issue.title,
+            state: this.mapLinearState(issue.state.type),
+            createdAt: new Date(issue.createdAt),
+            completedAt:
+              issue.state.type === 'completed'
+                ? new Date(issue.updatedAt)
+                : undefined,
+            estimatedEffort: issue.estimate ? issue.estimate * 60 : undefined,
+            assigneeId: issue.assignee?.id,
+            priority: this.mapLinearPriority(issue.priority),
+            labels: Array.isArray(issue.labels)
+              ? issue.labels.map((l: any) => l.name)
+              : (issue.labels as any)?.nodes?.map((l: any) => l.name) || [],
+            blockingIssues: [],
+          };
+          this.metricsQueries.upsertTask(task);
+        }
+      } catch (error) {
+        console.error('Failed to sync from Linear API:', error);
+      }
+    }
+
+    await this.notifyUpdate();
+  }
+
+  async syncFromTaskStore(): Promise<number> {
+    if (!this.taskStore) return 0;
 
     try {
-      // For now, we'll stub this as LinearClient doesn't expose a public query method
-      // In a real implementation, we'd need to add a public method to LinearClient
-      // or use LinearSyncEngine from linear-sync.ts
-      console.log(
-        'Linear sync not fully implemented - LinearClient needs public query method'
-      );
-      await this.notifyUpdate();
+      // Get all tasks including completed ones
+      const allTasks = this.getAllTasksFromStore();
+      let synced = 0;
+
+      for (const task of allTasks) {
+        const analyticsTask: TaskAnalytics = {
+          id: task.id,
+          title: task.title,
+          state: this.mapTaskStatus(task.status),
+          createdAt: new Date(task.created_at * 1000),
+          completedAt: task.completed_at
+            ? new Date(task.completed_at * 1000)
+            : undefined,
+          estimatedEffort: task.estimated_effort,
+          actualEffort: task.actual_effort,
+          assigneeId: task.assignee,
+          priority: task.priority as TaskAnalytics['priority'],
+          labels: task.tags || [],
+          blockingIssues: task.depends_on || [],
+        };
+        this.metricsQueries.upsertTask(analyticsTask);
+        synced++;
+      }
+
+      return synced;
     } catch (error) {
-      console.error('Failed to sync Linear tasks:', error);
+      console.error('Failed to sync from task store:', error);
+      return 0;
     }
+  }
+
+  private getAllTasksFromStore(): any[] {
+    if (!this.taskStore) return [];
+
+    try {
+      // Access the db directly to get ALL tasks including completed
+      const contextDbPath = path.join(
+        this.projectPath,
+        '.stackmemory',
+        'context.db'
+      );
+      const db = new Database(contextDbPath);
+
+      const rows = db
+        .prepare(
+          `
+        SELECT * FROM task_cache 
+        ORDER BY created_at DESC
+      `
+        )
+        .all() as any[];
+
+      db.close();
+
+      // Hydrate the rows
+      return rows.map((row) => ({
+        id: row.id,
+        title: row.title,
+        description: row.description,
+        status: row.status,
+        priority: row.priority,
+        created_at: row.created_at,
+        completed_at: row.completed_at,
+        estimated_effort: row.estimated_effort,
+        actual_effort: row.actual_effort,
+        assignee: row.assignee,
+        tags: JSON.parse(row.tags || '[]'),
+        depends_on: JSON.parse(row.depends_on || '[]'),
+      }));
+    } catch (error) {
+      console.error('Failed to get all tasks:', error);
+      return [];
+    }
+  }
+
+  private mapTaskStatus(status: string): TaskAnalytics['state'] {
+    const statusMap: Record<string, TaskAnalytics['state']> = {
+      pending: 'todo',
+      in_progress: 'in_progress',
+      completed: 'completed',
+      blocked: 'blocked',
+      cancelled: 'blocked',
+    };
+    return statusMap[status] || 'todo';
   }
 
   private mapLinearState(linearState: string): TaskAnalytics['state'] {

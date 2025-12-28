@@ -241,7 +241,7 @@ export function registerLinearCommands(parent: Command) {
     .action(async (issueId, options) => {
       try {
         const authManager = new LinearAuthManager(process.cwd());
-        const tokens = await authManager.getTokens();
+        const tokens = authManager.loadTokens();
         
         if (!tokens) {
           console.error(chalk.red('Not authenticated. Run: stackmemory linear auth'));

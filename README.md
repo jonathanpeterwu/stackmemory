@@ -101,44 +101,73 @@ This creates a **project-scoped memory space** tied to the repo.
 
 ---
 
-### Step 2: Install MCP client
+### Step 2: Install StackMemory
 
 ```bash
-npm install -g stackmemory-mcp
-```
-
-or via binary:
-
-```bash
-curl -fsSL https://stackmemory.dev/install | sh
+npm install -g @stackmemoryai/stackmemory@latest
 ```
 
 ---
 
-### Step 3: Configure Claude Code / editor
+### Step 3: Setup Claude Code Integration (Automated)
 
-Add StackMemory as an MCP tool:
+```bash
+# Automatic setup - configures MCP and session hooks
+npm run claude:setup
+```
 
-```json
+This automatically:
+- Creates `~/.claude/stackmemory-mcp.json` MCP configuration
+- Sets up session initialization hooks
+- Updates `~/.claude/config.json` with StackMemory integration
+
+**Manual setup alternative:**
+
+<details>
+<summary>Click to expand manual setup steps</summary>
+
+Create MCP configuration:
+```bash
+mkdir -p ~/.claude
+cat > ~/.claude/stackmemory-mcp.json << 'EOF'
 {
-  "tools": {
+  "mcpServers": {
     "stackmemory": {
-      "command": "stackmemory-mcp",
-      "args": ["--project", "github:org/repo"]
+      "command": "stackmemory",
+      "args": ["mcp-server"],
+      "env": { "NODE_ENV": "production" }
     }
   }
 }
+EOF
 ```
 
-That's it.
+Update Claude config:
+```json
+{
+  "mcp": {
+    "configFiles": ["~/.claude/stackmemory-mcp.json"]
+  }
+}
+```
+</details>
 
-Every message now:
+**That's it.**
 
-1. Gets logged losslessly
-2. Updates the call stack
-3. Retrieves the correct context automatically
+Every Claude Code session now automatically:
 
-No prompts to manage. No summaries to babysit.
+1. **Captures all tool calls** - Bash, Edit, Read, Write operations get logged
+2. **Maintains frame stack** - Task/subtask context persists across sessions
+3. **References previous work** - Decisions, constraints, and artifacts automatically surface
+4. **Syncs with Linear** - Bidirectional task synchronization when configured
+
+Available MCP tools in Claude Code:
+- `start_frame`, `close_frame` - Frame lifecycle management
+- `create_task`, `get_active_tasks` - Git-tracked task management
+- `linear_sync`, `linear_status` - Linear integration
+- `get_context`, `add_decision` - Context and decision tracking
+
+No prompts to manage. No summaries to babysit. Just seamless context continuity.
 
 ---
 

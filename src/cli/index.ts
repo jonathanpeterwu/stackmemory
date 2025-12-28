@@ -7,6 +7,7 @@
 import { program } from 'commander';
 import { logger } from '../core/monitoring/logger.js';
 import { FrameManager } from '../core/context/frame-manager.js';
+import { sessionManager, FrameQueryMode } from '../core/session/index.js';
 import { PebblesTaskStore } from '../features/tasks/pebbles-task-store.js';
 import {
   LinearAuthManager,
@@ -27,6 +28,7 @@ import { ProgressTracker } from '../core/monitoring/progress-tracker.js';
 import { registerProjectCommands } from './commands/projects.js';
 import { registerLinearCommands } from './commands/linear.js';
 import { registerLinearTestCommand } from './commands/linear-test.js';
+import { createSessionCommands } from './commands/session.js';
 import { registerWorktreeCommands } from './commands/worktree.js';
 import { registerOnboardingCommand } from './commands/onboard.js';
 import { webhookCommand } from './commands/webhook.js';
@@ -77,7 +79,10 @@ program
 program
   .command('status')
   .description('Show current StackMemory status')
-  .action(async () => {
+  .option('--all', 'Show all active frames across sessions')
+  .option('--project', 'Show all active frames in current project')
+  .option('--session <id>', 'Show frames for specific session')
+  .action(async (options) => {
     try {
       const projectRoot = process.cwd();
       const dbPath = join(projectRoot, '.stackmemory', 'context.db');
@@ -92,29 +97,68 @@ program
       // Check for updates and display if available
       await UpdateChecker.checkForUpdates(VERSION);
 
-      const db = new Database(dbPath);
-      const frameManager = new FrameManager(db, 'cli-project');
-
-      // Auto-create a status check context frame
-      frameManager.createFrame({
-        type: 'task',
-        name: 'status',
-        inputs: { timestamp: new Date().toISOString() },
+      // Initialize session manager
+      await sessionManager.initialize();
+      const session = await sessionManager.getOrCreateSession({
+        projectPath: projectRoot,
+        sessionId: options.session,
       });
+
+      const db = new Database(dbPath);
+      const frameManager = new FrameManager(db, session.projectId);
+
+      // Set query mode based on options
+      if (options.all) {
+        frameManager.setQueryMode(FrameQueryMode.ALL_ACTIVE);
+      } else if (options.project) {
+        frameManager.setQueryMode(FrameQueryMode.PROJECT_ACTIVE);
+      }
 
       const activeFrames = frameManager.getActiveFramePath();
       const stackDepth = frameManager.getStackDepth();
 
       console.log('📊 StackMemory Status:');
-      console.log(`   Stack depth: ${stackDepth}`);
-      console.log(`   Active frames: ${activeFrames.length}`);
+      console.log(
+        `   Session: ${session.sessionId.slice(0, 8)} (${session.state}, ${Math.round((Date.now() - session.startedAt) / 1000 / 60)}min old)`
+      );
+      console.log(`   Project: ${session.projectId}`);
+      if (session.branch) {
+        console.log(`   Branch: ${session.branch}`);
+      }
+      console.log(`\n   Current Session:`);
+      console.log(`     Stack depth: ${stackDepth}`);
+      console.log(`     Active frames: ${activeFrames.length}`);
 
       if (activeFrames.length > 0) {
-        console.log('\\n📚 Active Frames:');
         activeFrames.forEach((frame, i) => {
-          const indent = '  '.repeat(i);
-          console.log(`${indent}${i + 1}. ${frame.name} (${frame.type})`);
+          const indent = '     ' + '  '.repeat(frame.depth || i);
+          const prefix = i === 0 ? '└─' : '  └─';
+          console.log(`${indent}${prefix} ${frame.name} [${frame.type}]`);
         });
+      }
+
+      // Show other sessions if in default mode
+      if (!options.all && !options.project) {
+        const otherSessions = await sessionManager.listSessions({
+          projectId: session.projectId,
+          state: 'active',
+        });
+
+        const otherActive = otherSessions.filter(
+          (s) => s.sessionId !== session.sessionId
+        );
+        if (otherActive.length > 0) {
+          console.log(`\n   Other Active Sessions (same project):`);
+          otherActive.forEach((s) => {
+            const age = Math.round(
+              (Date.now() - s.lastActiveAt) / 1000 / 60 / 60
+            );
+            console.log(
+              `     - ${s.sessionId.slice(0, 8)}: ${s.branch || 'main'}, ${age}h old`
+            );
+          });
+          console.log(`\n   Tip: Use --all to see frames across sessions`);
+        }
       }
 
       db.close();
@@ -474,6 +518,119 @@ linearCommand
   });
 
 linearCommand
+  .command('update <issueId>')
+  .description('Update Linear task status')
+  .option(
+    '-s, --status <status>',
+    'New status (todo, in-progress, done, canceled)'
+  )
+  .option('-t, --title <title>', 'Update task title')
+  .option('-d, --description <desc>', 'Update task description')
+  .option(
+    '-p, --priority <priority>',
+    'Set priority (1=urgent, 2=high, 3=medium, 4=low)'
+  )
+  .action(async (issueId, options) => {
+    try {
+      const projectRoot = process.cwd();
+      const authManager = new LinearAuthManager(projectRoot);
+      const tokens = authManager.loadTokens();
+
+      if (!tokens) {
+        console.error('❌ Not authenticated. Run: stackmemory linear setup');
+        process.exit(1);
+      }
+
+      const { LinearClient } = await import('../integrations/linear/client.js');
+      const client = new LinearClient({
+        apiKey: tokens.accessToken,
+      });
+
+      // Find the issue first
+      let issue = await client.getIssue(issueId);
+      if (!issue) {
+        // Try finding by identifier
+        issue = await client.findIssueByIdentifier(issueId);
+      }
+
+      if (!issue) {
+        console.error(`❌ Issue ${issueId} not found`);
+        process.exit(1);
+      }
+
+      const updates: any = {};
+
+      // Handle status update
+      if (options.status) {
+        const team = await client.getTeam();
+        const states = await client.getWorkflowStates(team.id);
+
+        const statusMap: Record<string, string> = {
+          todo: 'unstarted',
+          'in-progress': 'started',
+          done: 'completed',
+          canceled: 'cancelled',
+        };
+
+        const targetType =
+          statusMap[options.status.toLowerCase()] || options.status;
+        const targetState = states.find((s: any) => s.type === targetType);
+
+        if (!targetState) {
+          console.error(`❌ Invalid status: ${options.status}`);
+          console.log('Available states:');
+          states.forEach((s: any) => console.log(`  - ${s.name} (${s.type})`));
+          process.exit(1);
+        }
+
+        updates.stateId = targetState.id;
+      }
+
+      if (options.title) updates.title = options.title;
+      if (options.description) updates.description = options.description;
+      if (options.priority) updates.priority = parseInt(options.priority);
+
+      // Perform update
+      const updatedIssue = await client.updateIssue(issue.id, updates);
+
+      console.log(
+        `✅ Updated ${updatedIssue.identifier}: ${updatedIssue.title}`
+      );
+      if (options.status) {
+        console.log(`   Status: ${updatedIssue.state.name}`);
+      }
+      console.log(`   ${updatedIssue.url}`);
+
+      // Auto-sync to local tasks after update
+      console.log('\n🔄 Syncing to local tasks...');
+      const dbPath = join(projectRoot, '.stackmemory', 'context.db');
+      if (existsSync(dbPath)) {
+        const db = new Database(dbPath);
+        const taskStore = new PebblesTaskStore(projectRoot, db);
+        const { LinearSyncEngine, DEFAULT_SYNC_CONFIG } =
+          await import('../integrations/linear/sync.js');
+        const syncEngine = new LinearSyncEngine(
+          taskStore,
+          authManager,
+          { ...DEFAULT_SYNC_CONFIG, enabled: true, direction: 'from_linear' },
+          projectRoot
+        );
+        const syncResult = await syncEngine.sync();
+        if (syncResult.success) {
+          console.log(
+            `   ✅ Local tasks synced (${syncResult.synced.fromLinear} new, ${syncResult.synced.updated} updated)`
+          );
+        }
+        db.close();
+      }
+    } catch (error) {
+      logger.error('Failed to update Linear task', error as Error);
+      console.error('❌ Failed to update task:', (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+linearCommand
   .command('config')
   .description('Configure auto-sync settings')
   .option('--show', 'Show current configuration')
@@ -722,6 +879,13 @@ program
       const { createServer } = await import('http');
 
       const app = express();
+
+      // Add error handling middleware
+      app.use((err: any, req: any, res: any, next: any) => {
+        console.error('Express error:', err);
+        res.status(500).json({ error: err.message });
+      });
+
       const analyticsAPI = new AnalyticsAPI(projectRoot);
 
       if (options.sync) {
@@ -737,49 +901,76 @@ program
 
       // Serve the HTML dashboard
       app.get('/', async (req, res) => {
-        const { fileURLToPath } = await import('url');
-        const { dirname } = await import('path');
-        const __filename = fileURLToPath(import.meta.url);
-        const __dirname = dirname(__filename);
-        const dashboardPath = join(__dirname, '../analytics/dashboard.html');
+        // Try multiple paths for the dashboard HTML
+        const possiblePaths = [
+          join(projectRoot, 'src/features/analytics/dashboard.html'),
+          join(projectRoot, 'dist/features/analytics/dashboard.html'),
+        ];
 
-        if (existsSync(dashboardPath)) {
-          res.sendFile(dashboardPath);
-        } else {
-          // Fallback to inline HTML if file not found
-          const { existsSync: fsExists } = await import('fs');
-          const { join: pathJoin } = await import('path');
-          const htmlPath = pathJoin(__dirname, '../analytics/dashboard.html');
-
-          if (fsExists(htmlPath)) {
-            res.sendFile(htmlPath);
-          } else {
-            res.send(`
-              <!DOCTYPE html>
-              <html>
-              <head>
-                <title>StackMemory Analytics</title>
-                <style>
-                  body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; padding: 20px; }
-                  h1 { color: #333; }
-                  .status { color: #22c55e; }
-                </style>
-              </head>
-              <body>
-                <h1>📊 StackMemory Analytics Dashboard</h1>
-                <p class="status">✅ Server running</p>
-                <p>Dashboard available at: /src/analytics/dashboard.html</p>
-                <p>API Endpoints:</p>
-                <ul>
-                  <li>GET /api/analytics/metrics</li>
-                  <li>GET /api/analytics/tasks</li>
-                  <li>POST /api/analytics/sync</li>
-                </ul>
-              </body>
-              </html>
-            `);
+        for (const dashboardPath of possiblePaths) {
+          if (existsSync(dashboardPath)) {
+            res.sendFile(dashboardPath);
+            return;
           }
         }
+
+        // Inline fallback dashboard
+        res.send(`<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StackMemory Analytics</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #1a1a2e; color: #eee; padding: 20px; }
+    .container { max-width: 1200px; margin: 0 auto; }
+    h1 { color: #667eea; margin-bottom: 20px; }
+    .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px; margin-bottom: 30px; }
+    .card { background: #16213e; border-radius: 12px; padding: 20px; }
+    .metric-value { font-size: 2.5em; font-weight: bold; color: #667eea; }
+    .metric-label { color: #888; text-transform: uppercase; font-size: 0.8em; }
+    .task-list { max-height: 400px; overflow-y: auto; }
+    .task-item { padding: 10px; border-left: 3px solid #667eea; margin-bottom: 8px; background: #1a1a2e; }
+    .task-item.completed { border-color: #22c55e; }
+    .task-item.in_progress { border-color: #f59e0b; }
+    .status { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 0.8em; margin-right: 8px; }
+    .status.completed { background: #22c55e30; color: #22c55e; }
+    .status.in_progress { background: #f59e0b30; color: #f59e0b; }
+    .status.todo { background: #667eea30; color: #667eea; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>📊 StackMemory Analytics</h1>
+    <div class="grid" id="metrics"></div>
+    <div class="card"><h3>Recent Tasks</h3><div class="task-list" id="tasks">Loading...</div></div>
+  </div>
+  <script>
+    async function load() {
+      const metrics = await fetch('/api/analytics/metrics').then(r => r.json());
+      const tasks = await fetch('/api/analytics/tasks').then(r => r.json());
+      
+      document.getElementById('metrics').innerHTML = \`
+        <div class="card"><div class="metric-label">Total</div><div class="metric-value">\${metrics.data.metrics.totalTasks}</div></div>
+        <div class="card"><div class="metric-label">Completed</div><div class="metric-value">\${metrics.data.metrics.completedTasks}</div></div>
+        <div class="card"><div class="metric-label">In Progress</div><div class="metric-value">\${metrics.data.metrics.inProgressTasks}</div></div>
+        <div class="card"><div class="metric-label">Completion</div><div class="metric-value">\${metrics.data.metrics.completionRate.toFixed(0)}%</div></div>
+      \`;
+      
+      document.getElementById('tasks').innerHTML = tasks.data.tasks.slice(0, 10).map(t => \`
+        <div class="task-item \${t.state}">
+          <span class="status \${t.state}">\${t.state}</span>
+          <strong>\${t.title}</strong>
+        </div>
+      \`).join('');
+    }
+    load();
+    setInterval(load, 30000);
+  </script>
+</body>
+</html>`);
       });
 
       const server = createServer(app);
@@ -809,6 +1000,9 @@ program
         server.close();
         process.exit(0);
       });
+
+      // Keep the process alive
+      await new Promise(() => {});
     } catch (error) {
       logger.error('Analytics command failed', error as Error);
       console.error('❌ Analytics failed:', (error as Error).message);
@@ -947,6 +1141,9 @@ registerWorktreeCommands(program);
 // Register Linear integration commands
 registerLinearCommands(program);
 registerLinearTestCommand(program);
+
+// Register session management commands
+program.addCommand(createSessionCommands());
 
 // Register webhook command
 program.addCommand(webhookCommand());

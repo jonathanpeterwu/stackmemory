@@ -1,5 +1,139 @@
 # StackMemory Integration for Open-Source AI Coding Tools
 
+## OpenCode Integration (opencode-sm)
+
+The `opencode-sm` command provides StackMemory context persistence for OpenCode, similar to `claude-sm` for Claude Code.
+
+### Quick Setup
+
+```bash
+# Setup the opencode-sm alias
+node scripts/setup/configure-opencode-alias.js
+
+# Reload shell
+source ~/.zshrc  # or ~/.bashrc
+
+# Use it
+opencode-sm
+```
+
+### What opencode-sm Does
+
+1. **Auto-initializes** StackMemory in git repos that don't have it
+2. **Loads context** on startup (previous decisions, tasks, learnings)
+3. **Saves context** on exit (preserves work across sessions)
+4. **Optional Linear sync** with `--auto-sync` flag
+
+### Usage
+
+```bash
+# Basic usage - starts OpenCode with StackMemory
+opencode-sm
+
+# With Linear auto-sync (syncs every 5 minutes)
+opencode-sm --auto-sync
+
+# Custom sync interval (10 minutes)
+opencode-sm --auto-sync --sync-interval=10
+```
+
+### MCP Server Configuration
+
+Add to your project's `opencode.jsonc`:
+
+```jsonc
+{
+  "$schema": "https://opencode.ai/config.json",
+  "mcp": {
+    "stackmemory": {
+      "type": "local",
+      "command": ["stackmemory", "mcp-server"],
+      "enabled": true,
+      "environment": {
+        "PROJECT_ROOT": ".",
+      },
+    },
+  },
+}
+```
+
+Or for global config in `~/.config/opencode/opencode.jsonc`.
+
+### Custom Commands
+
+Create `.opencode/command/` files for StackMemory shortcuts:
+
+| Command       | File            | Description                       |
+| ------------- | --------------- | --------------------------------- |
+| `/sm-check`   | `sm-check.md`   | Checkpoint - save current context |
+| `/sm-save`    | `sm-save.md`    | Save a specific decision          |
+| `/sm-context` | `sm-context.md` | Query stored context              |
+| `/sm-start`   | `sm-start.md`   | Start a new task frame            |
+| `/sm-close`   | `sm-close.md`   | Close frame with digest           |
+| `/sm-linear`  | `sm-linear.md`  | Sync with Linear                  |
+
+Example usage in OpenCode TUI:
+
+```
+/sm-check
+/sm-save Using React Query for server state management
+/sm-context authentication flow
+/sm-start Implement user login
+```
+
+### MCP Tools Available
+
+When StackMemory MCP is enabled, these tools are available to OpenCode:
+
+**Context Management**
+
+- `get_context` - Retrieve context by query
+- `add_decision` - Record decisions/constraints
+- `start_frame` - Start new work frame
+- `close_frame` - Close frame with digest
+- `add_anchor` - Pin important facts
+- `get_hot_stack` - Get active context
+
+**Task Management**
+
+- `create_task` - Create tracked task
+- `update_task_status` - Update task state
+- `get_active_tasks` - List current tasks
+
+**Linear Integration**
+
+- `linear_sync` - Sync with Linear
+- `linear_update_task` - Update Linear issue
+
+### AGENTS.md Integration
+
+Add to your project's `AGENTS.md` for automatic StackMemory usage:
+
+```markdown
+## StackMemory Context
+
+When working on this project:
+
+- Use `get_context` to check for relevant prior decisions
+- Use `add_decision` to record important architectural choices
+- Use `start_frame`/`close_frame` to track task boundaries
+- Check context every 15 minutes or at task boundaries
+```
+
+### Comparison: claude-sm vs opencode-sm
+
+| Feature              | claude-sm                    | opencode-sm                   |
+| -------------------- | ---------------------------- | ----------------------------- |
+| Wrapper script       | `claude-code-wrapper.sh`     | `opencode-wrapper.sh`         |
+| Alias setup          | `configure-alias.js`         | `configure-opencode-alias.js` |
+| MCP config           | `claude_desktop_config.json` | `opencode.jsonc`              |
+| Custom commands      | N/A                          | `.opencode/command/*.md`      |
+| Auto-init            | Yes                          | Yes                           |
+| Context save on exit | Yes                          | Yes                           |
+| Linear auto-sync     | Yes                          | Yes                           |
+
+---
+
 ## 🚀 **Universal Integration Methods**
 
 ### **1. Continue.dev Integration**
@@ -147,7 +281,7 @@ const {
   InitializeParams,
   TextDocumentSyncKind,
   InitializeResult,
-  CodeActionKind
+  CodeActionKind,
 } = require('vscode-languageserver/node');
 
 const { TextDocument } = require('vscode-languageserver-textdocument');
@@ -161,10 +295,10 @@ let stackMemoryProcess;
 connection.onInitialize((params) => {
   // Start StackMemory for this project
   const workspaceRoot = params.rootPath || process.cwd();
-  
+
   stackMemoryProcess = spawn('stackmemory', ['lsp'], {
     cwd: workspaceRoot,
-    env: { ...process.env, PROJECT_ROOT: workspaceRoot }
+    env: { ...process.env, PROJECT_ROOT: workspaceRoot },
   });
 
   const result = {
@@ -172,13 +306,13 @@ connection.onInitialize((params) => {
       textDocumentSync: TextDocumentSyncKind.Incremental,
       completionProvider: {
         resolveProvider: true,
-        triggerCharacters: ['@', '#']
+        triggerCharacters: ['@', '#'],
       },
       codeActionProvider: {
-        codeActionKinds: [CodeActionKind.QuickFix]
+        codeActionKinds: [CodeActionKind.QuickFix],
       },
-      hoverProvider: true
-    }
+      hoverProvider: true,
+    },
   };
   return result;
 });
@@ -190,17 +324,17 @@ connection.onHover(async ({ textDocument, position }) => {
 
   const line = doc.getText({
     start: { line: position.line, character: 0 },
-    end: { line: position.line + 1, character: 0 }
+    end: { line: position.line + 1, character: 0 },
   });
 
   // Get relevant context from StackMemory
   const context = await getStackMemoryContext(line);
-  
+
   return {
     contents: {
       kind: 'markdown',
-      value: context
-    }
+      value: context,
+    },
   };
 });
 
@@ -211,28 +345,28 @@ connection.onCompletion(async ({ textDocument, position }) => {
 
   const line = doc.getText({
     start: { line: position.line, character: 0 },
-    end: { line: position.line, character: position.character }
+    end: { line: position.line, character: position.character },
   });
 
   if (line.endsWith('@')) {
     // Return available contexts
     const contexts = await getAvailableContexts();
-    return contexts.map(ctx => ({
+    return contexts.map((ctx) => ({
       label: ctx.type,
       kind: 15, // Snippet
       detail: ctx.content.substring(0, 50),
-      documentation: ctx.content
+      documentation: ctx.content,
     }));
   }
 
   if (line.endsWith('#')) {
     // Return available decisions
     const decisions = await getDecisions();
-    return decisions.map(dec => ({
+    return decisions.map((dec) => ({
       label: dec.title,
       kind: 14, // Keyword
       detail: 'Decision',
-      documentation: dec.content
+      documentation: dec.content,
     }));
   }
 
@@ -243,7 +377,7 @@ async function getStackMemoryContext(query) {
   return new Promise((resolve) => {
     const child = spawn('stackmemory', ['context', '--query', query]);
     let output = '';
-    child.stdout.on('data', (data) => output += data);
+    child.stdout.on('data', (data) => (output += data));
     child.on('close', () => resolve(output));
   });
 }
@@ -252,7 +386,7 @@ async function getAvailableContexts() {
   return new Promise((resolve) => {
     const child = spawn('stackmemory', ['list', '--json']);
     let output = '';
-    child.stdout.on('data', (data) => output += data);
+    child.stdout.on('data', (data) => (output += data));
     child.on('close', () => {
       try {
         resolve(JSON.parse(output));
@@ -267,7 +401,7 @@ async function getDecisions() {
   return new Promise((resolve) => {
     const child = spawn('stackmemory', ['decisions', '--json']);
     let output = '';
-    child.stdout.on('data', (data) => output += data);
+    child.stdout.on('data', (data) => (output += data));
     child.on('close', () => {
       try {
         resolve(JSON.parse(output));
@@ -285,6 +419,7 @@ connection.listen();
 ### **Register LSP with editors**
 
 **Neovim** (`init.lua`):
+
 ```lua
 vim.lsp.start({
   name = 'stackmemory',
@@ -294,6 +429,7 @@ vim.lsp.start({
 ```
 
 **Emacs** (`init.el`):
+
 ```elisp
 (require 'lsp-mode)
 (add-to-list 'lsp-server-install-dir "~/.stackmemory/")
@@ -314,62 +450,64 @@ vim.lsp.start({
 ```javascript
 const functions = [
   {
-    name: "stackmemory_get_context",
-    description: "Get relevant project context from StackMemory",
+    name: 'stackmemory_get_context',
+    description: 'Get relevant project context from StackMemory',
     parameters: {
-      type: "object",
+      type: 'object',
       properties: {
         query: {
-          type: "string",
-          description: "What to search for in context"
+          type: 'string',
+          description: 'What to search for in context',
         },
         limit: {
-          type: "number",
-          description: "Maximum number of contexts to return"
-        }
+          type: 'number',
+          description: 'Maximum number of contexts to return',
+        },
       },
-      required: ["query"]
-    }
+      required: ['query'],
+    },
   },
   {
-    name: "stackmemory_add_decision",
-    description: "Add a decision or important information to StackMemory",
+    name: 'stackmemory_add_decision',
+    description: 'Add a decision or important information to StackMemory',
     parameters: {
-      type: "object",
+      type: 'object',
       properties: {
         type: {
-          type: "string",
-          enum: ["decision", "constraint", "learning"],
-          description: "Type of information"
+          type: 'string',
+          enum: ['decision', 'constraint', 'learning'],
+          description: 'Type of information',
         },
         content: {
-          type: "string",
-          description: "The decision or information to record"
-        }
+          type: 'string',
+          description: 'The decision or information to record',
+        },
       },
-      required: ["type", "content"]
-    }
+      required: ['type', 'content'],
+    },
   },
   {
-    name: "stackmemory_start_task",
-    description: "Start tracking a new task",
+    name: 'stackmemory_start_task',
+    description: 'Start tracking a new task',
     parameters: {
-      type: "object",
+      type: 'object',
       properties: {
         task: {
-          type: "string",
-          description: "Description of the task"
-        }
+          type: 'string',
+          description: 'Description of the task',
+        },
       },
-      required: ["task"]
-    }
-  }
+      required: ['task'],
+    },
+  },
 ];
 
 // Function implementations
 async function stackmemory_get_context({ query, limit = 5 }) {
   const { execSync } = require('child_process');
-  const result = execSync(`stackmemory context --query "${query}" --limit ${limit} --json`);
+  const result = execSync(
+    `stackmemory context --query "${query}" --limit ${limit} --json`
+  );
   return JSON.parse(result.toString());
 }
 
@@ -385,7 +523,12 @@ async function stackmemory_start_task({ task }) {
   return { success: true, frameId: result.toString().trim() };
 }
 
-module.exports = { functions, stackmemory_get_context, stackmemory_add_decision, stackmemory_start_task };
+module.exports = {
+  functions,
+  stackmemory_get_context,
+  stackmemory_add_decision,
+  stackmemory_start_task,
+};
 ```
 
 ### **Use with OpenAI API**
@@ -398,46 +541,51 @@ const openai = new OpenAI();
 
 async function callWithStackMemory(message) {
   const response = await openai.chat.completions.create({
-    model: "gpt-4",
+    model: 'gpt-4',
     messages: [
       {
-        role: "system",
-        content: "You are a helpful coding assistant. Always check project context using stackmemory_get_context before answering questions."
+        role: 'system',
+        content:
+          'You are a helpful coding assistant. Always check project context using stackmemory_get_context before answering questions.',
       },
       {
-        role: "user",
-        content: message
-      }
+        role: 'user',
+        content: message,
+      },
     ],
     functions: functions,
-    function_call: "auto"
+    function_call: 'auto',
   });
-  
+
   // Handle function calls
   if (response.choices[0].message.function_call) {
     const functionName = response.choices[0].message.function_call.name;
-    const functionArgs = JSON.parse(response.choices[0].message.function_call.arguments);
-    
+    const functionArgs = JSON.parse(
+      response.choices[0].message.function_call.arguments
+    );
+
     // Execute the function
-    const functionResult = await require('~/.stackmemory/openai-functions')[functionName](functionArgs);
-    
+    const functionResult = await require('~/.stackmemory/openai-functions')[
+      functionName
+    ](functionArgs);
+
     // Continue conversation with result
     const finalResponse = await openai.chat.completions.create({
-      model: "gpt-4",
+      model: 'gpt-4',
       messages: [
         ...messages,
         response.choices[0].message,
         {
-          role: "function",
+          role: 'function',
           name: functionName,
-          content: JSON.stringify(functionResult)
-        }
-      ]
+          content: JSON.stringify(functionResult),
+        },
+      ],
     });
-    
+
     return finalResponse;
   }
-  
+
   return response;
 }
 ```
@@ -516,6 +664,7 @@ curl -X POST http://localhost:7437/task \
 For CodeSandbox, Replit, GitHub Codespaces, create a browser extension:
 
 `manifest.json`:
+
 ```json
 {
   "manifest_version": 3,
@@ -525,7 +674,11 @@ For CodeSandbox, Replit, GitHub Codespaces, create a browser extension:
   "host_permissions": ["http://localhost:7437/*"],
   "content_scripts": [
     {
-      "matches": ["*://github.dev/*", "*://codespaces.new/*", "*://replit.com/*"],
+      "matches": [
+        "*://github.dev/*",
+        "*://codespaces.new/*",
+        "*://replit.com/*"
+      ],
       "js": ["stackmemory-inject.js"]
     }
   ]
@@ -537,17 +690,20 @@ For CodeSandbox, Replit, GitHub Codespaces, create a browser extension:
 ## 🚀 **Quick Setup for Any Tool**
 
 1. **Install globally:**
+
    ```bash
    ./install-global.sh
    ```
 
 2. **Initialize in your project:**
+
    ```bash
    cd your-project
    stackmemory-init
    ```
 
 3. **Use via CLI in any tool:**
+
    ```bash
    stackmemory context --query "your question"
    stackmemory add --type decision --content "your decision"
@@ -560,8 +716,9 @@ For CodeSandbox, Replit, GitHub Codespaces, create a browser extension:
    ```
 
 The system works with ANY tool that can:
+
 - Execute shell commands
-- Call HTTP APIs  
+- Call HTTP APIs
 - Use Language Server Protocol
 - Support custom extensions
 

@@ -17,9 +17,8 @@ import {
   TaskPriority,
   TaskStatus,
 } from '../../features/tasks/pebbles-task-store.js';
-// TODO: Temporarily disabled due to TypeScript errors
-// import { LinearAuthManager, LinearOAuthSetup } from '../integrations/linear/auth.js';
-// import { LinearSyncEngine, DEFAULT_SYNC_CONFIG } from '../integrations/linear/sync.js';
+import { LinearAuthManager, LinearOAuthSetup } from '../linear/auth.js';
+import { LinearSyncEngine, DEFAULT_SYNC_CONFIG } from '../linear/sync.js';
 import { logger } from '../../core/monitoring/logger.js';
 import { BrowserMCPIntegration } from '../../features/browser/browser-mcp.js';
 
@@ -33,9 +32,8 @@ class LocalStackMemoryMCP {
   private projectRoot: string;
   private frameManager: FrameManager;
   private taskStore: PebblesTaskStore;
-  // TODO: Temporarily disabled
-  // private linearAuthManager: LinearAuthManager;
-  // private linearSync: LinearSyncEngine;
+  private linearAuthManager: LinearAuthManager;
+  private linearSync: LinearSyncEngine;
   private projectId: string;
   private contexts: Map<string, any> = new Map();
   private browserMCP: BrowserMCPIntegration;
@@ -62,13 +60,13 @@ class LocalStackMemoryMCP {
     // Initialize task store
     this.taskStore = new PebblesTaskStore(this.projectRoot, this.db);
 
-    // TODO: Initialize Linear integration (temporarily disabled)
-    // this.linearAuthManager = new LinearAuthManager(this.projectRoot);
-    // this.linearSync = new LinearSyncEngine(
-    //   this.taskStore,
-    //   this.linearAuthManager,
-    //   DEFAULT_SYNC_CONFIG
-    // );
+    // Initialize Linear integration
+    this.linearAuthManager = new LinearAuthManager(this.projectRoot);
+    this.linearSync = new LinearSyncEngine(
+      this.taskStore,
+      this.linearAuthManager,
+      DEFAULT_SYNC_CONFIG
+    );
 
     // Initialize MCP server
     this.server = new Server(
@@ -433,13 +431,37 @@ class LocalStackMemoryMCP {
             },
             {
               name: 'get_active_tasks',
-              description: 'Get currently active tasks',
+              description: 'Get currently active tasks synced from Linear',
               inputSchema: {
                 type: 'object',
                 properties: {
                   frameId: {
                     type: 'string',
                     description: 'Filter by specific frame ID',
+                  },
+                  status: {
+                    type: 'string',
+                    enum: [
+                      'pending',
+                      'in_progress',
+                      'completed',
+                      'blocked',
+                      'cancelled',
+                    ],
+                    description: 'Filter by status',
+                  },
+                  priority: {
+                    type: 'string',
+                    enum: ['low', 'medium', 'high', 'urgent'],
+                    description: 'Filter by priority',
+                  },
+                  search: {
+                    type: 'string',
+                    description: 'Search in task title or description',
+                  },
+                  limit: {
+                    type: 'number',
+                    description: 'Max number of tasks to return (default: 20)',
                   },
                 },
               },
@@ -558,56 +580,101 @@ class LocalStackMemoryMCP {
       }),
       async (request) => {
         const { name, arguments: args } = request.params;
-
-        switch (name) {
-          case 'get_context':
-            return this.handleGetContext(args);
-
-          case 'add_decision':
-            return this.handleAddDecision(args);
-
-          case 'start_frame':
-            return this.handleStartFrame(args);
-
-          case 'close_frame':
-            return this.handleCloseFrame(args);
-
-          case 'add_anchor':
-            return this.handleAddAnchor(args);
-
-          case 'get_hot_stack':
-            return this.handleGetHotStack(args);
-
-          case 'create_task':
-            return this.handleCreateTask(args);
-
-          case 'update_task_status':
-            return this.handleUpdateTaskStatus(args);
-
-          case 'get_active_tasks':
-            return this.handleGetActiveTasks(args);
-
-          case 'get_task_metrics':
-            return this.handleGetTaskMetrics(args);
-
-          case 'add_task_dependency':
-            return this.handleAddTaskDependency(args);
-
-          case 'linear_sync':
-            return this.handleLinearSync(args);
-
-          case 'linear_update_task':
-            return this.handleLinearUpdateTask(args);
-
-          case 'linear_get_tasks':
-            return this.handleLinearGetTasks(args);
-
-          case 'linear_status':
-            return this.handleLinearStatus(args);
-
-          default:
-            throw new Error(`Unknown tool: ${name}`);
+        
+        // Log tool call event before execution
+        const currentFrameId = this.frameManager.getCurrentFrameId();
+        if (currentFrameId) {
+          this.frameManager.addEvent('tool_call', {
+            tool_name: name,
+            arguments: args,
+            timestamp: Date.now(),
+          });
         }
+
+        let result;
+        let error;
+        
+        try {
+          switch (name) {
+            case 'get_context':
+              result = await this.handleGetContext(args);
+              break;
+
+            case 'add_decision':
+              result = await this.handleAddDecision(args);
+              break;
+
+            case 'start_frame':
+              result = await this.handleStartFrame(args);
+              break;
+
+            case 'close_frame':
+              result = await this.handleCloseFrame(args);
+              break;
+
+            case 'add_anchor':
+              result = await this.handleAddAnchor(args);
+              break;
+
+            case 'get_hot_stack':
+              result = await this.handleGetHotStack(args);
+              break;
+
+            case 'create_task':
+              result = await this.handleCreateTask(args);
+              break;
+
+            case 'update_task_status':
+              result = await this.handleUpdateTaskStatus(args);
+              break;
+
+            case 'get_active_tasks':
+              result = await this.handleGetActiveTasks(args);
+              break;
+
+            case 'get_task_metrics':
+              result = await this.handleGetTaskMetrics(args);
+              break;
+
+            case 'add_task_dependency':
+              result = await this.handleAddTaskDependency(args);
+              break;
+
+            case 'linear_sync':
+              result = await this.handleLinearSync(args);
+              break;
+
+            case 'linear_update_task':
+              result = await this.handleLinearUpdateTask(args);
+              break;
+
+            case 'linear_get_tasks':
+              result = await this.handleLinearGetTasks(args);
+              break;
+
+            case 'linear_status':
+              result = await this.handleLinearStatus(args);
+              break;
+
+            default:
+              throw new Error(`Unknown tool: ${name}`);
+          }
+        } catch (err) {
+          error = err;
+          throw err;
+        } finally {
+          // Log tool result event after execution (success or failure)
+          if (currentFrameId) {
+            this.frameManager.addEvent('tool_result', {
+              tool_name: name,
+              success: !error,
+              result: error ? { error: error.message } : result,
+              timestamp: Date.now(),
+            });
+          }
+        }
+
+        return result;
       }
     );
   }
@@ -921,34 +988,81 @@ class LocalStackMemoryMCP {
   }
 
   private async handleGetActiveTasks(args: any) {
-    const { frameId } = args;
-    const activeTasks = this.taskStore.getActiveTasks(frameId);
+    const { frameId, status, priority, search, limit = 20 } = args;
+    let tasks = this.taskStore.getActiveTasks(frameId);
 
-    if (activeTasks.length === 0) {
+    // Apply filters
+    if (status) {
+      tasks = tasks.filter((t) => t.status === status);
+    }
+    if (priority) {
+      tasks = tasks.filter((t) => t.priority === priority);
+    }
+    if (search) {
+      const searchLower = search.toLowerCase();
+      tasks = tasks.filter(
+        (t) =>
+          t.title.toLowerCase().includes(searchLower) ||
+          (t.description && t.description.toLowerCase().includes(searchLower))
+      );
+    }
+
+    // Sort by priority (urgent first) then by created_at
+    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3 };
+    tasks.sort((a, b) => {
+      const pa = priorityOrder[a.priority] ?? 2;
+      const pb = priorityOrder[b.priority] ?? 2;
+      if (pa !== pb) return pa - pb;
+      return b.created_at - a.created_at;
+    });
+
+    // Limit results
+    tasks = tasks.slice(0, limit);
+
+    if (tasks.length === 0) {
       return {
         content: [
           {
             type: 'text',
-            text: frameId
-              ? `📝 No active tasks in frame ${frameId}`
-              : '📝 No active tasks in project',
+            text: search
+              ? `📝 No tasks matching "${search}"`
+              : '📝 No active tasks found',
           },
         ],
       };
     }
 
-    let response = '📝 **Active Tasks**\n\n';
-    activeTasks.forEach((task) => {
-      const priority = task.priority.toUpperCase();
-      const status = task.status.replace('_', ' ').toUpperCase();
+    let response = `📝 **Tasks** (${tasks.length} found)\n\n`;
+    tasks.forEach((task) => {
+      const priorityIcon =
+        { urgent: '🔴', high: '🟠', medium: '🟡', low: '🟢' }[task.priority] ||
+        '⚪';
+      const statusIcon =
+        {
+          pending: '⏳',
+          in_progress: '🔄',
+          completed: '✅',
+          blocked: '🚫',
+          cancelled: '❌',
+        }[task.status] || '⚪';
       const effort = task.estimated_effort
-        ? ` (${task.estimated_effort}m)`
+        ? ` (~${task.estimated_effort}m)`
         : '';
 
-      response += `- **[${status}]** ${task.title}${effort}\n`;
-      response += `  Priority: ${priority} | ID: ${task.id}\n`;
-      if (task.depends_on.length > 0) {
-        response += `  Depends on: ${task.depends_on.join(', ')}\n`;
+      // Extract Linear ID from title if present
+      const linearMatch = task.title.match(/\[ENG-\d+\]/);
+      const linearId = linearMatch ? linearMatch[0] : '';
+      const title = linearId
+        ? task.title.replace(linearId, '').trim()
+        : task.title;
+
+      response += `${statusIcon} ${priorityIcon} **${linearId || task.id}** ${title}${effort}\n`;
+      if (task.description) {
+        const desc = task.description.split('\n')[0].slice(0, 100);
+        response += `   ${desc}${task.description.length > 100 ? '...' : ''}\n`;
+      }
+      if (task.tags && task.tags.length > 0) {
+        response += `   🏷️ ${task.tags.join(', ')}\n`;
       }
       response += '\n';
     });
@@ -1034,12 +1148,7 @@ class LocalStackMemoryMCP {
   // Linear Integration Handlers
   private async handleLinearSync(args: any) {
     try {
-      const { LinearAuthManager } = await import('../linear/auth.js');
-      const { LinearSyncEngine, DEFAULT_SYNC_CONFIG } =
-        await import('../linear/sync.js');
-
-      const authManager = new LinearAuthManager(this.projectRoot);
-      const tokens = authManager.loadTokens();
+      const tokens = this.linearAuthManager.loadTokens();
 
       if (!tokens) {
         return {
@@ -1052,18 +1161,14 @@ class LocalStackMemoryMCP {
         };
       }
 
-      const syncConfig = { ...DEFAULT_SYNC_CONFIG };
+      const syncConfig = { ...DEFAULT_SYNC_CONFIG, enabled: true };
       if (args.direction) {
         syncConfig.direction = args.direction;
       }
 
-      const syncEngine = new LinearSyncEngine(
-        this.taskStore,
-        authManager,
-        syncConfig
-      );
-
-      const result = await syncEngine.sync();
+      // Update sync engine configuration for this sync
+      this.linearSync.updateConfig(syncConfig);
+      const result = await this.linearSync.sync();
 
       return {
         content: [
@@ -1087,11 +1192,9 @@ class LocalStackMemoryMCP {
 
   private async handleLinearUpdateTask(args: any) {
     try {
-      const { LinearAuthManager } = await import('../linear/auth.js');
       const { LinearClient } = await import('../linear/client.js');
 
-      const authManager = new LinearAuthManager(this.projectRoot);
-      const tokens = authManager.loadTokens();
+      const tokens = this.linearAuthManager.loadTokens();
 
       if (!tokens) {
         return {
@@ -1162,11 +1265,16 @@ class LocalStackMemoryMCP {
 
       const updatedIssue = await client.updateIssue(issue.id, updates);
 
+      // Auto-sync to local tasks after update
+      this.linearSync.updateConfig({ ...DEFAULT_SYNC_CONFIG, enabled: true, direction: 'from_linear' });
+      const syncResult = await this.linearSync.sync();
+
       let response = `✅ Updated ${updatedIssue.identifier}: ${updatedIssue.title}\n`;
       if (args.status) {
         response += `Status: ${updatedIssue.state.name}\n`;
       }
-      response += `URL: ${updatedIssue.url}`;
+      response += `URL: ${updatedIssue.url}\n`;
+      response += `\n🔄 Local sync: ${syncResult.synced.fromLinear} new, ${syncResult.synced.updated} updated`;
 
       return {
         content: [
@@ -1190,11 +1298,9 @@ class LocalStackMemoryMCP {
 
   private async handleLinearGetTasks(args: any) {
     try {
-      const { LinearAuthManager } = await import('../linear/auth.js');
       const { LinearClient } = await import('../linear/client.js');
 
-      const authManager = new LinearAuthManager(this.projectRoot);
-      const tokens = authManager.loadTokens();
+      const tokens = this.linearAuthManager.loadTokens();
 
       if (!tokens) {
         return {
@@ -1270,11 +1376,9 @@ class LocalStackMemoryMCP {
 
   private async handleLinearStatus(_args: any) {
     try {
-      const { LinearAuthManager } = await import('../linear/auth.js');
       const { LinearClient } = await import('../linear/client.js');
 
-      const authManager = new LinearAuthManager(this.projectRoot);
-      const tokens = authManager.loadTokens();
+      const tokens = this.linearAuthManager.loadTokens();
 
       if (!tokens) {
         return {

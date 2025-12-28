@@ -1,0 +1,21 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+
+  // StackMemory MCP Server Integration
+  "mcp": {
+    "stackmemory": {
+      "type": "local",
+      "command": ["stackmemory", "mcp-server"],
+      "enabled": true,
+      "environment": {
+        "PROJECT_ROOT": ".",
+      },
+      "timeout": 10000,
+    },
+  },
+
+  // Tool configuration - enable StackMemory tools globally
+  "tools": {
+    "stackmemory*": true,
+  },
+}
