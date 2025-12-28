@@ -21,6 +21,7 @@ import {
 // import { LinearAuthManager, LinearOAuthSetup } from '../integrations/linear-auth.js';
 // import { LinearSyncEngine, DEFAULT_SYNC_CONFIG } from '../integrations/linear-sync.js';
 import { logger } from '../core/logger.js';
+import { BrowserMCPIntegration } from '../integrations/browser-mcp.js';
 
 // ============================================
 // Simple Local MCP Server
@@ -37,6 +38,7 @@ class LocalStackMemoryMCP {
   // private linearSync: LinearSyncEngine;
   private projectId: string;
   private contexts: Map<string, any> = new Map();
+  private browserMCP: BrowserMCPIntegration;
 
   constructor() {
     // Find project root (where .git is)
@@ -81,8 +83,19 @@ class LocalStackMemoryMCP {
       }
     );
 
+    // Initialize Browser MCP integration
+    this.browserMCP = new BrowserMCPIntegration({
+      headless: process.env.BROWSER_HEADLESS !== 'false',
+      defaultViewport: { width: 1280, height: 720 },
+    });
+
     this.setupHandlers();
     this.loadInitialContext();
+    
+    // Initialize Browser MCP with this server
+    this.browserMCP.initialize(this.server).catch((error) => {
+      logger.error('Failed to initialize Browser MCP', error);
+    });
 
     logger.info('StackMemory MCP Server initialized', {
       projectRoot: this.projectRoot,

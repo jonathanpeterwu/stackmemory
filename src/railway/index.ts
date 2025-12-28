@@ -11,6 +11,7 @@ import cors from 'cors';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 // WebSocket transport will be handled differently for Railway
 import Database from 'better-sqlite3';
+import { BrowserMCPIntegration } from '../integrations/browser-mcp.js';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
@@ -43,6 +44,7 @@ class RailwayMCPServer {
   private mcpServer: Server;
   private db: Database.Database;
   private connections: Map<string, any> = new Map();
+  private browserMCP: BrowserMCPIntegration;
 
   constructor() {
     this.app = express();
@@ -51,6 +53,12 @@ class RailwayMCPServer {
     this.setupMiddleware();
     this.setupRoutes();
     this.setupMCPServer();
+    
+    // Initialize Browser MCP for Railway
+    this.browserMCP = new BrowserMCPIntegration({
+      headless: true, // Always headless in production
+      defaultViewport: { width: 1280, height: 720 },
+    });
 
     if (config.enableWebSocket) {
       this.setupWebSocket();
@@ -361,7 +369,7 @@ class RailwayMCPServer {
     }
   }
 
-  private setupMCPServer(): void {
+  private async setupMCPServer(): Promise<void> {
     this.mcpServer = new Server(
       {
         name: 'stackmemory-railway',
@@ -374,6 +382,9 @@ class RailwayMCPServer {
         },
       }
     );
+    
+    // Initialize Browser MCP with the server
+    await this.browserMCP.initialize(this.mcpServer);
 
     // Register MCP tools
     this.mcpServer.setRequestHandler('tools/list' as any, async () => {
