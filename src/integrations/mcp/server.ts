@@ -470,6 +470,78 @@ class LocalStackMemoryMCP {
                 required: ['taskId', 'dependsOnId'],
               },
             },
+            {
+              name: 'linear_sync',
+              description: 'Sync tasks with Linear',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  direction: {
+                    type: 'string',
+                    enum: ['bidirectional', 'to_linear', 'from_linear'],
+                    description: 'Sync direction',
+                  },
+                },
+              },
+            },
+            {
+              name: 'linear_update_task',
+              description: 'Update a Linear task status',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  issueId: {
+                    type: 'string',
+                    description: 'Linear issue ID or identifier (e.g., STA-34)',
+                  },
+                  status: {
+                    type: 'string',
+                    enum: ['todo', 'in-progress', 'done', 'canceled'],
+                    description: 'New status for the task',
+                  },
+                  title: {
+                    type: 'string',
+                    description: 'Update task title (optional)',
+                  },
+                  description: {
+                    type: 'string',
+                    description: 'Update task description (optional)',
+                  },
+                  priority: {
+                    type: 'number',
+                    enum: [1, 2, 3, 4],
+                    description: 'Priority (1=urgent, 2=high, 3=medium, 4=low)',
+                  },
+                },
+                required: ['issueId'],
+              },
+            },
+            {
+              name: 'linear_get_tasks',
+              description: 'Get Linear tasks',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  status: {
+                    type: 'string',
+                    enum: ['todo', 'in-progress', 'done', 'all'],
+                    description: 'Filter by status',
+                  },
+                  limit: {
+                    type: 'number',
+                    description: 'Maximum number of tasks to return',
+                  },
+                },
+              },
+            },
+            {
+              name: 'linear_status',
+              description: 'Get Linear integration status',
+              inputSchema: {
+                type: 'object',
+                properties: {},
+              },
+            },
           ],
         };
       }
@@ -520,6 +592,18 @@ class LocalStackMemoryMCP {
 
           case 'add_task_dependency':
             return this.handleAddTaskDependency(args);
+
+          case 'linear_sync':
+            return this.handleLinearSync(args);
+
+          case 'linear_update_task':
+            return this.handleLinearUpdateTask(args);
+
+          case 'linear_get_tasks':
+            return this.handleLinearGetTasks(args);
+
+          case 'linear_status':
+            return this.handleLinearStatus(args);
 
           default:
             throw new Error(`Unknown tool: ${name}`);
@@ -941,6 +1025,300 @@ class LocalStackMemoryMCP {
           {
             type: 'text',
             text: `❌ Failed to add dependency: ${error}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // Linear Integration Handlers
+  private async handleLinearSync(args: any) {
+    try {
+      const { LinearAuthManager } = await import('../linear/auth.js');
+      const { LinearSyncEngine, DEFAULT_SYNC_CONFIG } =
+        await import('../linear/sync.js');
+
+      const authManager = new LinearAuthManager(this.projectRoot);
+      const tokens = authManager.loadTokens();
+
+      if (!tokens) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: '❌ Linear not authenticated. Run: stackmemory linear setup',
+            },
+          ],
+        };
+      }
+
+      const syncConfig = { ...DEFAULT_SYNC_CONFIG };
+      if (args.direction) {
+        syncConfig.direction = args.direction;
+      }
+
+      const syncEngine = new LinearSyncEngine(
+        this.taskStore,
+        authManager,
+        syncConfig
+      );
+
+      const result = await syncEngine.sync();
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `✅ Linear sync completed\n- To Linear: ${result.synced.toLinear} tasks\n- From Linear: ${result.synced.fromLinear} tasks\n- Updated: ${result.synced.updated} tasks`,
+          },
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Linear sync failed: ${error.message}`,
+          },
+        ],
+      };
+    }
+  }
+
+  private async handleLinearUpdateTask(args: any) {
+    try {
+      const { LinearAuthManager } = await import('../linear/auth.js');
+      const { LinearClient } = await import('../linear/client.js');
+
+      const authManager = new LinearAuthManager(this.projectRoot);
+      const tokens = authManager.loadTokens();
+
+      if (!tokens) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: '❌ Linear not authenticated. Run: stackmemory linear setup',
+            },
+          ],
+        };
+      }
+
+      const client = new LinearClient({
+        apiKey: tokens.accessToken,
+      });
+
+      // Find the issue
+      let issue = await client.getIssue(args.issueId);
+      if (!issue) {
+        issue = await client.findIssueByIdentifier(args.issueId);
+      }
+
+      if (!issue) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `❌ Linear issue ${args.issueId} not found`,
+            },
+          ],
+        };
+      }
+
+      const updates: any = {};
+
+      // Handle status update
+      if (args.status) {
+        const team = await client.getTeam();
+        const states = await client.getWorkflowStates(team.id);
+
+        const statusMap: Record<string, string> = {
+          todo: 'unstarted',
+          'in-progress': 'started',
+          done: 'completed',
+          canceled: 'cancelled',
+        };
+
+        const targetType = statusMap[args.status] || args.status;
+        const targetState = states.find((s: any) => s.type === targetType);
+
+        if (!targetState) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `❌ Invalid status: ${args.status}`,
+              },
+            ],
+          };
+        }
+
+        updates.stateId = targetState.id;
+      }
+
+      if (args.title) updates.title = args.title;
+      if (args.description) updates.description = args.description;
+      if (args.priority) updates.priority = args.priority;
+
+      const updatedIssue = await client.updateIssue(issue.id, updates);
+
+      let response = `✅ Updated ${updatedIssue.identifier}: ${updatedIssue.title}\n`;
+      if (args.status) {
+        response += `Status: ${updatedIssue.state.name}\n`;
+      }
+      response += `URL: ${updatedIssue.url}`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response,
+          },
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to update Linear task: ${error.message}`,
+          },
+        ],
+      };
+    }
+  }
+
+  private async handleLinearGetTasks(args: any) {
+    try {
+      const { LinearAuthManager } = await import('../linear/auth.js');
+      const { LinearClient } = await import('../linear/client.js');
+
+      const authManager = new LinearAuthManager(this.projectRoot);
+      const tokens = authManager.loadTokens();
+
+      if (!tokens) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: '❌ Linear not authenticated. Run: stackmemory linear setup',
+            },
+          ],
+        };
+      }
+
+      const client = new LinearClient({
+        apiKey: tokens.accessToken,
+      });
+
+      let stateType: any = undefined;
+      if (args.status && args.status !== 'all') {
+        const statusMap: Record<string, string> = {
+          todo: 'unstarted',
+          'in-progress': 'started',
+          done: 'completed',
+        };
+        stateType = statusMap[args.status] || args.status;
+      }
+
+      const issues = await client.getIssues({
+        stateType,
+        limit: args.limit || 20,
+      });
+
+      if (!issues || issues.length === 0) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: 'No Linear tasks found',
+            },
+          ],
+        };
+      }
+
+      let response = `📋 **Linear Tasks** (${issues.length} items)\n\n`;
+      issues.forEach((issue: any) => {
+        const priority = issue.priority ? `P${issue.priority}` : '-';
+        response += `- **${issue.identifier}**: ${issue.title}\n`;
+        response += `  Status: ${issue.state.name} | Priority: ${priority}\n`;
+        if (issue.assignee) {
+          response += `  Assignee: ${issue.assignee.name}\n`;
+        }
+        response += `  ${issue.url}\n\n`;
+      });
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response,
+          },
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to get Linear tasks: ${error.message}`,
+          },
+        ],
+      };
+    }
+  }
+
+  private async handleLinearStatus(_args: any) {
+    try {
+      const { LinearAuthManager } = await import('../linear/auth.js');
+      const { LinearClient } = await import('../linear/client.js');
+
+      const authManager = new LinearAuthManager(this.projectRoot);
+      const tokens = authManager.loadTokens();
+
+      if (!tokens) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: '❌ Linear integration not configured\nRun: stackmemory linear setup',
+            },
+          ],
+        };
+      }
+
+      try {
+        const client = new LinearClient({
+          apiKey: tokens.accessToken,
+        });
+
+        const viewer = await client.getViewer();
+        const team = await client.getTeam();
+
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `✅ **Linear Integration Status**\n\nConnected as: ${viewer.name} (${viewer.email})\nTeam: ${team.name} (${team.key})\nTokens: Valid`,
+            },
+          ],
+        };
+      } catch (error: any) {
+        return {
+          content: [
+            {
+              type: 'text',
+              text: `⚠️ Linear configured but connection failed: ${error.message}`,
+            },
+          ],
+        };
+      }
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Linear status check failed: ${error.message}`,
           },
         ],
       };
