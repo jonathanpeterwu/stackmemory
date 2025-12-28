@@ -37,6 +37,7 @@
     "node_modules",
     "dist",
     "**/*.test.ts",
-    "**/__tests__/**"
+    "**/__tests__/**",
+    "scripts/merge-linear-duplicates.ts"
   ]
 }
