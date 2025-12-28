@@ -27,12 +27,15 @@ import { ProgressTracker } from '../core/monitoring/progress-tracker.js';
 import { registerProjectCommands } from './commands/projects.js';
 import { registerLinearCommands } from './commands/linear.js';
 import { registerLinearTestCommand } from './commands/linear-test.js';
+import { registerWorktreeCommands } from './commands/worktree.js';
+import { registerOnboardingCommand } from './commands/onboard.js';
+import { webhookCommand } from './commands/webhook.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
-const VERSION = '0.2.4';
+const VERSION = '0.2.7';
 
 // Check for updates on CLI startup
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
@@ -936,11 +939,17 @@ program
   });
 
 // Register project management commands
+// Register command modules
+registerOnboardingCommand(program);
 registerProjectCommands(program);
+registerWorktreeCommands(program);
 
 // Register Linear integration commands
 registerLinearCommands(program);
 registerLinearTestCommand(program);
+
+// Register webhook command
+program.addCommand(webhookCommand());
 
 // Auto-detect current project on startup
 if (process.argv.length > 2) {

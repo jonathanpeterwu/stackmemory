@@ -6,7 +6,15 @@
 import Database from 'better-sqlite3';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../monitoring/logger.js';
-import { StackMemoryError, ErrorCode } from '../monitoring/error-handler.js';
+import {
+  DatabaseError,
+  FrameError,
+  SystemError,
+  ErrorCode,
+  wrapError,
+  createErrorHandler,
+} from '../errors/index.js';
+import { retry, withTimeout } from '../errors/recovery.js';
 
 // Frame types based on architecture
 export type FrameType =
@@ -95,78 +103,132 @@ export class FrameManager {
   }
 
   private initializeSchema() {
-    // Enhanced frames table matching architecture
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS frames (
-        frame_id TEXT PRIMARY KEY,
-        run_id TEXT NOT NULL,
-        project_id TEXT NOT NULL,
-        parent_frame_id TEXT REFERENCES frames(frame_id),
-        depth INTEGER NOT NULL DEFAULT 0,
-        type TEXT NOT NULL,
-        name TEXT NOT NULL,
-        state TEXT DEFAULT 'active',
-        inputs TEXT DEFAULT '{}',
-        outputs TEXT DEFAULT '{}',
-        digest_text TEXT,
-        digest_json TEXT DEFAULT '{}',
-        created_at INTEGER DEFAULT (unixepoch()),
-        closed_at INTEGER
-      );
+    const errorHandler = createErrorHandler({
+      operation: 'initializeSchema',
+      projectId: this.projectId,
+      runId: this.currentRunId,
+    });
 
-      CREATE TABLE IF NOT EXISTS events (
-        event_id TEXT PRIMARY KEY,
-        run_id TEXT NOT NULL,
-        frame_id TEXT NOT NULL,
-        seq INTEGER NOT NULL,
-        event_type TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        ts INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY(frame_id) REFERENCES frames(frame_id)
-      );
+    try {
+      // Enhanced frames table matching architecture
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS frames (
+          frame_id TEXT PRIMARY KEY,
+          run_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          parent_frame_id TEXT REFERENCES frames(frame_id),
+          depth INTEGER NOT NULL DEFAULT 0,
+          type TEXT NOT NULL,
+          name TEXT NOT NULL,
+          state TEXT DEFAULT 'active',
+          inputs TEXT DEFAULT '{}',
+          outputs TEXT DEFAULT '{}',
+          digest_text TEXT,
+          digest_json TEXT DEFAULT '{}',
+          created_at INTEGER DEFAULT (unixepoch()),
+          closed_at INTEGER
+        );
 
-      CREATE TABLE IF NOT EXISTS anchors (
-        anchor_id TEXT PRIMARY KEY,
-        frame_id TEXT NOT NULL,
-        project_id TEXT NOT NULL,
-        type TEXT NOT NULL,
-        text TEXT NOT NULL,
-        priority INTEGER DEFAULT 0,
-        created_at INTEGER DEFAULT (unixepoch()),
-        metadata TEXT DEFAULT '{}',
-        FOREIGN KEY(frame_id) REFERENCES frames(frame_id)
-      );
+        CREATE TABLE IF NOT EXISTS events (
+          event_id TEXT PRIMARY KEY,
+          run_id TEXT NOT NULL,
+          frame_id TEXT NOT NULL,
+          seq INTEGER NOT NULL,
+          event_type TEXT NOT NULL,
+          payload TEXT NOT NULL,
+          ts INTEGER DEFAULT (unixepoch()),
+          FOREIGN KEY(frame_id) REFERENCES frames(frame_id)
+        );
 
-      CREATE INDEX IF NOT EXISTS idx_frames_run ON frames(run_id);
-      CREATE INDEX IF NOT EXISTS idx_frames_parent ON frames(parent_frame_id);
-      CREATE INDEX IF NOT EXISTS idx_frames_state ON frames(state);
-      CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);
-      CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);
-      CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);
-    `);
+        CREATE TABLE IF NOT EXISTS anchors (
+          anchor_id TEXT PRIMARY KEY,
+          frame_id TEXT NOT NULL,
+          project_id TEXT NOT NULL,
+          type TEXT NOT NULL,
+          text TEXT NOT NULL,
+          priority INTEGER DEFAULT 0,
+          created_at INTEGER DEFAULT (unixepoch()),
+          metadata TEXT DEFAULT '{}',
+          FOREIGN KEY(frame_id) REFERENCES frames(frame_id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_frames_run ON frames(run_id);
+        CREATE INDEX IF NOT EXISTS idx_frames_parent ON frames(parent_frame_id);
+        CREATE INDEX IF NOT EXISTS idx_frames_state ON frames(state);
+        CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);
+        CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);
+        CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);
+      `);
+    } catch (error) {
+      const dbError = errorHandler(error, {
+        operation: 'initializeSchema',
+        schema: 'frames',
+      });
+      
+      if (dbError instanceof DatabaseError) {
+        throw new DatabaseError(
+          'Failed to initialize frame database schema',
+          ErrorCode.DB_MIGRATION_FAILED,
+          {
+            projectId: this.projectId,
+            operation: 'initializeSchema',
+            originalError: error,
+          },
+          error instanceof Error ? error : undefined
+        );
+      }
+      throw dbError;
+    }
   }
 
   private loadActiveStack() {
-    // Load currently active frames for this run
-    const activeFrames = this.db
-      .prepare(
-        `
-      SELECT frame_id, parent_frame_id, depth
-      FROM frames
-      WHERE run_id = ? AND state = 'active'
-      ORDER BY depth ASC
-    `
-      )
-      .all(this.currentRunId) as Frame[];
-
-    // Rebuild stack order
-    this.activeStack = this.buildStackOrder(activeFrames);
-
-    logger.info('Loaded active stack', {
+    const errorHandler = createErrorHandler({
+      operation: 'loadActiveStack',
       runId: this.currentRunId,
-      stackDepth: this.activeStack.length,
-      activeFrames: this.activeStack,
+      projectId: this.projectId,
     });
+
+    try {
+      // Load currently active frames for this run
+      const activeFrames = this.db
+        .prepare(
+          `
+        SELECT frame_id, parent_frame_id, depth
+        FROM frames
+        WHERE run_id = ? AND state = 'active'
+        ORDER BY depth ASC
+      `
+        )
+        .all(this.currentRunId) as Frame[];
+
+      // Rebuild stack order
+      this.activeStack = this.buildStackOrder(activeFrames);
+
+      logger.info('Loaded active stack', {
+        runId: this.currentRunId,
+        stackDepth: this.activeStack.length,
+        activeFrames: this.activeStack,
+      });
+    } catch (error) {
+      const dbError = errorHandler(error, {
+        query: 'SELECT frame_id, parent_frame_id, depth FROM frames',
+        runId: this.currentRunId,
+      });
+      
+      if (dbError instanceof DatabaseError) {
+        throw new DatabaseError(
+          'Failed to load active frame stack',
+          ErrorCode.DB_QUERY_FAILED,
+          {
+            runId: this.currentRunId,
+            projectId: this.projectId,
+            operation: 'loadActiveStack',
+          },
+          error instanceof Error ? error : undefined
+        );
+      }
+      throw dbError;
+    }
   }
 
   private buildStackOrder(
@@ -223,26 +285,42 @@ export class FrameManager {
       created_at: Math.floor(Date.now() / 1000),
     };
 
-    this.db
-      .prepare(
-        `
-      INSERT INTO frames (
-        frame_id, run_id, project_id, parent_frame_id, depth, type, name, state, inputs, created_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `
-      )
-      .run(
-        frame.frame_id,
-        frame.run_id,
-        frame.project_id,
-        frame.parent_frame_id,
-        frame.depth,
-        frame.type,
-        frame.name,
-        frame.state,
-        JSON.stringify(frame.inputs),
-        frame.created_at
+    try {
+      this.db
+        .prepare(
+          `
+        INSERT INTO frames (
+          frame_id, run_id, project_id, parent_frame_id, depth, type, name, state, inputs, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `
+        )
+        .run(
+          frame.frame_id,
+          frame.run_id,
+          frame.project_id,
+          frame.parent_frame_id,
+          frame.depth,
+          frame.type,
+          frame.name,
+          frame.state,
+          JSON.stringify(frame.inputs),
+          frame.created_at
+        );
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to create frame: ${options.name}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          frameId,
+          frameType: options.type,
+          frameName: options.name,
+          parentFrameId,
+          depth,
+          operation: 'createFrame',
+        },
+        error instanceof Error ? error : undefined
       );
+    }
 
     // Push to active stack
     this.activeStack.push(frameId);
@@ -265,18 +343,28 @@ export class FrameManager {
   public closeFrame(frameId?: string, outputs?: Record<string, any>): void {
     const targetFrameId = frameId || this.getCurrentFrameId();
     if (!targetFrameId) {
-      throw new StackMemoryError(
-        ErrorCode.OPERATION_FAILED,
-        'No active frame to close'
+      throw new FrameError(
+        'No active frame to close',
+        ErrorCode.FRAME_INVALID_STATE,
+        {
+          operation: 'closeFrame',
+          activeStack: this.activeStack,
+          stackDepth: this.activeStack.length,
+        }
       );
     }
 
     // Get frame details
     const frame = this.getFrame(targetFrameId);
     if (!frame) {
-      throw new StackMemoryError(
-        ErrorCode.OPERATION_FAILED,
-        `Frame not found: ${targetFrameId}`
+      throw new FrameError(
+        `Frame not found: ${targetFrameId}`,
+        ErrorCode.FRAME_NOT_FOUND,
+        {
+          frameId: targetFrameId,
+          operation: 'closeFrame',
+          runId: this.currentRunId,
+        }
       );
     }
 
@@ -291,25 +379,38 @@ export class FrameManager {
     const digest = this.generateDigest(targetFrameId);
     const finalOutputs = { ...outputs, ...digest.structured };
 
-    // Update frame to closed state
-    this.db
-      .prepare(
-        `
-      UPDATE frames
-      SET state = 'closed',
-          outputs = ?,
-          digest_text = ?,
-          digest_json = ?,
-          closed_at = unixepoch()
-      WHERE frame_id = ?
-    `
-      )
-      .run(
-        JSON.stringify(finalOutputs),
-        digest.text,
-        JSON.stringify(digest.structured),
-        targetFrameId
+    try {
+      // Update frame to closed state
+      this.db
+        .prepare(
+          `
+        UPDATE frames
+        SET state = 'closed',
+            outputs = ?,
+            digest_text = ?,
+            digest_json = ?,
+            closed_at = unixepoch()
+        WHERE frame_id = ?
+      `
+        )
+        .run(
+          JSON.stringify(finalOutputs),
+          digest.text,
+          JSON.stringify(digest.structured),
+          targetFrameId
+        );
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to close frame: ${targetFrameId}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          frameId: targetFrameId,
+          frameName: frame.name,
+          operation: 'closeFrame',
+        },
+        error instanceof Error ? error : undefined
       );
+    }
 
     // Remove from active stack
     this.activeStack = this.activeStack.filter((id) => id !== targetFrameId);
@@ -327,18 +428,41 @@ export class FrameManager {
   }
 
   private closeChildFrames(parentFrameId: string) {
-    const children = this.db
-      .prepare(
-        `
-      SELECT frame_id FROM frames
-      WHERE parent_frame_id = ? AND state = 'active'
-    `
-      )
-      .all(parentFrameId) as { frame_id: string }[];
+    try {
+      const children = this.db
+        .prepare(
+          `
+        SELECT frame_id FROM frames
+        WHERE parent_frame_id = ? AND state = 'active'
+      `
+        )
+        .all(parentFrameId) as { frame_id: string }[];
 
-    children.forEach((child) => {
-      this.closeFrame(child.frame_id);
-    });
+      children.forEach((child) => {
+        try {
+          this.closeFrame(child.frame_id);
+        } catch (error) {
+          logger.error(
+            'Failed to close child frame',
+            error instanceof Error ? error : new Error(String(error)),
+            {
+              parentFrameId,
+              childFrameId: child.frame_id,
+            }
+          );
+        }
+      });
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to close child frames for parent: ${parentFrameId}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          parentFrameId,
+          operation: 'closeChildFrames',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
@@ -353,9 +477,14 @@ export class FrameManager {
     const anchors = this.getFrameAnchors(frameId);
 
     if (!frame) {
-      throw new StackMemoryError(
-        ErrorCode.OPERATION_FAILED,
-        `Cannot generate digest: frame not found ${frameId}`
+      throw new FrameError(
+        `Cannot generate digest: frame not found ${frameId}`,
+        ErrorCode.FRAME_NOT_FOUND,
+        {
+          frameId,
+          operation: 'generateDigest',
+          runId: this.currentRunId,
+        }
       );
     }
 
@@ -427,30 +556,50 @@ export class FrameManager {
   ): string {
     const targetFrameId = frameId || this.getCurrentFrameId();
     if (!targetFrameId) {
-      throw new StackMemoryError(
-        ErrorCode.OPERATION_FAILED,
-        'No active frame for event'
+      throw new FrameError(
+        'No active frame for event',
+        ErrorCode.FRAME_INVALID_STATE,
+        {
+          operation: 'addEvent',
+          eventType,
+          activeStack: this.activeStack,
+        }
       );
     }
 
     const eventId = uuidv4();
     const seq = this.getNextEventSequence(targetFrameId);
 
-    this.db
-      .prepare(
-        `
-      INSERT INTO events (event_id, run_id, frame_id, seq, event_type, payload)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `
-      )
-      .run(
-        eventId,
-        this.currentRunId,
-        targetFrameId,
-        seq,
-        eventType,
-        JSON.stringify(payload)
+    try {
+      this.db
+        .prepare(
+          `
+        INSERT INTO events (event_id, run_id, frame_id, seq, event_type, payload)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `
+        )
+        .run(
+          eventId,
+          this.currentRunId,
+          targetFrameId,
+          seq,
+          eventType,
+          JSON.stringify(payload)
+        );
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to add event to frame: ${targetFrameId}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          eventId,
+          frameId: targetFrameId,
+          eventType,
+          seq,
+          operation: 'addEvent',
+        },
+        error instanceof Error ? error : undefined
       );
+    }
 
     return eventId;
   }
@@ -467,30 +616,50 @@ export class FrameManager {
   ): string {
     const targetFrameId = frameId || this.getCurrentFrameId();
     if (!targetFrameId) {
-      throw new StackMemoryError(
-        ErrorCode.OPERATION_FAILED,
-        'No active frame for anchor'
+      throw new FrameError(
+        'No active frame for anchor',
+        ErrorCode.FRAME_INVALID_STATE,
+        {
+          operation: 'addAnchor',
+          anchorType: type,
+          text: text.substring(0, 100),
+          activeStack: this.activeStack,
+        }
       );
     }
 
     const anchorId = uuidv4();
 
-    this.db
-      .prepare(
-        `
-      INSERT INTO anchors (anchor_id, frame_id, project_id, type, text, priority, metadata)
-      VALUES (?, ?, ?, ?, ?, ?, ?)
-    `
-      )
-      .run(
-        anchorId,
-        targetFrameId,
-        this.projectId,
-        type,
-        text,
-        priority,
-        JSON.stringify(metadata)
+    try {
+      this.db
+        .prepare(
+          `
+        INSERT INTO anchors (anchor_id, frame_id, project_id, type, text, priority, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
+      `
+        )
+        .run(
+          anchorId,
+          targetFrameId,
+          this.projectId,
+          type,
+          text,
+          priority,
+          JSON.stringify(metadata)
+        );
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to add anchor to frame: ${targetFrameId}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          anchorId,
+          frameId: targetFrameId,
+          anchorType: type,
+          operation: 'addAnchor',
+        },
+        error instanceof Error ? error : undefined
       );
+    }
 
     return anchorId;
   }
@@ -543,63 +712,112 @@ export class FrameManager {
   }
 
   public getFrame(frameId: string): Frame | undefined {
-    const row = this.db
-      .prepare(
-        `
-      SELECT * FROM frames WHERE frame_id = ?
-    `
-      )
-      .get(frameId) as any;
+    try {
+      const row = this.db
+        .prepare(
+          `
+        SELECT * FROM frames WHERE frame_id = ?
+      `
+        )
+        .get(frameId) as any;
 
-    if (!row) return undefined;
+      if (!row) return undefined;
 
-    return {
-      ...row,
-      inputs: JSON.parse(row.inputs || '{}'),
-      outputs: JSON.parse(row.outputs || '{}'),
-      digest_json: JSON.parse(row.digest_json || '{}'),
-    };
+      return {
+        ...row,
+        inputs: JSON.parse(row.inputs || '{}'),
+        outputs: JSON.parse(row.outputs || '{}'),
+        digest_json: JSON.parse(row.digest_json || '{}'),
+      };
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to get frame: ${frameId}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          frameId,
+          operation: 'getFrame',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   public getFrameEvents(frameId: string, limit?: number): Event[] {
-    const query = limit
-      ? `SELECT * FROM events WHERE frame_id = ? ORDER BY seq DESC LIMIT ?`
-      : `SELECT * FROM events WHERE frame_id = ? ORDER BY seq ASC`;
+    try {
+      const query = limit
+        ? `SELECT * FROM events WHERE frame_id = ? ORDER BY seq DESC LIMIT ?`
+        : `SELECT * FROM events WHERE frame_id = ? ORDER BY seq ASC`;
 
-    const params = limit ? [frameId, limit] : [frameId];
-    const rows = this.db.prepare(query).all(...params) as any[];
+      const params = limit ? [frameId, limit] : [frameId];
+      const rows = this.db.prepare(query).all(...params) as any[];
 
-    return rows.map((row) => ({
-      ...row,
-      payload: JSON.parse(row.payload),
-    }));
+      return rows.map((row) => ({
+        ...row,
+        payload: JSON.parse(row.payload),
+      }));
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to get frame events: ${frameId}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          frameId,
+          limit,
+          operation: 'getFrameEvents',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   private getFrameAnchors(frameId: string): Anchor[] {
-    const rows = this.db
-      .prepare(
-        `
-      SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC
-    `
-      )
-      .all(frameId) as any[];
+    try {
+      const rows = this.db
+        .prepare(
+          `
+        SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC
+      `
+        )
+        .all(frameId) as any[];
 
-    return rows.map((row) => ({
-      ...row,
-      metadata: JSON.parse(row.metadata || '{}'),
-    }));
+      return rows.map((row) => ({
+        ...row,
+        metadata: JSON.parse(row.metadata || '{}'),
+      }));
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to get frame anchors: ${frameId}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          frameId,
+          operation: 'getFrameAnchors',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   private getNextEventSequence(frameId: string): number {
-    const result = this.db
-      .prepare(
-        `
-      SELECT MAX(seq) as max_seq FROM events WHERE frame_id = ?
-    `
-      )
-      .get(frameId) as { max_seq: number | null };
+    try {
+      const result = this.db
+        .prepare(
+          `
+        SELECT MAX(seq) as max_seq FROM events WHERE frame_id = ?
+      `
+        )
+        .get(frameId) as { max_seq: number | null };
 
-    return (result.max_seq || 0) + 1;
+      return (result.max_seq || 0) + 1;
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to get next event sequence for frame: ${frameId}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          frameId,
+          operation: 'getNextEventSequence',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   private extractConstraints(

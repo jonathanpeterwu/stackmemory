@@ -205,6 +205,10 @@ export class BrowserMCPIntegration {
     this.server.setRequestHandler(CallToolRequestSchema, async (request) => {
       const { name, arguments: args } = request.params;
 
+      if (!args) {
+        throw new McpError(ErrorCode.InvalidParams, 'Missing arguments');
+      }
+
       try {
         switch (name) {
           case 'browser_navigate':

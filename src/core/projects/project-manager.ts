@@ -9,6 +9,15 @@ import { join, basename, dirname } from 'path';
 import { homedir } from 'os';
 import Database from 'better-sqlite3';
 import { logger } from '../monitoring/logger.js';
+import {
+  DatabaseError,
+  ProjectError,
+  SystemError,
+  ErrorCode,
+  wrapError,
+  createErrorHandler,
+} from '../errors/index.js';
+import { retry, withTimeout } from '../errors/recovery.js';
 
 export interface ProjectInfo {
   id: string;
@@ -37,7 +46,7 @@ export interface OrganizationConfig {
 
 export class ProjectManager {
   private static instance: ProjectManager;
-  private db: Database.Database;
+  private db!: Database.Database;
   private configPath: string;
   private organizations: Map<string, OrganizationConfig> = new Map();
   private projectCache: Map<string, ProjectInfo> = new Map();
@@ -63,41 +72,74 @@ export class ProjectManager {
    */
   async detectProject(projectPath?: string): Promise<ProjectInfo> {
     const path = projectPath || process.cwd();
-
-    // Check cache first
-    const cached = this.projectCache.get(path);
-    if (cached && this.isCacheValid(cached)) {
-      return cached;
-    }
-
-    const project = await this.analyzeProject(path);
-
-    // Auto-categorize based on git origin
-    if (project.gitRemote) {
-      project.organization = this.extractOrganization(project.gitRemote);
-      project.accountType = this.determineAccountType(
-        project.gitRemote,
-        project.organization
-      );
-      project.isPrivate = this.isPrivateRepo(project.gitRemote);
-    }
-
-    // Detect framework and language
-    project.primaryLanguage = this.detectPrimaryLanguage(path);
-    project.framework = this.detectFramework(path);
-
-    // Store in database
-    this.saveProject(project);
-    this.projectCache.set(path, project);
-    this.currentProject = project;
-
-    logger.info('Project auto-detected', {
-      id: project.id,
-      org: project.organization,
-      type: project.accountType,
+    const errorHandler = createErrorHandler({
+      operation: 'detectProject',
+      projectPath: path,
     });
 
-    return project;
+    try {
+      // Check cache first
+      const cached = this.projectCache.get(path);
+      if (cached && this.isCacheValid(cached)) {
+        return cached;
+      }
+
+      const project = await this.analyzeProject(path);
+
+      // Auto-categorize based on git origin
+      if (project.gitRemote) {
+        project.organization = this.extractOrganization(project.gitRemote);
+        project.accountType = this.determineAccountType(
+          project.gitRemote,
+          project.organization
+        );
+        project.isPrivate = this.isPrivateRepo(project.gitRemote);
+      }
+
+      // Detect framework and language
+      project.primaryLanguage = this.detectPrimaryLanguage(path);
+      project.framework = this.detectFramework(path);
+
+      // Store in database with retry logic
+      await retry(
+        () => Promise.resolve(this.saveProject(project)),
+        {
+          maxAttempts: 3,
+          initialDelay: 100,
+          onRetry: (attempt, error) => {
+            logger.warn(`Retrying project save (attempt ${attempt})`, {
+              projectId: project.id,
+              error: error instanceof Error ? error.message : String(error),
+            });
+          },
+        }
+      );
+
+      this.projectCache.set(path, project);
+      this.currentProject = project;
+
+      logger.info('Project auto-detected', {
+        id: project.id,
+        org: project.organization,
+        type: project.accountType,
+      });
+
+      return project;
+    } catch (error) {
+      const wrappedError = errorHandler(error, {
+        projectPath: path,
+        operation: 'detectProject',
+      });
+      
+      throw new ProjectError(
+        `Failed to detect project at path: ${path}`,
+        ErrorCode.PROJECT_INVALID_PATH,
+        {
+          projectPath: path,
+          operation: 'detectProject',
+        }
+      );
+    }
   }
 
   /**
@@ -129,30 +171,38 @@ export class ProjectManager {
    */
   private getGitInfo(projectPath: string): any {
     const info: any = {};
+    const errorHandler = createErrorHandler({
+      operation: 'getGitInfo',
+      projectPath,
+    });
 
     try {
       // Get remote origin
       info.remote = execSync('git config --get remote.origin.url', {
         cwd: projectPath,
         encoding: 'utf-8',
+        timeout: 5000, // 5 second timeout
       }).trim();
 
       // Get current branch
       info.branch = execSync('git branch --show-current', {
         cwd: projectPath,
         encoding: 'utf-8',
+        timeout: 5000,
       }).trim();
 
       // Get last commit
       info.lastCommit = execSync('git log -1 --format=%H', {
         cwd: projectPath,
         encoding: 'utf-8',
+        timeout: 5000,
       }).trim();
 
       // Check if working tree is dirty
       const status = execSync('git status --porcelain', {
         cwd: projectPath,
         encoding: 'utf-8',
+        timeout: 5000,
       });
       info.isDirty = status.length > 0;
 
@@ -161,6 +211,10 @@ export class ProjectManager {
       info.name = match ? match[1] : basename(projectPath);
     } catch (error) {
       // Not a git repository or git not available
+      logger.debug('Git info extraction failed, using directory name', {
+        projectPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
       info.name = basename(projectPath);
     }
 
@@ -377,73 +431,110 @@ export class ProjectManager {
    */
   private initializeDatabase(): void {
     const dbPath = join(this.configPath, 'projects.db');
-    this.db = new Database(dbPath);
+    const errorHandler = createErrorHandler({
+      operation: 'initializeDatabase',
+      dbPath,
+    });
 
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS projects (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        path TEXT NOT NULL UNIQUE,
-        git_remote TEXT,
-        organization TEXT,
-        account_type TEXT,
-        is_private BOOLEAN,
-        primary_language TEXT,
-        framework TEXT,
-        last_accessed DATETIME,
-        metadata JSON,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+    try {
+      this.db = new Database(dbPath);
+
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS projects (
+          id TEXT PRIMARY KEY,
+          name TEXT NOT NULL,
+          path TEXT NOT NULL UNIQUE,
+          git_remote TEXT,
+          organization TEXT,
+          account_type TEXT,
+          is_private BOOLEAN,
+          primary_language TEXT,
+          framework TEXT,
+          last_accessed DATETIME,
+          metadata JSON,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS organizations (
+          name TEXT PRIMARY KEY,
+          type TEXT,
+          account_type TEXT,
+          config JSON,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+        );
+
+        CREATE TABLE IF NOT EXISTS project_contexts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          project_id TEXT NOT NULL,
+          context_type TEXT,
+          content TEXT,
+          metadata JSON,
+          created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+          FOREIGN KEY (project_id) REFERENCES projects(id)
+        );
+
+        CREATE INDEX IF NOT EXISTS idx_projects_org ON projects(organization);
+        CREATE INDEX IF NOT EXISTS idx_projects_type ON projects(account_type);
+        CREATE INDEX IF NOT EXISTS idx_contexts_project ON project_contexts(project_id);
+      `);
+    } catch (error) {
+      const dbError = errorHandler(error, {
+        dbPath,
+        operation: 'initializeDatabase',
+      });
+      
+      throw new DatabaseError(
+        'Failed to initialize projects database',
+        ErrorCode.DB_MIGRATION_FAILED,
+        {
+          dbPath,
+          configPath: this.configPath,
+          operation: 'initializeDatabase',
+        },
+        error instanceof Error ? error : undefined
       );
-
-      CREATE TABLE IF NOT EXISTS organizations (
-        name TEXT PRIMARY KEY,
-        type TEXT,
-        account_type TEXT,
-        config JSON,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-      );
-
-      CREATE TABLE IF NOT EXISTS project_contexts (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        project_id TEXT NOT NULL,
-        context_type TEXT,
-        content TEXT,
-        metadata JSON,
-        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-        FOREIGN KEY (project_id) REFERENCES projects(id)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_projects_org ON projects(organization);
-      CREATE INDEX IF NOT EXISTS idx_projects_type ON projects(account_type);
-      CREATE INDEX IF NOT EXISTS idx_contexts_project ON project_contexts(project_id);
-    `);
+    }
   }
 
   /**
    * Save project to database
    */
   private saveProject(project: ProjectInfo): void {
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO projects 
-      (id, name, path, git_remote, organization, account_type, is_private, 
-       primary_language, framework, last_accessed, metadata, updated_at)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO projects 
+        (id, name, path, git_remote, organization, account_type, is_private, 
+         primary_language, framework, last_accessed, metadata, updated_at)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+      `);
 
-    stmt.run(
-      project.id,
-      project.name,
-      project.path,
-      project.gitRemote,
-      project.organization,
-      project.accountType,
-      project.isPrivate ? 1 : 0,
-      project.primaryLanguage,
-      project.framework,
-      project.lastAccessed.toISOString(),
-      JSON.stringify(project.metadata)
-    );
+      stmt.run(
+        project.id,
+        project.name,
+        project.path,
+        project.gitRemote,
+        project.organization,
+        project.accountType,
+        project.isPrivate ? 1 : 0,
+        project.primaryLanguage,
+        project.framework,
+        project.lastAccessed.toISOString(),
+        JSON.stringify(project.metadata)
+      );
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to save project: ${project.name}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          projectId: project.id,
+          projectName: project.name,
+          projectPath: project.path,
+          operation: 'saveProject',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
@@ -459,7 +550,10 @@ export class ProjectManager {
           this.organizations.set(org.name, org);
         }
       } catch (error) {
-        logger.error('Failed to load organizations config', error);
+        logger.error(
+          'Failed to load organizations config',
+          error instanceof Error ? error : undefined
+        );
       }
     }
   }
@@ -468,6 +562,10 @@ export class ProjectManager {
    * Auto-discover organizations from existing projects
    */
   private autoDiscoverOrganizations(): void {
+    const errorHandler = createErrorHandler({
+      operation: 'autoDiscoverOrganizations',
+    });
+
     try {
       const stmt = this.db.prepare(`
         SELECT DISTINCT organization, account_type, COUNT(*) as project_count
@@ -492,7 +590,17 @@ export class ProjectManager {
         }
       }
     } catch (error) {
-      logger.error('Failed to auto-discover organizations', error);
+      const wrappedError = errorHandler(error, {
+        operation: 'autoDiscoverOrganizations',
+      });
+      
+      logger.error(
+        'Failed to auto-discover organizations',
+        error instanceof Error ? error : new Error(String(error)),
+        {
+          operation: 'autoDiscoverOrganizations',
+        }
+      );
     }
   }
 
@@ -530,56 +638,91 @@ export class ProjectManager {
    * Get all projects
    */
   getAllProjects(): ProjectInfo[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM projects
-      ORDER BY last_accessed DESC
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM projects
+        ORDER BY last_accessed DESC
+      `);
 
-    const projects = stmt.all() as any[];
-    return projects.map((p) => ({
-      ...p,
-      isPrivate: p.is_private === 1,
-      lastAccessed: new Date(p.last_accessed),
-      metadata: JSON.parse(p.metadata || '{}'),
-    }));
+      const projects = stmt.all() as any[];
+      return projects.map((p) => ({
+        ...p,
+        isPrivate: p.is_private === 1,
+        lastAccessed: new Date(p.last_accessed),
+        metadata: JSON.parse(p.metadata || '{}'),
+      }));
+    } catch (error) {
+      throw new DatabaseError(
+        'Failed to get all projects',
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          operation: 'getAllProjects',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
    * Get projects by organization
    */
   getProjectsByOrganization(organization: string): ProjectInfo[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM projects
-      WHERE organization = ?
-      ORDER BY last_accessed DESC
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM projects
+        WHERE organization = ?
+        ORDER BY last_accessed DESC
+      `);
 
-    const projects = stmt.all(organization) as any[];
-    return projects.map((p) => ({
-      ...p,
-      isPrivate: p.is_private === 1,
-      lastAccessed: new Date(p.last_accessed),
-      metadata: JSON.parse(p.metadata || '{}'),
-    }));
+      const projects = stmt.all(organization) as any[];
+      return projects.map((p) => ({
+        ...p,
+        isPrivate: p.is_private === 1,
+        lastAccessed: new Date(p.last_accessed),
+        metadata: JSON.parse(p.metadata || '{}'),
+      }));
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to get projects by organization: ${organization}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          organization,
+          operation: 'getProjectsByOrganization',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
    * Get projects by account type
    */
   getProjectsByAccountType(accountType: string): ProjectInfo[] {
-    const stmt = this.db.prepare(`
-      SELECT * FROM projects
-      WHERE account_type = ?
-      ORDER BY last_accessed DESC
-    `);
+    try {
+      const stmt = this.db.prepare(`
+        SELECT * FROM projects
+        WHERE account_type = ?
+        ORDER BY last_accessed DESC
+      `);
 
-    const projects = stmt.all(accountType) as any[];
-    return projects.map((p) => ({
-      ...p,
-      isPrivate: p.is_private === 1,
-      lastAccessed: new Date(p.last_accessed),
-      metadata: JSON.parse(p.metadata || '{}'),
-    }));
+      const projects = stmt.all(accountType) as any[];
+      return projects.map((p) => ({
+        ...p,
+        isPrivate: p.is_private === 1,
+        lastAccessed: new Date(p.last_accessed),
+        metadata: JSON.parse(p.metadata || '{}'),
+      }));
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to get projects by account type: ${accountType}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          accountType,
+          operation: 'getProjectsByAccountType',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
@@ -596,23 +739,45 @@ export class ProjectManager {
    * Save organization config
    */
   saveOrganization(org: OrganizationConfig): void {
-    this.organizations.set(org.name, org);
+    const errorHandler = createErrorHandler({
+      operation: 'saveOrganization',
+      orgName: org.name,
+    });
 
-    // Save to file
-    const configFile = join(this.configPath, 'organizations.json');
-    const config = {
-      organizations: Array.from(this.organizations.values()),
-    };
+    try {
+      this.organizations.set(org.name, org);
 
-    writeFileSync(configFile, JSON.stringify(config, null, 2));
+      // Save to file
+      const configFile = join(this.configPath, 'organizations.json');
+      const config = {
+        organizations: Array.from(this.organizations.values()),
+      };
 
-    // Save to database
-    const stmt = this.db.prepare(`
-      INSERT OR REPLACE INTO organizations (name, type, account_type, config)
-      VALUES (?, ?, ?, ?)
-    `);
+      writeFileSync(configFile, JSON.stringify(config, null, 2));
 
-    stmt.run(org.name, org.type, org.accountType, JSON.stringify(org));
+      // Save to database
+      const stmt = this.db.prepare(`
+        INSERT OR REPLACE INTO organizations (name, type, account_type, config)
+        VALUES (?, ?, ?, ?)
+      `);
+
+      stmt.run(org.name, org.type, org.accountType, JSON.stringify(org));
+    } catch (error) {
+      const wrappedError = errorHandler(error, {
+        orgName: org.name,
+        operation: 'saveOrganization',
+      });
+      
+      throw new DatabaseError(
+        `Failed to save organization: ${org.name}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          orgName: org.name,
+          operation: 'saveOrganization',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
@@ -636,10 +801,10 @@ export class ProjectManager {
       if (!existsSync(basePath)) continue;
 
       try {
-        // Find all .git directories
+        // Find all .git directories with timeout
         const gitDirs = execSync(
           `find ${basePath} -type d -name .git -maxdepth 4 2>/dev/null`,
-          { encoding: 'utf-8' }
+          { encoding: 'utf-8', timeout: 30000 } // 30 second timeout
         )
           .trim()
           .split('\n')
@@ -652,11 +817,21 @@ export class ProjectManager {
             await this.detectProject(projectPath);
             logger.info(`Discovered project: ${projectPath}`);
           } catch (error) {
-            logger.warn(`Failed to analyze project: ${projectPath}`, error);
+            logger.warn(
+              `Failed to analyze project: ${projectPath}`,
+              {
+                projectPath,
+                error: error instanceof Error ? error.message : String(error),
+                operation: 'scanAndCategorizeAllProjects',
+              }
+            );
           }
         }
       } catch (error) {
-        logger.warn(`Failed to scan ${basePath}`, error);
+        logger.warn(
+          `Failed to scan ${basePath}`,
+          error instanceof Error ? { error } : undefined
+        );
       }
     }
 

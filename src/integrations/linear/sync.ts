@@ -524,7 +524,10 @@ export class LinearSyncEngine {
       );
       return matchingState?.id;
     } catch (error) {
-      logger.warn('Failed to map status to Linear state:', error);
+      logger.warn(
+        'Failed to map status to Linear state:',
+        error instanceof Error ? { error } : undefined
+      );
       return undefined;
     }
   }

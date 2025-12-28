@@ -8,6 +8,15 @@ import { createHash } from 'crypto';
 import { appendFile, existsSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../core/monitoring/logger.js';
+import {
+  DatabaseError,
+  TaskError,
+  SystemError,
+  ErrorCode,
+  wrapError,
+  createErrorHandler,
+} from '../../core/errors/index.js';
+import { retry, withTimeout } from '../../core/errors/recovery.js';
 
 export type TaskStatus =
   | 'pending'
@@ -88,37 +97,60 @@ export class PebblesTaskStore {
   }
 
   private initializeCache() {
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS task_cache (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        timestamp INTEGER NOT NULL,
-        parent_id TEXT,
-        frame_id TEXT NOT NULL,
-        title TEXT NOT NULL,
-        description TEXT,
-        status TEXT NOT NULL,
-        priority TEXT NOT NULL,
-        assignee TEXT,
-        created_at INTEGER NOT NULL,
-        started_at INTEGER,
-        completed_at INTEGER,
-        estimated_effort INTEGER,
-        actual_effort INTEGER,
-        depends_on TEXT DEFAULT '[]',
-        blocks TEXT DEFAULT '[]',
-        tags TEXT DEFAULT '[]',
-        external_refs TEXT DEFAULT '{}',
-        context_score REAL DEFAULT 0.5,
-        last_accessed INTEGER
-      );
+    const errorHandler = createErrorHandler({
+      operation: 'initializeCache',
+      projectRoot: this.projectRoot,
+    });
+
+    try {
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS task_cache (
+          id TEXT PRIMARY KEY,
+          type TEXT NOT NULL,
+          timestamp INTEGER NOT NULL,
+          parent_id TEXT,
+          frame_id TEXT NOT NULL,
+          title TEXT NOT NULL,
+          description TEXT,
+          status TEXT NOT NULL,
+          priority TEXT NOT NULL,
+          assignee TEXT,
+          created_at INTEGER NOT NULL,
+          started_at INTEGER,
+          completed_at INTEGER,
+          estimated_effort INTEGER,
+          actual_effort INTEGER,
+          depends_on TEXT DEFAULT '[]',
+          blocks TEXT DEFAULT '[]',
+          tags TEXT DEFAULT '[]',
+          external_refs TEXT DEFAULT '{}',
+          context_score REAL DEFAULT 0.5,
+          last_accessed INTEGER
+        );
+        
+        CREATE INDEX IF NOT EXISTS idx_task_status ON task_cache(status);
+        CREATE INDEX IF NOT EXISTS idx_task_priority ON task_cache(priority);
+        CREATE INDEX IF NOT EXISTS idx_task_frame ON task_cache(frame_id);
+        CREATE INDEX IF NOT EXISTS idx_task_timestamp ON task_cache(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_task_parent ON task_cache(parent_id);
+      `);
+    } catch (error) {
+      const dbError = errorHandler(error, {
+        operation: 'initializeCache',
+        schema: 'task_cache',
+      });
       
-      CREATE INDEX IF NOT EXISTS idx_task_status ON task_cache(status);
-      CREATE INDEX IF NOT EXISTS idx_task_priority ON task_cache(priority);
-      CREATE INDEX IF NOT EXISTS idx_task_frame ON task_cache(frame_id);
-      CREATE INDEX IF NOT EXISTS idx_task_timestamp ON task_cache(timestamp);
-      CREATE INDEX IF NOT EXISTS idx_task_parent ON task_cache(parent_id);
-    `);
+      throw new DatabaseError(
+        'Failed to initialize task cache schema',
+        ErrorCode.DB_MIGRATION_FAILED,
+        {
+          projectRoot: this.projectRoot,
+          cacheFile: this.cacheFile,
+          operation: 'initializeCache',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
@@ -127,21 +159,47 @@ export class PebblesTaskStore {
   private loadFromJSONL() {
     if (!existsSync(this.tasksFile)) return;
 
-    const content = readFileSync(this.tasksFile, 'utf-8');
-    const lines = content.split('\n').filter((line) => line.trim());
+    const errorHandler = createErrorHandler({
+      operation: 'loadFromJSONL',
+      tasksFile: this.tasksFile,
+    });
 
-    let loaded = 0;
-    for (const line of lines) {
-      try {
-        const task = JSON.parse(line) as PebblesTask;
-        this.upsertToCache(task);
-        loaded++;
-      } catch (error) {
-        logger.warn('Failed to parse task line', { line, error });
+    try {
+      const content = readFileSync(this.tasksFile, 'utf-8');
+      const lines = content.split('\n').filter((line) => line.trim());
+
+      let loaded = 0;
+      for (const line of lines) {
+        try {
+          const task = JSON.parse(line) as PebblesTask;
+          this.upsertToCache(task);
+          loaded++;
+        } catch (error) {
+          logger.warn('Failed to parse task line', { 
+            line: line.substring(0, 100), 
+            error: error instanceof Error ? error.message : String(error),
+            lineNumber: loaded + 1
+          });
+        }
       }
-    }
 
-    logger.info('Loaded tasks from JSONL', { loaded, file: this.tasksFile });
+      logger.info('Loaded tasks from JSONL', { loaded, file: this.tasksFile });
+    } catch (error) {
+      const systemError = errorHandler(error, {
+        operation: 'loadFromJSONL',
+        file: this.tasksFile,
+      });
+      
+      throw new SystemError(
+        'Failed to load tasks from JSONL file',
+        ErrorCode.INTERNAL_ERROR,
+        {
+          tasksFile: this.tasksFile,
+          operation: 'loadFromJSONL',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
@@ -196,7 +254,31 @@ export class PebblesTaskStore {
     _reason?: string
   ): void {
     const existing = this.getTask(taskId);
-    if (!existing) throw new Error(`Task not found: ${taskId}`);
+    if (!existing) {
+      throw new TaskError(
+        `Task not found: ${taskId}`,
+        ErrorCode.TASK_NOT_FOUND,
+        {
+          taskId,
+          newStatus,
+          operation: 'updateTaskStatus',
+        }
+      );
+    }
+
+    // Validate status transition
+    if (existing.status === 'completed' && newStatus !== 'cancelled') {
+      throw new TaskError(
+        `Cannot change completed task status from ${existing.status} to ${newStatus}`,
+        ErrorCode.TASK_INVALID_STATE,
+        {
+          taskId,
+          currentStatus: existing.status,
+          newStatus,
+          operation: 'updateTaskStatus',
+        }
+      );
+    }
 
     const now = Math.floor(Date.now() / 1000);
     const updates: Partial<PebblesTask> = {
@@ -229,9 +311,41 @@ export class PebblesTaskStore {
     const task = this.getTask(taskId);
     const dependsOnTask = this.getTask(dependsOnId);
 
-    if (!task) throw new Error(`Task not found: ${taskId}`);
-    if (!dependsOnTask)
-      throw new Error(`Dependency task not found: ${dependsOnId}`);
+    if (!task) {
+      throw new TaskError(
+        `Task not found: ${taskId}`,
+        ErrorCode.TASK_NOT_FOUND,
+        {
+          taskId,
+          operation: 'addDependency',
+        }
+      );
+    }
+    
+    if (!dependsOnTask) {
+      throw new TaskError(
+        `Dependency task not found: ${dependsOnId}`,
+        ErrorCode.TASK_NOT_FOUND,
+        {
+          dependsOnId,
+          taskId,
+          operation: 'addDependency',
+        }
+      );
+    }
+
+    // Check for circular dependency
+    if (this.wouldCreateCircularDependency(taskId, dependsOnId)) {
+      throw new TaskError(
+        `Adding dependency would create circular dependency: ${taskId} -> ${dependsOnId}`,
+        ErrorCode.TASK_CIRCULAR_DEPENDENCY,
+        {
+          taskId,
+          dependsOnId,
+          operation: 'addDependency',
+        }
+      );
+    }
 
     // Update task dependencies
     const updatedTask: PebblesTask = {
@@ -257,123 +371,169 @@ export class PebblesTaskStore {
    * Get current active tasks
    */
   public getActiveTasks(frameId?: string): PebblesTask[] {
-    let query = `
-      SELECT * FROM task_cache 
-      WHERE status IN ('pending', 'in_progress')
-    `;
-    const params: any[] = [];
+    try {
+      let query = `
+        SELECT * FROM task_cache 
+        WHERE status IN ('pending', 'in_progress')
+      `;
+      const params: any[] = [];
 
-    if (frameId) {
-      query += ` AND frame_id = ?`;
-      params.push(frameId);
+      if (frameId) {
+        query += ` AND frame_id = ?`;
+        params.push(frameId);
+      }
+
+      query += ` ORDER BY priority DESC, created_at ASC`;
+
+      const rows = this.db.prepare(query).all(...params) as any[];
+      return this.hydrateTasks(rows);
+    } catch (error) {
+      throw new DatabaseError(
+        'Failed to get active tasks',
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          frameId,
+          operation: 'getActiveTasks',
+        },
+        error instanceof Error ? error : undefined
+      );
     }
-
-    query += ` ORDER BY priority DESC, created_at ASC`;
-
-    const rows = this.db.prepare(query).all(...params) as any[];
-    return this.hydrateTasks(rows);
   }
 
   /**
    * Get task by ID (latest version)
    */
   public getTask(taskId: string): PebblesTask | undefined {
-    const row = this.db
-      .prepare(
-        `
-      SELECT * FROM task_cache WHERE id = ?
-    `
-      )
-      .get(taskId) as any;
+    try {
+      const row = this.db
+        .prepare(
+          `
+        SELECT * FROM task_cache WHERE id = ?
+      `
+        )
+        .get(taskId) as any;
 
-    return row ? this.hydrateTask(row) : undefined;
+      return row ? this.hydrateTask(row) : undefined;
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to get task: ${taskId}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          taskId,
+          operation: 'getTask',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
    * Get tasks that are blocking other tasks
    */
   public getBlockingTasks(): PebblesTask[] {
-    const rows = this.db
-      .prepare(
-        `
-      SELECT * FROM task_cache 
-      WHERE JSON_ARRAY_LENGTH(blocks) > 0 
-      AND status NOT IN ('completed', 'cancelled')
-      ORDER BY priority DESC
-    `
-      )
-      .all() as any[];
+    try {
+      const rows = this.db
+        .prepare(
+          `
+        SELECT * FROM task_cache 
+        WHERE JSON_ARRAY_LENGTH(blocks) > 0 
+        AND status NOT IN ('completed', 'cancelled')
+        ORDER BY priority DESC
+      `
+        )
+        .all() as any[];
 
-    return this.hydrateTasks(rows);
+      return this.hydrateTasks(rows);
+    } catch (error) {
+      throw new DatabaseError(
+        'Failed to get blocking tasks',
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          operation: 'getBlockingTasks',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   /**
    * Get metrics for current project
    */
   public getMetrics(): TaskMetrics {
-    const statusCounts = this.db
-      .prepare(
-        `
-      SELECT status, COUNT(*) as count 
-      FROM task_cache 
-      GROUP BY status
-    `
-      )
-      .all() as { status: TaskStatus; count: number }[];
+    try {
+      const statusCounts = this.db
+        .prepare(
+          `
+        SELECT status, COUNT(*) as count 
+        FROM task_cache 
+        GROUP BY status
+      `
+        )
+        .all() as { status: TaskStatus; count: number }[];
 
-    const priorityCounts = this.db
-      .prepare(
-        `
-      SELECT priority, COUNT(*) as count 
-      FROM task_cache 
-      GROUP BY priority  
-    `
-      )
-      .all() as { priority: TaskPriority; count: number }[];
+      const priorityCounts = this.db
+        .prepare(
+          `
+        SELECT priority, COUNT(*) as count 
+        FROM task_cache 
+        GROUP BY priority  
+      `
+        )
+        .all() as { priority: TaskPriority; count: number }[];
 
-    const totalTasks = statusCounts.reduce((sum, s) => sum + s.count, 0);
-    const completedTasks =
-      statusCounts.find((s) => s.status === 'completed')?.count || 0;
-    const blockedTasks =
-      statusCounts.find((s) => s.status === 'blocked')?.count || 0;
+      const totalTasks = statusCounts.reduce((sum, s) => sum + s.count, 0);
+      const completedTasks =
+        statusCounts.find((s) => s.status === 'completed')?.count || 0;
+      const blockedTasks =
+        statusCounts.find((s) => s.status === 'blocked')?.count || 0;
 
-    // Calculate effort accuracy
-    const effortRows = this.db
-      .prepare(
-        `
-      SELECT estimated_effort, actual_effort 
-      FROM task_cache 
-      WHERE estimated_effort IS NOT NULL 
-      AND actual_effort IS NOT NULL
-    `
-      )
-      .all() as { estimated_effort: number; actual_effort: number }[];
+      // Calculate effort accuracy
+      const effortRows = this.db
+        .prepare(
+          `
+        SELECT estimated_effort, actual_effort 
+        FROM task_cache 
+        WHERE estimated_effort IS NOT NULL 
+        AND actual_effort IS NOT NULL
+      `
+        )
+        .all() as { estimated_effort: number; actual_effort: number }[];
 
-    let avgEffortAccuracy = 0;
-    if (effortRows.length > 0) {
-      const accuracies = effortRows.map(
-        (r) =>
-          1 -
-          Math.abs(r.estimated_effort - r.actual_effort) /
-            Math.max(r.estimated_effort, 1)
+      let avgEffortAccuracy = 0;
+      if (effortRows.length > 0) {
+        const accuracies = effortRows.map(
+          (r) =>
+            1 -
+            Math.abs(r.estimated_effort - r.actual_effort) /
+              Math.max(r.estimated_effort, 1)
+        );
+        avgEffortAccuracy =
+          accuracies.reduce((sum, acc) => sum + acc, 0) / accuracies.length;
+      }
+
+      return {
+        total_tasks: totalTasks,
+        by_status: Object.fromEntries(
+          statusCounts.map((s) => [s.status, s.count])
+        ) as any,
+        by_priority: Object.fromEntries(
+          priorityCounts.map((p) => [p.priority, p.count])
+        ) as any,
+        completion_rate: totalTasks > 0 ? completedTasks / totalTasks : 0,
+        avg_effort_accuracy: avgEffortAccuracy,
+        blocked_tasks: blockedTasks,
+        overdue_tasks: 0, // TODO: implement due dates
+      };
+    } catch (error) {
+      throw new DatabaseError(
+        'Failed to get task metrics',
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          operation: 'getMetrics',
+        },
+        error instanceof Error ? error : undefined
       );
-      avgEffortAccuracy =
-        accuracies.reduce((sum, acc) => sum + acc, 0) / accuracies.length;
     }
-
-    return {
-      total_tasks: totalTasks,
-      by_status: Object.fromEntries(
-        statusCounts.map((s) => [s.status, s.count])
-      ) as any,
-      by_priority: Object.fromEntries(
-        priorityCounts.map((p) => [p.priority, p.count])
-      ) as any,
-      completion_rate: totalTasks > 0 ? completedTasks / totalTasks : 0,
-      avg_effort_accuracy: avgEffortAccuracy,
-      blocked_tasks: blockedTasks,
-      overdue_tasks: 0, // TODO: implement due dates
-    };
   }
 
   /**
@@ -409,61 +569,116 @@ export class PebblesTaskStore {
 
   // Private methods
   private appendTask(task: PebblesTask) {
-    // Append to JSONL file (git-tracked source of truth)
-    const jsonLine = JSON.stringify(task) + '\n';
-    appendFile(this.tasksFile, jsonLine, (err) => {
-      if (err)
+    try {
+      // Append to JSONL file (git-tracked source of truth)
+      const jsonLine = JSON.stringify(task) + '\n';
+      appendFile(this.tasksFile, jsonLine, (err) => {
+        if (err) {
+          logger.error(
+            `Failed to append task ${task.id} to JSONL: ${err.message}`,
+            err,
+            {
+              taskId: task.id,
+              tasksFile: this.tasksFile,
+            }
+          );
+        }
+      });
+
+      // Update SQLite cache (for fast queries) with retry logic
+      retry(
+        () => Promise.resolve(this.upsertToCache(task)),
+        {
+          maxAttempts: 3,
+          initialDelay: 100,
+          onRetry: (attempt, error) => {
+            logger.warn(
+              `Retrying task cache upsert (attempt ${attempt})`,
+              {
+                taskId: task.id,
+                errorMessage: error instanceof Error ? error.message : String(error),
+              }
+            );
+          },
+        }
+      ).catch((error) => {
         logger.error(
-          `Failed to append task ${task.id} to JSONL: ${err.message}`
+          'Failed to upsert task to cache after retries',
+          error instanceof Error ? error : new Error(String(error)),
+          {
+            taskId: task.id,
+          }
         );
-    });
+        throw error;
+      });
 
-    // Update SQLite cache (for fast queries)
-    this.upsertToCache(task);
-
-    logger.info('Appended task', {
-      id: task.id,
-      type: task.type,
-      title: task.title,
-      status: task.status,
-    });
+      logger.info('Appended task', {
+        id: task.id,
+        type: task.type,
+        title: task.title,
+        status: task.status,
+      });
+    } catch (error) {
+      throw new SystemError(
+        `Failed to append task: ${task.id}`,
+        ErrorCode.INTERNAL_ERROR,
+        {
+          taskId: task.id,
+          operation: 'appendTask',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 
   private upsertToCache(task: PebblesTask) {
-    this.db
-      .prepare(
-        `
-      INSERT OR REPLACE INTO task_cache (
-        id, type, timestamp, parent_id, frame_id, title, description,
-        status, priority, assignee, created_at, started_at, completed_at,
-        estimated_effort, actual_effort, depends_on, blocks, tags,
-        external_refs, context_score, last_accessed
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-    `
-      )
-      .run(
-        task.id,
-        task.type,
-        task.timestamp,
-        task.parent_id,
-        task.frame_id,
-        task.title,
-        task.description,
-        task.status,
-        task.priority,
-        task.assignee,
-        task.created_at,
-        task.started_at,
-        task.completed_at,
-        task.estimated_effort,
-        task.actual_effort,
-        JSON.stringify(task.depends_on),
-        JSON.stringify(task.blocks),
-        JSON.stringify(task.tags),
-        JSON.stringify(task.external_refs || {}),
-        task.context_score,
-        task.last_accessed
+    try {
+      this.db
+        .prepare(
+          `
+        INSERT OR REPLACE INTO task_cache (
+          id, type, timestamp, parent_id, frame_id, title, description,
+          status, priority, assignee, created_at, started_at, completed_at,
+          estimated_effort, actual_effort, depends_on, blocks, tags,
+          external_refs, context_score, last_accessed
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      `
+        )
+        .run(
+          task.id,
+          task.type,
+          task.timestamp,
+          task.parent_id,
+          task.frame_id,
+          task.title,
+          task.description,
+          task.status,
+          task.priority,
+          task.assignee,
+          task.created_at,
+          task.started_at,
+          task.completed_at,
+          task.estimated_effort,
+          task.actual_effort,
+          JSON.stringify(task.depends_on),
+          JSON.stringify(task.blocks),
+          JSON.stringify(task.tags),
+          JSON.stringify(task.external_refs || {}),
+          task.context_score,
+          task.last_accessed
+        );
+    } catch (error) {
+      throw new DatabaseError(
+        `Failed to upsert task to cache: ${task.id}`,
+        ErrorCode.DB_QUERY_FAILED,
+        {
+          taskId: task.id,
+          taskTitle: task.title,
+          operation: 'upsertToCache',
+        },
+        error instanceof Error ? error : undefined
       );
+    }
   }
 
   private generateTaskId(content: string): string {
@@ -497,5 +712,35 @@ export class PebblesTaskStore {
       cancelled: 'Cancelled',
     };
     return map[status] || 'Backlog';
+  }
+
+  /**
+   * Check if adding a dependency would create a circular dependency
+   */
+  private wouldCreateCircularDependency(taskId: string, dependsOnId: string): boolean {
+    const visited = new Set<string>();
+    const stack = [dependsOnId];
+
+    while (stack.length > 0) {
+      const currentId = stack.pop()!;
+      
+      if (currentId === taskId) {
+        return true; // Found circular dependency
+      }
+      
+      if (visited.has(currentId)) {
+        continue;
+      }
+      
+      visited.add(currentId);
+      
+      // Get dependencies of current task
+      const currentTask = this.getTask(currentId);
+      if (currentTask) {
+        stack.push(...currentTask.depends_on);
+      }
+    }
+
+    return false;
   }
 }

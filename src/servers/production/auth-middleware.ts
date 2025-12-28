@@ -31,7 +31,7 @@ export interface AuthRequest extends Request {
 export class AuthMiddleware {
   private jwksClient: jwksRsa.JwksClient;
   private redis: Redis;
-  private rateLimiters: Map<string, RateLimiterRedis>;
+  private rateLimiters!: Map<string, RateLimiterRedis>;
   private blacklistedTokens: Set<string> = new Set();
 
   constructor(
@@ -305,7 +305,10 @@ export class AuthMiddleware {
 
       return await this.loadUser(verified.sub);
     } catch (error) {
-      logger.error('WebSocket authentication failed', error);
+      logger.error(
+        'WebSocket authentication failed',
+        error instanceof Error ? error : undefined
+      );
       return null;
     }
   };

@@ -158,7 +158,7 @@ export class LinearClient {
    */
   async updateIssue(
     issueId: string,
-    updates: Partial<LinearCreateIssueInput>
+    updates: Partial<LinearCreateIssueInput> & { stateId?: string }
   ): Promise<LinearIssue> {
     const mutation = `
       mutation UpdateIssue($id: String!, $input: IssueUpdateInput!) {
@@ -511,15 +511,15 @@ export class LinearClient {
     `;
 
     const filter: any = {};
-    
+
     if (options?.teamId) {
       filter.team = { id: { eq: options.teamId } };
     }
-    
+
     if (options?.assigneeId) {
       filter.assignee = { id: { eq: options.assigneeId } };
     }
-    
+
     if (options?.stateType) {
       filter.state = { type: { eq: options.stateType } };
     }
@@ -530,7 +530,7 @@ export class LinearClient {
       };
     }>(query, {
       filter: Object.keys(filter).length > 0 ? filter : undefined,
-      first: options?.limit || 50
+      first: options?.limit || 50,
     });
 
     return result.issues.nodes;

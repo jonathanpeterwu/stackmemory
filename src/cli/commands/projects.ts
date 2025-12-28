@@ -160,8 +160,8 @@ export function registerProjectCommands(program: Command): void {
           if (!orgMap[project.organization]) {
             orgMap[project.organization] = { count: 0, types: new Set() };
           }
-          orgMap[project.organization].count++;
-          orgMap[project.organization].types.add(project.accountType);
+          orgMap[project.organization]!.count++;
+          orgMap[project.organization]!.types.add(project.accountType);
         }
       }
 
@@ -261,7 +261,7 @@ export function registerProjectCommands(program: Command): void {
       };
 
       for (const project of allProjects) {
-        organized[project.accountType].push(project.name);
+        organized[project.accountType]?.push(project.name);
       }
 
       console.log(chalk.green('\n✓ Projects organized by account type:\n'));

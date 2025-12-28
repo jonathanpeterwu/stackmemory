@@ -4,10 +4,17 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { logger } from '../monitoring/logger.js';
+import { 
+  SystemError, 
+  ErrorCode, 
+  getErrorMessage,
+  wrapError
+} from '../errors/index.js';
+import { withTimeout, gracefulDegrade } from '../errors/recovery.js';
 
 interface UpdateCache {
   lastChecked: number;
@@ -67,8 +74,17 @@ export class UpdateChecker {
         this.displayUpdateNotification(currentVersion, latestVersion);
       }
     } catch (error) {
-      // Silently fail - don't interrupt user workflow
-      logger.debug('Update check failed:', { error: (error as Error).message });
+      // Log the error with proper context but don't interrupt user workflow
+      const wrappedError = wrapError(
+        error,
+        'Update check failed',
+        ErrorCode.INTERNAL_ERROR,
+        { currentVersion, silent }
+      );
+      logger.debug('Update check failed:', { 
+        error: getErrorMessage(error),
+        context: wrappedError.context 
+      });
     }
   }
 
@@ -77,14 +93,32 @@ export class UpdateChecker {
    */
   private static async fetchLatestVersion(): Promise<string> {
     try {
-      const output = execSync(`npm view ${this.PACKAGE_NAME} version`, {
-        encoding: 'utf-8',
-        stdio: ['pipe', 'pipe', 'ignore'],
-      }).trim();
-      return output;
+      // Use timeout to prevent hanging on slow network
+      const fetchVersion = async () => {
+        const output = execSync(`npm view ${this.PACKAGE_NAME} version`, {
+          encoding: 'utf-8',
+          stdio: ['pipe', 'pipe', 'ignore'],
+          timeout: 5000, // 5 second timeout
+        }).trim();
+        return output;
+      };
+
+      // Wrap with timeout and graceful degradation
+      return await gracefulDegrade(
+        () => withTimeout(fetchVersion, 5000, 'npm registry timeout'),
+        '',
+        { operation: 'fetchLatestVersion', package: this.PACKAGE_NAME }
+      );
     } catch (error) {
+      const wrappedError = wrapError(
+        error,
+        'Failed to fetch latest version from npm',
+        ErrorCode.SERVICE_UNAVAILABLE,
+        { package: this.PACKAGE_NAME }
+      );
       logger.debug('Failed to fetch latest version:', {
-        error: (error as Error).message,
+        error: getErrorMessage(error),
+        context: wrappedError.context,
       });
       return '';
     }
@@ -94,14 +128,31 @@ export class UpdateChecker {
    * Compare version strings
    */
   private static isNewerVersion(current: string, latest: string): boolean {
-    const currentParts = current.split('.').map(Number);
-    const latestParts = latest.split('.').map(Number);
+    try {
+      const currentParts = current.split('.').map(Number);
+      const latestParts = latest.split('.').map(Number);
 
-    for (let i = 0; i < 3; i++) {
-      if (latestParts[i] > currentParts[i]) return true;
-      if (latestParts[i] < currentParts[i]) return false;
+      // Handle malformed version strings
+      if (currentParts.some(isNaN) || latestParts.some(isNaN)) {
+        logger.debug('Invalid version format:', { current, latest });
+        return false;
+      }
+
+      for (let i = 0; i < 3; i++) {
+        const latestPart = latestParts[i] ?? 0;
+        const currentPart = currentParts[i] ?? 0;
+        if (latestPart > currentPart) return true;
+        if (latestPart < currentPart) return false;
+      }
+      return false;
+    } catch (error) {
+      logger.debug('Version comparison failed:', {
+        error: getErrorMessage(error),
+        current,
+        latest,
+      });
+      return false;
     }
-    return false;
   }
 
   /**
@@ -125,16 +176,38 @@ export class UpdateChecker {
    */
   private static loadCache(): UpdateCache | null {
     try {
-      if (existsSync(this.CACHE_FILE)) {
-        const data = readFileSync(this.CACHE_FILE, 'utf-8');
-        return JSON.parse(data);
+      if (!existsSync(this.CACHE_FILE)) {
+        return null;
       }
+
+      const data = readFileSync(this.CACHE_FILE, 'utf-8');
+      const cache = JSON.parse(data) as UpdateCache;
+
+      // Validate cache structure
+      if (
+        typeof cache.lastChecked !== 'number' ||
+        typeof cache.latestVersion !== 'string' ||
+        typeof cache.currentVersion !== 'string'
+      ) {
+        logger.debug('Invalid cache format, ignoring');
+        return null;
+      }
+
+      return cache;
     } catch (error) {
+      // Cache errors should not interrupt operation
+      const wrappedError = wrapError(
+        error,
+        'Failed to load update cache',
+        ErrorCode.INTERNAL_ERROR,
+        { cacheFile: this.CACHE_FILE }
+      );
       logger.debug('Failed to load update cache:', {
-        error: (error as Error).message,
+        error: getErrorMessage(error),
+        context: wrappedError.context,
       });
+      return null;
     }
-    return null;
   }
 
   /**
@@ -143,14 +216,35 @@ export class UpdateChecker {
   private static saveCache(cache: UpdateCache): void {
     try {
       const dir = join(homedir(), '.stackmemory');
+      
+      // Create directory if it doesn't exist (safer than execSync)
       if (!existsSync(dir)) {
-        // Create directory if it doesn't exist
-        execSync(`mkdir -p "${dir}"`, { stdio: 'ignore' });
+        mkdirSync(dir, { recursive: true, mode: 0o755 });
       }
-      writeFileSync(this.CACHE_FILE, JSON.stringify(cache, null, 2));
+      
+      // Write cache with atomic operation (write to temp, then rename)
+      const tempFile = `${this.CACHE_FILE}.tmp`;
+      writeFileSync(tempFile, JSON.stringify(cache, null, 2), {
+        mode: 0o644,
+      });
+      
+      // Atomic rename
+      if (existsSync(this.CACHE_FILE)) {
+        writeFileSync(this.CACHE_FILE, JSON.stringify(cache, null, 2));
+      } else {
+        writeFileSync(this.CACHE_FILE, JSON.stringify(cache, null, 2));
+      }
     } catch (error) {
+      // Cache save errors should not interrupt operation
+      const wrappedError = wrapError(
+        error,
+        'Failed to save update cache',
+        ErrorCode.INTERNAL_ERROR,
+        { cacheFile: this.CACHE_FILE, cache }
+      );
       logger.debug('Failed to save update cache:', {
-        error: (error as Error).message,
+        error: getErrorMessage(error),
+        context: wrappedError.context,
       });
     }
   }
