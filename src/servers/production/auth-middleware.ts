@@ -432,14 +432,11 @@ export class AuthMiddleware {
       return apiKeyHeader;
     }
 
-    // Check query parameter (less secure, but convenient for webhooks)
-    if (
-      req.query.api_key &&
-      typeof req.query.api_key === 'string' &&
-      req.query.api_key.startsWith('sk-')
-    ) {
-      return req.query.api_key;
-    }
+    // Query parameter support removed for security reasons
+    // API keys should only be sent via headers to prevent:
+    // - URL logging exposure
+    // - Browser history leakage
+    // - Referer header transmission
 
     return null;
   }

@@ -4,6 +4,7 @@ import {
   EmbeddingProvider,
   createEmbeddingProvider,
 } from './embedding-provider.js';
+import { sanitizeSQLIdentifier } from '../../validation/schemas.js';
 
 export interface SemanticSearchConfig {
   pool: Pool;
@@ -77,15 +78,22 @@ export class SemanticSearch {
   ): Promise<SearchResult[]> {
     const queryEmbedding = await this.createEmbedding(query);
 
+    // Sanitize all identifiers to prevent SQL injection
+    const sanitizedTable = sanitizeSQLIdentifier(this.config.tableName);
+    const sanitizedContent = sanitizeSQLIdentifier(this.config.contentColumn);
+    const sanitizedEmbedding = sanitizeSQLIdentifier(
+      this.config.embeddingColumn
+    );
+
     const searchQuery = `
       SELECT 
         id,
-        ${this.config.contentColumn} as content,
+        ${sanitizedContent} as content,
         metadata,
-        1 - (${this.config.embeddingColumn} <=> $1::vector) as similarity
-      FROM ${this.config.tableName}
-      WHERE 1 - (${this.config.embeddingColumn} <=> $1::vector) > $2
-      ORDER BY ${this.config.embeddingColumn} <=> $1::vector
+        1 - (${sanitizedEmbedding} <=> $1::vector) as similarity
+      FROM ${sanitizedTable}
+      WHERE 1 - (${sanitizedEmbedding} <=> $1::vector) > $2
+      ORDER BY ${sanitizedEmbedding} <=> $1::vector
       LIMIT $3
     `;
 
@@ -104,18 +112,25 @@ export class SemanticSearch {
   }
 
   async findSimilar(id: string, limit = 10): Promise<SearchResult[]> {
+    // Sanitize all identifiers to prevent SQL injection
+    const sanitizedTable = sanitizeSQLIdentifier(this.config.tableName);
+    const sanitizedContent = sanitizeSQLIdentifier(this.config.contentColumn);
+    const sanitizedEmbedding = sanitizeSQLIdentifier(
+      this.config.embeddingColumn
+    );
+
     const query = `
       WITH target AS (
-        SELECT ${this.config.embeddingColumn} as embedding
-        FROM ${this.config.tableName}
+        SELECT ${sanitizedEmbedding} as embedding
+        FROM ${sanitizedTable}
         WHERE id = $1
       )
       SELECT 
         t.id,
-        t.${this.config.contentColumn} as content,
+        t.${sanitizedContent} as content,
         t.metadata,
-        1 - (t.${this.config.embeddingColumn} <=> target.embedding) as similarity
-      FROM ${this.config.tableName} t, target
+        1 - (t.${sanitizedEmbedding} <=> target.embedding) as similarity
+      FROM ${sanitizedTable} t, target
       WHERE t.id != $1
       ORDER BY t.${this.config.embeddingColumn} <=> target.embedding
       LIMIT $2
@@ -135,15 +150,22 @@ export class SemanticSearch {
     k: number,
     maxIterations = 10
   ): Promise<Map<number, SearchResult[]>> {
+    // Sanitize all identifiers to prevent SQL injection
+    const sanitizedTable = sanitizeSQLIdentifier(this.config.tableName);
+    const sanitizedContent = sanitizeSQLIdentifier(this.config.contentColumn);
+    const sanitizedEmbedding = sanitizeSQLIdentifier(
+      this.config.embeddingColumn
+    );
+
     // K-means clustering using pgvector
     const query = `
       WITH clusters AS (
         SELECT 
           id,
-          ${this.config.contentColumn} as content,
+          ${sanitizedContent} as content,
           metadata,
-          kmeans(${this.config.embeddingColumn}, $1, $2) OVER () as cluster_id
-        FROM ${this.config.tableName}
+          kmeans(${sanitizedEmbedding}, $1, $2) OVER () as cluster_id
+        FROM ${sanitizedTable}
       )
       SELECT * FROM clusters ORDER BY cluster_id
     `;
@@ -170,12 +192,19 @@ export class SemanticSearch {
   }
 
   async reindex(): Promise<void> {
+    // Sanitize table name to prevent SQL injection
+    const sanitizedTable = sanitizeSQLIdentifier(this.config.tableName);
+
     // Rebuild the IVFFlat index for better performance
-    const query = `REINDEX INDEX CONCURRENTLY idx_${this.config.tableName}_embedding`;
+    // Using sanitized identifier prevents SQL injection
+    const indexName = `idx_${sanitizedTable}_embedding`;
+    const sanitizedIndex = sanitizeSQLIdentifier(indexName);
+
+    const query = `REINDEX INDEX CONCURRENTLY ${sanitizedIndex}`;
 
     try {
       await this.pool.query(query);
-      logger.info(`Reindexed ${this.config.tableName} embeddings`);
+      logger.info(`Reindexed ${sanitizedTable} embeddings`);
     } catch (error) {
       logger.error(
         'Failed to reindex embeddings',
@@ -190,22 +219,29 @@ export class SemanticSearch {
     avgSimilarity: number;
     indexSize: string;
   }> {
+    // Sanitize all identifiers to prevent SQL injection
+    const sanitizedTable = sanitizeSQLIdentifier(this.config.tableName);
+    const sanitizedEmbedding = sanitizeSQLIdentifier(
+      this.config.embeddingColumn
+    );
+    const indexName = `idx_${sanitizedTable}_embedding`;
+
     const statsQuery = `
       SELECT 
         COUNT(*) as total,
         AVG(
-          1 - (${this.config.embeddingColumn} <=> (
-            SELECT AVG(${this.config.embeddingColumn})::vector 
-            FROM ${this.config.tableName}
+          1 - (${sanitizedEmbedding} <=> (
+            SELECT AVG(${sanitizedEmbedding})::vector 
+            FROM ${sanitizedTable}
           ))
         ) as avg_similarity,
         pg_size_pretty(
-          pg_relation_size('idx_${this.config.tableName}_embedding')
+          pg_relation_size($1::regclass)
         ) as index_size
-      FROM ${this.config.tableName}
+      FROM ${sanitizedTable}
     `;
 
-    const result = await this.pool.query(statsQuery);
+    const result = await this.pool.query(statsQuery, [indexName]);
     const row: any = result.rows[0];
 
     return {
