@@ -37,6 +37,7 @@ import { createSearchCommand } from './commands/search.js';
 import { createLogCommand } from './commands/log.js';
 import { createContextCommands } from './commands/context.js';
 import { createConfigCommand } from './commands/config.js';
+import { createAgentCommand } from './commands/agent.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -1232,6 +1233,7 @@ program.addCommand(createSearchCommand());
 program.addCommand(createLogCommand());
 program.addCommand(createContextCommands());
 program.addCommand(createConfigCommand());
+program.addCommand(createAgentCommand());
 
 // Auto-detect current project on startup
 if (process.argv.length > 2) {
