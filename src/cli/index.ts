@@ -123,7 +123,9 @@ program
       const stackDepth = frameManager.getStackDepth();
 
       // Always get total counts across all sessions
-      const totalStats = db.prepare(`
+      const totalStats = db
+        .prepare(
+          `
         SELECT 
           COUNT(*) as total_frames,
           SUM(CASE WHEN state = 'active' THEN 1 ELSE 0 END) as active_frames,
@@ -131,15 +133,25 @@ program
           COUNT(DISTINCT run_id) as total_sessions
         FROM frames
         WHERE project_id = ?
-      `).get(session.projectId) as any;
+      `
+        )
+        .get(session.projectId) as any;
 
-      const contextCount = db.prepare(`
+      const contextCount = db
+        .prepare(
+          `
         SELECT COUNT(*) as count FROM contexts
-      `).get() as any;
+      `
+        )
+        .get() as any;
 
-      const eventCount = db.prepare(`
+      const eventCount = db
+        .prepare(
+          `
         SELECT COUNT(*) as count FROM events
-      `).get() as any;
+      `
+        )
+        .get() as any;
 
       console.log('📊 StackMemory Status:');
       console.log(
@@ -149,23 +161,29 @@ program
       if (session.branch) {
         console.log(`   Branch: ${session.branch}`);
       }
-      
+
       // Show total database statistics
       console.log(`\n   Database Statistics:`);
       console.log(`     Total contexts: ${contextCount.count}`);
-      console.log(`     Total frames: ${totalStats.total_frames} (${totalStats.active_frames} active, ${totalStats.closed_frames} closed)`);
+      console.log(
+        `     Total frames: ${totalStats.total_frames} (${totalStats.active_frames} active, ${totalStats.closed_frames} closed)`
+      );
       console.log(`     Total events: ${eventCount.count}`);
       console.log(`     Total sessions: ${totalStats.total_sessions}`);
-      
+
       // Show recent activity
-      const recentFrames = db.prepare(`
+      const recentFrames = db
+        .prepare(
+          `
         SELECT name, type, state, datetime(created_at, 'unixepoch') as created
         FROM frames
         WHERE project_id = ?
         ORDER BY created_at DESC
         LIMIT 3
-      `).all(session.projectId) as any[];
-      
+      `
+        )
+        .all(session.projectId) as any[];
+
       if (recentFrames.length > 0) {
         console.log(`\n   Recent Activity:`);
         recentFrames.forEach((f: any) => {
@@ -173,7 +191,7 @@ program
           console.log(`     ${stateIcon} ${f.name} [${f.type}] - ${f.created}`);
         });
       }
-      
+
       console.log(`\n   Current Session:`);
       console.log(`     Stack depth: ${stackDepth}`);
       console.log(`     Active frames: ${activeFrames.length}`);

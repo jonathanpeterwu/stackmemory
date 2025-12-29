@@ -17,6 +17,8 @@ import {
   CompressionStrategy,
 } from './types';
 import { ConfigManager } from '../config/config-manager';
+import { TraceStore } from './trace-store';
+import Database from 'better-sqlite3';
 
 export class TraceDetector {
   private config: TraceBoundaryConfig;
@@ -24,13 +26,40 @@ export class TraceDetector {
   private lastToolTime: number = 0;
   private traces: Trace[] = [];
   private configManager: ConfigManager;
+  private traceStore?: TraceStore;
 
   constructor(
     config: Partial<TraceBoundaryConfig> = {},
-    configManager?: ConfigManager
+    configManager?: ConfigManager,
+    db?: Database.Database
   ) {
     this.config = { ...DEFAULT_TRACE_CONFIG, ...config };
     this.configManager = configManager || new ConfigManager();
+
+    if (db) {
+      this.traceStore = new TraceStore(db);
+      // Load existing traces from database
+      this.loadTracesFromStore();
+    }
+  }
+
+  /**
+   * Load traces from the database
+   */
+  private loadTracesFromStore(): void {
+    if (!this.traceStore) return;
+
+    try {
+      // Load recent traces (last 24 hours)
+      const recentTraces = this.traceStore.getAllTraces();
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+
+      this.traces = recentTraces.filter((t) => t.metadata.startTime >= cutoff);
+    } catch (error) {
+      // If loading fails, start with empty traces
+      console.error('Failed to load traces from store:', error);
+      this.traces = [];
+    }
   }
 
   /**
@@ -81,12 +110,12 @@ export class TraceDetector {
     if (this.config.sameDirThreshold) {
       const lastFiles = lastTool.filesAffected || [];
       const currentFiles = tool.filesAffected || [];
-      
+
       if (lastFiles.length > 0 && currentFiles.length > 0) {
-        const lastDirs = lastFiles.map(f => this.getDirectory(f));
-        const currentDirs = currentFiles.map(f => this.getDirectory(f));
-        
-        const hasCommonDir = lastDirs.some(d => currentDirs.includes(d));
+        const lastDirs = lastFiles.map((f) => this.getDirectory(f));
+        const currentDirs = currentFiles.map((f) => this.getDirectory(f));
+
+        const hasCommonDir = lastDirs.some((d) => currentDirs.includes(d));
         if (!hasCommonDir) {
           return true;
         }
@@ -109,7 +138,10 @@ export class TraceDetector {
    */
   private isFixAttempt(current: ToolCall, previous: ToolCall): boolean {
     // Edit after error is likely a fix
-    if (previous.error && (current.tool === 'edit' || current.tool === 'write')) {
+    if (
+      previous.error &&
+      (current.tool === 'edit' || current.tool === 'write')
+    ) {
       return true;
     }
 
@@ -129,6 +161,16 @@ export class TraceDetector {
 
     const trace = this.createTrace(this.activeTrace);
     this.traces.push(trace);
+
+    // Persist to database if store is available
+    if (this.traceStore) {
+      try {
+        this.traceStore.saveTrace(trace);
+      } catch (error) {
+        console.error('Failed to persist trace:', error);
+      }
+    }
+
     this.activeTrace = [];
   }
 
@@ -164,7 +206,7 @@ export class TraceDetector {
    * Detect the type of trace based on tool patterns
    */
   private detectTraceType(tools: ToolCall[]): TraceType {
-    const toolSequence = tools.map(t => t.tool);
+    const toolSequence = tools.map((t) => t.tool);
 
     // Check against known patterns
     for (const pattern of TRACE_PATTERNS) {
@@ -181,7 +223,7 @@ export class TraceDetector {
       return TraceType.EXPLORATION;
     }
 
-    if (tools.some(t => t.error)) {
+    if (tools.some((t) => t.error)) {
       return TraceType.ERROR_RECOVERY;
     }
 
@@ -241,7 +283,7 @@ export class TraceDetector {
 
       // Collect files
       if (tool.filesAffected) {
-        tool.filesAffected.forEach(f => filesModified.add(f));
+        tool.filesAffected.forEach((f) => filesModified.add(f));
       }
 
       // Collect errors
@@ -280,7 +322,7 @@ export class TraceDetector {
     metadata: TraceMetadata
   ): number {
     // Get individual tool scores
-    const toolScores = tools.map(t => 
+    const toolScores = tools.map((t) =>
       this.configManager.calculateScore(t.tool, {
         filesAffected: t.filesAffected?.length || 0,
         isPermanent: this.isPermanentChange(t),
@@ -328,7 +370,7 @@ export class TraceDetector {
     type: TraceType,
     metadata: TraceMetadata
   ): string {
-    const toolChain = tools.map(t => t.tool).join('→');
+    const toolChain = tools.map((t) => t.tool).join('→');
 
     switch (type) {
       case TraceType.SEARCH_DRIVEN:
@@ -366,7 +408,7 @@ export class TraceDetector {
    * Compress a trace for long-term storage
    */
   private compressTrace(trace: Trace): CompressedTrace {
-    const pattern = trace.tools.map(t => t.tool).join('→');
+    const pattern = trace.tools.map((t) => t.tool).join('→');
     const duration = trace.metadata.endTime - trace.metadata.startTime;
 
     return {
@@ -408,14 +450,14 @@ export class TraceDetector {
    * Get traces by type
    */
   getTracesByType(type: TraceType): Trace[] {
-    return this.traces.filter(t => t.type === type);
+    return this.traces.filter((t) => t.type === type);
   }
 
   /**
    * Get high-importance traces
    */
   getHighImportanceTraces(threshold: number = 0.7): Trace[] {
-    return this.traces.filter(t => t.score >= threshold);
+    return this.traces.filter((t) => t.score >= threshold);
   }
 
   /**
@@ -465,7 +507,8 @@ export class TraceDetector {
 
     for (const trace of this.traces) {
       // Type distribution
-      stats.tracesByType[trace.type] = (stats.tracesByType[trace.type] || 0) + 1;
+      stats.tracesByType[trace.type] =
+        (stats.tracesByType[trace.type] || 0) + 1;
 
       // Scores
       totalScore += trace.score;

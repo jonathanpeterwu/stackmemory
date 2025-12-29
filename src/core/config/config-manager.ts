@@ -12,7 +12,7 @@ import {
   DEFAULT_CONFIG,
   PRESET_PROFILES,
   ScoringWeights,
-} from './types';
+} from './types.js';
 
 export interface ValidationResult {
   valid: boolean;
@@ -228,7 +228,10 @@ export class ConfigManager {
       result.suggestions.push('Consider using a profile for your use case');
     }
 
-    if (this.config?.scoring?.tool_scores?.search && this.config.scoring.tool_scores.search < 0.5) {
+    if (
+      this.config?.scoring?.tool_scores?.search &&
+      this.config.scoring.tool_scores.search < 0.5
+    ) {
       result.suggestions.push(
         'Search tool score seems low - consider increasing for better discovery'
       );

@@ -23,6 +23,7 @@ import { logger } from '../../core/monitoring/logger.js';
 import { BrowserMCPIntegration } from '../../features/browser/browser-mcp.js';
 import { TraceDetector } from '../../core/trace/trace-detector.js';
 import { ToolCall, Trace } from '../../core/trace/types.js';
+import { LLMContextRetrieval } from '../../core/retrieval/index.js';
 import { v4 as uuidv4 } from 'uuid';
 
 // ============================================
@@ -41,6 +42,7 @@ class LocalStackMemoryMCP {
   private contexts: Map<string, any> = new Map();
   private browserMCP: BrowserMCPIntegration;
   private traceDetector: TraceDetector;
+  private contextRetrieval: LLMContextRetrieval;
 
   constructor() {
     // Find project root (where .git is)
@@ -91,8 +93,15 @@ class LocalStackMemoryMCP {
       defaultViewport: { width: 1280, height: 720 },
     });
 
-    // Initialize Trace Detector
-    this.traceDetector = new TraceDetector();
+    // Initialize Trace Detector with database persistence
+    this.traceDetector = new TraceDetector({}, undefined, this.db);
+
+    // Initialize LLM Context Retrieval
+    this.contextRetrieval = new LLMContextRetrieval(
+      this.db,
+      this.frameManager,
+      this.projectId
+    );
 
     this.setupHandlers();
     this.loadInitialContext();
@@ -628,6 +637,45 @@ class LocalStackMemoryMCP {
                 },
               },
             },
+            {
+              name: 'smart_context',
+              description:
+                'LLM-driven context retrieval - intelligently selects relevant frames based on query',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  query: {
+                    type: 'string',
+                    description:
+                      'Natural language query describing what context you need',
+                  },
+                  tokenBudget: {
+                    type: 'number',
+                    description:
+                      'Maximum tokens to use for context (default: 4000)',
+                  },
+                  forceRefresh: {
+                    type: 'boolean',
+                    description: 'Force refresh of cached summaries',
+                  },
+                },
+                required: ['query'],
+              },
+            },
+            {
+              name: 'get_summary',
+              description:
+                'Get compressed summary of project memory for analysis',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  forceRefresh: {
+                    type: 'boolean',
+                    description: 'Force refresh of cached summary',
+                  },
+                },
+              },
+            },
           ],
         };
       }
@@ -744,6 +792,14 @@ class LocalStackMemoryMCP {
 
             case 'compress_old_traces':
               result = await this.handleCompressOldTraces(args);
+              break;
+
+            case 'smart_context':
+              result = await this.handleSmartContext(args);
+              break;
+
+            case 'get_summary':
+              result = await this.handleGetSummary(args);
               break;
 
             default:
@@ -1647,6 +1703,139 @@ ${typeBreakdown}`,
         },
       ],
     };
+  }
+
+  private async handleSmartContext(args: any) {
+    const { query, tokenBudget = 4000, forceRefresh = false } = args;
+
+    try {
+      const result = await this.contextRetrieval.retrieveContext(query, {
+        tokenBudget,
+        forceRefresh,
+      });
+
+      // Log the retrieval
+      const currentFrameId = this.frameManager.getCurrentFrameId();
+      if (currentFrameId) {
+        this.frameManager.addEvent('observation', {
+          action: 'smart_context',
+          query,
+          framesRetrieved: result.frames.length,
+          tokenUsage: result.tokenUsage,
+          confidence: result.analysis.confidenceScore,
+        });
+      }
+
+      // Build response with metadata
+      let response = result.context;
+      response += `\n\n---\n📊 **Retrieval Stats**\n`;
+      response += `- Frames included: ${result.frames.length}\n`;
+      response += `- Tokens used: ${result.tokenUsage.used}/${result.tokenUsage.budget}\n`;
+      response += `- Confidence: ${(result.analysis.confidenceScore * 100).toFixed(0)}%\n`;
+      response += `- Time: ${result.metadata.retrievalTimeMs}ms`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response,
+          },
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Context retrieval failed: ${error.message}`,
+          },
+        ],
+      };
+    }
+  }
+
+  private async handleGetSummary(args: any) {
+    const { forceRefresh = false } = args;
+
+    try {
+      const summary = this.contextRetrieval.getSummary(forceRefresh);
+
+      // Format the summary for display
+      let response = '📋 **Compressed Memory Summary**\n\n';
+
+      // Recent session
+      response += '## Recent Session\n';
+      response += `- Frames: ${summary.recentSession.frames.length}\n`;
+      response += `- Time range: ${new Date(summary.recentSession.timeRange.start).toLocaleString()} - ${new Date(summary.recentSession.timeRange.end).toLocaleString()}\n`;
+
+      if (summary.recentSession.dominantOperations.length > 0) {
+        response += `- Dominant ops: ${summary.recentSession.dominantOperations
+          .slice(0, 5)
+          .map((o) => `${o.operation}(${o.count})`)
+          .join(', ')}\n`;
+      }
+
+      if (summary.recentSession.filesTouched.length > 0) {
+        response += `- Files touched: ${summary.recentSession.filesTouched
+          .slice(0, 5)
+          .map((f) => f.path)
+          .join(', ')}\n`;
+      }
+
+      if (summary.recentSession.errorsEncountered.length > 0) {
+        response += `- Errors: ${summary.recentSession.errorsEncountered.length}\n`;
+      }
+
+      // Historical patterns
+      response += '\n## Historical Patterns\n';
+      response += `- Topic counts: ${Object.keys(summary.historicalPatterns.topicFrameCounts).length} topics\n`;
+
+      if (summary.historicalPatterns.keyDecisions.length > 0) {
+        response += `\n### Key Decisions (${summary.historicalPatterns.keyDecisions.length})\n`;
+        summary.historicalPatterns.keyDecisions.slice(0, 5).forEach((d) => {
+          response += `- ${d.text.substring(0, 80)}${d.text.length > 80 ? '...' : ''}\n`;
+        });
+      }
+
+      if (summary.historicalPatterns.recurringIssues.length > 0) {
+        response += `\n### Recurring Issues (${summary.historicalPatterns.recurringIssues.length})\n`;
+        summary.historicalPatterns.recurringIssues.slice(0, 3).forEach((i) => {
+          response += `- ${i.issueType} (${i.occurrenceCount} times)\n`;
+        });
+      }
+
+      // Queryable indices
+      response += '\n## Available Indices\n';
+      response += `- By time: ${Object.keys(summary.queryableIndices.byTimeframe).length} periods\n`;
+      response += `- By file: ${Object.keys(summary.queryableIndices.byFile).length} files\n`;
+      response += `- By topic: ${Object.keys(summary.queryableIndices.byTopic).length} topics\n`;
+      response += `- By error: ${Object.keys(summary.queryableIndices.byErrorType).length} error types\n`;
+
+      // Stats
+      response += `\n## Stats\n`;
+      response += `- Total frames: ${summary.stats.totalFrames}\n`;
+      response += `- Total anchors: ${summary.stats.totalAnchors}\n`;
+      response += `- Total events: ${summary.stats.totalEvents}\n`;
+      response += `- Generated: ${new Date(summary.generatedAt).toLocaleString()}`;
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response,
+          },
+        ],
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Failed to get summary: ${error.message}`,
+          },
+        ],
+      };
+    }
   }
 
   async start() {

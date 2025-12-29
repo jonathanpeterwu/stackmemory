@@ -7,21 +7,26 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
-import { ConfigManager } from '../../core/config/config-manager';
-import { DEFAULT_CONFIG, PRESET_PROFILES } from '../../core/config/types';
+import { ConfigManager } from '../../core/config/config-manager.js';
+import { DEFAULT_CONFIG, PRESET_PROFILES } from '../../core/config/types.js';
 
 export function createConfigCommand(): Command {
-  const config = new Command('config')
-    .description('Manage StackMemory configuration');
+  const config = new Command('config').description(
+    'Manage StackMemory configuration'
+  );
 
   config
     .command('validate')
     .description('Validate configuration file')
-    .option('-f, --file <path>', 'Path to config file', '.stackmemory/config.yaml')
+    .option(
+      '-f, --file <path>',
+      'Path to config file',
+      '.stackmemory/config.yaml'
+    )
     .option('--fix', 'Attempt to auto-fix common issues')
     .action(async (options) => {
       console.log(chalk.blue('🔍 Validating configuration...'));
-      
+
       const configPath = path.resolve(options.file);
       const manager = new ConfigManager(configPath);
       const result = manager.validate();
@@ -29,7 +34,7 @@ export function createConfigCommand(): Command {
       // Display errors
       if (result.errors.length > 0) {
         console.log(chalk.red('\n✗ Errors:'));
-        result.errors.forEach(error => {
+        result.errors.forEach((error) => {
           console.log(chalk.red(`  • ${error}`));
         });
       }
@@ -37,7 +42,7 @@ export function createConfigCommand(): Command {
       // Display warnings
       if (result.warnings.length > 0) {
         console.log(chalk.yellow('\n⚠ Warnings:'));
-        result.warnings.forEach(warning => {
+        result.warnings.forEach((warning) => {
           console.log(chalk.yellow(`  • ${warning}`));
         });
       }
@@ -45,7 +50,7 @@ export function createConfigCommand(): Command {
       // Display suggestions
       if (result.suggestions.length > 0) {
         console.log(chalk.cyan('\n💡 Suggestions:'));
-        result.suggestions.forEach(suggestion => {
+        result.suggestions.forEach((suggestion) => {
           console.log(chalk.cyan(`  • ${suggestion}`));
         });
       }
@@ -53,11 +58,15 @@ export function createConfigCommand(): Command {
       // Auto-fix if requested
       if (options.fix && result.errors.length > 0) {
         console.log(chalk.blue('\n🔧 Attempting auto-fix...'));
-        
+
         const config = manager.getConfig();
         const weights = config.scoring.weights;
-        const weightSum = weights.base + weights.impact + weights.persistence + weights.reference;
-        
+        const weightSum =
+          weights.base +
+          weights.impact +
+          weights.persistence +
+          weights.reference;
+
         if (Math.abs(weightSum - 1.0) > 0.001) {
           // Normalize weights to sum to 1.0
           const factor = 1.0 / weightSum;
@@ -88,10 +97,18 @@ export function createConfigCommand(): Command {
     .option('-p, --profile <name>', 'Use a preset profile', 'default')
     .option('-f, --force', 'Overwrite existing config')
     .action(async (options) => {
-      const configPath = path.join(process.cwd(), '.stackmemory', 'config.yaml');
-      
+      const configPath = path.join(
+        process.cwd(),
+        '.stackmemory',
+        'config.yaml'
+      );
+
       if (fs.existsSync(configPath) && !options.force) {
-        console.log(chalk.yellow('⚠ Config file already exists. Use --force to overwrite.'));
+        console.log(
+          chalk.yellow(
+            '⚠ Config file already exists. Use --force to overwrite.'
+          )
+        );
         process.exit(1);
       }
 
@@ -113,7 +130,7 @@ export function createConfigCommand(): Command {
 
       fs.writeFileSync(configPath, content, 'utf-8');
       console.log(chalk.green(`✅ Created config file at ${configPath}`));
-      
+
       if (options.profile !== 'default') {
         console.log(chalk.cyan(`📋 Using profile: ${options.profile}`));
       }
@@ -130,11 +147,11 @@ export function createConfigCommand(): Command {
       if (options.profile) {
         const profiles = manager.getProfiles();
         const profile = profiles[options.profile];
-        
+
         if (!profile) {
           console.log(chalk.red(`❌ Profile '${options.profile}' not found`));
           console.log(chalk.cyan('Available profiles:'));
-          Object.keys(profiles).forEach(name => {
+          Object.keys(profiles).forEach((name) => {
             console.log(`  • ${name}`);
           });
           process.exit(1);
@@ -159,14 +176,14 @@ export function createConfigCommand(): Command {
     .description('Set active profile')
     .action(async (name) => {
       const manager = new ConfigManager();
-      
+
       if (manager.setProfile(name)) {
         manager.save();
         console.log(chalk.green(`✅ Active profile set to: ${name}`));
       } else {
         console.log(chalk.red(`❌ Profile '${name}' not found`));
         console.log(chalk.cyan('Available profiles:'));
-        Object.keys(manager.getProfiles()).forEach(profile => {
+        Object.keys(manager.getProfiles()).forEach((profile) => {
           console.log(`  • ${profile}`);
         });
         process.exit(1);
@@ -199,7 +216,7 @@ export function createConfigCommand(): Command {
     .option('-r, --references <number>', 'Reference count', parseInt)
     .action(async (tool, options) => {
       const manager = new ConfigManager();
-      
+
       const score = manager.calculateScore(tool, {
         filesAffected: options.files,
         isPermanent: options.permanent,
@@ -212,7 +229,7 @@ export function createConfigCommand(): Command {
       console.log(chalk.blue('\n📊 Score Calculation:'));
       console.log(`  Tool: ${chalk.cyan(tool)}`);
       console.log(`  Base Score: ${chalk.yellow(baseScore.toFixed(3))}`);
-      
+
       if (options.files !== undefined) {
         console.log(`  Files Affected: ${options.files}`);
       }
