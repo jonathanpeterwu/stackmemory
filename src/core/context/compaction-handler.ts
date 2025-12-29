@@ -172,7 +172,10 @@ export class CompactionHandler {
         `Preserved critical context at ${this.metrics.estimatedTokens} tokens`
       );
     } catch (error) {
-      logger.error('Failed to preserve critical context:', error);
+      logger.error(
+        'Failed to preserve critical context:',
+        error instanceof Error ? error : undefined
+      );
     }
   }
 

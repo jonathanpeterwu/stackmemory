@@ -806,8 +806,8 @@ class LocalStackMemoryMCP {
               throw new Error(`Unknown tool: ${name}`);
           }
         } catch (err) {
-          error = err;
-          toolCall.error = err.message || String(err);
+          error = err instanceof Error ? err : new Error(String(err));
+          toolCall.error = error.message;
           throw err;
         } finally {
           const endTime = Date.now();

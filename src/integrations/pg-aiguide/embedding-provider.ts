@@ -190,7 +190,10 @@ export class HybridEmbeddingProvider implements EmbeddingProvider {
       try {
         return await this.openai.createEmbedding(text);
       } catch (error) {
-        logger.warn('OpenAI embedding failed, falling back to local', error);
+        logger.warn(
+          'OpenAI embedding failed, falling back to local',
+          error instanceof Error ? error : undefined
+        );
         this.useOpenAI = false; // Disable for future calls
       }
     }

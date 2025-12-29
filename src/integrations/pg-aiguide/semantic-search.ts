@@ -177,7 +177,10 @@ export class SemanticSearch {
       await this.pool.query(query);
       logger.info(`Reindexed ${this.config.tableName} embeddings`);
     } catch (error) {
-      logger.error('Failed to reindex embeddings', error);
+      logger.error(
+        'Failed to reindex embeddings',
+        error instanceof Error ? error : undefined
+      );
       throw error;
     }
   }
