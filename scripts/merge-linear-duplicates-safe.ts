@@ -14,6 +14,32 @@ interface DuplicateGroup {
   primaryId: string;
 }
 
+interface LinearTeam {
+  id: string;
+  key: string;
+  name: string;
+  states: {
+    nodes: WorkflowState[];
+  };
+}
+
+interface WorkflowState {
+  id: string;
+  name: string;
+  type: string;
+}
+
+interface LinearIssue {
+  id: string;
+  identifier: string;
+  title: string;
+  description?: string;
+  state: {
+    name: string;
+    type: string;
+  };
+}
+
 const duplicateGroups: DuplicateGroup[] = [
   {
     name: 'Linear API Integration',
@@ -78,7 +104,10 @@ async function mergeDuplicateTasks(dryRun = true) {
   // Initialize Linear client using GraphQL directly
   const linearApiUrl = 'https://api.linear.app/graphql';
 
-  async function graphqlRequest(query: string, variables: any = {}) {
+  async function graphqlRequest(
+    query: string,
+    variables: Record<string, unknown> = {}
+  ) {
     const response = await fetch(linearApiUrl, {
       method: 'POST',
       headers: {
@@ -127,7 +156,7 @@ async function mergeDuplicateTasks(dryRun = true) {
   `;
 
   const teamData = (await graphqlRequest(teamQuery)) as {
-    teams: { nodes: any[] };
+    teams: { nodes: LinearTeam[] };
   };
   const team = teamData.teams.nodes[0];
 
@@ -137,7 +166,7 @@ async function mergeDuplicateTasks(dryRun = true) {
   }
 
   const canceledState = team.states.nodes.find(
-    (s: any) => s.type === 'canceled'
+    (s: WorkflowState) => s.type === 'canceled'
   );
   if (!canceledState) {
     console.error('❌ No canceled state found in team workflow');
@@ -186,7 +215,7 @@ async function mergeDuplicateTasks(dryRun = true) {
         // Get primary issue
         const primaryData = (await graphqlRequest(issueQuery, {
           identifier: group.primaryId,
-        })) as { issue: any };
+        })) as { issue: LinearIssue | null };
         const primaryIssue = primaryData.issue;
 
         if (!primaryIssue) {
@@ -206,7 +235,7 @@ async function mergeDuplicateTasks(dryRun = true) {
           try {
             const dupData = (await graphqlRequest(issueQuery, {
               identifier: duplicateId,
-            })) as { issue: any };
+            })) as { issue: LinearIssue | null };
             const duplicateIssue = dupData.issue;
 
             if (!duplicateIssue) {
@@ -254,9 +283,11 @@ async function mergeDuplicateTasks(dryRun = true) {
 
             console.log(`   ✅ Canceled ${duplicateId} as duplicate`);
             totalCanceled++;
-          } catch (error: any) {
+          } catch (error) {
+            const errorMessage =
+              error instanceof Error ? error.message : String(error);
             console.log(
-              `   ❌ Failed to process ${duplicateId}: ${error.message}`
+              `   ❌ Failed to process ${duplicateId}: ${errorMessage}`
             );
           }
         }
@@ -295,8 +326,10 @@ async function mergeDuplicateTasks(dryRun = true) {
           );
           totalUpdates++;
         }
-      } catch (error: any) {
-        console.error(`   ❌ Error processing group: ${error.message}`);
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : String(error);
+        console.error(`   ❌ Error processing group: ${errorMessage}`);
       }
     }
   }

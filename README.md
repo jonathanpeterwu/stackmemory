@@ -26,9 +26,11 @@ Modern AI tools forget:
 
 StackMemory fixes this by:
 
-- storing **everything losslessly** (events, tool calls, decisions)
-- injecting only the **relevant working set** into model context
-- keeping memory **project-scoped**, not chat-scoped
+- storing **everything losslessly** (events, tool calls, decisions) with infinite remote retention
+- using **LLM-driven intelligent retrieval** to inject only the most relevant context
+- organizing memory as a **call stack with up to 10,000 frames** instead of linear chat logs
+- providing **configurable importance scoring** to prioritize what matters for your workflow
+- enabling **team collaboration** through shared and individual frame stacks
 
 ---
 
@@ -556,11 +558,26 @@ stackmemory mcp-server --port 3001        # Custom port
 
 ## Roadmap (high level)
 
-- Team / org projects
-- Cross-repo memory
-- Background project compilers
-- Fine-grained retention policies
-- Editor UX surfacing frame boundaries
+### Phase 2: Intelligence Layer (In Progress)
+- Query language with NLP and structured formats
+- LLM-driven context retrieval with compressed summaries
+- 60/40 hybrid digest generation during idle time
+- Configurable weight profiles for scoring
+- Smart trace detection and bundling
+
+### Phase 3: Collaboration
+- Dual stack architecture (individual + shared)
+- Frame handoff between developers
+- Stack merge conflict resolution
+- Team awareness and notifications
+- Permission-based frame operations
+
+### Phase 4: Scale & Performance
+- Two-tier storage (local + infinite remote)
+- Incremental garbage collection
+- Predictive migration and prefetching
+- Enterprise security features
+- Cost-optimized storage tiers
 
 ---
 

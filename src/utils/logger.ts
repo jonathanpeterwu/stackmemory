@@ -21,7 +21,7 @@ export class Logger {
   private formatMessage(
     level: LogLevel,
     message: string,
-    ...args: any[]
+    ...args: unknown[]
   ): string {
     const timestamp = new Date().toISOString();
     const prefix = `[${timestamp}] [${this.name}] [${level.toUpperCase()}]`;
@@ -39,25 +39,25 @@ export class Logger {
     return `${prefix} ${message}${formattedArgs}`;
   }
 
-  public debug(message: string, ...args: any[]): void {
+  public debug(message: string, ...args: unknown[]): void {
     if (this.shouldLog('debug')) {
       console.log(chalk.gray(this.formatMessage('debug', message, ...args)));
     }
   }
 
-  public info(message: string, ...args: any[]): void {
+  public info(message: string, ...args: unknown[]): void {
     if (this.shouldLog('info')) {
       console.log(chalk.blue(this.formatMessage('info', message, ...args)));
     }
   }
 
-  public warn(message: string, ...args: any[]): void {
+  public warn(message: string, ...args: unknown[]): void {
     if (this.shouldLog('warn')) {
       console.warn(chalk.yellow(this.formatMessage('warn', message, ...args)));
     }
   }
 
-  public error(message: string, error?: any): void {
+  public error(message: string, error?: unknown): void {
     if (this.shouldLog('error')) {
       const errorDetails = error
         ? error instanceof Error

@@ -8,6 +8,27 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import chalk from 'chalk';
 
+interface CountResult {
+  count: number;
+}
+
+interface ContextRow {
+  type: string;
+  preview: string;
+  importance: number;
+  access_count: number;
+}
+
+interface FrameRow {
+  task: string;
+  started: string;
+}
+
+interface AttentionRow {
+  query_preview: string;
+  count: number;
+}
+
 const projectRoot = process.cwd();
 const dbPath = join(projectRoot, '.stackmemory', 'context.db');
 
@@ -23,11 +44,15 @@ console.log(chalk.blue.bold('\n📊 StackMemory Status\n'));
 
 // Get statistics
 const stats = {
-  contexts: db.prepare('SELECT COUNT(*) as count FROM contexts').get() as any,
-  frames: db.prepare('SELECT COUNT(*) as count FROM frames').get() as any,
+  contexts: db
+    .prepare('SELECT COUNT(*) as count FROM contexts')
+    .get() as CountResult,
+  frames: db
+    .prepare('SELECT COUNT(*) as count FROM frames')
+    .get() as CountResult,
   attention: db
     .prepare('SELECT COUNT(*) as count FROM attention_log')
-    .get() as any,
+    .get() as CountResult,
 };
 
 console.log(chalk.green('Database:') + ` ${dbPath}`);
@@ -47,7 +72,7 @@ const topContexts = db
   LIMIT 5
 `
   )
-  .all() as any[];
+  .all() as ContextRow[];
 
 topContexts.forEach((ctx, i) => {
   const importance = '●'.repeat(Math.round(ctx.importance * 5));
@@ -71,7 +96,7 @@ const activeFrames = db
   LIMIT 3
 `
   )
-  .all() as any[];
+  .all() as FrameRow[];
 
 if (activeFrames.length > 0) {
   console.log(chalk.blue('\n🔄 Active Tasks:\n'));
@@ -95,7 +120,7 @@ const recentAttention = db
   LIMIT 3
 `
   )
-  .all() as any[];
+  .all() as AttentionRow[];
 
 if (recentAttention.length > 0) {
   console.log(chalk.blue('\n👁️ Recent Query Patterns:\n'));
@@ -115,7 +140,7 @@ const oldContexts = db
   WHERE last_accessed < unixepoch() - 86400 * 7
 `
   )
-  .get() as any;
+  .get() as CountResult;
 
 if (oldContexts.count > 0) {
   console.log(

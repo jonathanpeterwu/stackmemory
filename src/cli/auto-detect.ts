@@ -410,14 +410,14 @@ export class ClaudeAutoDetect {
     switch (taskType) {
       case 'frontend':
         if (mode === 'worktree') {
-          mode = 'chrome' as any;
+          mode = 'chrome';
           flags.push('--chrome');
           reason += '; Chrome automation for UI work';
         }
         break;
       case 'backend':
         if (mode === 'worktree') {
-          mode = 'sandbox' as any;
+          mode = 'sandbox';
           flags.push('--sandbox');
           reason += '; Sandboxed for API development';
         }

@@ -13,6 +13,23 @@ interface TaskGroup {
   keepFirst: boolean;
 }
 
+interface LinearIssue {
+  id: string;
+  identifier: string;
+  title: string;
+  createdAt: string;
+  team?: {
+    states?: {
+      nodes?: Array<{ id: string; type: string }>;
+    };
+  };
+}
+
+interface WorkflowState {
+  id: string;
+  type: string;
+}
+
 // Define patterns to identify duplicate tasks
 const duplicatePatterns: TaskGroup[] = [
   { pattern: 'Linear API Integration', keepFirst: true },
@@ -46,7 +63,10 @@ async function cancelDuplicateTasks(dryRun = true) {
   // GraphQL helper
   const linearApiUrl = 'https://api.linear.app/graphql';
 
-  async function graphqlRequest(query: string, variables: any = {}) {
+  async function graphqlRequest(
+    query: string,
+    variables: Record<string, unknown> = {}
+  ) {
     const response = await fetch(linearApiUrl, {
       method: 'POST',
       headers: {
@@ -106,7 +126,7 @@ async function cancelDuplicateTasks(dryRun = true) {
   `;
 
   const issuesData = (await graphqlRequest(issuesQuery)) as {
-    issues: { nodes: any[] };
+    issues: { nodes: LinearIssue[] };
   };
   const allIssues = issuesData.issues.nodes;
 
@@ -114,7 +134,7 @@ async function cancelDuplicateTasks(dryRun = true) {
 
   // Get canceled state from the first issue's team
   const canceledState = allIssues[0]?.team?.states?.nodes?.find(
-    (s: any) => s.type === 'canceled'
+    (s: WorkflowState) => s.type === 'canceled'
   );
   if (!canceledState) {
     console.error('❌ No canceled state found in workflow');
@@ -122,17 +142,17 @@ async function cancelDuplicateTasks(dryRun = true) {
   }
 
   // Group issues by pattern
-  const groupedIssues = new Map<string, any[]>();
+  const groupedIssues = new Map<string, LinearIssue[]>();
 
   for (const pattern of duplicatePatterns) {
-    const matches = allIssues.filter((issue: any) =>
+    const matches = allIssues.filter((issue: LinearIssue) =>
       issue.title.includes(pattern.pattern)
     );
 
     if (matches.length > 1) {
       // Sort by creation date to keep the oldest
       matches.sort(
-        (a: any, b: any) =>
+        (a: LinearIssue, b: LinearIssue) =>
           new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
       );
       groupedIssues.set(pattern.pattern, matches);
@@ -186,9 +206,11 @@ async function cancelDuplicateTasks(dryRun = true) {
 
           console.log(`      ✅ Successfully canceled ${duplicate.identifier}`);
           totalCanceled++;
-        } catch (error: any) {
+        } catch (error) {
+          const errorMessage =
+            error instanceof Error ? error.message : String(error);
           console.log(
-            `      ❌ Failed to cancel ${duplicate.identifier}: ${error.message}`
+            `      ❌ Failed to cancel ${duplicate.identifier}: ${errorMessage}`
           );
         }
       } else {

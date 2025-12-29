@@ -1,5 +1,29 @@
 # StackMemory Agent Instructions
 
+## System Architecture Overview
+
+StackMemory is a **lossless, project-scoped memory runtime** that revolutionizes how AI tools maintain context. Key architectural principles:
+
+### Core Concepts
+- **Frame-based memory**: Call stack metaphor with up to 10,000 frames (not linear chat logs)
+- **Two-tier storage**: Local SQLite (30-day retention) + infinite remote storage (S3/TimeSeries DB)
+- **LLM-driven retrieval**: Intelligent context selection analyzing compressed summaries to determine optimal frame depth
+- **Hybrid digests**: 60% deterministic extraction, 40% AI-generated summaries processed during idle time
+- **Configurable scoring**: Tool importance scores (search: 0.95, grep: 0.15) with customizable weight profiles
+- **Team collaboration**: Dual stack architecture supporting individual and shared frames with handoff
+
+### Query System
+- **Natural language**: "provide context from the last day", "show Alice's auth work"
+- **Structured queries**: TypeScript interfaces with time/content/frame/people filters
+- **Hybrid syntax**: Command-line style, inline modifiers, template patterns
+- **Smart shortcuts**: today, yesterday, bugs, features, critical, my work
+
+### Performance Targets
+- **Retrieval latency**: p50 < 50ms, p99 < 500ms
+- **Max stack depth**: 10,000 frames
+- **Storage**: 2GB local, infinite remote
+- **Incremental GC**: 100 frames/cycle to avoid UI freezes
+
 ## NPM Publishing Process
 
 ### Prerequisites

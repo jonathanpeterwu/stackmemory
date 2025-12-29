@@ -562,7 +562,7 @@ linearCommand
         process.exit(1);
       }
 
-      const updates: any = {};
+      const updates: Record<string, unknown> = {};
 
       // Handle status update
       if (options.status) {
@@ -578,12 +578,16 @@ linearCommand
 
         const targetType =
           statusMap[options.status.toLowerCase()] || options.status;
-        const targetState = states.find((s: any) => s.type === targetType);
+        const targetState = states.find(
+          (s: { type: string }) => s.type === targetType
+        );
 
         if (!targetState) {
           console.error(`❌ Invalid status: ${options.status}`);
           console.log('Available states:');
-          states.forEach((s: any) => console.log(`  - ${s.name} (${s.type})`));
+          states.forEach((s: { name: string; type: string }) =>
+            console.log(`  - ${s.name} (${s.type})`)
+          );
           process.exit(1);
         }
 
@@ -692,7 +696,7 @@ linearCommand
       }
 
       // Update configuration
-      const updates: any = {};
+      const updates: Record<string, unknown> = {};
 
       if (options.setInterval) {
         const interval = parseInt(options.setInterval);
@@ -885,10 +889,17 @@ program
       const app = express();
 
       // Add error handling middleware
-      app.use((err: any, req: any, res: any, _next: any) => {
-        console.error('Express error:', err);
-        res.status(500).json({ error: err.message });
-      });
+      app.use(
+        (
+          err: Error,
+          _req: import('express').Request,
+          res: import('express').Response,
+          _next: import('express').NextFunction
+        ) => {
+          console.error('Express error:', err);
+          res.status(500).json({ error: err.message });
+        }
+      );
 
       const analyticsAPI = new AnalyticsAPI(projectRoot);
 
@@ -1166,4 +1177,15 @@ if (process.argv.length > 2) {
   });
 }
 
-program.parse();
+// Only parse when running as main module (not when imported for testing)
+const isMainModule =
+  import.meta.url === `file://${process.argv[1]}` ||
+  process.argv[1]?.endsWith('/stackmemory') ||
+  process.argv[1]?.endsWith('index.ts') ||
+  process.argv[1]?.includes('tsx');
+
+if (isMainModule) {
+  program.parse();
+}
+
+export { program };

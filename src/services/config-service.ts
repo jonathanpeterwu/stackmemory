@@ -77,7 +77,9 @@ export class ConfigService {
     return this.config.integrations?.linear || {};
   }
 
-  public async updateLinearConfig(updates: any): Promise<void> {
+  public async updateLinearConfig(
+    updates: Record<string, unknown>
+  ): Promise<void> {
     if (!this.config.integrations) {
       this.config.integrations = {};
     }

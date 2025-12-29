@@ -167,7 +167,10 @@ class ClaudeSM {
     }
   }
 
-  private saveContext(message: string, metadata: any = {}): void {
+  private saveContext(
+    message: string,
+    metadata: Record<string, unknown> = {}
+  ): void {
     if (!this.config.contextEnabled) return;
 
     try {
@@ -200,11 +203,13 @@ class ClaudeSM {
 
       if (contexts.length > 0) {
         console.log(chalk.gray('Recent context loaded:'));
-        contexts.forEach((ctx: any) => {
-          console.log(
-            chalk.gray(`  - ${ctx.message} (${ctx.metadata?.timestamp})`)
-          );
-        });
+        contexts.forEach(
+          (ctx: { message: string; metadata?: { timestamp?: string } }) => {
+            console.log(
+              chalk.gray(`  - ${ctx.message} (${ctx.metadata?.timestamp})`)
+            );
+          }
+        );
       }
     } catch {
       // Silently continue

@@ -7,6 +7,17 @@
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
+interface LinearIssue {
+  identifier: string;
+  title: string;
+  state: {
+    name: string;
+    type: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
 async function showLinearSummary() {
   // Load Linear tokens
   const tokensPath = join(process.cwd(), '.stackmemory', 'linear-tokens.json');
@@ -26,7 +37,10 @@ async function showLinearSummary() {
   // GraphQL helper
   const linearApiUrl = 'https://api.linear.app/graphql';
 
-  async function graphqlRequest(query: string, variables: any = {}) {
+  async function graphqlRequest(
+    query: string,
+    variables: Record<string, unknown> = {}
+  ) {
     const response = await fetch(linearApiUrl, {
       method: 'POST',
       headers: {
@@ -72,19 +86,22 @@ async function showLinearSummary() {
   `;
 
   const data = (await graphqlRequest(issuesQuery)) as {
-    issues: { nodes: any[] };
+    issues: { nodes: LinearIssue[] };
   };
   const issues = data.issues.nodes;
 
   // Group by state type
-  const grouped = new Map<string, any[]>();
+  const grouped = new Map<string, LinearIssue[]>();
 
   for (const issue of issues) {
     const stateType = issue.state.type;
     if (!grouped.has(stateType)) {
       grouped.set(stateType, []);
     }
-    grouped.get(stateType)!.push(issue);
+    const stateIssues = grouped.get(stateType);
+    if (stateIssues) {
+      stateIssues.push(issue);
+    }
   }
 
   // Display summary

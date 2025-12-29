@@ -37,7 +37,7 @@ async function main() {
     const client = apiKey
       ? new LinearClient({ apiKey })
       : new LinearClient({
-          apiKey: tokens!.accessToken,
+          apiKey: tokens?.accessToken ?? '',
         });
 
     // Get all issues (increase limit to get more tasks)
