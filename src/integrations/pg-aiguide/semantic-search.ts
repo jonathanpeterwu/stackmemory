@@ -1,5 +1,9 @@
 import { Pool } from 'pg';
 import { logger } from '../../core/monitoring/logger.js';
+import {
+  EmbeddingProvider,
+  createEmbeddingProvider,
+} from './embedding-provider.js';
 
 export interface SemanticSearchConfig {
   pool: Pool;
@@ -7,6 +11,7 @@ export interface SemanticSearchConfig {
   embeddingColumn: string;
   contentColumn: string;
   vectorDimensions: number;
+  embeddingProvider?: EmbeddingProvider;
 }
 
 export interface SearchResult {
@@ -19,21 +24,26 @@ export interface SearchResult {
 export class SemanticSearch {
   private pool: Pool;
   private config: SemanticSearchConfig;
+  private embeddingProvider: EmbeddingProvider;
 
   constructor(config: SemanticSearchConfig) {
     this.pool = config.pool;
     this.config = config;
+    this.embeddingProvider =
+      config.embeddingProvider || createEmbeddingProvider('hybrid');
+
+    // Verify dimensions match
+    if (this.embeddingProvider.getDimensions() !== config.vectorDimensions) {
+      logger.warn(
+        `Embedding provider dimensions (${this.embeddingProvider.getDimensions()}) ` +
+          `don't match config (${config.vectorDimensions}). Using provider dimensions.`
+      );
+      this.config.vectorDimensions = this.embeddingProvider.getDimensions();
+    }
   }
 
   async createEmbedding(text: string): Promise<number[]> {
-    // This is a placeholder - in production, you would call an embedding API
-    // like OpenAI's ada-002 or a local model
-    logger.warn(
-      'Using placeholder embedding - implement actual embedding generation'
-    );
-    return Array(this.config.vectorDimensions)
-      .fill(0)
-      .map(() => Math.random());
+    return this.embeddingProvider.createEmbedding(text);
   }
 
   async indexContent(
