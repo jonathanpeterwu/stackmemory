@@ -127,8 +127,7 @@ export class PostgresAdapter implements PersistenceAdapter {
         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         type VARCHAR(100) NOT NULL,
         data JSONB NOT NULL,
-        metadata JSONB,
-        INDEX idx_traces_session_timestamp (session_id, timestamp)
+        metadata JSONB
       )`,
 
       // Context frames table
@@ -140,8 +139,7 @@ export class PostgresAdapter implements PersistenceAdapter {
         summary TEXT,
         timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         type VARCHAR(100) NOT NULL,
-        metadata JSONB,
-        INDEX idx_context_project_branch (project_id, branch)
+        metadata JSONB
       )`,
 
       // Decisions table
@@ -158,6 +156,24 @@ export class PostgresAdapter implements PersistenceAdapter {
 
     for (const query of queries) {
       await this.execute(query);
+    }
+
+    // Create indexes separately (PostgreSQL doesn't support inline INDEX in CREATE TABLE)
+    const indexes = [
+      `CREATE INDEX IF NOT EXISTS idx_traces_session_timestamp 
+       ON traces(session_id, timestamp)`,
+      `CREATE INDEX IF NOT EXISTS idx_context_project_branch 
+       ON context_frames(project_id, branch)`,
+      `CREATE INDEX IF NOT EXISTS idx_traces_type 
+       ON traces(type)`,
+      `CREATE INDEX IF NOT EXISTS idx_context_frames_timestamp 
+       ON context_frames(timestamp)`,
+      `CREATE INDEX IF NOT EXISTS idx_decisions_project_session 
+       ON decisions(project_id, session_id)`,
+    ];
+
+    for (const index of indexes) {
+      await this.execute(index);
     }
   }
 

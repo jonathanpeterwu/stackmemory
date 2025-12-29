@@ -37,6 +37,8 @@ export class AuthMiddleware {
   private blacklistedTokens: Set<string> = new Set();
   private userModel: UserModel;
   private db: BetterSqlite3.Database;
+  private mockUser?: AuthUser;
+  private mockUserInitializing = false;
 
   constructor(
     private config: {
@@ -586,41 +588,82 @@ export class AuthMiddleware {
     return orgs;
   }
 
-  private getMockUser(): AuthUser {
-    // For development/testing only - properly create in database
+  private async initializeMockUser(): Promise<AuthUser> {
     const mockSub = 'dev-sub';
 
-    // Check if dev user exists in database, create if not
-    this.userModel
-      .findUserBySub(mockSub)
-      .then((user) => {
-        if (!user) {
-          this.userModel.createUser({
-            sub: mockSub,
-            email: 'dev@stackmemory.local',
-            name: 'Development User',
-            tier: 'enterprise',
-            permissions: ['read', 'write', 'admin', 'delete'],
-            organizations: [
-              {
-                id: 'dev-org',
-                name: 'Development Organization',
-                role: 'admin',
-              },
-            ],
-          });
-        }
-      })
-      .catch((err) => logger.error('Failed to create mock user', err));
+    // Check if user exists in database
+    let dbUser = await this.userModel.findUserBySub(mockSub);
+
+    if (!dbUser) {
+      // Create mock user in database
+      dbUser = await this.userModel.createUser({
+        sub: mockSub,
+        email: 'dev@stackmemory.local',
+        name: 'Development User',
+        tier: 'enterprise',
+        permissions: ['read', 'write', 'admin', 'delete'],
+        organizations: [
+          {
+            id: 'dev-org',
+            name: 'Development Organization',
+            role: 'admin',
+          },
+        ],
+        metadata: {
+          isDevelopmentUser: true,
+          createdAt: new Date().toISOString(),
+        },
+      });
+      logger.info('Created development mock user');
+    }
 
     return {
-      id: 'dev-user-id',
-      sub: mockSub,
+      id: dbUser.id,
+      sub: dbUser.sub,
+      email: dbUser.email,
+      name: dbUser.name,
+      picture: dbUser.avatar,
+      tier: dbUser.tier,
+      permissions: dbUser.permissions,
+      organizations: dbUser.organizations.map((org) => org.id),
+      metadata: dbUser.metadata,
+    };
+  }
+
+  private getMockUser(): AuthUser {
+    // Return cached mock user if available
+    if (this.mockUser) {
+      return this.mockUser;
+    }
+
+    // Initialize mock user synchronously to prevent race conditions
+    // This runs during constructor or first use
+    if (!this.mockUserInitializing) {
+      this.mockUserInitializing = true;
+
+      // Initialize asynchronously but return a temporary user immediately
+      this.initializeMockUser()
+        .then((user) => {
+          this.mockUser = user;
+          this.mockUserInitializing = false;
+          logger.info('Mock user initialized and cached');
+        })
+        .catch((err) => {
+          logger.error('Failed to initialize mock user', err);
+          this.mockUserInitializing = false;
+        });
+    }
+
+    // Return temporary mock user while initialization is in progress
+    return {
+      id: 'temp-dev-user-id',
+      sub: 'dev-sub',
       email: 'dev@stackmemory.local',
       name: 'Development User',
       tier: 'enterprise',
       permissions: ['read', 'write', 'admin', 'delete'],
       organizations: ['dev-org'],
+      metadata: { temporary: true },
     };
   }
 

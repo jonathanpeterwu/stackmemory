@@ -75,6 +75,21 @@ export class UserModel {
       )
     `);
 
+    // Create api_keys table for efficient lookup
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS api_keys (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        key_hash TEXT UNIQUE NOT NULL,
+        name TEXT,
+        last_used_at DATETIME,
+        created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+        expires_at DATETIME,
+        metadata TEXT DEFAULT '{}',
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      )
+    `);
+
     // Create indexes
     this.db.exec(`
       CREATE INDEX IF NOT EXISTS idx_users_sub ON users(sub);
@@ -82,6 +97,8 @@ export class UserModel {
       CREATE INDEX IF NOT EXISTS idx_sessions_token ON user_sessions(token);
       CREATE INDEX IF NOT EXISTS idx_sessions_user ON user_sessions(user_id);
       CREATE INDEX IF NOT EXISTS idx_sessions_expires ON user_sessions(expires_at);
+      CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash);
+      CREATE INDEX IF NOT EXISTS idx_api_keys_user ON api_keys(user_id);
     `);
 
     logger.info('User database schema initialized');
@@ -296,43 +313,93 @@ export class UserModel {
   }
 
   // API Key management
-  async generateApiKey(userId: string): Promise<string> {
-    const apiKey = `sk-${this.generateToken(32)}`;
+  async generateApiKey(userId: string, name?: string): Promise<string> {
     const user = await this.findUserById(userId);
-
     if (!user) {
       throw new Error('User not found');
     }
 
+    const apiKey = `sk-${this.generateToken(32)}`;
     const hashedKey = await bcrypt.hash(apiKey, 10);
-    const apiKeys = [...(user.apiKeys || []), hashedKey];
 
-    await this.updateUser(userId, { apiKeys });
+    // Store in dedicated api_keys table
+    const stmt = this.db.prepare(`
+      INSERT INTO api_keys (id, user_id, key_hash, name, created_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
 
-    logger.info('API key generated', { userId });
+    const apiKeyId = uuidv4();
+    stmt.run(
+      apiKeyId,
+      userId,
+      hashedKey,
+      name || 'API Key',
+      new Date().toISOString()
+    );
+
+    logger.info('API key generated', { userId, apiKeyId });
     return apiKey;
   }
 
   async validateApiKey(apiKey: string): Promise<User | null> {
-    // This is inefficient for large scale, but works for small deployments
-    // For production, consider a separate api_keys table
-    const stmt = this.db.prepare(
-      'SELECT * FROM users WHERE api_keys IS NOT NULL'
-    );
+    // Efficient lookup using indexed api_keys table
+    const stmt = this.db.prepare(`
+      SELECT u.*, ak.id as api_key_id, ak.key_hash
+      FROM api_keys ak
+      JOIN users u ON ak.user_id = u.id
+      WHERE (ak.expires_at IS NULL OR ak.expires_at > datetime('now'))
+    `);
+
     const rows = stmt.all() as any[];
 
     for (const row of rows) {
-      const user = this.rowToUser(row);
-      const apiKeys = user.apiKeys || [];
+      if (await bcrypt.compare(apiKey, row.key_hash)) {
+        // Update last used timestamp
+        const updateStmt = this.db.prepare(
+          'UPDATE api_keys SET last_used_at = ? WHERE id = ?'
+        );
+        updateStmt.run(new Date().toISOString(), row.api_key_id);
 
-      for (const hashedKey of apiKeys) {
-        if (await bcrypt.compare(apiKey, hashedKey)) {
-          return user;
-        }
+        return this.rowToUser(row);
       }
     }
 
     return null;
+  }
+
+  async revokeApiKey(userId: string, apiKeyId: string): Promise<boolean> {
+    const stmt = this.db.prepare(
+      'DELETE FROM api_keys WHERE id = ? AND user_id = ?'
+    );
+    const result = stmt.run(apiKeyId, userId);
+
+    if (result.changes > 0) {
+      logger.info('API key revoked', { userId, apiKeyId });
+      return true;
+    }
+
+    return false;
+  }
+
+  async listApiKeys(
+    userId: string
+  ): Promise<
+    Array<{ id: string; name: string; lastUsed?: Date; createdAt: Date }>
+  > {
+    const stmt = this.db.prepare(`
+      SELECT id, name, last_used_at, created_at
+      FROM api_keys
+      WHERE user_id = ?
+      ORDER BY created_at DESC
+    `);
+
+    const rows = stmt.all(userId) as any[];
+    return rows.map((row) => ({
+      id: row.id,
+      name: row.name,
+      lastUsed: row.last_used_at ? new Date(row.last_used_at) : undefined,
+      createdAt: new Date(row.created_at),
+    }));
   }
 
   // Helper methods

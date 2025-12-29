@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Lossless, project-scoped memory for AI tools",
   "engines": {
     "node": ">=20.0.0",
