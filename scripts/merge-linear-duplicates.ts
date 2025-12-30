@@ -23,7 +23,19 @@ const duplicateGroups: DuplicateGroup[] = [
   },
   {
     name: 'Performance Optimization',
-    taskIds: ['STA-87', 'STA-73', 'STA-60', 'STA-45', 'STA-31', 'STA-13', 'STA-21', 'STA-35', 'STA-50', 'STA-63', 'STA-77'],
+    taskIds: [
+      'STA-87',
+      'STA-73',
+      'STA-60',
+      'STA-45',
+      'STA-31',
+      'STA-13',
+      'STA-21',
+      'STA-35',
+      'STA-50',
+      'STA-63',
+      'STA-77',
+    ],
     primaryId: 'STA-13',
   },
   {
@@ -56,7 +68,9 @@ async function mergeDuplicateTasks() {
     accessToken = tokens.accessToken;
     console.log('✅ Loaded Linear authentication tokens\n');
   } catch (error) {
-    console.error('❌ Failed to load Linear tokens. Please run: stackmemory linear setup');
+    console.error(
+      '❌ Failed to load Linear tokens. Please run: stackmemory linear setup'
+    );
     process.exit(1);
   }
 
@@ -69,20 +83,24 @@ async function mergeDuplicateTasks() {
   for (const group of duplicateGroups) {
     console.log(`\n📋 Processing: ${group.name}`);
     console.log(`   Primary: ${group.primaryId}`);
-    console.log(`   Duplicates: ${group.taskIds.filter(id => id !== group.primaryId).join(', ')}`);
+    console.log(
+      `   Duplicates: ${group.taskIds.filter((id) => id !== group.primaryId).join(', ')}`
+    );
 
     try {
       // Get the primary issue
       const primaryIssue = await client.issue(group.primaryId);
       if (!primaryIssue) {
-        console.log(`   ⚠️  Primary issue ${group.primaryId} not found, skipping group`);
+        console.log(
+          `   ⚠️  Primary issue ${group.primaryId} not found, skipping group`
+        );
         continue;
       }
 
       // Collect descriptions from all duplicates
       let combinedDescription = primaryIssue.description || '';
-      const duplicateIds = group.taskIds.filter(id => id !== group.primaryId);
-      
+      const duplicateIds = group.taskIds.filter((id) => id !== group.primaryId);
+
       for (const duplicateId of duplicateIds) {
         try {
           const duplicateIssue = await client.issue(duplicateId);
@@ -92,18 +110,22 @@ async function mergeDuplicateTasks() {
           }
 
           // Add duplicate's description if it exists and differs
-          if (duplicateIssue.description && 
-              duplicateIssue.description !== primaryIssue.description) {
+          if (
+            duplicateIssue.description &&
+            duplicateIssue.description !== primaryIssue.description
+          ) {
             combinedDescription += `\n\n---\n[Merged from ${duplicateId}]\n${duplicateIssue.description}`;
           }
 
           // Get the canceled state for the team
           const team = await duplicateIssue.team;
           const states = await team.states();
-          const canceledState = states.nodes.find(s => s.type === 'canceled');
+          const canceledState = states.nodes.find((s) => s.type === 'canceled');
 
           if (!canceledState) {
-            console.log(`   ⚠️  No 'canceled' state found for team, skipping ${duplicateId}`);
+            console.log(
+              `   ⚠️  No 'canceled' state found for team, skipping ${duplicateId}`
+            );
             continue;
           }
 
@@ -113,9 +135,13 @@ async function mergeDuplicateTasks() {
             description: `Duplicate of ${group.primaryId}\n\n${duplicateIssue.description || ''}`,
           });
 
-          console.log(`   ✅ Marked ${duplicateId} as duplicate of ${group.primaryId}`);
+          console.log(
+            `   ✅ Marked ${duplicateId} as duplicate of ${group.primaryId}`
+          );
         } catch (error: any) {
-          console.log(`   ❌ Failed to process ${duplicateId}: ${error.message}`);
+          console.log(
+            `   ❌ Failed to process ${duplicateId}: ${error.message}`
+          );
         }
       }
 
@@ -124,7 +150,9 @@ async function mergeDuplicateTasks() {
         await primaryIssue.update({
           description: combinedDescription,
         });
-        console.log(`   ✅ Updated ${group.primaryId} with merged descriptions`);
+        console.log(
+          `   ✅ Updated ${group.primaryId} with merged descriptions`
+        );
       }
 
       console.log(`   ✅ Group "${group.name}" processed successfully`);
@@ -136,9 +164,13 @@ async function mergeDuplicateTasks() {
   console.log('\n✨ Duplicate merge complete!');
   console.log('\n📊 Summary:');
   console.log(`   Groups processed: ${duplicateGroups.length}`);
-  console.log(`   Total tasks affected: ${duplicateGroups.reduce((acc, g) => acc + g.taskIds.length, 0)}`);
+  console.log(
+    `   Total tasks affected: ${duplicateGroups.reduce((acc, g) => acc + g.taskIds.length, 0)}`
+  );
   console.log(`   Primary tasks kept: ${duplicateGroups.length}`);
-  console.log(`   Tasks marked as duplicate: ${duplicateGroups.reduce((acc, g) => acc + g.taskIds.length - 1, 0)}`);
+  console.log(
+    `   Tasks marked as duplicate: ${duplicateGroups.reduce((acc, g) => acc + g.taskIds.length - 1, 0)}`
+  );
 }
 
 // Run the merge

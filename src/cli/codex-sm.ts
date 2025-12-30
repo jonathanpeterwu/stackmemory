@@ -74,7 +74,9 @@ class CodexSM {
 
   private getCurrentBranch(): string {
     try {
-      return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+      return execSync('git rev-parse --abbrev-ref HEAD', {
+        encoding: 'utf8',
+      }).trim();
     } catch {
       return 'main';
     }
@@ -94,11 +96,18 @@ class CodexSM {
 
     console.log(chalk.blue('🌳 Setting up isolated worktree...'));
 
-    const timestamp = new Date().toISOString().replace(/[:.]/g, '-').substring(0, 19);
+    const timestamp = new Date()
+      .toISOString()
+      .replace(/[:.]/g, '-')
+      .substring(0, 19);
     const branch =
-      this.config.branch || `codex-${this.config.task || 'work'}-${timestamp}-${this.config.instanceId}`;
+      this.config.branch ||
+      `codex-${this.config.task || 'work'}-${timestamp}-${this.config.instanceId}`;
     const repoName = path.basename(process.cwd());
-    const worktreePath = path.join(path.dirname(process.cwd()), `${repoName}--${branch}`);
+    const worktreePath = path.join(
+      path.dirname(process.cwd()),
+      `${repoName}--${branch}`
+    );
 
     try {
       const cmd = `git worktree add -b "${branch}" "${worktreePath}"`;
@@ -121,7 +130,8 @@ class CodexSM {
       const envFiles = ['.env', '.env.local', '.mise.toml', '.tool-versions'];
       for (const file of envFiles) {
         const srcPath = path.join(process.cwd(), file);
-        if (fs.existsSync(srcPath)) fs.copyFileSync(srcPath, path.join(worktreePath, file));
+        if (fs.existsSync(srcPath))
+          fs.copyFileSync(srcPath, path.join(worktreePath, file));
       }
 
       return worktreePath;
@@ -131,7 +141,10 @@ class CodexSM {
     }
   }
 
-  private saveContext(message: string, metadata: Record<string, unknown> = {}): void {
+  private saveContext(
+    message: string,
+    metadata: Record<string, unknown> = {}
+  ): void {
     if (!this.config.contextEnabled) return;
     try {
       const contextData = {
@@ -159,9 +172,13 @@ class CodexSM {
       const contexts = JSON.parse(output);
       if (Array.isArray(contexts) && contexts.length > 0) {
         console.log(chalk.gray('Recent context loaded:'));
-        contexts.forEach((ctx: { message: string; metadata?: { timestamp?: string } }) => {
-          console.log(chalk.gray(`  - ${ctx.message} (${ctx.metadata?.timestamp})`));
-        });
+        contexts.forEach(
+          (ctx: { message: string; metadata?: { timestamp?: string } }) => {
+            console.log(
+              chalk.gray(`  - ${ctx.message} (${ctx.metadata?.timestamp})`)
+            );
+          }
+        );
       }
     } catch {
       // ignore
@@ -171,7 +188,9 @@ class CodexSM {
   private suggestWorktreeMode(): void {
     if (this.hasUncommittedChanges()) {
       console.log(chalk.yellow('⚠️  Uncommitted changes detected'));
-      console.log(chalk.gray('   Consider using --worktree to work in isolation'));
+      console.log(
+        chalk.gray('   Consider using --worktree to work in isolation')
+      );
     }
   }
 
@@ -232,11 +251,15 @@ class CodexSM {
         process.env.TRACE_RESULTS = 'false';
       }
       initializeTracing();
-      trace.command('codex-sm', {
-        instanceId: this.config.instanceId,
-        worktree: this.config.useWorktree,
-        task: this.config.task,
-      }, async () => {});
+      trace.command(
+        'codex-sm',
+        {
+          instanceId: this.config.instanceId,
+          worktree: this.config.useWorktree,
+          task: this.config.task,
+        },
+        async () => {}
+      );
     }
 
     console.log(chalk.blue('╔════════════════════════════════════════╗'));
@@ -266,7 +289,8 @@ class CodexSM {
     this.loadContext();
 
     process.env.CODEX_INSTANCE_ID = this.config.instanceId;
-    if (this.config.worktreePath) process.env.CODEX_WORKTREE_PATH = this.config.worktreePath;
+    if (this.config.worktreePath)
+      process.env.CODEX_WORKTREE_PATH = this.config.worktreePath;
 
     console.log(chalk.gray(`🤖 Instance ID: ${this.config.instanceId}`));
     console.log(chalk.gray(`📁 Working in: ${process.cwd()}`));
@@ -276,21 +300,35 @@ class CodexSM {
     console.log(chalk.gray('─'.repeat(42)));
 
     const codexBin = (() => {
-      try { execSync('which codex', { stdio: 'ignore' }); return 'codex'; } catch {}
-      try { execSync('which codex-cli', { stdio: 'ignore' }); return 'codex-cli'; } catch {}
+      try {
+        execSync('which codex', { stdio: 'ignore' });
+        return 'codex';
+      } catch {}
+      try {
+        execSync('which codex-cli', { stdio: 'ignore' });
+        return 'codex-cli';
+      } catch {}
       return null;
     })();
 
     if (!codexBin) {
-      console.error(chalk.red('❌ Codex CLI not found in PATH (codex or codex-cli).'));
+      console.error(
+        chalk.red('❌ Codex CLI not found in PATH (codex or codex-cli).')
+      );
       process.exit(1);
       return;
     }
 
-    const child = spawn(codexBin, codexArgs, { stdio: 'inherit', env: process.env });
+    const child = spawn(codexBin, codexArgs, {
+      stdio: 'inherit',
+      env: process.env,
+    });
 
     child.on('exit', (code) => {
-      this.saveContext('Codex session ended', { action: 'session_end', exitCode: code });
+      this.saveContext('Codex session ended', {
+        action: 'session_end',
+        exitCode: code,
+      });
       if (this.config.tracingEnabled) {
         const summary = trace.getExecutionSummary();
         console.log();
@@ -308,12 +346,16 @@ class CodexSM {
     });
 
     process.on('SIGINT', () => {
-      this.saveContext('Codex session interrupted', { action: 'session_interrupt' });
+      this.saveContext('Codex session interrupted', {
+        action: 'session_interrupt',
+      });
       child.kill('SIGINT');
     });
 
     process.on('SIGTERM', () => {
-      this.saveContext('Codex session terminated', { action: 'session_terminate' });
+      this.saveContext('Codex session terminated', {
+        action: 'session_terminate',
+      });
       child.kill('SIGTERM');
     });
   }
@@ -341,4 +383,3 @@ program
 if (require.main === module) {
   program.parse(process.argv);
 }
-
