@@ -58,12 +58,23 @@ export class LinearSyncManager extends EventEmitter {
    * Setup event listeners for automatic sync triggers
    */
   private setupEventListeners(): void {
-    // TODO: Implement event listening when PebblesTaskStore extends EventEmitter
-    // For now, we'll rely on manual sync or periodic sync
-    if (this.config.syncOnTaskChange) {
-      logger.debug(
-        'Task change sync will be implemented when PebblesTaskStore supports events'
-      );
+    if (this.config.syncOnTaskChange && this.taskStore) {
+      // Listen for task changes to trigger sync
+      this.taskStore.on('sync:needed', (changeType: string) => {
+        logger.debug(`Task change detected: ${changeType}`);
+        this.scheduleDebouncedSync();
+      });
+
+      // Listen for specific task events if needed for logging
+      this.taskStore.on('task:created', (task: any) => {
+        logger.debug(`Task created: ${task.title}`);
+      });
+
+      this.taskStore.on('task:completed', (task: any) => {
+        logger.debug(`Task completed: ${task.title}`);
+      });
+
+      logger.info('Task change sync enabled via EventEmitter');
     }
   }
 

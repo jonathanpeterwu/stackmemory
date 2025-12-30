@@ -138,8 +138,31 @@ export class LinearWebhookHandler {
       title: payload.data.title,
     });
 
-    // TODO: Implement task creation with proper frame context
-    // This would require access to the current FrameManager context
+    // Create a StackMemory task from Linear issue
+    if (this.taskStore) {
+      try {
+        const taskId = this.taskStore.createTask({
+          frameId: 'linear-import', // Special frame for Linear imports
+          title: payload.data.title || 'Untitled Linear Issue',
+          description: payload.data.description || '',
+          priority: this.mapLinearPriorityToStackMemory(payload.data.priority),
+          assignee: payload.data.assignee?.email,
+          tags: payload.data.labels?.map((l: any) => l.name) || [],
+        });
+
+        // Store mapping for future syncing
+        this.storeMapping(taskId, payload.data.id);
+
+        logger.info('Created StackMemory task from Linear issue', {
+          stackmemoryId: taskId,
+          linearId: payload.data.id,
+        });
+      } catch (error) {
+        logger.error('Failed to create task from Linear issue', {
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+    }
   }
 
   /**
@@ -275,9 +298,37 @@ export class LinearWebhookHandler {
   private findMappingByLinearId(
     linearId: string
   ): { stackmemoryId: string; linearId: string } | null {
-    // TODO: Implement proper mapping lookup from database
-    // For now, return null
+    // Use in-memory mapping for now
+    // In production, this would query a database
+    const mapping = this.taskMappings.get(linearId);
+    if (mapping) {
+      return { stackmemoryId: mapping, linearId };
+    }
     return null;
+  }
+
+  // In-memory task mappings (Linear ID -> StackMemory ID)
+  private taskMappings = new Map<string, string>();
+
+  /**
+   * Store mapping between Linear and StackMemory IDs
+   */
+  private storeMapping(stackmemoryId: string, linearId: string): void {
+    this.taskMappings.set(linearId, stackmemoryId);
+    // In production, persist to database
+  }
+
+  /**
+   * Map Linear priority to StackMemory priority
+   */
+  private mapLinearPriorityToStackMemory(
+    priority: number | undefined
+  ): 'low' | 'medium' | 'high' | 'urgent' {
+    if (!priority) return 'medium';
+    if (priority <= 1) return 'urgent';
+    if (priority === 2) return 'high';
+    if (priority === 3) return 'medium';
+    return 'low';
   }
 
   /**
