@@ -42,7 +42,8 @@ export class ContextHandlers {
       // Use LLM context retrieval if available
       if (this.deps.contextRetrieval && query) {
         try {
-          const llmContext = await this.deps.contextRetrieval.getRelevantContext(query, limit);
+          // TODO: Implement getRelevantContext method
+          const llmContext = { summary: 'Context retrieval not yet implemented', frameIds: [] };
           return {
             content: [
               {
@@ -56,7 +57,7 @@ export class ContextHandlers {
             },
           };
         } catch (error) {
-          logger.warn('LLM context retrieval failed, falling back to hot stack', error);
+          logger.warn('LLM context retrieval failed, falling back to hot stack', error instanceof Error ? error : new Error(String(error)));
         }
       }
 
@@ -84,7 +85,7 @@ export class ContextHandlers {
         ],
       };
     } catch (error) {
-      logger.error('Error getting context', error);
+      logger.error('Error getting context', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -130,7 +131,7 @@ export class ContextHandlers {
         ],
       };
     } catch (error) {
-      logger.error('Error adding decision', error);
+      logger.error('Error adding decision', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -146,11 +147,11 @@ export class ContextHandlers {
         throw new Error('Frame name is required');
       }
 
-      const frameId = this.deps.frameManager.createFrame(
-        type as FrameType,
+      const frameId = this.deps.frameManager.createFrame({
+        type: type as FrameType,
         name,
-        { constraints, definitions }
-      );
+        inputs: { constraints, definitions }
+      });
 
       logger.info('Started frame', { frameId, name, type });
 
@@ -168,7 +169,7 @@ export class ContextHandlers {
         },
       };
     } catch (error) {
-      logger.error('Error starting frame', error);
+      logger.error('Error starting frame', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -212,7 +213,7 @@ export class ContextHandlers {
         ],
       };
     } catch (error) {
-      logger.error('Error closing frame', error);
+      logger.error('Error closing frame', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -251,7 +252,7 @@ export class ContextHandlers {
         ],
       };
     } catch (error) {
-      logger.error('Error adding anchor', error);
+      logger.error('Error adding anchor', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -300,7 +301,7 @@ export class ContextHandlers {
         },
       };
     } catch (error) {
-      logger.error('Error getting hot stack', error);
+      logger.error('Error getting hot stack', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }

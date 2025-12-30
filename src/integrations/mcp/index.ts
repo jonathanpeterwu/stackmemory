@@ -17,4 +17,4 @@ export { TraceHandlers } from './handlers/trace-handlers.js';
 export { MCPToolDefinitions } from './tool-definitions.js';
 
 // Re-export original server for backwards compatibility
-export { LocalStackMemoryMCP as LegacyStackMemoryMCP } from './server.js';
+export { default as LegacyStackMemoryMCP } from './server.js';

@@ -72,7 +72,7 @@ export class PerformanceProfiler {
   /**
    * Start timing an operation
    */
-  startTiming(operationName: string): () => void {
+  startTiming(operationName: string): (metadata?: Record<string, any>) => void {
     if (!this.isEnabled) {
       return () => {}; // No-op
     }
@@ -420,7 +420,7 @@ export class StackMemoryPerformanceMonitor {
    */
   monitorDatabaseOperations(db: Database.Database): void {
     const originalPrepare = db.prepare;
-    db.prepare = function(sql: string) {
+    db.prepare = function<T = any>(sql: string): Database.Statement<T[], T> {
       const stmt = originalPrepare.call(this, sql);
       return wrapStatement(stmt, sql);
     };
@@ -449,15 +449,15 @@ function wrapStatement(stmt: Database.Statement, sql: string): Database.Statemen
   const originalGet = stmt.get;
   const originalAll = stmt.all;
 
-  stmt.run = function (...args: any[]) {
+  stmt.run = function (this: Database.Statement, ...args: any[]) {
     return getProfiler().timeFunction(`${operationName}.run`, () => originalRun.apply(this, args));
   } as any;
 
-  stmt.get = function (...args: any[]) {
+  stmt.get = function (this: Database.Statement, ...args: any[]) {
     return getProfiler().timeFunction(`${operationName}.get`, () => originalGet.apply(this, args));
   } as any;
 
-  stmt.all = function (...args: any[]) {
+  stmt.all = function (this: Database.Statement, ...args: any[]) {
     return getProfiler().timeFunction(`${operationName}.all`, () => originalAll.apply(this, args));
   } as any;
 

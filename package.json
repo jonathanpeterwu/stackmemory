@@ -9,7 +9,8 @@
   "type": "module",
   "main": "dist/src/index.js",
   "bin": {
-    "stackmemory": "dist/src/cli/index.js"
+    "stackmemory": "dist/src/cli/index.js",
+    "codex-sm": "dist/src/cli/codex-sm.js"
   },
   "types": "dist/src/index.d.ts",
   "files": [
@@ -42,9 +43,12 @@
     "setup:claude": "npm run build && ./scripts/setup-claude-integration.sh",
     "postinstall": "node scripts/setup-alias.js || true",
     "init": "node dist/scripts/initialize.js",
-    "build": "tsc",
+    "build": "node esbuild.config.js",
+    "build:types": "tsc --emitDeclarationOnly --project tsconfig.build.json",
     "lint": "eslint src/**/*.ts scripts/**/*.ts",
     "lint:fix": "eslint src/**/*.ts scripts/**/*.ts --fix",
+    "lint:oxc": "oxlint src scripts",
+    "lint:fast": "oxlint src scripts && eslint src/**/*.ts scripts/**/*.ts",
     "lint:autofix": "node scripts/development/fix-lint-loop.cjs",
     "format": "prettier --write src/**/*.ts scripts/**/*.ts",
     "test": "vitest",
@@ -118,11 +122,13 @@
     "@typescript-eslint/parser": "^8.50.1",
     "@vitest/coverage-v8": "^4.0.16",
     "@vitest/ui": "^4.0.16",
+    "esbuild": "^0.27.2",
     "eslint": "^9.39.2",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.4",
     "husky": "^9.1.7",
     "lint-staged": "^16.2.7",
+    "oxlint": "^1.36.0",
     "prettier": "^3.7.4",
     "tsx": "^4.7.0",
     "typescript": "^5.3.3",

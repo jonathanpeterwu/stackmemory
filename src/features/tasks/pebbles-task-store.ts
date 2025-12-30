@@ -4,6 +4,7 @@
  */
 
 import Database from 'better-sqlite3';
+import { EventEmitter } from 'events';
 import { createHash } from 'crypto';
 import { appendFile, existsSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
@@ -75,7 +76,7 @@ export interface TaskMetrics {
   overdue_tasks: number;
 }
 
-export class PebblesTaskStore {
+export class PebblesTaskStore extends EventEmitter {
   private db: Database.Database;
   private projectRoot: string;
   private tasksFile: string;
@@ -84,6 +85,7 @@ export class PebblesTaskStore {
   private taskCache: ContextCache<PebblesTask>;
 
   constructor(projectRoot: string, db: Database.Database) {
+    super();
     this.projectRoot = projectRoot;
     this.db = db;
 
@@ -320,6 +322,8 @@ export class PebblesTaskStore {
     };
 
     this.appendTask(task);
+    this.emit('task:created', task);
+    this.emit('sync:needed', 'task:created');
     return id;
   }
 
@@ -380,6 +384,11 @@ export class PebblesTaskStore {
 
     const updatedTask: PebblesTask = { ...existing, ...updates };
     this.appendTask(updatedTask);
+    
+    if (newStatus === 'completed') {
+      this.emit('task:completed', updatedTask);
+    }
+    this.emit('sync:needed', 'task:updated');
   }
 
   /**

@@ -42,23 +42,23 @@ interface MCPServerConfig {
  * Refactored StackMemory MCP Server
  */
 class RefactoredStackMemoryMCP {
-  private server: Server;
-  private db: Database.Database;
+  private server!: Server;
+  private db!: Database.Database;
   private projectRoot: string;
   private projectId: string;
   
   // Core components
-  private frameManager: RefactoredFrameManager;
-  private taskStore: PebblesTaskStore;
-  private linearAuthManager: LinearAuthManager;
-  private linearSync: LinearSyncEngine;
-  private browserMCP: BrowserMCPIntegration;
-  private traceDetector: TraceDetector;
-  private contextRetrieval: LLMContextRetrieval;
+  private frameManager!: RefactoredFrameManager;
+  private taskStore!: PebblesTaskStore;
+  private linearAuthManager!: LinearAuthManager;
+  private linearSync!: LinearSyncEngine;
+  private browserMCP!: BrowserMCPIntegration;
+  private traceDetector!: TraceDetector;
+  private contextRetrieval!: LLMContextRetrieval;
   
   // Handler factory
-  private handlerFactory: MCPHandlerFactory;
-  private toolDefinitions: MCPToolDefinitions;
+  private handlerFactory!: MCPHandlerFactory;
+  private toolDefinitions!: MCPToolDefinitions;
 
   constructor(config: MCPServerConfig = {}) {
     this.projectRoot = this.findProjectRoot();
@@ -121,12 +121,10 @@ class RefactoredStackMemoryMCP {
 
     // Context retrieval
     this.contextRetrieval = new LLMContextRetrieval(
-      this.frameManager,
-      {
-        maxContextLength: 8000,
-        includeRelatedFrames: true,
-        prioritizeRecentFrames: true,
-      }
+      this.db,
+      this.frameManager as any,
+      this.projectId,
+      {}
     );
 
     logger.info('Core components initialized');
@@ -157,7 +155,7 @@ class RefactoredStackMemoryMCP {
   private setupHandlers(): void {
     // Create handler factory with dependencies
     const dependencies: MCPHandlerDependencies = {
-      frameManager: this.frameManager,
+      frameManager: this.frameManager as any,
       contextRetrieval: this.contextRetrieval,
       taskStore: this.taskStore,
       projectId: this.projectId,
@@ -329,7 +327,7 @@ class RefactoredStackMemoryMCP {
       this.setupCleanup();
 
     } catch (error) {
-      logger.error('Failed to start MCP server', error);
+      logger.error('Failed to start MCP server', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -352,7 +350,7 @@ class RefactoredStackMemoryMCP {
         
         logger.info('MCP server shutdown complete');
       } catch (error) {
-        logger.error('Error during cleanup', error);
+        logger.error('Error during cleanup', error instanceof Error ? error : new Error(String(error)));
       }
       
       process.exit(0);
@@ -361,7 +359,7 @@ class RefactoredStackMemoryMCP {
     process.on('SIGINT', cleanup);
     process.on('SIGTERM', cleanup);
     process.on('uncaughtException', (error) => {
-      logger.error('Uncaught exception', error);
+      logger.error('Uncaught exception', error instanceof Error ? error : new Error(String(error)));
       cleanup();
     });
   }
@@ -420,7 +418,7 @@ async function main(): Promise<void> {
     await server.start();
 
   } catch (error) {
-    logger.error('Failed to start server', error);
+    logger.error('Failed to start server', error instanceof Error ? error : new Error(String(error)));
     process.exit(1);
   }
 }

@@ -26,32 +26,32 @@ export class TaskHandlers {
       }
 
       const taskPriority = this.validatePriority(priority);
-      const task = await this.deps.taskStore.createTask({
+      const taskId = await this.deps.taskStore.createTask({
         title,
         description: description || '',
         priority: taskPriority,
         tags: Array.isArray(tags) ? tags : [tags].filter(Boolean),
         parentId: parent_id,
-        projectId: this.deps.projectId,
+        frameId: 'default-frame',
       });
 
-      logger.info('Created task', { taskId: task.id, title, priority });
+      logger.info('Created task', { taskId, title, priority });
 
       return {
         content: [
           {
             type: 'text',
-            text: `Created task: ${title} (${task.id})`,
+            text: `Created task: ${title} (${taskId})`,
           },
         ],
         metadata: {
-          taskId: task.id,
+          taskId,
           title,
           priority: taskPriority,
         },
       };
     } catch (error) {
-      logger.error('Error creating task', error);
+      logger.error('Error creating task', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -96,7 +96,7 @@ export class TaskHandlers {
         },
       };
     } catch (error) {
-      logger.error('Error updating task status', error);
+      logger.error('Error updating task status', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -137,20 +137,20 @@ export class TaskHandlers {
         filters.search = search;
       }
 
-      const tasks = await this.deps.taskStore.getTasks(filters, limit);
+      const tasks = await this.deps.taskStore.getActiveTasks();
 
-      const taskSummary = tasks.map(task => ({
+      const taskSummary = tasks.map((task: any) => ({
         id: task.id,
         title: task.title,
         status: task.status,
         priority: task.priority,
         tags: task.tags || [],
-        created: new Date(task.createdAt).toLocaleDateString(),
-        progress: task.metadata?.progress || 0,
+        created: new Date(task.created_at * 1000).toLocaleDateString(),
+        progress: 0,
       }));
 
       const summaryText = taskSummary.length > 0
-        ? taskSummary.map(t => 
+        ? taskSummary.map((t: any) => 
             `${t.id}: ${t.title} [${t.status}] (${t.priority})`
           ).join('\n')
         : 'No tasks found matching criteria';
@@ -169,7 +169,7 @@ export class TaskHandlers {
         },
       };
     } catch (error) {
-      logger.error('Error getting active tasks', error);
+      logger.error('Error getting active tasks', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -179,23 +179,23 @@ export class TaskHandlers {
    */
   async handleGetTaskMetrics(args: any): Promise<any> {
     try {
-      const metrics = await this.deps.taskStore.getAnalytics();
+      const metrics = await this.deps.taskStore.getMetrics();
 
       const metricsText = `
 Task Metrics:
-- Total: ${metrics.totalTasks}
-- Active: ${metrics.activeTasks} 
-- Completed: ${metrics.completedTasks}
-- Completion Rate: ${(metrics.completionRate * 100).toFixed(1)}%
-- Avg Time to Complete: ${metrics.avgCompletionTime || 'N/A'}
+- Total: ${metrics.total_tasks}
+- Blocked: ${metrics.blocked_tasks} 
+- Overdue: ${metrics.overdue_tasks}
+- Completion Rate: ${(metrics.completion_rate * 100).toFixed(1)}%
+- Effort Accuracy: ${(metrics.avg_effort_accuracy * 100).toFixed(1)}%
 
 By Priority:
-${Object.entries(metrics.tasksByPriority || {})
+${Object.entries(metrics.by_priority || {})
   .map(([priority, count]) => `- ${priority}: ${count}`)
   .join('\n')}
 
 By Status:
-${Object.entries(metrics.tasksByStatus || {})
+${Object.entries(metrics.by_status || {})
   .map(([status, count]) => `- ${status}: ${count}`)
   .join('\n')}
       `.trim();
@@ -210,7 +210,7 @@ ${Object.entries(metrics.tasksByStatus || {})
         metadata: metrics,
       };
     } catch (error) {
-      logger.error('Error getting task metrics', error);
+      logger.error('Error getting task metrics', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -226,7 +226,7 @@ ${Object.entries(metrics.tasksByStatus || {})
         throw new Error('Both task_id and depends_on are required');
       }
 
-      await this.deps.taskStore.addTaskDependency(task_id, depends_on, dependency_type);
+      await this.deps.taskStore.addDependency(task_id, depends_on);
 
       const task = await this.deps.taskStore.getTask(task_id);
       const dependencyTask = await this.deps.taskStore.getTask(depends_on);
@@ -251,7 +251,7 @@ ${Object.entries(metrics.tasksByStatus || {})
         },
       };
     } catch (error) {
-      logger.error('Error adding task dependency', error);
+      logger.error('Error adding task dependency', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
   }
@@ -260,7 +260,7 @@ ${Object.entries(metrics.tasksByStatus || {})
    * Validate task priority
    */
   private validatePriority(priority: string): TaskPriority {
-    const validPriorities: TaskPriority[] = ['low', 'medium', 'high', 'critical'];
+    const validPriorities: TaskPriority[] = ['low', 'medium', 'high', 'urgent'];
     const normalizedPriority = priority.toLowerCase() as TaskPriority;
     
     if (!validPriorities.includes(normalizedPriority)) {
@@ -274,7 +274,7 @@ ${Object.entries(metrics.tasksByStatus || {})
    * Validate task status
    */
   private validateStatus(status: string): TaskStatus {
-    const validStatuses: TaskStatus[] = ['pending', 'in-progress', 'blocked', 'completed', 'cancelled'];
+    const validStatuses: TaskStatus[] = ['pending', 'in_progress', 'blocked', 'completed', 'cancelled'];
     const normalizedStatus = status.toLowerCase().replace('_', '-') as TaskStatus;
     
     if (!validStatuses.includes(normalizedStatus)) {

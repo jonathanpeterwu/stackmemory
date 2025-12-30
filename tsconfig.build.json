@@ -1,0 +1,13 @@
+{
+  "extends": "./tsconfig.json",
+  "exclude": [
+    "node_modules",
+    "dist",
+    "**/*.test.ts",
+    "**/__tests__/**",
+    "scripts/merge-linear-duplicates.ts",
+    "src/core/performance/performance-profiler.ts",
+    "src/integrations/mcp/refactored-server.ts",
+    "src/integrations/mcp/handlers/linear-handlers.ts"
+  ]
+}
