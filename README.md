@@ -552,7 +552,7 @@ stackmemory mcp-server --port 3001        # Custom port
 - Hosted: **Private beta**
 - OSS mirror: **Early preview**
 - MCP integration: **Stable**
-- CLI: **v0.2.7** - Full task, context, and Linear management
+- CLI: **v0.3.1** - Full task, context, and Linear management
 
 ---
 

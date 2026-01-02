@@ -9,6 +9,7 @@ import {
   TraceType,
   TraceMetadata,
   CompressedTrace,
+  CompressionStrategy,
 } from './types.js';
 import { logger } from '../monitoring/logger.js';
 

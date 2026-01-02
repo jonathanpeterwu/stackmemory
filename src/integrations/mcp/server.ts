@@ -185,18 +185,28 @@ class LocalStackMemoryMCP {
   }
 
   private getProjectId(): string {
-    // Use git remote or directory name as project ID
+    // Use git remote or directory path as project ID
+    // Algorithm must match session-manager and project-manager
+    let identifier: string;
     try {
-      const remoteUrl = execSync('git config --get remote.origin.url', {
+      identifier = execSync('git config --get remote.origin.url', {
         cwd: this.projectRoot,
         stdio: 'pipe',
+        timeout: 5000,
       })
         .toString()
         .trim();
-      return remoteUrl || this.projectRoot.split('/').pop() || 'unknown';
     } catch {
-      return this.projectRoot.split('/').pop() || 'unknown';
+      identifier = this.projectRoot;
     }
+
+    // Normalize: remove .git suffix, replace non-alphanumeric with dashes, take last 50 chars
+    const cleaned = identifier
+      .replace(/\.git$/, '')
+      .replace(/[^a-zA-Z0-9-]/g, '-')
+      .toLowerCase();
+
+    return cleaned.substring(cleaned.length - 50) || 'unknown';
   }
 
   private getProjectInfo() {

@@ -405,9 +405,48 @@ export class TraceDetector {
   }
 
   /**
-   * Compress a trace for long-term storage
+   * Compress a trace for long-term storage using strategy
    */
-  private compressTrace(trace: Trace): CompressedTrace {
+  private compressTrace(
+    trace: Trace, 
+    strategy: CompressionStrategy = CompressionStrategy.PATTERN_BASED
+  ): CompressedTrace {
+    switch (strategy) {
+      case CompressionStrategy.SUMMARY_ONLY:
+        return this.compressSummaryOnly(trace);
+      
+      case CompressionStrategy.PATTERN_BASED:
+        return this.compressPatternBased(trace);
+      
+      case CompressionStrategy.SELECTIVE:
+        return this.compressSelective(trace);
+      
+      case CompressionStrategy.FULL_COMPRESSION:
+        return this.compressMaximal(trace);
+      
+      default:
+        return this.compressPatternBased(trace);
+    }
+  }
+  
+  /**
+   * Summary-only compression - minimal data retention
+   */
+  private compressSummaryOnly(trace: Trace): CompressedTrace {
+    return {
+      pattern: '', // No pattern stored
+      summary: trace.summary.substring(0, 100), // Limit summary
+      score: trace.score,
+      toolCount: trace.tools.length,
+      duration: trace.metadata.endTime - trace.metadata.startTime,
+      timestamp: trace.metadata.startTime,
+    };
+  }
+  
+  /**
+   * Pattern-based compression - keep tool sequence
+   */
+  private compressPatternBased(trace: Trace): CompressedTrace {
     const pattern = trace.tools.map((t) => t.tool).join('→');
     const duration = trace.metadata.endTime - trace.metadata.startTime;
 
@@ -419,6 +458,102 @@ export class TraceDetector {
       duration,
       timestamp: trace.metadata.startTime,
     };
+  }
+  
+  /**
+   * Selective compression - keep high-score tools only
+   */
+  private compressSelective(trace: Trace, threshold: number = 0.5): CompressedTrace {
+    // Calculate individual tool scores
+    const significantTools = trace.tools.filter(tool => {
+      const score = this.configManager.calculateScore(tool.tool, {
+        filesAffected: tool.filesAffected?.length || 0,
+        isPermanent: this.isPermanentChange(tool),
+        referenceCount: 0,
+      });
+      return score >= threshold;
+    });
+    
+    const pattern = significantTools.length > 0 
+      ? significantTools.map(t => t.tool).join('→')
+      : trace.tools.map(t => t.tool).join('→');
+    
+    return {
+      pattern,
+      summary: `${trace.summary} [${significantTools.length}/${trace.tools.length} significant]`,
+      score: trace.score,
+      toolCount: significantTools.length,
+      duration: trace.metadata.endTime - trace.metadata.startTime,
+      timestamp: trace.metadata.startTime,
+    };
+  }
+  
+  /**
+   * Maximal compression - absolute minimum data
+   */
+  private compressMaximal(trace: Trace): CompressedTrace {
+    // Compress pattern to type abbreviation
+    const typeAbbrev = this.getTraceTypeAbbreviation(trace.type);
+    const pattern = `${typeAbbrev}:${trace.tools.length}`;
+    
+    return {
+      pattern,
+      summary: trace.type, // Just the type
+      score: Math.round(trace.score * 10) / 10, // Round to 1 decimal
+      toolCount: trace.tools.length,
+      duration: Math.round((trace.metadata.endTime - trace.metadata.startTime) / 1000) * 1000, // Round to seconds
+      timestamp: trace.metadata.startTime,
+    };
+  }
+  
+  /**
+   * Get abbreviated trace type
+   */
+  private getTraceTypeAbbreviation(type: TraceType): string {
+    const abbreviations: Record<TraceType, string> = {
+      [TraceType.SEARCH_DRIVEN]: 'SD',
+      [TraceType.ERROR_RECOVERY]: 'ER',
+      [TraceType.FEATURE_IMPLEMENTATION]: 'FI',
+      [TraceType.REFACTORING]: 'RF',
+      [TraceType.TESTING]: 'TS',
+      [TraceType.EXPLORATION]: 'EX',
+      [TraceType.DEBUGGING]: 'DB',
+      [TraceType.DOCUMENTATION]: 'DC',
+      [TraceType.BUILD_DEPLOY]: 'BD',
+      [TraceType.UNKNOWN]: 'UN',
+    };
+    return abbreviations[type] || 'UN';
+  }
+  
+  /**
+   * Choose compression strategy based on trace age and importance
+   */
+  private selectCompressionStrategy(trace: Trace): CompressionStrategy {
+    const ageHours = (Date.now() - trace.metadata.startTime) / (1000 * 60 * 60);
+    const score = trace.score;
+    
+    // Recent and important: pattern-based
+    if (ageHours < 24 && score > 0.7) {
+      return CompressionStrategy.PATTERN_BASED;
+    }
+    
+    // Recent but less important: selective
+    if (ageHours < 24) {
+      return CompressionStrategy.SELECTIVE;
+    }
+    
+    // Old and important: selective
+    if (ageHours < 168 && score > 0.5) { // 1 week
+      return CompressionStrategy.SELECTIVE;
+    }
+    
+    // Old and less important: summary only
+    if (ageHours < 720) { // 30 days
+      return CompressionStrategy.SUMMARY_ONLY;
+    }
+    
+    // Very old: maximal compression
+    return CompressionStrategy.FULL_COMPRESSION;
   }
 
   /**
@@ -461,7 +596,7 @@ export class TraceDetector {
   }
 
   /**
-   * Compress old traces
+   * Compress old traces with intelligent strategy selection
    */
   compressOldTraces(ageHours: number = 24): number {
     let compressed = 0;
@@ -470,10 +605,36 @@ export class TraceDetector {
     for (const trace of this.traces) {
       const age = (now - trace.metadata.startTime) / (1000 * 60 * 60);
       if (age > ageHours && !trace.compressed) {
-        trace.compressed = this.compressTrace(trace);
-        // Optionally remove full tool data to save space
-        // trace.tools = [];
+        // Select compression strategy based on age and importance
+        const strategy = this.selectCompressionStrategy(trace);
+        trace.compressed = this.compressTrace(trace, strategy);
+        
+        // Remove full tool data for older traces to save memory
+        if (strategy === CompressionStrategy.FULL_COMPRESSION || 
+            strategy === CompressionStrategy.SUMMARY_ONLY) {
+          trace.tools = []; // Clear tool data for maximum compression
+        } else if (strategy === CompressionStrategy.SELECTIVE) {
+          // Keep only high-score tools
+          trace.tools = trace.tools.filter(tool => {
+            const score = this.configManager.calculateScore(tool.tool, {
+              filesAffected: tool.filesAffected?.length || 0,
+              isPermanent: this.isPermanentChange(tool),
+              referenceCount: 0,
+            });
+            return score >= 0.5;
+          });
+        }
+        
         compressed++;
+        
+        // Update database if available
+        if (this.traceStore) {
+          try {
+            this.traceStore.updateCompression(trace.id, trace.compressed, strategy);
+          } catch (error) {
+            console.error('Failed to update trace compression in store:', error);
+          }
+        }
       }
     }
 

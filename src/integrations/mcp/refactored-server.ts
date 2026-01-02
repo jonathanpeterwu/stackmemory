@@ -21,11 +21,13 @@ import { LinearSyncEngine, DEFAULT_SYNC_CONFIG } from '../linear/sync.js';
 import { BrowserMCPIntegration } from '../../features/browser/browser-mcp.js';
 import { TraceDetector } from '../../core/trace/trace-detector.js';
 import { LLMContextRetrieval } from '../../core/retrieval/index.js';
+import { ConfigManager } from '../../core/config/config-manager.js';
 import { logger } from '../../core/monitoring/logger.js';
 
 // Handler modules
 import { MCPHandlerFactory, MCPHandlerDependencies } from './handlers/index.js';
 import { MCPToolDefinitions } from './tool-definitions.js';
+import { ToolScoringMiddleware } from './middleware/tool-scoring.js';
 
 /**
  * Configuration for MCP server
@@ -55,6 +57,8 @@ class RefactoredStackMemoryMCP {
   private browserMCP!: BrowserMCPIntegration;
   private traceDetector!: TraceDetector;
   private contextRetrieval!: LLMContextRetrieval;
+  private configManager!: ConfigManager;
+  private toolScoringMiddleware!: ToolScoringMiddleware;
   
   // Handler factory
   private handlerFactory!: MCPHandlerFactory;
@@ -89,6 +93,10 @@ class RefactoredStackMemoryMCP {
    * Initialize core components
    */
   private initializeComponents(config: MCPServerConfig): void {
+    // Configuration manager
+    const configPath = join(this.projectRoot, '.stackmemory', 'config.yaml');
+    this.configManager = new ConfigManager(configPath);
+
     // Frame manager
     this.frameManager = new RefactoredFrameManager(this.db, this.projectId);
 
@@ -114,10 +122,17 @@ class RefactoredStackMemoryMCP {
       });
     }
 
-    // Trace detector (if enabled)
+    // Trace detector with ConfigManager (if enabled)
     if (config.enableTracing !== false) {
-      this.traceDetector = new TraceDetector({}, undefined, this.db);
+      this.traceDetector = new TraceDetector({}, this.configManager, this.db);
     }
+
+    // Tool scoring middleware
+    this.toolScoringMiddleware = new ToolScoringMiddleware(
+      this.configManager,
+      this.traceDetector,
+      this.db
+    );
 
     // Context retrieval
     this.contextRetrieval = new LLMContextRetrieval(
@@ -237,7 +252,15 @@ class RefactoredStackMemoryMCP {
 
           const duration = Date.now() - startTime;
 
-          // Log tool result event
+          // Score the tool call using current profile
+          const score = await this.toolScoringMiddleware.scoreToolCall(
+            name,
+            args,
+            result,
+            undefined // no error
+          );
+
+          // Log tool result event with score
           if (currentFrameId) {
             this.frameManager.addEvent('tool_result', {
               tool_name: name,
@@ -245,6 +268,8 @@ class RefactoredStackMemoryMCP {
               duration,
               success: true,
               result_size: JSON.stringify(result).length,
+              importance_score: score,
+              profile: this.configManager.getConfig().profile || 'default',
             });
           }
 
@@ -272,7 +297,15 @@ class RefactoredStackMemoryMCP {
           const duration = Date.now() - startTime;
           const errorMessage = error instanceof Error ? error.message : String(error);
 
-          // Log error event
+          // Score the failed tool call
+          const score = await this.toolScoringMiddleware.scoreToolCall(
+            name,
+            args,
+            undefined,
+            errorMessage
+          );
+
+          // Log error event with score
           const currentFrameId = this.frameManager.getCurrentFrameId();
           if (currentFrameId) {
             this.frameManager.addEvent('tool_result', {
@@ -281,6 +314,8 @@ class RefactoredStackMemoryMCP {
               duration,
               success: false,
               error: errorMessage,
+              importance_score: score,
+              profile: this.configManager.getConfig().profile || 'default',
             });
           }
 

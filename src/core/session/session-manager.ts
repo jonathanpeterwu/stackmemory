@@ -37,7 +37,7 @@ export enum FrameQueryMode {
   CURRENT_SESSION = 'current',
   PROJECT_ACTIVE = 'project',
   ALL_ACTIVE = 'all',
-  HISTORICAL = 'historical'
+  HISTORICAL = 'historical',
 }
 
 export class SessionManager {
@@ -61,8 +61,12 @@ export class SessionManager {
   async initialize(): Promise<void> {
     try {
       await fs.mkdir(this.sessionsDir, { recursive: true });
-      await fs.mkdir(path.join(this.sessionsDir, 'projects'), { recursive: true });
-      await fs.mkdir(path.join(this.sessionsDir, 'history'), { recursive: true });
+      await fs.mkdir(path.join(this.sessionsDir, 'projects'), {
+        recursive: true,
+      });
+      await fs.mkdir(path.join(this.sessionsDir, 'history'), {
+        recursive: true,
+      });
     } catch (error) {
       throw new SystemError(
         'Failed to initialize session directories',
@@ -94,11 +98,15 @@ export class SessionManager {
 
     // 3. Check project + branch context
     const projectHash = await this.getProjectHash(options?.projectPath);
-    const branch = options?.branch || await this.getGitBranch(options?.projectPath);
+    const branch =
+      options?.branch || (await this.getGitBranch(options?.projectPath));
 
     if (projectHash) {
       // Try project+branch session
-      const branchSession = await this.findProjectBranchSession(projectHash, branch);
+      const branchSession = await this.findProjectBranchSession(
+        projectHash,
+        branch
+      );
       if (branchSession && this.isSessionRecent(branchSession)) {
         await this.touchSession(branchSession);
         this.currentSession = branchSession;
@@ -118,9 +126,9 @@ export class SessionManager {
     const newSession = await this.createSession({
       projectId: projectHash || 'global',
       branch,
-      metadata: options?.metadata
+      metadata: options?.metadata,
     });
-    
+
     this.currentSession = newSession;
     return newSession;
   }
@@ -141,21 +149,21 @@ export class SessionManager {
         ...params.metadata,
         user: process.env.USER,
         environment: process.env.NODE_ENV || 'development',
-        cliVersion: process.env.npm_package_version
+        cliVersion: process.env.npm_package_version,
       },
-      state: 'active'
+      state: 'active',
     };
 
     await this.saveSession(session);
     await this.setProjectActiveSession(params.projectId, session.sessionId);
-    
+
     // Set as current session
     this.currentSession = session;
-    
+
     logger.info('Created new session', {
       sessionId: session.sessionId,
       projectId: session.projectId,
-      branch: session.branch
+      branch: session.branch,
     });
 
     return session;
@@ -169,7 +177,11 @@ export class SessionManager {
     } catch (error) {
       // Check history
       try {
-        const historyPath = path.join(this.sessionsDir, 'history', `${sessionId}.json`);
+        const historyPath = path.join(
+          this.sessionsDir,
+          'history',
+          `${sessionId}.json`
+        );
         const data = await fs.readFile(historyPath, 'utf-8');
         return JSON.parse(data) as Session;
       } catch {
@@ -179,7 +191,10 @@ export class SessionManager {
   }
 
   async saveSession(session: Session): Promise<void> {
-    const sessionPath = path.join(this.sessionsDir, `${session.sessionId}.json`);
+    const sessionPath = path.join(
+      this.sessionsDir,
+      `${session.sessionId}.json`
+    );
     await fs.writeFile(sessionPath, JSON.stringify(session, null, 2));
   }
 
@@ -198,17 +213,15 @@ export class SessionManager {
   async resumeSession(sessionId: string): Promise<Session> {
     const session = await this.loadSession(sessionId);
     if (!session) {
-      throw new SystemError(
-        'Session not found',
-        ErrorCode.NOT_FOUND,
-        { sessionId }
-      );
+      throw new SystemError('Session not found', ErrorCode.NOT_FOUND, {
+        sessionId,
+      });
     }
 
     session.state = 'active';
     session.lastActiveAt = Date.now();
     await this.saveSession(session);
-    
+
     this.currentSession = session;
     return session;
   }
@@ -221,11 +234,18 @@ export class SessionManager {
     if (session) {
       session.state = 'closed';
       session.lastActiveAt = Date.now();
-      
+
       // Move to history
-      const sessionPath = path.join(this.sessionsDir, `${session.sessionId}.json`);
-      const historyPath = path.join(this.sessionsDir, 'history', `${session.sessionId}.json`);
-      
+      const sessionPath = path.join(
+        this.sessionsDir,
+        `${session.sessionId}.json`
+      );
+      const historyPath = path.join(
+        this.sessionsDir,
+        'history',
+        `${session.sessionId}.json`
+      );
+
       await fs.rename(sessionPath, historyPath);
     }
   }
@@ -236,7 +256,7 @@ export class SessionManager {
     branch?: string;
   }): Promise<Session[]> {
     const sessions: Session[] = [];
-    
+
     // Load active sessions
     const files = await fs.readdir(this.sessionsDir);
     for (const file of files) {
@@ -249,7 +269,7 @@ export class SessionManager {
     }
 
     // Apply filters
-    return sessions.filter(s => {
+    return sessions.filter((s) => {
       if (filter?.projectId && s.projectId !== filter.projectId) return false;
       if (filter?.state && s.state !== filter.state) return false;
       if (filter?.branch && s.branch !== filter.branch) return false;
@@ -273,7 +293,7 @@ export class SessionManager {
     target.metadata = {
       ...target.metadata,
       ...source.metadata,
-      tags: [...(target.metadata.tags || []), ...(source.metadata.tags || [])]
+      tags: [...(target.metadata.tags || []), ...(source.metadata.tags || [])],
     };
 
     // Update timestamps
@@ -285,13 +305,15 @@ export class SessionManager {
 
     logger.info('Merged sessions', {
       source: sourceId,
-      target: targetId
+      target: targetId,
     });
 
     return target;
   }
 
-  async cleanupStaleSessions(maxAge: number = 30 * 24 * 60 * 60 * 1000): Promise<number> {
+  async cleanupStaleSessions(
+    maxAge: number = 30 * 24 * 60 * 60 * 1000
+  ): Promise<number> {
     const historyDir = path.join(this.sessionsDir, 'history');
     const files = await fs.readdir(historyDir);
     const cutoff = Date.now() - maxAge;
@@ -301,7 +323,7 @@ export class SessionManager {
       if (file.endsWith('.json')) {
         const filePath = path.join(historyDir, file);
         const stats = await fs.stat(filePath);
-        
+
         if (stats.mtimeMs < cutoff) {
           await fs.unlink(filePath);
           cleaned++;
@@ -324,32 +346,43 @@ export class SessionManager {
   private async getProjectHash(projectPath?: string): Promise<string | null> {
     try {
       const cwd = projectPath || process.cwd();
-      
-      // Try to use the basename of the directory as project ID
-      const path = await import('path');
-      const projectName = path.basename(cwd);
-      
-      // Check if it looks like a demo/development project
-      if (projectName === 'stackmemory') {
-        return 'stackmemory-demo';
+      const pathModule = await import('path');
+
+      // Try to get git remote first (consistent with project-manager)
+      let identifier: string;
+      try {
+        const { execSync } = await import('child_process');
+        identifier = execSync('git config --get remote.origin.url', {
+          cwd,
+          encoding: 'utf-8',
+          timeout: 5000,
+        }).trim();
+      } catch {
+        // Fall back to directory path
+        identifier = cwd;
       }
-      
-      // Otherwise use hash for consistency
-      const hash = crypto.createHash('sha256');
-      hash.update(cwd);
-      return hash.digest('hex').substring(0, 12);
+
+      // Use same algorithm as project-manager.generateProjectId
+      const cleaned = identifier
+        .replace(/\.git$/, '')
+        .replace(/[^a-zA-Z0-9-]/g, '-')
+        .toLowerCase();
+
+      return cleaned.substring(cleaned.length - 50);
     } catch {
       return null;
     }
   }
 
-  private async getGitBranch(projectPath?: string): Promise<string | undefined> {
+  private async getGitBranch(
+    projectPath?: string
+  ): Promise<string | undefined> {
     try {
       const { execSync } = await import('child_process');
       const cwd = projectPath || process.cwd();
       const branch = execSync('git rev-parse --abbrev-ref HEAD', {
         cwd,
-        encoding: 'utf-8'
+        encoding: 'utf-8',
       }).trim();
       return branch;
     } catch {
@@ -358,7 +391,7 @@ export class SessionManager {
   }
 
   private async findProjectBranchSession(
-    projectHash: string, 
+    projectHash: string,
     branch?: string
   ): Promise<Session | null> {
     if (!branch) return null;
@@ -366,28 +399,44 @@ export class SessionManager {
     const sessions = await this.listSessions({
       projectId: projectHash,
       state: 'active',
-      branch
+      branch,
     });
 
     return sessions.sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0] || null;
   }
 
-  private async findLastActiveSession(projectHash: string): Promise<Session | null> {
+  private async findLastActiveSession(
+    projectHash: string
+  ): Promise<Session | null> {
     const sessions = await this.listSessions({
       projectId: projectHash,
-      state: 'active'
+      state: 'active',
     });
 
     return sessions.sort((a, b) => b.lastActiveAt - a.lastActiveAt)[0] || null;
   }
 
-  private async setProjectActiveSession(projectId: string, sessionId: string): Promise<void> {
-    const projectFile = path.join(this.sessionsDir, 'projects', `${projectId}.json`);
-    await fs.writeFile(projectFile, JSON.stringify({
-      projectId,
-      activeSessionId: sessionId,
-      updatedAt: Date.now()
-    }, null, 2));
+  private async setProjectActiveSession(
+    projectId: string,
+    sessionId: string
+  ): Promise<void> {
+    const projectFile = path.join(
+      this.sessionsDir,
+      'projects',
+      `${projectId}.json`
+    );
+    await fs.writeFile(
+      projectFile,
+      JSON.stringify(
+        {
+          projectId,
+          activeSessionId: sessionId,
+          updatedAt: Date.now(),
+        },
+        null,
+        2
+      )
+    );
   }
 
   private isSessionRecent(session: Session): boolean {

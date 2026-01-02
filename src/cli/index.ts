@@ -39,6 +39,7 @@ import { createContextCommands } from './commands/context.js';
 import { createConfigCommand } from './commands/config.js';
 import { createAgentCommand } from './commands/agent.js';
 import { createHandoffCommand } from './commands/handoff.js';
+import { createStorageCommand } from './commands/storage.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -150,10 +151,12 @@ program
       const eventCount = db
         .prepare(
           `
-        SELECT COUNT(*) as count FROM events
+        SELECT COUNT(*) as count FROM events e
+        JOIN frames f ON e.frame_id = f.frame_id
+        WHERE f.project_id = ?
       `
         )
-        .get() as any;
+        .get(session.projectId) as any;
 
       console.log('📊 StackMemory Status:');
       console.log(
@@ -165,13 +168,13 @@ program
       }
 
       // Show total database statistics
-      console.log(`\n   Database Statistics:`);
-      console.log(`     Total contexts: ${contextCount.count}`);
+      console.log(`\n   Database Statistics (this project):`);
       console.log(
-        `     Total frames: ${totalStats.total_frames} (${totalStats.active_frames} active, ${totalStats.closed_frames} closed)`
+        `     Frames: ${totalStats.total_frames || 0} (${totalStats.active_frames || 0} active, ${totalStats.closed_frames || 0} closed)`
       );
-      console.log(`     Total events: ${eventCount.count}`);
-      console.log(`     Total sessions: ${totalStats.total_sessions}`);
+      console.log(`     Events: ${eventCount.count || 0}`);
+      console.log(`     Sessions: ${totalStats.total_sessions || 0}`);
+      console.log(`     Cached contexts: ${contextCount.count || 0} (global)`);
 
       // Show recent activity
       const recentFrames = db
@@ -1236,6 +1239,7 @@ program.addCommand(createContextCommands());
 program.addCommand(createConfigCommand());
 program.addCommand(createAgentCommand());
 program.addCommand(createHandoffCommand());
+program.addCommand(createStorageCommand());
 
 // Auto-detect current project on startup
 if (process.argv.length > 2) {
