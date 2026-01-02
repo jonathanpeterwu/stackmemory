@@ -138,7 +138,12 @@ program
         WHERE project_id = ?
       `
         )
-        .get(session.projectId) as any;
+        .get(session.projectId) as {
+        total_frames: number;
+        active_frames: number;
+        closed_frames: number;
+        total_sessions: number;
+      };
 
       const contextCount = db
         .prepare(
@@ -146,7 +151,7 @@ program
         SELECT COUNT(*) as count FROM contexts
       `
         )
-        .get() as any;
+        .get() as { count: number };
 
       const eventCount = db
         .prepare(
@@ -156,7 +161,7 @@ program
         WHERE f.project_id = ?
       `
         )
-        .get(session.projectId) as any;
+        .get(session.projectId) as { count: number };
 
       console.log('📊 StackMemory Status:');
       console.log(
@@ -187,11 +192,16 @@ program
         LIMIT 3
       `
         )
-        .all(session.projectId) as any[];
+        .all(session.projectId) as Array<{
+        name: string;
+        type: string;
+        state: string;
+        created: string;
+      }>;
 
       if (recentFrames.length > 0) {
         console.log(`\n   Recent Activity:`);
-        recentFrames.forEach((f: any) => {
+        recentFrames.forEach((f) => {
           const stateIcon = f.state === 'active' ? '🟢' : '⚫';
           console.log(`     ${stateIcon} ${f.name} [${f.type}] - ${f.created}`);
         });

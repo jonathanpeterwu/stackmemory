@@ -5,6 +5,31 @@ import { logger } from '../core/monitoring/logger.js';
 
 type Database = BetterSqlite3.Database;
 
+interface UserRow {
+  id: string;
+  sub: string;
+  email: string;
+  name?: string;
+  avatar?: string;
+  tier: 'free' | 'pro' | 'enterprise';
+  permissions: string;
+  organizations: string;
+  api_keys: string;
+  created_at: number;
+  updated_at: number;
+  last_login_at?: number;
+  metadata?: string;
+}
+
+interface SessionRow {
+  id: string;
+  user_id: string;
+  token: string;
+  expires_at: number;
+  created_at: number;
+  metadata?: string;
+}
+
 export interface User {
   id: string;
   sub: string; // Subject identifier from auth provider
@@ -22,7 +47,7 @@ export interface User {
   createdAt: Date;
   updatedAt: Date;
   lastLoginAt?: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface UserSession {
@@ -31,7 +56,7 @@ export interface UserSession {
   token: string;
   expiresAt: Date;
   createdAt: Date;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export class UserModel {
@@ -105,10 +130,14 @@ export class UserModel {
   }
 
   async createUser(userData: Partial<User>): Promise<User> {
+    if (!userData.sub || !userData.email) {
+      throw new Error('User sub and email are required');
+    }
+
     const user: User = {
       id: userData.id || uuidv4(),
-      sub: userData.sub!,
-      email: userData.email!,
+      sub: userData.sub,
+      email: userData.email,
       name: userData.name,
       avatar: userData.avatar,
       tier: userData.tier || 'free',
@@ -148,7 +177,7 @@ export class UserModel {
 
   async findUserBySub(sub: string): Promise<User | null> {
     const stmt = this.db.prepare('SELECT * FROM users WHERE sub = ?');
-    const row = stmt.get(sub) as any;
+    const row = stmt.get(sub) as UserRow | undefined;
 
     if (!row) {
       return null;
@@ -159,7 +188,7 @@ export class UserModel {
 
   async findUserByEmail(email: string): Promise<User | null> {
     const stmt = this.db.prepare('SELECT * FROM users WHERE email = ?');
-    const row = stmt.get(email) as any;
+    const row = stmt.get(email) as UserRow | undefined;
 
     if (!row) {
       return null;
@@ -170,7 +199,7 @@ export class UserModel {
 
   async findUserById(id: string): Promise<User | null> {
     const stmt = this.db.prepare('SELECT * FROM users WHERE id = ?');
-    const row = stmt.get(id) as any;
+    const row = stmt.get(id) as UserRow | undefined;
 
     if (!row) {
       return null;
@@ -267,7 +296,7 @@ export class UserModel {
 
   async findSessionByToken(token: string): Promise<UserSession | null> {
     const stmt = this.db.prepare('SELECT * FROM user_sessions WHERE token = ?');
-    const row = stmt.get(token) as any;
+    const row = stmt.get(token) as SessionRow | undefined;
 
     if (!row) {
       return null;
@@ -350,7 +379,7 @@ export class UserModel {
       WHERE (ak.expires_at IS NULL OR ak.expires_at > datetime('now'))
     `);
 
-    const rows = stmt.all() as any[];
+    const rows = stmt.all() as SessionRow[];
 
     for (const row of rows) {
       if (await bcrypt.compare(apiKey, row.key_hash)) {
@@ -393,7 +422,7 @@ export class UserModel {
       ORDER BY created_at DESC
     `);
 
-    const rows = stmt.all(userId) as any[];
+    const rows = stmt.all(userId) as SessionRow[];
     return rows.map((row) => ({
       id: row.id,
       name: row.name,
@@ -403,7 +432,7 @@ export class UserModel {
   }
 
   // Helper methods
-  private rowToUser(row: any): User {
+  private rowToUser(row: UserRow): User {
     return {
       id: row.id,
       sub: row.sub,
@@ -421,7 +450,7 @@ export class UserModel {
     };
   }
 
-  private rowToSession(row: any): UserSession {
+  private rowToSession(row: SessionRow): UserSession {
     return {
       id: row.id,
       userId: row.user_id,

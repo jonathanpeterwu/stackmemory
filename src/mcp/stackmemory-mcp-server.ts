@@ -61,7 +61,7 @@ interface ExecuteTaskArgs {
 interface AgentTurnArgs {
   sessionId: string;
   action: string;
-  context?: Record<string, any>;
+  context?: Record<string, unknown>;
 }
 
 interface TaskStatusArgs {

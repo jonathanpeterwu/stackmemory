@@ -1,7 +1,7 @@
 export interface PersistenceAdapter {
   connect(): Promise<void>;
   disconnect(): Promise<void>;
-  execute(query: string, params?: any[]): Promise<QueryResult>;
+  execute(query: string, params?: unknown[]): Promise<QueryResult>;
   beginTransaction(): Promise<void>;
   commit(): Promise<void>;
   rollback(): Promise<void>;
@@ -9,7 +9,7 @@ export interface PersistenceAdapter {
 }
 
 export interface QueryResult {
-  rows: any[];
+  rows: unknown[];
   rowCount: number;
   fields?: Array<{
     name: string;
@@ -22,8 +22,8 @@ export interface TraceData {
   sessionId: string;
   timestamp: Date;
   type: string;
-  data: any;
-  metadata?: Record<string, any>;
+  data: unknown;
+  metadata?: Record<string, unknown>;
 }
 
 export interface ContextData {
@@ -33,5 +33,5 @@ export interface ContextData {
   content: string;
   timestamp: Date;
   type: string;
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }

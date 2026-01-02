@@ -6,6 +6,21 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
+interface TaskRow {
+  id: string;
+  title: string;
+  description?: string;
+  status?: string;
+  priority?: string;
+  tags?: string;
+  external_id?: string;
+  external_identifier?: string;
+  external_url?: string;
+  metadata?: string;
+  created_at: number;
+  updated_at: number;
+}
+
 export class ContextService {
   private logger: Logger;
   private db: Database.Database | null = null;
@@ -55,7 +70,7 @@ export class ContextService {
 
       // Load all tasks from database
       const stmt = this.db.prepare('SELECT * FROM tasks');
-      const rows = stmt.all() as any[];
+      const rows = stmt.all() as TaskRow[];
 
       for (const row of rows) {
         const task: Task = {

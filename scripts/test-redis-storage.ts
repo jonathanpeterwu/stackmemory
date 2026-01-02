@@ -456,7 +456,7 @@ async function main() {
     ORDER BY created_at DESC LIMIT 3
   `
     )
-    .all() as any[];
+    .all() as Array<{ trace_id: string; tier: string }>;
 
   for (const trace of recentTraces) {
     const tierIcon =
