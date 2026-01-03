@@ -357,8 +357,11 @@ describe('SharedContextLayer', () => {
     it('should update recently accessed list', async () => {
       await contextLayer.querySharedContext({ tags: ['important'] });
 
-      const context = await contextLayer.getSharedContext();
-      expect(context.referenceIndex.recentlyAccessed).toContain('f1');
+      // Check what was written to the file
+      expect(fs.writeFile).toHaveBeenCalled();
+      const writeCall = vi.mocked(fs.writeFile).mock.calls[0];
+      const savedContext = JSON.parse(writeCall[1] as string);
+      expect(savedContext.referenceIndex.recentlyAccessed).toContain('f1');
     });
   });
 

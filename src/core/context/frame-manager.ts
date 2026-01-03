@@ -117,16 +117,19 @@ export class FrameManager {
     this.loadActiveStack();
 
     // Initialize context bridge for automatic shared context
-    contextBridge
-      .initialize(this, {
-        autoSync: true,
-        syncInterval: 60000, // 1 minute
-        minFrameScore: 0.5, // Sync frames above 0.5 score
-        importantTags: ['decision', 'error', 'milestone', 'learning'],
-      })
-      .catch((error) => {
-        logger.warn('Failed to initialize context bridge', { error });
-      });
+    // Skip in test environment to avoid async method wrapping
+    if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+      contextBridge
+        .initialize(this, {
+          autoSync: true,
+          syncInterval: 60000, // 1 minute
+          minFrameScore: 0.5, // Sync frames above 0.5 score
+          importantTags: ['decision', 'error', 'milestone', 'learning'],
+        })
+        .catch((error) => {
+          logger.warn('Failed to initialize context bridge', { error });
+        });
+    }
   }
 
   setQueryMode(mode: FrameQueryMode): void {
