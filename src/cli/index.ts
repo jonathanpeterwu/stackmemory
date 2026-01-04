@@ -43,8 +43,8 @@ import { createHandoffCommand } from './commands/handoff.js';
 import { createStorageCommand } from './commands/storage.js';
 import clearCommand from './commands/clear.js';
 import createWorkflowCommand from './commands/workflow.js';
-import createMonitorCommand from './commands/monitor.js';
-import createQualityCommand from './commands/quality.js';
+import monitorCommand from './commands/monitor.js';
+import qualityCommand from './commands/quality.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -1287,9 +1287,82 @@ program.addCommand(createAgentCommand());
 program.addCommand(createHandoffCommand());
 program.addCommand(createStorageCommand());
 program.addCommand(clearCommand);
-program.addCommand(createWorkflowCommand);
-program.addCommand(createMonitorCommand);
-program.addCommand(createQualityCommand);
+program.addCommand(createWorkflowCommand());
+program.addCommand(monitorCommand);
+program.addCommand(qualityCommand);
+
+// Register dashboard command
+program
+  .command('dashboard')
+  .description('Display monitoring dashboard in terminal')
+  .option('-w, --watch', 'Auto-refresh dashboard')
+  .option('-i, --interval <seconds>', 'Refresh interval in seconds', '5')
+  .action(async (options) => {
+    const { dashboardCommand } = await import('./commands/dashboard.js');
+    await dashboardCommand.handler(options);
+  });
+
+// Register TUI command (advanced terminal UI - requires blessed)
+program
+  .command('tui')
+  .description('Launch interactive TUI monitoring dashboard (requires blessed)')
+  .option('-s, --server', 'Start WebSocket server for real-time updates')
+  .option('-w, --ws-url <url>', 'WebSocket server URL', 'ws://localhost:8080')
+  .option('-r, --refresh <ms>', 'Auto-refresh interval in milliseconds', '2000')
+  .action(async (options) => {
+    try {
+      // Check if blessed is installed by trying to import it
+      try {
+        await import('blessed');
+      } catch {
+        console.log('❌ The TUI requires the blessed package. Install it with:');
+        console.log('   npm install blessed blessed-contrib');
+        console.log('\n💡 Alternatively, use "stackmemory dashboard" for a simpler view');
+        process.exit(1);
+      }
+
+      const { spawn } = await import('child_process');
+      const { fileURLToPath } = await import('url');
+      const { dirname, join } = await import('path');
+      
+      const __filename = fileURLToPath(import.meta.url);
+      const __dirname = dirname(__filename);
+      
+      console.log('🚀 Launching StackMemory TUI Dashboard...');
+      
+      // Set environment variables
+      process.env.STACKMEMORY_WS_URL = options.wsUrl;
+      
+      // Get TUI module path
+      const tuiPath = join(__dirname, '../features/tui/index.js');
+      
+      // Launch TUI directly
+      const tui = spawn('node', [tuiPath], {
+        stdio: 'inherit',
+        env: {
+          ...process.env,
+          STACKMEMORY_WS_URL: options.wsUrl
+        }
+      });
+      
+      tui.on('error', (error) => {
+        console.error('Failed to launch TUI:', error);
+        console.log('\n💡 Try "stackmemory dashboard" instead');
+        process.exit(1);
+      });
+      
+      tui.on('exit', (code) => {
+        if (code !== 0) {
+          console.error(`TUI exited with code ${code}`);
+          process.exit(code || 1);
+        }
+      });
+    } catch (error) {
+      console.error('❌ Failed to launch TUI:', (error as Error).message);
+      console.log('\n💡 Try "stackmemory dashboard" for a simpler view');
+      process.exit(1);
+    }
+  });
 
 // Auto-detect current project on startup
 if (process.argv.length > 2) {

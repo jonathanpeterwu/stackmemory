@@ -1,8 +1,15 @@
 import esbuild from 'esbuild';
 
+import { glob } from 'glob';
+
+// Get all TypeScript files except tests
+const entryPoints = glob.sync('src/**/*.ts', {
+  ignore: ['**/*.test.ts', '**/*.spec.ts', '**/__tests__/**']
+});
+
 // Build configuration
 const buildConfig = {
-  entryPoints: ['src/**/*.ts'],
+  entryPoints,
   outdir: 'dist',
   platform: 'node',
   target: 'node20',

@@ -494,7 +494,11 @@ describe('QueryRouter', () => {
         queryType: 'read',
       };
 
-      const executor = vi.fn().mockResolvedValue('result');
+      // Add a small delay to ensure measurable latency
+      const executor = vi.fn().mockImplementation(async () => {
+        await new Promise(resolve => setTimeout(resolve, 1));
+        return 'result';
+      });
 
       await router.route('test', context, executor);
       await router.route('test', context, executor);
