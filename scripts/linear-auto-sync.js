@@ -12,6 +12,7 @@ import { LinearAuthManager } from '../dist/integrations/linear/auth.js';
 import { logger } from '../dist/core/monitoring/logger.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+import Database from 'better-sqlite3';
 
 const SYNC_STATE_FILE = '.stackmemory/linear-sync-state.json';
 const DEFAULT_SYNC_CONFIG = {
@@ -79,9 +80,19 @@ class LinearAutoSync {
     }
 
     try {
+      // Check if StackMemory is initialized
+      const dbPath = join(this.projectRoot, '.stackmemory', 'context.db');
+      if (!existsSync(dbPath)) {
+        console.error(
+          '❌ StackMemory not initialized. Run "stackmemory init" first.'
+        );
+        process.exit(1);
+      }
+
       // Initialize components
-      const taskStore = new PebblesTaskStore(this.projectRoot);
-      const authManager = new LinearAuthManager();
+      const db = new Database(dbPath);
+      const taskStore = new PebblesTaskStore(this.projectRoot, db);
+      const authManager = new LinearAuthManager(this.projectRoot);
       const syncEngine = new LinearSyncEngine(
         taskStore,
         authManager,
