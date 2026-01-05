@@ -10,6 +10,10 @@ export interface LinearConfig {
   teamId?: string;
   webhookSecret?: string;
   baseUrl?: string;
+  // If true, send Authorization header as `Bearer <apiKey>` (OAuth access token)
+  useBearer?: boolean;
+  // Optional callback to refresh token on 401 and return the new access token
+  onUnauthorized?: () => Promise<string>;
 }
 
 export interface LinearIssue {
@@ -136,17 +140,22 @@ export class LinearClient {
   private async graphql<T>(
     query: string,
     variables?: Record<string, unknown>,
-    retries = 3
+    retries = 3,
+    allowAuthRefresh = true
   ): Promise<T> {
     // Wait for rate limit before making request
     await this.waitForRateLimit();
 
     this.lastRequestTime = Date.now();
 
-    const response = await fetch(`${this.baseUrl}/graphql`, {
+    const authHeader = this.config.useBearer
+      ? `Bearer ${this.config.apiKey}`
+      : this.config.apiKey;
+
+    let response = await fetch(`${this.baseUrl}/graphql`, {
       method: 'POST',
       headers: {
-        Authorization: this.config.apiKey,
+        Authorization: authHeader,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
@@ -158,6 +167,33 @@ export class LinearClient {
     // Update rate limit state from response
     this.updateRateLimitState(response);
 
+    // Handle unauthorized (e.g., expired OAuth token)
+    if (
+      response.status === 401 &&
+      this.config.onUnauthorized &&
+      allowAuthRefresh
+    ) {
+      try {
+        const newToken = await this.config.onUnauthorized();
+        // Update local config and retry once without further auth refresh
+        this.config.apiKey = newToken;
+        const retryHeader = this.config.useBearer
+          ? `Bearer ${newToken}`
+          : newToken;
+        response = await fetch(`${this.baseUrl}/graphql`, {
+          method: 'POST',
+          headers: {
+            Authorization: retryHeader,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({ query, variables }),
+        });
+        this.updateRateLimitState(response);
+      } catch (e) {
+        // Fall through to standard error handling
+      }
+    }
+
     // Handle rate limiting with exponential backoff
     if (response.status === 429) {
       if (retries > 0) {
@@ -168,7 +204,7 @@ export class LinearClient {
         );
         this.rateLimitState.retryAfter = Date.now() + waitTime;
         await this.sleep(waitTime);
-        return this.graphql<T>(query, variables, retries - 1);
+        return this.graphql<T>(query, variables, retries - 1, allowAuthRefresh);
       }
       throw new Error('Linear API rate limit exceeded after retries');
     }

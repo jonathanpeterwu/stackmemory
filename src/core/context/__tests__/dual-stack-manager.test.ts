@@ -13,6 +13,20 @@ import { DatabaseAdapter } from '../../database/database-adapter';
 // Mock database adapter
 class MockDatabaseAdapter extends DatabaseAdapter {
   private data: Map<string, any> = new Map();
+  db: any = {
+    exec: (sql: string) => {
+      // Mock SQLite exec for schema creation
+      console.log('Mock exec:', sql.slice(0, 50) + '...');
+    },
+    all: (sql: string, params?: any[]) => [],
+    get: (sql: string, params?: any[]) => null,
+    run: (sql: string, params?: any[]) => ({ lastInsertRowid: 1, changes: 1 }),
+    prepare: (sql: string) => ({
+      all: () => [],
+      get: () => null,
+      run: () => ({ lastInsertRowid: 1, changes: 1 }),
+    }),
+  };
 
   async connect(): Promise<void> {}
   async disconnect(): Promise<void> {}
@@ -22,7 +36,9 @@ class MockDatabaseAdapter extends DatabaseAdapter {
   async ping(): Promise<boolean> {
     return true;
   }
-  async initializeSchema(): Promise<void> {}
+  async initializeSchema(): Promise<void> {
+    // Mock schema initialization
+  }
   async migrateSchema(targetVersion: number): Promise<void> {}
   async getSchemaVersion(): Promise<number> {
     return 1;
@@ -130,7 +146,12 @@ class MockDatabaseAdapter extends DatabaseAdapter {
   async detectPatterns(timeRange?: any): Promise<any[]> {
     return [];
   }
-  async executeBulk(operations: any[]): Promise<void> {}
+  async executeBulk(operations: any[]): Promise<void> {
+    // Mock bulk operations
+    for (const op of operations) {
+      console.log('Mock bulk operation:', op.type);
+    }
+  }
   async vacuum(): Promise<void> {}
   async analyze(): Promise<void> {}
   async getStats(): Promise<any> {

@@ -8,6 +8,7 @@ import {
   LinearAuthManager,
   LinearOAuthSetup,
 } from '../../integrations/linear/auth.js';
+import { LinearOAuthServer } from '../../integrations/linear/oauth-server.js';
 import {
   LinearSyncEngine,
   DEFAULT_SYNC_CONFIG,
@@ -19,6 +20,7 @@ import {
 import { LinearConfigManager } from '../../integrations/linear/config.js';
 import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
 import { LinearClient } from '../../integrations/linear/client.js';
+import { LinearRestClient } from '../../integrations/linear/rest-client.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
@@ -79,11 +81,118 @@ export function registerLinearCommands(parent: Command) {
     .command('linear')
     .description('Linear API integration commands');
 
+  // Quick tasks command using memory cache
+  linear
+    .command('list')
+    .alias('ls')
+    .description('List Linear tasks (memory-cached)')
+    .option('--limit <n>', 'Number of tasks to show', '20')
+    .option(
+      '--status <status>',
+      'Filter by status (backlog, started, completed, etc.)'
+    )
+    .option('--my', 'Show only tasks assigned to me')
+    .option('--cache', 'Show cache stats only')
+    .option('--refresh', 'Force refresh cache')
+    .option('--count', 'Show count by status only')
+    .action(async (options) => {
+      try {
+        const apiKey = process.env.LINEAR_API_KEY;
+        if (!apiKey) {
+          console.log(
+            chalk.yellow('⚠ Set LINEAR_API_KEY environment variable')
+          );
+          return;
+        }
+
+        const restClient = new LinearRestClient(apiKey);
+
+        // Show cache stats if requested
+        if (options.cache) {
+          const stats = restClient.getCacheStats();
+          console.log(chalk.cyan('📊 Cache Stats:'));
+          console.log(`  Size: ${stats.size} tasks`);
+          console.log(`  Age: ${Math.round(stats.age / 1000)}s`);
+          console.log(`  Fresh: ${stats.fresh ? 'yes' : 'no'}`);
+          console.log(
+            `  Last sync: ${new Date(stats.lastSync).toLocaleString()}`
+          );
+          return;
+        }
+
+        // Show counts only
+        if (options.count) {
+          const counts = await restClient.getTaskCounts();
+          console.log(chalk.cyan('📊 Task Counts:'));
+          Object.entries(counts)
+            .sort(([, a], [, b]) => b - a)
+            .forEach(([status, count]) => {
+              console.log(`  ${status}: ${count}`);
+            });
+          return;
+        }
+
+        let tasks;
+        if (options.my) {
+          tasks = await restClient.getMyTasks();
+        } else if (options.status) {
+          tasks = await restClient.getTasksByStatus(options.status);
+        } else {
+          tasks = await restClient.getAllTasks(options.refresh);
+        }
+
+        if (!tasks || tasks.length === 0) {
+          console.log(chalk.gray('No tasks found'));
+          return;
+        }
+
+        // Limit results
+        const limit = parseInt(options.limit);
+        const displayTasks = tasks.slice(0, limit);
+
+        console.log(
+          chalk.cyan(
+            `\n📋 Linear Tasks (${displayTasks.length}/${tasks.length}):`
+          )
+        );
+
+        displayTasks.forEach((task) => {
+          const priority = task.priority ? `P${task.priority}` : '';
+          const assignee = task.assignee ? ` @${task.assignee.name}` : '';
+          const statusColor =
+            task.state.type === 'completed'
+              ? chalk.green
+              : task.state.type === 'started'
+                ? chalk.yellow
+                : chalk.gray;
+
+          console.log(`${chalk.blue(task.identifier)} ${task.title}`);
+          console.log(
+            chalk.gray(
+              `  ${statusColor(task.state.name)} ${priority}${assignee}`
+            )
+          );
+        });
+
+        console.log(
+          chalk.gray(
+            `\n${displayTasks.length} shown, ${tasks.length} total tasks`
+          )
+        );
+      } catch (error) {
+        console.error(
+          chalk.red('Failed to list tasks:'),
+          (error as Error).message
+        );
+      }
+    });
+
   // Auth command
   linear
     .command('auth')
     .description('Authenticate with Linear')
     .option('--api-key <key>', 'Use API key instead of OAuth')
+    .option('--no-browser', 'Do not open browser automatically')
     .action(async (options) => {
       try {
         if (options.apiKey) {
@@ -101,25 +210,66 @@ export function registerLinearCommands(parent: Command) {
             );
           }
         } else {
-          // OAuth flow
+          // OAuth flow with callback server
           const authManager = new LinearAuthManager(process.cwd());
-          const setup = new LinearOAuthSetup(process.cwd());
-          const authResult = await setup.setupInteractive();
 
-          if (authResult.authUrl) {
-            console.log(chalk.cyan('\n🔗 Open this URL in your browser:'));
-            console.log(authResult.authUrl);
+          // Check if client ID and secret are configured
+          const clientId = process.env.LINEAR_CLIENT_ID;
+          const clientSecret = process.env.LINEAR_CLIENT_SECRET;
+
+          if (!clientId || !clientSecret) {
+            console.log(chalk.yellow('\n⚠ Linear OAuth app not configured'));
+            console.log(chalk.cyan('\n📝 Setup Instructions:'));
             console.log(
-              chalk.gray('\nFollow the instructions to complete authentication')
+              '  1. Create a Linear OAuth app at: https://linear.app/settings/api'
             );
+            console.log(
+              '  2. Set redirect URI to: http://localhost:3456/auth/linear/callback'
+            );
+            console.log('  3. Copy your Client ID and Client Secret');
+            console.log('  4. Set environment variables:');
+            console.log(
+              chalk.gray('     export LINEAR_CLIENT_ID="your_client_id"')
+            );
+            console.log(
+              chalk.gray(
+                '     export LINEAR_CLIENT_SECRET="your_client_secret"'
+              )
+            );
+            console.log('  5. Run this command again');
+            return;
           }
 
-          if (authResult.instructions) {
-            console.log(chalk.yellow('\n📝 Instructions:'));
-            authResult.instructions.forEach((instruction) => {
-              console.log(`  ${instruction}`);
-            });
+          // Save OAuth config
+          authManager.saveConfig({
+            clientId,
+            clientSecret,
+            redirectUri: 'http://localhost:3456/auth/linear/callback',
+            scopes: ['read', 'write', 'admin'],
+          });
+
+          // Start OAuth server
+          const oauthServer = new LinearOAuthServer(process.cwd());
+          const { url } = await oauthServer.start();
+
+          // Open browser if not disabled
+          if (options.browser !== false) {
+            const open = (await import('open')).default;
+            await open(url);
+            console.log(
+              chalk.green('\n✓ Browser opened with authorization page')
+            );
+          } else {
+            console.log(chalk.cyan('\n🔗 Open this URL in your browser:'));
+            console.log(chalk.underline(url));
           }
+
+          console.log(chalk.gray('\nWaiting for authorization...'));
+          console.log(
+            chalk.gray(
+              'The server will automatically shut down after authorization.'
+            )
+          );
         }
       } catch (error) {
         console.error(
@@ -275,6 +425,11 @@ export function registerLinearCommands(parent: Command) {
           ? new LinearClient({ apiKey })
           : new LinearClient({
               apiKey: tokens!.accessToken,
+              useBearer: true,
+              onUnauthorized: async () => {
+                const refreshed = await authManager.refreshAccessToken();
+                return refreshed.accessToken;
+              },
             });
 
         const user = await client.getViewer();
@@ -306,51 +461,93 @@ export function registerLinearCommands(parent: Command) {
   linear
     .command('tasks')
     .description('List Linear tasks')
-    .option('--limit <n>', 'Number of tasks to show', '10')
+    .option('--limit <n>', 'Number of tasks to show', '50')
+    .option(
+      '--status <status>',
+      'Filter by status (backlog, started, completed, etc.)'
+    )
+    .option('--my', 'Show only tasks assigned to me')
+    .option('--cache', 'Show cache stats')
+    .option('--refresh', 'Force refresh cache')
     .action(async (options) => {
       try {
-        const authManager = new LinearAuthManager(process.cwd());
-        const tokens = authManager.loadTokens();
         const apiKey = process.env.LINEAR_API_KEY;
-
-        if (!tokens && !apiKey) {
-          console.log(chalk.yellow('⚠ Not authenticated with Linear'));
+        if (!apiKey) {
+          console.log(
+            chalk.yellow('⚠ Set LINEAR_API_KEY environment variable')
+          );
           return;
         }
 
-        const client = apiKey
-          ? new LinearClient({ apiKey })
-          : new LinearClient({
-              apiKey: tokens!.accessToken,
-            });
+        const restClient = new LinearRestClient(apiKey);
 
-        const issues = await client.getIssues({
-          limit: parseInt(options.limit),
-        });
-
-        if (!issues || issues.length === 0) {
-          console.log(chalk.gray('No issues found'));
+        // Show cache stats if requested
+        if (options.cache) {
+          const stats = restClient.getCacheStats();
+          console.log(chalk.cyan('📊 Cache Stats:'));
+          console.log(`  Size: ${stats.size} tasks`);
+          console.log(`  Age: ${Math.round(stats.age / 1000)}s`);
+          console.log(`  Fresh: ${stats.fresh ? 'yes' : 'no'}`);
+          console.log(
+            `  Last sync: ${new Date(stats.lastSync).toLocaleString()}`
+          );
           return;
         }
+
+        let tasks;
+        if (options.my) {
+          tasks = await restClient.getMyTasks();
+        } else if (options.status) {
+          tasks = await restClient.getTasksByStatus(options.status);
+        } else {
+          tasks = await restClient.getAllTasks(options.refresh);
+        }
+
+        if (!tasks || tasks.length === 0) {
+          console.log(chalk.gray('No tasks found'));
+          return;
+        }
+
+        // Limit results
+        const limit = parseInt(options.limit);
+        const displayTasks = tasks.slice(0, limit);
 
         const table = new Table({
           head: ['ID', 'Title', 'State', 'Priority', 'Assignee'],
           style: { head: ['cyan'] },
         });
 
-        issues.forEach((issue) => {
+        displayTasks.forEach((task) => {
           table.push([
-            issue.identifier,
-            issue.title.substring(0, 40) +
-              (issue.title.length > 40 ? '...' : ''),
-            issue.state?.name || '-',
-            issue.priority ? `P${issue.priority}` : '-',
-            issue.assignee?.name || '-',
+            task.identifier,
+            task.title.substring(0, 40) + (task.title.length > 40 ? '...' : ''),
+            task.state?.name || '-',
+            task.priority ? `P${task.priority}` : '-',
+            task.assignee?.name || '-',
           ]);
         });
 
         console.log(table.toString());
-        console.log(chalk.gray(`\nShowing ${issues.length} issues`));
+
+        // Show counts by status
+        const counts = await restClient.getTaskCounts();
+        console.log(chalk.cyan('\n📊 Task Summary:'));
+        Object.entries(counts).forEach(([status, count]) => {
+          console.log(`  ${status}: ${count}`);
+        });
+
+        console.log(
+          chalk.gray(
+            `\nShowing ${displayTasks.length} of ${tasks.length} total tasks`
+          )
+        );
+
+        const cacheStats = restClient.getCacheStats();
+        console.log(
+          chalk.gray(
+            `Cache: ${cacheStats.size} tasks, age: ${Math.round(cacheStats.age / 1000)}s`
+          )
+        );
       } catch (error) {
         console.error(
           chalk.red('Failed to list tasks:'),

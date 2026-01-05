@@ -706,14 +706,24 @@ export class DualStackManager {
 
     // Remove frames from source stack after successful sync
     if (syncResult.success && syncResult.errors.length === 0) {
-      // TODO: Implement frame removal from source stack
-      // const sourceStack = this.getStackManager(sourceStackId);
-      // for (const frameId of frameIds) {
-      //   console.log('DEBUG: Deleting frame', frameId);
-      //   await sourceStack.deleteFrame(frameId);
-      //   console.log('DEBUG: Frame deleted successfully', frameId);
-      // }
-      // console.log('DEBUG: All frames deleted from source stack');
+      const sourceStack = this.getStackManager(sourceStackId);
+      for (const frameId of frameIds) {
+        try {
+          sourceStack.deleteFrame(frameId);
+          logger.debug('Deleted frame from source stack', {
+            frameId,
+            sourceStackId,
+          });
+        } catch (error) {
+          logger.warn('Failed to delete frame from source stack', {
+            frameId,
+            error,
+          });
+        }
+      }
+      logger.debug('Completed frame cleanup from source stack', {
+        frameIds: frameIds.length,
+      });
     }
 
     return syncResult;
@@ -891,16 +901,93 @@ export class DualStackManager {
   private async loadHandoffRequest(
     requestId: string
   ): Promise<HandoffRequest | null> {
-    return this.handoffRequests.get(requestId) || null;
+    // Try in-memory first for fast access
+    const memoryRequest = this.handoffRequests.get(requestId);
+    if (memoryRequest) {
+      return memoryRequest;
+    }
+
+    // Try loading from database
+    try {
+      const rawDb =
+        this.adapter instanceof SQLiteAdapter
+          ? this.adapter.getRawDatabase()
+          : null;
+      if (rawDb) {
+        const query = rawDb.prepare(`
+          SELECT * FROM handoff_requests WHERE request_id = ?
+        `);
+
+        const row = query.get(requestId) as any;
+        if (row) {
+          const request: HandoffRequest = {
+            requestId: row.request_id,
+            sourceStackId: row.source_stack_id,
+            targetStackId: row.target_stack_id,
+            frameIds: JSON.parse(row.frame_ids),
+            status: row.status,
+            createdAt: new Date(row.created_at),
+            expiresAt: new Date(row.expires_at),
+            targetUserId: row.target_user_id,
+            message: row.message,
+          };
+
+          // Cache in memory for future access
+          this.handoffRequests.set(requestId, request);
+          return request;
+        }
+      }
+    } catch (error) {
+      logger.error('Failed to load handoff request from database', {
+        requestId,
+        error,
+      });
+    }
+
+    return null;
   }
 
   private async saveHandoffRequest(request: HandoffRequest): Promise<void> {
-    // For now, just use in-memory storage for tests
-    // TODO: Implement full database persistence
-    this.handoffRequests.set(request.requestId, request);
-    logger.debug('Saved handoff request (in-memory)', {
-      requestId: request.requestId,
-    });
+    try {
+      // Use raw database for direct query
+      const rawDb =
+        this.adapter instanceof SQLiteAdapter
+          ? this.adapter.getRawDatabase()
+          : null;
+      if (rawDb) {
+        const query = rawDb.prepare(`
+          INSERT OR REPLACE INTO handoff_requests 
+          (request_id, source_stack_id, target_stack_id, frame_ids, status, created_at, expires_at, target_user_id, message)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        query.run(
+          request.requestId,
+          request.sourceStackId,
+          request.targetStackId,
+          JSON.stringify(request.frameIds),
+          request.status,
+          request.createdAt.getTime(),
+          request.expiresAt.getTime(),
+          request.targetUserId || null,
+          request.message || null
+        );
+
+        logger.debug('Saved handoff request to database', {
+          requestId: request.requestId,
+        });
+      }
+
+      // Also keep in-memory for fast access
+      this.handoffRequests.set(request.requestId, request);
+    } catch (error) {
+      logger.error('Failed to save handoff request', {
+        requestId: request.requestId,
+        error,
+      });
+      // Fallback to in-memory only
+      this.handoffRequests.set(request.requestId, request);
+    }
   }
 
   /**

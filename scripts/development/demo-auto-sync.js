@@ -7,7 +7,7 @@
 import {
   initializeAutoSync,
   getAutoSyncService,
-} from '../../dist/src/integrations/linear-auto-sync.js';
+} from './dist/src/integrations/linear-auto-sync.js';
 
 console.log('🚀 Linear Auto-Sync Demo\n');
 

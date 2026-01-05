@@ -13,7 +13,6 @@ import {
 } from './types.js';
 import { Frame } from '../context/frame-manager.js';
 import { ConflictDetector } from './conflict-detector.js';
-import { logger } from '../monitoring/logger.js';
 
 export interface VisualMarker {
   frameId: string;

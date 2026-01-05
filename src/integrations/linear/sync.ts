@@ -98,6 +98,11 @@ export class LinearSyncEngine {
 
       this.linearClient = new LinearClient({
         apiKey: tokens.accessToken,
+        useBearer: true,
+        onUnauthorized: async () => {
+          const refreshed = await this.authManager.refreshAccessToken();
+          return refreshed.accessToken;
+        },
       });
     }
 
@@ -136,7 +141,14 @@ export class LinearSyncEngine {
       const apiKey = process.env.LINEAR_API_KEY;
       if (!apiKey) {
         const token = await this.authManager.getValidToken();
-        this.linearClient = new LinearClient({ apiKey: token });
+        this.linearClient = new LinearClient({
+          apiKey: token,
+          useBearer: true,
+          onUnauthorized: async () => {
+            const refreshed = await this.authManager.refreshAccessToken();
+            return refreshed.accessToken;
+          },
+        });
       }
 
       // Get team info if not configured

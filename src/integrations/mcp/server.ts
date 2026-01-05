@@ -1390,6 +1390,11 @@ class LocalStackMemoryMCP {
 
       const client = new LinearClient({
         apiKey: tokens.accessToken,
+        useBearer: true,
+        onUnauthorized: async () => {
+          const refreshed = await this.linearAuthManager.refreshAccessToken();
+          return refreshed.accessToken;
+        },
       });
 
       // Find the issue
@@ -1500,6 +1505,11 @@ class LocalStackMemoryMCP {
 
       const client = new LinearClient({
         apiKey: tokens.accessToken,
+        useBearer: true,
+        onUnauthorized: async () => {
+          const refreshed = await this.linearAuthManager.refreshAccessToken();
+          return refreshed.accessToken;
+        },
       });
 
       let stateType: any = undefined;
@@ -1579,6 +1589,11 @@ class LocalStackMemoryMCP {
       try {
         const client = new LinearClient({
           apiKey: tokens.accessToken,
+          useBearer: true,
+          onUnauthorized: async () => {
+            const refreshed = await this.linearAuthManager.refreshAccessToken();
+            return refreshed.accessToken;
+          },
         });
 
         const viewer = await client.getViewer();

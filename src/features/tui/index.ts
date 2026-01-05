@@ -4,6 +4,7 @@
  * Interactive monitoring interface for sessions, tasks, frames, and integrations
  */
 
+import 'dotenv/config';
 import blessed from 'blessed';
 import contrib from 'blessed-contrib';
 import { EventEmitter } from 'events';
@@ -36,7 +37,7 @@ export class StackMemoryTUI extends EventEmitter {
       refreshInterval: 1000,
       wsUrl: 'ws://localhost:8080',
       theme: 'dark',
-      ...config
+      ...config,
     };
 
     this.components = new Map();
@@ -51,10 +52,10 @@ export class StackMemoryTUI extends EventEmitter {
   private createScreen(): blessed.Widgets.Screen {
     // Get terminal-specific configuration
     const blessedConfig = terminalCompat.getBlessedConfig();
-    
+
     const screen = blessed.screen({
       ...blessedConfig,
-      autoPadding: true
+      autoPadding: true,
     });
 
     // Add header
@@ -69,8 +70,8 @@ export class StackMemoryTUI extends EventEmitter {
       style: {
         fg: 'white',
         bg: 'blue',
-        bold: true
-      }
+        bold: true,
+      },
     });
 
     return screen;
@@ -81,7 +82,7 @@ export class StackMemoryTUI extends EventEmitter {
     const grid = new contrib.grid({
       rows: 12,
       cols: 12,
-      screen: this.screen
+      screen: this.screen,
     });
 
     return grid;
@@ -93,7 +94,7 @@ export class StackMemoryTUI extends EventEmitter {
       this.grid.set(0, 0, 4, 6, blessed.box, {
         label: '📊 Sessions',
         border: { type: 'line' },
-        style: { border: { fg: 'cyan' } }
+        style: { border: { fg: 'cyan' } },
       })
     );
     this.components.set('sessions', sessionMonitor);
@@ -103,7 +104,7 @@ export class StackMemoryTUI extends EventEmitter {
       this.grid.set(0, 6, 4, 6, blessed.box, {
         label: '📋 Linear Tasks',
         border: { type: 'line' },
-        style: { border: { fg: 'green' } }
+        style: { border: { fg: 'green' } },
       })
     );
     this.components.set('tasks', taskBoard);
@@ -113,9 +114,9 @@ export class StackMemoryTUI extends EventEmitter {
     const frameContainer = this.grid.set(4, 0, 4, 6, blessed.box, {
       label: '🗂️ Frame Storage',
       border: { type: 'line' },
-      style: { border: { fg: 'yellow' } }
+      style: { border: { fg: 'yellow' } },
     });
-    
+
     const frameTree = contrib.tree({
       parent: frameContainer,
       top: 0,
@@ -126,15 +127,15 @@ export class StackMemoryTUI extends EventEmitter {
         text: 'green',
         selected: {
           bg: 'yellow',
-          fg: 'black'
-        }
+          fg: 'black',
+        },
       },
       template: {
-        lines: true
+        lines: true,
       },
-      label: ''
+      label: '',
     });
-    
+
     const frameViz = new FrameVisualizer(frameTree);
     this.components.set('frames', frameViz);
 
@@ -143,7 +144,7 @@ export class StackMemoryTUI extends EventEmitter {
       this.grid.set(4, 6, 4, 6, blessed.box, {
         label: '🤖 Subagent Fleet',
         border: { type: 'line' },
-        style: { border: { fg: 'magenta' } }
+        style: { border: { fg: 'magenta' } },
       })
     );
     this.components.set('subagents', subagentFleet);
@@ -155,7 +156,7 @@ export class StackMemoryTUI extends EventEmitter {
         border: { type: 'line' },
         style: { border: { fg: 'red' } },
         scrollable: true,
-        mouse: true
+        mouse: true,
       })
     );
     this.components.set('prs', prTracker);
@@ -165,14 +166,14 @@ export class StackMemoryTUI extends EventEmitter {
       this.grid.set(8, 6, 2, 6, contrib.line, {
         label: '📈 Analytics',
         border: { type: 'line' },
-        style: { 
+        style: {
           border: { fg: 'white' },
           line: 'yellow',
           text: 'green',
-          baseline: 'black'
+          baseline: 'black',
         },
         showLegend: true,
-        wholeNumbersOnly: false
+        wholeNumbersOnly: false,
       })
     );
     this.components.set('analytics', analytics);
@@ -187,8 +188,8 @@ export class StackMemoryTUI extends EventEmitter {
       tags: true,
       style: {
         fg: 'white',
-        bg: 'black'
-      }
+        bg: 'black',
+      },
     });
     this.components.set('status', statusBar);
 
@@ -256,21 +257,24 @@ export class StackMemoryTUI extends EventEmitter {
   private async updateAll(): Promise<void> {
     try {
       // Fetch latest data
-      const [sessions, tasks, frames, agents, prs, analytics] = await Promise.all([
-        this.dataService.getSessions(),
-        this.dataService.getTasks(),
-        this.dataService.getFrames(),
-        this.dataService.getAgents(),
-        this.dataService.getPRs(),
-        this.dataService.getAnalytics()
-      ]);
+      const [sessions, tasks, frames, agents, prs, issues, analytics] =
+        await Promise.all([
+          this.dataService.getSessions(),
+          this.dataService.getTasks(),
+          this.dataService.getFrames(),
+          this.dataService.getAgents(),
+          this.dataService.getPRs(),
+          this.dataService.getIssues(),
+          this.dataService.getAnalytics(),
+        ]);
 
       // Update components
       this.components.get('sessions')?.update(sessions);
       this.components.get('tasks')?.update(tasks);
       this.components.get('frames')?.update(frames);
       this.components.get('subagents')?.update(agents);
-      this.components.get('prs')?.update(prs);
+      // PR/Issue tracker expects an object with prs/issues
+      this.components.get('prs')?.update({ prs, issues });
       this.components.get('analytics')?.update(analytics);
 
       this.updateStatusBar(`Last updated: ${new Date().toLocaleTimeString()}`);
@@ -287,7 +291,7 @@ export class StackMemoryTUI extends EventEmitter {
 
   private focusNext(): void {
     const components = Array.from(this.components.values());
-    const currentIndex = components.findIndex(c => c.hasFocus?.());
+    const currentIndex = components.findIndex((c) => c.hasFocus?.());
     const nextIndex = (currentIndex + 1) % components.length;
     components[nextIndex]?.focus?.();
     this.screen.render();
@@ -295,8 +299,9 @@ export class StackMemoryTUI extends EventEmitter {
 
   private focusPrevious(): void {
     const components = Array.from(this.components.values());
-    const currentIndex = components.findIndex(c => c.hasFocus?.());
-    const prevIndex = currentIndex <= 0 ? components.length - 1 : currentIndex - 1;
+    const currentIndex = components.findIndex((c) => c.hasFocus?.());
+    const prevIndex =
+      currentIndex <= 0 ? components.length - 1 : currentIndex - 1;
     components[prevIndex]?.focus?.();
     this.screen.render();
   }
@@ -314,7 +319,8 @@ export class StackMemoryTUI extends EventEmitter {
   private updateStatusBar(message: string): void {
     const statusBar = this.components.get('status');
     if (statusBar) {
-      const shortcuts = '{yellow-fg}[q]{/} Quit | {yellow-fg}[r]{/} Refresh | {yellow-fg}[Tab]{/} Navigate | {yellow-fg}[1-6]{/} Views';
+      const shortcuts =
+        '{yellow-fg}[q]{/} Quit | {yellow-fg}[r]{/} Refresh | {yellow-fg}[Tab]{/} Navigate | {yellow-fg}[1-6]{/} Views';
       statusBar.setContent(`{bold}${message}{/} | ${shortcuts}`);
       this.screen.render();
     }
@@ -330,7 +336,7 @@ export class StackMemoryTUI extends EventEmitter {
       left: 'center',
       label: '{red-fg}Error{/}',
       tags: true,
-      hidden: true
+      hidden: true,
     });
 
     msg.display(message, () => {
@@ -344,22 +350,22 @@ export class StackMemoryTUI extends EventEmitter {
       // Show terminal compatibility info
       const termInfo = terminalCompat.getTerminalInfo();
       const warnings = terminalCompat.getWarnings();
-      
+
       if (warnings.length > 0) {
         console.log('⚠️  Terminal Compatibility Warnings:');
-        warnings.forEach(w => console.log(`   • ${w}`));
+        warnings.forEach((w) => console.log(`   • ${w}`));
         console.log('');
-        
+
         // Give user time to read warnings
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await new Promise((resolve) => setTimeout(resolve, 2000));
       }
-      
+
       // Show terminal capabilities in debug mode
       if (process.env.DEBUG || process.env.TUI_DEBUG) {
         console.log('🔍 Terminal Capabilities:');
         console.log(`   ${terminalCompat.getCapabilitiesString()}`);
         console.log('');
-        await new Promise(resolve => setTimeout(resolve, 1000));
+        await new Promise((resolve) => setTimeout(resolve, 1000));
       }
 
       // Connect WebSocket (but don't fail if it can't connect)
@@ -368,14 +374,14 @@ export class StackMemoryTUI extends EventEmitter {
       } catch (wsError) {
         console.log('⚠️  Running in offline mode (no WebSocket connection)');
       }
-      
+
       // Initialize data service
       await this.dataService.initialize();
-      
+
       // Start auto-refresh
       if (this.config.refreshInterval > 0) {
         this.refreshInterval = setInterval(() => {
-          this.updateAll().catch(error => {
+          this.updateAll().catch((error) => {
             // Silent error handling for refresh failures
             if (process.env.DEBUG) {
               console.error('Update error:', error);
@@ -412,17 +418,20 @@ export class StackMemoryTUI extends EventEmitter {
 
 // CLI entry point
 // Check if this file is being run directly
-const isMainModule = typeof process !== 'undefined' && 
-                     process.argv && 
-                     process.argv[1] && 
-                     (import.meta.url === `file://${process.argv[1]}` || 
-                      process.argv[1].endsWith('/index.js'));
+const isMainModule =
+  typeof process !== 'undefined' &&
+  process.argv &&
+  process.argv[1] &&
+  (import.meta.url === `file://${process.argv[1]}` ||
+    process.argv[1].endsWith('/index.js'));
 
 if (isMainModule) {
   // Check terminal compatibility first
   if (!terminalCompat.isCompatible()) {
     console.error('❌ Terminal is not compatible with TUI mode');
-    console.error('   Please use the dashboard command instead: stackmemory dashboard --watch');
+    console.error(
+      '   Please use the dashboard command instead: stackmemory dashboard --watch'
+    );
     process.exit(1);
   }
 
@@ -433,7 +442,9 @@ if (isMainModule) {
     if (error.stack) {
       console.error('Stack trace:', error.stack);
     }
-    console.error('\n💡 Try the simpler dashboard instead: stackmemory dashboard --watch');
+    console.error(
+      '\n💡 Try the simpler dashboard instead: stackmemory dashboard --watch'
+    );
     process.exit(1);
   });
 
@@ -443,7 +454,9 @@ if (isMainModule) {
     if (reason instanceof Error) {
       console.error('Stack trace:', reason.stack);
     }
-    console.error('\n💡 Try the simpler dashboard instead: stackmemory dashboard --watch');
+    console.error(
+      '\n💡 Try the simpler dashboard instead: stackmemory dashboard --watch'
+    );
     process.exit(1);
   });
 
@@ -451,14 +464,19 @@ if (isMainModule) {
   try {
     tui = new StackMemoryTUI({
       refreshInterval: 2000,
-      wsUrl: process.env.STACKMEMORY_WS_URL || 'ws://localhost:8080'
+      wsUrl: process.env.STACKMEMORY_WS_URL || 'ws://localhost:8080',
     });
   } catch (constructorError) {
-    console.error('\n❌ Failed to create TUI:', constructorError.message || constructorError);
+    console.error(
+      '\n❌ Failed to create TUI:',
+      constructorError.message || constructorError
+    );
     if (constructorError.stack) {
       console.error('Stack trace:', constructorError.stack);
     }
-    console.error('\n💡 Try the simpler dashboard instead: stackmemory dashboard --watch');
+    console.error(
+      '\n💡 Try the simpler dashboard instead: stackmemory dashboard --watch'
+    );
     process.exit(1);
   }
 
@@ -467,7 +485,9 @@ if (isMainModule) {
     if (error.stack) {
       console.error('Stack trace:', error.stack);
     }
-    console.error('\n💡 Try the simpler dashboard instead: stackmemory dashboard --watch');
+    console.error(
+      '\n💡 Try the simpler dashboard instead: stackmemory dashboard --watch'
+    );
     process.exit(1);
   });
 

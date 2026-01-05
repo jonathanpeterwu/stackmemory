@@ -19,6 +19,7 @@ out/
 .env.*.local
 .env.production
 .env.development
+.env.linear
 
 # IDE & Editor
 .vscode/

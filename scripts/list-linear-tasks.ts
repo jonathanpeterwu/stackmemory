@@ -38,6 +38,7 @@ async function main() {
       ? new LinearClient({ apiKey })
       : new LinearClient({
           apiKey: tokens?.accessToken ?? '',
+          useBearer: true,
         });
 
     // Get all issues (increase limit to get more tasks)

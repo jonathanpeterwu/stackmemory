@@ -16,7 +16,7 @@ const cli = (cmd: string) => `node ${cliPath} ${cmd}`;
 // NOTE: These tests have implementation dependencies
 // Simpler tests are in src/__tests__/integration/cli-integration.test.ts
 
-describe.skip('CLI Integration Tests - NEEDS IMPLEMENTATION', () => {
+describe('CLI Integration Tests', () => {
   let testDir: string;
 
   beforeEach(() => {
@@ -56,11 +56,7 @@ describe.skip('CLI Integration Tests - NEEDS IMPLEMENTATION', () => {
       expect(result).toContain('Continuity ledger saved');
 
       // Check that ledger file was created
-      const ledgerPath = path.join(
-        testDir,
-        '.stackmemory',
-        'continuity.json'
-      );
+      const ledgerPath = path.join(testDir, '.stackmemory', 'continuity.json');
       expect(fs.existsSync(ledgerPath)).toBe(true);
     });
 
@@ -127,10 +123,10 @@ describe.skip('CLI Integration Tests - NEEDS IMPLEMENTATION', () => {
 
       // Check for any successful output
       expect(result).toBeDefined();
-      
+
       // Check that handoff file was created
       const files = fs.readdirSync(testDir);
-      const handoffFile = files.find(f => f.includes('handoff'));
+      const handoffFile = files.find((f) => f.includes('handoff'));
       if (handoffFile) {
         expect(handoffFile).toBeDefined();
       }
@@ -171,7 +167,7 @@ describe.skip('CLI Integration Tests - NEEDS IMPLEMENTATION', () => {
         cwd: testDir,
         encoding: 'utf8',
       });
-      
+
       expect(result).toContain('workflow');
 
       // Generate handoff
@@ -179,7 +175,7 @@ describe.skip('CLI Integration Tests - NEEDS IMPLEMENTATION', () => {
         cwd: testDir,
         encoding: 'utf8',
       });
-      
+
       // Just verify it ran
       expect(result).toBeDefined();
 
@@ -188,7 +184,7 @@ describe.skip('CLI Integration Tests - NEEDS IMPLEMENTATION', () => {
         cwd: testDir,
         encoding: 'utf8',
       });
-      
+
       expect(result).toContain('Continuity ledger saved');
     });
   });

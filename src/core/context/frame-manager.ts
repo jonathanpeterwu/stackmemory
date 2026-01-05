@@ -187,12 +187,26 @@ export class FrameManager {
           FOREIGN KEY(frame_id) REFERENCES frames(frame_id)
         );
 
+        CREATE TABLE IF NOT EXISTS handoff_requests (
+          request_id TEXT PRIMARY KEY,
+          source_stack_id TEXT NOT NULL,
+          target_stack_id TEXT NOT NULL,
+          frame_ids TEXT NOT NULL,
+          status TEXT NOT NULL DEFAULT 'pending',
+          created_at INTEGER DEFAULT (unixepoch()),
+          expires_at INTEGER,
+          target_user_id TEXT,
+          message TEXT
+        );
+
         CREATE INDEX IF NOT EXISTS idx_frames_run ON frames(run_id);
         CREATE INDEX IF NOT EXISTS idx_frames_parent ON frames(parent_frame_id);
         CREATE INDEX IF NOT EXISTS idx_frames_state ON frames(state);
         CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);
         CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);
         CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);
+        CREATE INDEX IF NOT EXISTS idx_handoff_requests_status ON handoff_requests(status);
+        CREATE INDEX IF NOT EXISTS idx_handoff_requests_target ON handoff_requests(target_stack_id);
       `);
     } catch (error) {
       const dbError = errorHandler(error, {
@@ -512,6 +526,28 @@ export class FrameManager {
       digestLength: digest.text.length,
       stackDepth: this.activeStack.length,
     });
+  }
+
+  /**
+   * Delete a frame completely from the database (used in handoffs)
+   */
+  deleteFrame(frameId: string): void {
+    try {
+      // First delete related data
+      this.db.prepare('DELETE FROM events WHERE frame_id = ?').run(frameId);
+      this.db.prepare('DELETE FROM anchors WHERE frame_id = ?').run(frameId);
+
+      // Remove from active stack if present
+      this.activeStack = this.activeStack.filter((id) => id !== frameId);
+
+      // Delete the frame itself
+      this.db.prepare('DELETE FROM frames WHERE frame_id = ?').run(frameId);
+
+      logger.debug('Deleted frame completely', { frameId });
+    } catch (error) {
+      logger.error('Failed to delete frame', { frameId, error });
+      throw error;
+    }
   }
 
   private closeChildFrames(parentFrameId: string) {

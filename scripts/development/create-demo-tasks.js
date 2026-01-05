@@ -5,8 +5,8 @@
 
 import Database from 'better-sqlite3';
 import { join } from 'path';
-import { PebblesTaskStore } from '../../dist/src/pebbles/pebbles-task-store.js';
-import { FrameManager } from '../../dist/src/core/frame-manager.js';
+import { PebblesTaskStore } from './dist/src/pebbles/pebbles-task-store.js';
+import { FrameManager } from './dist/src/core/frame-manager.js';
 
 const projectRoot = process.cwd();
 const dbPath = join(projectRoot, '.stackmemory', 'context.db');

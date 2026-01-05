@@ -16,6 +16,16 @@ NC='\033[0m' # No Color
 
 echo -e "${GREEN}🚀 Starting StackMemory TUI Dashboard${NC}"
 
+# Load environment from .env if present (so TUI sees LINEAR_API_KEY, etc.)
+if [ -f "$PROJECT_ROOT/.env" ]; then
+    # export all variables loaded from the file
+    set -a
+    # shellcheck disable=SC1091
+    . "$PROJECT_ROOT/.env"
+    set +a
+    echo -e "${GREEN}ℹ Loaded environment from $PROJECT_ROOT/.env${NC}"
+fi
+
 # Check if built files exist
 if [ ! -f "$PROJECT_ROOT/dist/features/tui/index.js" ]; then
     echo -e "${YELLOW}Building TUI...${NC}"
@@ -23,7 +33,7 @@ if [ ! -f "$PROJECT_ROOT/dist/features/tui/index.js" ]; then
     npm run build
 fi
 
-# Check for environment variables
+# Check for environment variables (after loading .env)
 if [ -z "$LINEAR_API_KEY" ]; then
     echo -e "${YELLOW}⚠️  Warning: LINEAR_API_KEY not set. Linear integration will be disabled.${NC}"
 fi

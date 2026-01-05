@@ -272,8 +272,8 @@ export class ConflictDetector {
    * Helper: Compare frame inputs
    */
   private compareInputs(
-    inputs1: Record<string, any>,
-    inputs2: Record<string, any>
+    inputs1: Record<string, unknown>,
+    inputs2: Record<string, unknown>
   ): number {
     const keys1 = Object.keys(inputs1 || {});
     const keys2 = Object.keys(inputs2 || {});
@@ -348,7 +348,7 @@ export class ConflictDetector {
   /**
    * Helper: Check for logical conflicts in payloads
    */
-  private hasLogicalConflict(payload1: any, payload2: any): boolean {
+  private hasLogicalConflict(payload1: unknown, payload2: unknown): boolean {
     // Architecture decisions
     if (payload1?.architecture && payload2?.architecture) {
       return payload1.architecture !== payload2.architecture;
@@ -412,7 +412,10 @@ export class ConflictDetector {
         if (!tree.has(frame.parent_frame_id)) {
           tree.set(frame.parent_frame_id, new Set());
         }
-        tree.get(frame.parent_frame_id)!.add(frame.frame_id);
+        const parentSet = tree.get(frame.parent_frame_id);
+        if (parentSet) {
+          parentSet.add(frame.frame_id);
+        }
       }
     }
 
@@ -432,8 +435,8 @@ export class ConflictDetector {
     // Find nodes that exist in both but have different children
     for (const [node, children1] of tree1) {
       if (tree2.has(node)) {
-        const children2 = tree2.get(node)!;
-        if (!this.setsEqual(children1, children2)) {
+        const children2 = tree2.get(node);
+        if (children2 && !this.setsEqual(children1, children2)) {
           divergences.push({
             node1: node,
             node2: node,
@@ -478,9 +481,9 @@ export class ConflictDetector {
   /**
    * Helper: Calculate divergence severity
    */
-  private calculateDivergenceSeverity(
-    divergence: any
-  ): 'low' | 'medium' | 'high' | 'critical' {
+  private calculateDivergenceSeverity(divergence: {
+    depth: number;
+  }): 'low' | 'medium' | 'high' | 'critical' {
     if (divergence.depth === 0) return 'critical'; // Root divergence
     if (divergence.depth === 1) return 'high';
     if (divergence.depth === 2) return 'medium';

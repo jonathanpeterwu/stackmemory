@@ -29,6 +29,9 @@ import { ProgressTracker } from '../core/monitoring/progress-tracker.js';
 import { registerProjectCommands } from './commands/projects.js';
 import { registerLinearCommands } from './commands/linear.js';
 import { registerLinearTestCommand } from './commands/linear-test.js';
+import { registerLinearListCommand } from './commands/linear-list.js';
+import { registerLinearMigrateCommand } from './commands/linear-migrate.js';
+import { registerLinearCreateCommand } from './commands/linear-create.js';
 import { createSessionCommands } from './commands/session.js';
 import { registerWorktreeCommands } from './commands/worktree.js';
 import { registerOnboardingCommand } from './commands/onboard.js';
@@ -662,6 +665,11 @@ linearCommand
       const { LinearClient } = await import('../integrations/linear/client.js');
       const client = new LinearClient({
         apiKey: tokens.accessToken,
+        useBearer: true,
+        onUnauthorized: async () => {
+          const refreshed = await authManager.refreshAccessToken();
+          return refreshed.accessToken;
+        },
       });
 
       // Find the issue first
@@ -1270,6 +1278,9 @@ registerWorktreeCommands(program);
 // Register Linear integration commands
 registerLinearCommands(program);
 registerLinearTestCommand(program);
+registerLinearListCommand(program);
+registerLinearMigrateCommand(program);
+registerLinearCreateCommand(program);
 
 // Register session management commands
 program.addCommand(createSessionCommands());
@@ -1315,42 +1326,46 @@ program
       try {
         await import('blessed');
       } catch {
-        console.log('❌ The TUI requires the blessed package. Install it with:');
+        console.log(
+          '❌ The TUI requires the blessed package. Install it with:'
+        );
         console.log('   npm install blessed blessed-contrib');
-        console.log('\n💡 Alternatively, use "stackmemory dashboard" for a simpler view');
+        console.log(
+          '\n💡 Alternatively, use "stackmemory dashboard" for a simpler view'
+        );
         process.exit(1);
       }
 
       const { spawn } = await import('child_process');
       const { fileURLToPath } = await import('url');
       const { dirname, join } = await import('path');
-      
+
       const __filename = fileURLToPath(import.meta.url);
       const __dirname = dirname(__filename);
-      
+
       console.log('🚀 Launching StackMemory TUI Dashboard...');
-      
+
       // Set environment variables
       process.env.STACKMEMORY_WS_URL = options.wsUrl;
-      
+
       // Get TUI module path
       const tuiPath = join(__dirname, '../features/tui/index.js');
-      
+
       // Launch TUI directly
       const tui = spawn('node', [tuiPath], {
         stdio: 'inherit',
         env: {
           ...process.env,
-          STACKMEMORY_WS_URL: options.wsUrl
-        }
+          STACKMEMORY_WS_URL: options.wsUrl,
+        },
       });
-      
+
       tui.on('error', (error) => {
         console.error('Failed to launch TUI:', error);
         console.log('\n💡 Try "stackmemory dashboard" instead');
         process.exit(1);
       });
-      
+
       tui.on('exit', (code) => {
         if (code !== 0) {
           console.error(`TUI exited with code ${code}`);

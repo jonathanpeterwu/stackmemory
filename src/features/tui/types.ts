@@ -17,10 +17,10 @@ export interface SessionData {
   lastActivity?: number;
   completed?: boolean;
   error?: string;
-  
+
   // Metrics
   totalTokens?: number;
-  contextUsage: number;  // 0-1 percentage
+  contextUsage: number; // 0-1 percentage
   filesEdited?: string[];
   commandsRun?: number;
   errors?: Array<{
@@ -28,14 +28,14 @@ export interface SessionData {
     message: string;
     stack?: string;
   }>;
-  
+
   // Context
   primaryFile?: string;
   gitBranch?: string;
   lastCommit?: string;
   linearTask?: LinearTask;
   agentType?: string;
-  
+
   // Activities
   recentActivities?: Array<{
     timestamp: number;
@@ -63,36 +63,38 @@ export interface LinearTask {
   estimate?: number;
   progress?: number;
   dueDate?: string;
-  
-  assignee?: {
-    id: string;
-    name: string;
-    email: string;
-    avatar?: string;
-  };
-  
+
+  assignee?:
+    | {
+        id: string;
+        name: string;
+        email: string;
+        avatar?: string;
+      }
+    | string;
+
   labels?: string[];
-  
+
   comments?: Array<{
     id: string;
     author: string;
     body: string;
     createdAt: string;
   }>;
-  
+
   subtasks?: Array<{
     id: string;
     title: string;
     completed: boolean;
   }>;
-  
+
   cycle?: {
     id: string;
     name: string;
     startsAt: string;
     endsAt: string;
   };
-  
+
   project?: {
     id: string;
     name: string;
@@ -116,20 +118,20 @@ export interface FrameData {
   sessionId: string;
   parentId?: string;
   type: 'root' | 'branch' | 'leaf';
-  
+
   // Content
   inputs?: string[];
   outputs?: string[];
   tools?: string[];
   digest?: string;
-  
+
   // Metadata
   timestamp: number;
   tokenCount: number;
   tier: 'hot' | 'warm' | 'cold';
   compressionRatio?: number;
   score?: number;
-  
+
   // Relationships
   children?: string[];
   references?: string[];
@@ -148,7 +150,7 @@ export interface SubagentData {
   id: string;
   type: string;
   status: 'idle' | 'active' | 'error' | 'completed';
-  
+
   // Current task
   currentTask?: {
     id: string;
@@ -156,18 +158,18 @@ export interface SubagentData {
     progress: number;
     startTime: number;
   };
-  
+
   // Metrics
   tasksCompleted: number;
   tasksFailed: number;
   averageTime: number;
   successRate: number;
-  
+
   // Resources
   cpuUsage?: number;
   memoryUsage?: number;
   tokenUsage?: number;
-  
+
   // Error info
   lastError?: {
     message: string;
@@ -182,18 +184,18 @@ export interface PRData {
   title: string;
   state: 'open' | 'closed' | 'merged';
   draft: boolean;
-  
+
   author: {
     login: string;
     avatar?: string;
   };
-  
+
   // Review status
   reviews: Array<{
     user: string;
     state: 'approved' | 'changes_requested' | 'commented';
   }>;
-  
+
   // CI status
   checks?: {
     total: number;
@@ -201,21 +203,21 @@ export interface PRData {
     failed: number;
     pending: number;
   };
-  
+
   // Metadata
   createdAt: string;
   updatedAt: string;
   mergedAt?: string;
-  
+
   // Stats
   additions: number;
   deletions: number;
   changedFiles: number;
   comments: number;
-  
+
   // Labels
   labels?: string[];
-  
+
   // Associated
   linkedIssues?: string[];
   linearTask?: string;
@@ -226,18 +228,18 @@ export interface IssueData {
   number: number;
   title: string;
   state: 'open' | 'closed';
-  
+
   author: {
     login: string;
   };
-  
+
   assignees?: string[];
   labels?: string[];
-  
+
   createdAt: string;
   updatedAt: string;
   closedAt?: string;
-  
+
   comments: number;
   reactions?: {
     '+1': number;
@@ -256,26 +258,26 @@ export interface AnalyticsData {
     labels: string[];
     values: number[];
   };
-  
+
   tokens: {
     labels: string[];
     values: number[];
   };
-  
+
   tasks: {
     completed: number;
     inProgress: number;
     todo: number;
     velocity: number[];
   };
-  
+
   quality: {
     testsPassed: number;
     testsFailed: number;
     coverage: number;
     lintErrors: number;
   };
-  
+
   performance: {
     avgResponseTime: number[];
     errorRate: number[];

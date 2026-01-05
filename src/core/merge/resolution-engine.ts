@@ -186,7 +186,6 @@ export class ResolutionEngine {
 
     // Apply vote results to conflicts
     for (const conflict of conflicts) {
-      const winner = this.determineVoteWinner(conflict, voteResults);
       conflict.resolution = {
         strategy,
         resolvedBy: 'team_consensus',
@@ -220,11 +219,7 @@ export class ResolutionEngine {
     }
 
     // Assume stack1 is the senior's preferred choice
-    const preferredStack = this.determinePreferredStack(
-      stack1,
-      stack2,
-      context
-    );
+    this.determinePreferredStack(stack1, stack2, context);
 
     const strategy: ResolutionStrategy = {
       type: 'senior_override',
@@ -416,7 +411,14 @@ export class ResolutionEngine {
   /**
    * Count votes from team members
    */
-  private countVotes(votes: TeamVote[]): any {
+  private countVotes(votes: TeamVote[]): {
+    frame1: number;
+    frame2: number;
+    both: number;
+    neither: number;
+    total: number;
+    consensus: number;
+  } {
     const counts = {
       frame1: 0,
       frame2: 0,
@@ -445,7 +447,7 @@ export class ResolutionEngine {
   /**
    * Calculate confidence based on vote distribution
    */
-  private calculateVoteConfidence(voteResults: any): number {
+  private calculateVoteConfidence(voteResults: { consensus: number }): number {
     // High confidence if strong consensus
     if (voteResults.consensus >= 80) return 0.95;
     if (voteResults.consensus >= 60) return 0.75;
@@ -458,7 +460,12 @@ export class ResolutionEngine {
    */
   private determineVoteWinner(
     conflict: MergeConflict,
-    voteResults: any
+    voteResults: {
+      frame1: number;
+      frame2: number;
+      both: number;
+      neither: number;
+    }
   ): string {
     if (voteResults.frame1 > voteResults.frame2) return conflict.frameId1;
     if (voteResults.frame2 > voteResults.frame1) return conflict.frameId2;
@@ -496,7 +503,10 @@ export class ResolutionEngine {
   private async analyzeFrameQuality(
     stack1: FrameStack,
     stack2: FrameStack
-  ): Promise<any> {
+  ): Promise<{
+    stack1: { completeness: number; efficiency: number; quality: number };
+    stack2: { completeness: number; efficiency: number; quality: number };
+  }> {
     const analysis = {
       stack1: {
         completeness: this.calculateCompleteness(stack1),
@@ -563,7 +573,10 @@ export class ResolutionEngine {
   /**
    * Generate AI reasoning for resolution
    */
-  private generateAIReasoning(analysis: any): string {
+  private generateAIReasoning(analysis: {
+    stack1: { completeness: number; efficiency: number; quality: number };
+    stack2: { completeness: number; efficiency: number; quality: number };
+  }): string {
     const stack1Score =
       analysis.stack1.completeness * 0.3 +
       analysis.stack1.efficiency * 0.3 +
@@ -584,7 +597,7 @@ export class ResolutionEngine {
   /**
    * Get AI recommendation for specific conflict
    */
-  private getAIRecommendation(conflict: MergeConflict, analysis: any): string {
+  private getAIRecommendation(conflict: MergeConflict): string {
     switch (conflict.type) {
       case 'parallel_solution':
         return 'Recommend keeping both solutions for A/B testing';
@@ -603,16 +616,13 @@ export class ResolutionEngine {
   /**
    * Create rollback point before merge
    */
-  private createRollbackPoint(stack1: FrameStack, stack2: FrameStack): string {
+  private createRollbackPoint(
+    _stack1: FrameStack,
+    _stack2: FrameStack
+  ): string {
     const rollbackId = uuidv4();
 
-    // Store current state for rollback
-    const rollbackData = {
-      id: rollbackId,
-      timestamp: Date.now(),
-      stack1: JSON.parse(JSON.stringify(stack1)),
-      stack2: JSON.parse(JSON.stringify(stack2)),
-    };
+    // Store current state for rollback (would persist in real implementation)
 
     // In real implementation, persist this to database
     logger.info('Created rollback point', { rollbackId });

@@ -70,7 +70,7 @@ export interface DiffNode {
   type: 'common' | 'branch1' | 'branch2' | 'conflict';
   frame?: Frame;
   position: { x: number; y: number };
-  metadata?: Record<string, any>;
+  metadata?: Record<string, unknown>;
 }
 
 export interface DiffEdge {
