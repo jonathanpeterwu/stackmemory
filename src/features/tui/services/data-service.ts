@@ -5,36 +5,38 @@
 
 import { EventEmitter } from 'events';
 import Database from 'better-sqlite3';
-import { LinearClient } from '../../../integrations/linear/client.js';
 import { SessionManager } from '../../../core/session/session-manager.js';
 import { FrameManager } from '../../../core/context/frame-manager.js';
-import type { 
-  SessionData, 
-  LinearTask, 
-  FrameData, 
-  SubagentData, 
-  PRData, 
+import { PebblesTaskStore } from '../../tasks/pebbles-task-store.js';
+import { existsSync, readFileSync } from 'fs';
+import { join } from 'path';
+import type {
+  SessionData,
+  LinearTask,
+  FrameData,
+  SubagentData,
+  PRData,
   IssueData,
-  AnalyticsData 
+  AnalyticsData,
 } from '../types.js';
 
 export class DataService extends EventEmitter {
   private db: Database.Database | null = null;
-  private linearClient: LinearClient | null = null;
   private sessionManager: SessionManager | null = null;
   private frameManager: FrameManager | null = null;
-  private cache: Map<string, { data: any, timestamp: number }> = new Map();
+  private taskStore: PebblesTaskStore | null = null;
+  private linearMappings: Map<string, any> = new Map();
+  private cache: Map<string, { data: any; timestamp: number }> = new Map();
   private cacheTimeout = 5000; // 5 seconds
 
   async initialize(): Promise<void> {
     try {
       // Initialize database with error handling
       try {
-        const { existsSync } = await import('fs');
-        const dbPath = process.env.PROJECT_ROOT 
+        const dbPath = process.env.PROJECT_ROOT
           ? `${process.env.PROJECT_ROOT}/.stackmemory/context.db`
           : `${process.cwd()}/.stackmemory/context.db`;
-        
+
         if (existsSync(dbPath)) {
           this.db = new Database(dbPath);
         }
@@ -44,10 +46,32 @@ export class DataService extends EventEmitter {
         }
       }
 
+      // Initialize task store for local synced tasks
+      try {
+        this.taskStore = new PebblesTaskStore();
+
+        // Load Linear mappings if they exist
+        const mappingsPath = join(
+          process.env.PROJECT_ROOT || process.cwd(),
+          '.stackmemory',
+          'linear-mappings.json'
+        );
+        if (existsSync(mappingsPath)) {
+          const mappingsData = JSON.parse(readFileSync(mappingsPath, 'utf8'));
+          mappingsData.forEach((mapping: any) => {
+            this.linearMappings.set(mapping.stackmemoryId, mapping);
+          });
+        }
+      } catch (tsError) {
+        if (process.env.DEBUG) {
+          console.log('Task store initialization failed:', tsError.message);
+        }
+      }
+
       // Initialize managers with error handling
       try {
         this.sessionManager = new SessionManager({
-          enableMonitoring: true
+          enableMonitoring: true,
         });
       } catch (smError) {
         if (process.env.DEBUG) {
@@ -55,7 +79,7 @@ export class DataService extends EventEmitter {
         }
         // Continue without session manager
       }
-      
+
       if (this.db) {
         try {
           this.frameManager = new FrameManager(this.db, 'tui');
@@ -67,18 +91,12 @@ export class DataService extends EventEmitter {
         }
       }
 
-      // Initialize Linear if API key is available
-      if (process.env.LINEAR_API_KEY) {
-        try {
-          this.linearClient = new LinearClient({
-            apiKey: process.env.LINEAR_API_KEY
-          });
-        } catch (linearError) {
-          if (process.env.DEBUG) {
-            console.log('Linear client initialization failed:', linearError.message);
-          }
-          // Continue without Linear client
-        }
+      // Note: Linear clients removed - all syncing happens via webhook or scheduled scripts
+      // The TUI only displays locally synced tasks from the task store
+      if (process.env.DEBUG) {
+        console.log(
+          'TUI: Using local task store only (no direct Linear API calls)'
+        );
       }
 
       this.emit('data:ready');
@@ -98,7 +116,7 @@ export class DataService extends EventEmitter {
     try {
       // Get active sessions from manager
       const activeSessions = this.sessionManager?.getActiveSessions() || [];
-      
+
       // Try to get recent sessions from database
       let recentSessions = [];
       if (this.db) {
@@ -128,7 +146,7 @@ export class DataService extends EventEmitter {
       // Combine and format
       const sessions: SessionData[] = [
         ...activeSessions.map(this.formatSession),
-        ...recentSessions.map(this.formatDatabaseSession)
+        ...recentSessions.map(this.formatDatabaseSession),
       ];
 
       this.setCache('sessions', sessions);
@@ -145,22 +163,72 @@ export class DataService extends EventEmitter {
     const cached = this.getFromCache('tasks');
     if (cached) return cached;
 
-    if (!this.linearClient) {
-      // Return mock tasks when Linear isn't configured
+    const tasks: LinearTask[] = [];
+
+    // ONLY use locally synced tasks - no direct Linear API calls
+    // Tasks should be synced via webhook or scheduled sync scripts
+    if (this.taskStore) {
+      try {
+        const localTasks = this.taskStore.getActiveTasks();
+
+        // Convert local tasks to TUI display format
+        localTasks.forEach((localTask) => {
+          const mapping = this.linearMappings.get(localTask.id);
+
+          // Extract identifier from title (e.g., "[ENG-123] Task title")
+          const identifierMatch = localTask.title.match(/\[(\w+-\d+)\]/);
+          const identifier = identifierMatch
+            ? identifierMatch[1]
+            : mapping?.linearIdentifier || 'LOCAL-' + localTask.id.slice(-6);
+
+          // Format local task for TUI display
+          const linearTask: LinearTask = {
+            id: mapping?.linearId || localTask.id,
+            identifier: identifier,
+            title: localTask.title.replace(/\[\w+-\d+\]\s*/, ''), // Remove identifier from title
+            description: localTask.description,
+            state: this.mapLocalStatusToLinearState(localTask.status),
+            priority: this.mapLocalPriorityToLinear(localTask.priority),
+            estimate: localTask.estimated_effort
+              ? Math.ceil(localTask.estimated_effort / 60)
+              : undefined,
+            assignee: localTask.assignee,
+            createdAt: new Date(localTask.created_at * 1000).toISOString(),
+            updatedAt: new Date(localTask.timestamp * 1000).toISOString(),
+            // Add sync metadata
+            lastSyncedAt: mapping?.lastSyncTimestamp
+              ? new Date(mapping.lastSyncTimestamp).toISOString()
+              : undefined,
+            syncStatus: mapping ? 'synced' : 'local',
+          };
+
+          tasks.push(linearTask);
+        });
+
+        if (process.env.DEBUG) {
+          console.log(
+            `Loaded ${tasks.length} tasks from local store (no Linear API calls)`
+          );
+        }
+      } catch (error) {
+        if (process.env.DEBUG) {
+          console.log('Failed to get local tasks:', error.message);
+        }
+      }
+    }
+
+    // If no local tasks, show helpful message instead of mock data
+    if (tasks.length === 0) {
+      console.log(
+        'ℹ️  No local tasks found. Run "npm run linear:sync" to sync tasks from Linear.'
+      );
       const mockTasks = this.getMockTasks();
       this.setCache('tasks', mockTasks);
       return mockTasks;
     }
 
-    try {
-      const tasks = await this.linearClient.getActiveTasks();
-      const formatted = tasks.map(this.formatLinearTask);
-      this.setCache('tasks', formatted);
-      return formatted;
-    } catch (error) {
-      this.emit('error', error);
-      return [];
-    }
+    this.setCache('tasks', tasks);
+    return tasks;
   }
 
   async getFrames(): Promise<FrameData[]> {
@@ -169,14 +237,14 @@ export class DataService extends EventEmitter {
 
     try {
       const frames = this.frameManager?.getAllFrames() || [];
-      
+
       // If no frames, return mock data
       if (frames.length === 0) {
         const mockFrames = this.getMockFrames();
         this.setCache('frames', mockFrames);
         return mockFrames;
       }
-      
+
       const formatted = frames.map(this.formatFrame);
       this.setCache('frames', formatted);
       return formatted;
@@ -206,7 +274,7 @@ export class DataService extends EventEmitter {
             id: 'task-1',
             description: 'Analyzing codebase for performance issues',
             progress: 0.65,
-            startTime: Date.now() - 120000
+            startTime: Date.now() - 120000,
           },
           tasksCompleted: 42,
           tasksFailed: 3,
@@ -214,7 +282,7 @@ export class DataService extends EventEmitter {
           successRate: 0.93,
           cpuUsage: 45,
           memoryUsage: 62,
-          tokenUsage: 125000
+          tokenUsage: 125000,
         },
         {
           id: 'agent-2',
@@ -226,7 +294,7 @@ export class DataService extends EventEmitter {
           successRate: 0.96,
           cpuUsage: 12,
           memoryUsage: 38,
-          tokenUsage: 85000
+          tokenUsage: 85000,
         },
         {
           id: 'agent-3',
@@ -239,12 +307,12 @@ export class DataService extends EventEmitter {
           lastError: {
             message: 'Test suite timeout',
             timestamp: Date.now() - 60000,
-            recoverable: true
+            recoverable: true,
           },
           cpuUsage: 0,
           memoryUsage: 25,
-          tokenUsage: 45000
-        }
+          tokenUsage: 45000,
+        },
       ];
 
       this.setCache('agents', agents);
@@ -269,14 +337,12 @@ export class DataService extends EventEmitter {
           state: 'open',
           draft: false,
           author: { login: 'stackmemory-bot' },
-          reviews: [
-            { user: 'reviewer1', state: 'approved' }
-          ],
+          reviews: [{ user: 'reviewer1', state: 'approved' }],
           checks: {
             total: 5,
             passed: 3,
             failed: 0,
-            pending: 2
+            pending: 2,
           },
           createdAt: new Date(Date.now() - 3600000).toISOString(),
           updatedAt: new Date().toISOString(),
@@ -285,8 +351,8 @@ export class DataService extends EventEmitter {
           changedFiles: 12,
           comments: 3,
           labels: ['enhancement', 'monitoring'],
-          linearTask: 'STA-100'
-        }
+          linearTask: 'STA-100',
+        },
       ];
 
       this.setCache('prs', prs);
@@ -314,8 +380,8 @@ export class DataService extends EventEmitter {
           labels: ['enhancement', 'monitoring'],
           createdAt: new Date(Date.now() - 86400000).toISOString(),
           updatedAt: new Date().toISOString(),
-          comments: 5
-        }
+          comments: 5,
+        },
       ];
 
       this.setCache('issues', issues);
@@ -335,29 +401,29 @@ export class DataService extends EventEmitter {
       const analytics: AnalyticsData = {
         sessions: {
           labels: ['1h', '2h', '3h', '4h', '5h', '6h'],
-          values: [5, 8, 12, 15, 18, 22]
+          values: [5, 8, 12, 15, 18, 22],
         },
         tokens: {
           labels: ['1h', '2h', '3h', '4h', '5h', '6h'],
-          values: [12000, 25000, 45000, 62000, 78000, 95000]
+          values: [12000, 25000, 45000, 62000, 78000, 95000],
         },
         tasks: {
           completed: 45,
           inProgress: 12,
           todo: 28,
-          velocity: [8, 12, 15, 18, 20]
+          velocity: [8, 12, 15, 18, 20],
         },
         quality: {
           testsPassed: 142,
           testsFailed: 3,
           coverage: 78,
-          lintErrors: 0
+          lintErrors: 0,
         },
         performance: {
           avgResponseTime: [120, 115, 108, 105, 110],
           errorRate: [0.02, 0.015, 0.01, 0.008, 0.005],
-          throughput: [100, 120, 135, 140, 145]
-        }
+          throughput: [100, 120, 135, 140, 145],
+        },
       };
 
       this.setCache('analytics', analytics);
@@ -369,7 +435,7 @@ export class DataService extends EventEmitter {
         tokens: { labels: [], values: [] },
         tasks: { completed: 0, inProgress: 0, todo: 0, velocity: [] },
         quality: { testsPassed: 0, testsFailed: 0, coverage: 0, lintErrors: 0 },
-        performance: { avgResponseTime: [], errorRate: [], throughput: [] }
+        performance: { avgResponseTime: [], errorRate: [], throughput: [] },
       };
     }
   }
@@ -391,7 +457,7 @@ export class DataService extends EventEmitter {
       lastCommit: session.lastCommit,
       linearTask: session.linearTask,
       agentType: session.agentType,
-      recentActivities: session.recentActivities
+      recentActivities: session.recentActivities,
     };
   }
 
@@ -399,12 +465,14 @@ export class DataService extends EventEmitter {
     return {
       id: row.id,
       startTime: new Date(row.created_at).getTime(),
-      lastActivity: row.updated_at ? new Date(row.updated_at).getTime() : undefined,
+      lastActivity: row.updated_at
+        ? new Date(row.updated_at).getTime()
+        : undefined,
       completed: row.status === 'completed',
       totalTokens: row.token_count,
       contextUsage: row.context_usage || 0,
       filesEdited: row.files_edited ? JSON.parse(row.files_edited) : [],
-      commandsRun: row.commands_run || 0
+      commandsRun: row.commands_run || 0,
     };
   }
 
@@ -414,21 +482,50 @@ export class DataService extends EventEmitter {
       identifier: task.identifier,
       title: task.title,
       description: task.description,
-      state: task.state.name,
+      // Use Linear state.type for stable mapping ('unstarted'|'started'|...)
+      state: task.state?.type || task.state?.name,
       priority: task.priority,
       estimate: task.estimate,
       dueDate: task.dueDate,
-      assignee: task.assignee ? {
-        id: task.assignee.id,
-        name: task.assignee.name,
-        email: task.assignee.email
-      } : undefined,
+      assignee: task.assignee
+        ? {
+            id: task.assignee.id,
+            name: task.assignee.name,
+            email: task.assignee.email,
+          }
+        : undefined,
       labels: task.labels?.nodes.map((l: any) => l.name),
-      project: task.project ? {
-        id: task.project.id,
-        name: task.project.name,
-        key: task.project.key
-      } : undefined
+      project: task.project
+        ? {
+            id: task.project.id,
+            name: task.project.name,
+            key: task.project.key,
+          }
+        : undefined,
+    };
+  }
+
+  private formatRestLinearTask(task: any): LinearTask {
+    // Map Linear state.type to TUI display states
+    const stateMap: Record<string, string> = {
+      backlog: 'Backlog',
+      unstarted: 'To Do',
+      started: 'In Progress',
+      completed: 'Done',
+      canceled: 'Canceled',
+    };
+
+    return {
+      id: task.id,
+      identifier: task.identifier,
+      title: task.title,
+      description: task.description,
+      state: stateMap[task.state.type] || task.state.name,
+      priority: task.priority,
+      estimate: task.estimate,
+      assignee: task.assignee ? task.assignee.name : undefined,
+      createdAt: task.createdAt,
+      updatedAt: task.updatedAt,
     };
   }
 
@@ -448,7 +545,7 @@ export class DataService extends EventEmitter {
       compressionRatio: frame.compressionRatio,
       score: frame.score,
       children: frame.children,
-      references: frame.references
+      references: frame.references,
     };
   }
 
@@ -462,6 +559,27 @@ export class DataService extends EventEmitter {
 
   private setCache(key: string, data: any): void {
     this.cache.set(key, { data, timestamp: Date.now() });
+  }
+
+  private mapLocalStatusToLinearState(status: string): string {
+    const statusMap: Record<string, string> = {
+      pending: 'To Do',
+      in_progress: 'In Progress',
+      completed: 'Done',
+      cancelled: 'Canceled',
+      blocked: 'To Do',
+    };
+    return statusMap[status] || 'To Do';
+  }
+
+  private mapLocalPriorityToLinear(priority: string): number {
+    const priorityMap: Record<string, number> = {
+      urgent: 0,
+      high: 1,
+      medium: 2,
+      low: 3,
+    };
+    return priorityMap[priority] || 2;
   }
 
   cleanup(): void {
@@ -491,14 +609,14 @@ export class DataService extends EventEmitter {
           {
             timestamp: now - 120000,
             type: 'file_edit' as const,
-            description: 'Modified Dashboard.tsx'
+            description: 'Modified Dashboard.tsx',
           },
           {
             timestamp: now - 60000,
             type: 'command' as const,
-            description: 'npm run test'
-          }
-        ]
+            description: 'npm run test',
+          },
+        ],
       },
       {
         id: 'demo-session-2',
@@ -516,10 +634,10 @@ export class DataService extends EventEmitter {
           {
             timestamp: now - 600000,
             type: 'file_edit' as const,
-            description: 'Updated API endpoints'
-          }
-        ]
-      }
+            description: 'Updated API endpoints',
+          },
+        ],
+      },
     ];
   }
 
@@ -539,7 +657,7 @@ export class DataService extends EventEmitter {
         inputs: ['Create user dashboard'],
         outputs: ['Dashboard component created'],
         children: [],
-        references: []
+        references: [],
       },
       {
         id: 'frame-2',
@@ -555,8 +673,8 @@ export class DataService extends EventEmitter {
         inputs: ['Setup REST API'],
         outputs: ['API routes configured'],
         children: [],
-        references: []
-      }
+        references: [],
+      },
     ];
   }
 
@@ -570,7 +688,7 @@ export class DataService extends EventEmitter {
         priority: 2,
         assignee: 'demo-user',
         createdAt: new Date(Date.now() - 86400000).toISOString(),
-        updatedAt: new Date().toISOString()
+        updatedAt: new Date().toISOString(),
       },
       {
         id: 'task-2',
@@ -580,8 +698,8 @@ export class DataService extends EventEmitter {
         priority: 1,
         assignee: 'demo-user',
         createdAt: new Date(Date.now() - 172800000).toISOString(),
-        updatedAt: new Date().toISOString()
-      }
+        updatedAt: new Date().toISOString(),
+      },
     ];
   }
 
@@ -595,7 +713,7 @@ export class DataService extends EventEmitter {
         tasksCompleted: 45,
         averageTime: '2.3s',
         successRate: 98.5,
-        lastActive: new Date().toISOString()
+        lastActive: new Date().toISOString(),
       },
       {
         id: 'agent-2',
@@ -605,8 +723,8 @@ export class DataService extends EventEmitter {
         tasksCompleted: 156,
         averageTime: '5.6s',
         successRate: 95.2,
-        lastActive: new Date().toISOString()
-      }
+        lastActive: new Date().toISOString(),
+      },
     ];
   }
 
@@ -628,9 +746,9 @@ export class DataService extends EventEmitter {
           total: 5,
           passed: 5,
           failed: 0,
-          pending: 0
-        }
-      }
+          pending: 0,
+        },
+      },
     ];
   }
 }
