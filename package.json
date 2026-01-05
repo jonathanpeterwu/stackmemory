@@ -1,7 +1,7 @@
 {
   "name": "@stackmemoryai/stackmemory",
   "version": "0.3.2",
-  "description": "Lossless, project-scoped memory for AI tools",
+  "description": "Lossless memory runtime for AI coding tools - organizes context as a call stack instead of linear chat logs, with team collaboration and infinite retention",
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
@@ -109,6 +109,7 @@
     "jwks-rsa": "^3.2.0",
     "msgpackr": "^1.10.1",
     "ngrok": "^5.0.0-beta.2",
+    "open": "^11.0.0",
     "ora": "^9.0.0",
     "pg": "^8.16.3",
     "puppeteer": "^24.34.0",

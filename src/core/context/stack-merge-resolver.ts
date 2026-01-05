@@ -9,7 +9,7 @@ import {
   type StackSyncResult,
 } from './dual-stack-manager.js';
 import { logger } from '../monitoring/logger.js';
-import { ValidationError, ErrorCode } from '../errors/index.js';
+import { ValidationError, DatabaseError, ErrorCode } from '../errors/index.js';
 import {
   validateInput,
   StartMergeSessionSchema,
@@ -89,6 +89,9 @@ export class StackMergeResolver {
   constructor(dualStackManager: DualStackManager) {
     this.dualStackManager = dualStackManager;
     this.initializeDefaultPolicies();
+    logger.debug('StackMergeResolver initialized', {
+      policies: Array.from(this.mergePolicies.keys()),
+    });
   }
 
   /**
@@ -109,8 +112,16 @@ export class StackMergeResolver {
     });
     const sessionId = `merge-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
 
+    logger.debug('Looking for merge policy', {
+      policyName: input.policyName,
+      availablePolicies: Array.from(this.mergePolicies.keys()),
+    });
     const policy = this.mergePolicies.get(input.policyName);
     if (!policy) {
+      logger.error('Merge policy not found', {
+        requested: input.policyName,
+        available: Array.from(this.mergePolicies.keys()),
+      });
       throw new ValidationError(
         `Merge policy not found: ${input.policyName}`,
         ErrorCode.RESOURCE_NOT_FOUND
@@ -172,6 +183,12 @@ export class StackMergeResolver {
 
       return sessionId;
     } catch (error) {
+      logger.error('Failed to start merge session', {
+        error: error instanceof Error ? error.message : error,
+        sourceStackId: input.sourceStackId,
+        targetStackId: input.targetStackId,
+        policyName: input.policyName,
+      });
       throw new DatabaseError(
         'Failed to start merge session',
         ErrorCode.OPERATION_FAILED,
@@ -768,8 +785,8 @@ export class StackMergeResolver {
 
   // Helper methods
   private getStackManager(stackId: string): any {
-    // Implementation would get stack manager from dual stack manager
-    return null; // Placeholder
+    // Use DualStackManager's getStackManager method to get the right stack
+    return this.dualStackManager.getStackManager(stackId);
   }
 
   private groupAnchorsByType(anchors: Anchor[]): Record<string, Anchor[]> {

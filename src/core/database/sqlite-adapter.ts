@@ -92,6 +92,14 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     logger.info('SQLite database disconnected');
   }
 
+  /**
+   * Get raw database handle for testing purposes
+   * @internal
+   */
+  getRawDatabase(): Database.Database | null {
+    return this.db;
+  }
+
   isConnected(): boolean {
     return this.db !== null && this.db.open;
   }

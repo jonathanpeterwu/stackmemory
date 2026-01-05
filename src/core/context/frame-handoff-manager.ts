@@ -10,7 +10,7 @@ import {
   type HandoffRequest,
 } from './dual-stack-manager.js';
 import { logger } from '../monitoring/logger.js';
-import { ValidationError, ErrorCode } from '../errors/index.js';
+import { ValidationError, DatabaseError, ErrorCode } from '../errors/index.js';
 import {
   validateInput,
   InitiateHandoffSchema,
@@ -239,8 +239,16 @@ export class FrameHandoffManager {
    * Execute the actual frame transfer after approval
    */
   private async executeHandoffTransfer(requestId: string): Promise<void> {
+    logger.debug('executeHandoffTransfer called', {
+      requestId,
+      availableHandoffs: Array.from(this.activeHandoffs.keys()),
+    });
     const progress = this.activeHandoffs.get(requestId);
     if (!progress) {
+      logger.error('Handoff progress not found', {
+        requestId,
+        availableHandoffs: Array.from(this.activeHandoffs.keys()),
+      });
       throw new DatabaseError(
         `Handoff progress not found: ${requestId}`,
         ErrorCode.INVALID_STATE
@@ -248,12 +256,18 @@ export class FrameHandoffManager {
     }
 
     try {
+      logger.debug('Setting progress status to in_transfer', { requestId });
       progress.status = 'in_transfer';
       progress.currentStep = 'Transferring frames';
       progress.estimatedCompletion = new Date(Date.now() + 5 * 60 * 1000); // 5 minutes
 
       // Execute the handoff through DualStackManager
+      logger.debug('About to call acceptHandoff', { requestId });
       const result = await this.dualStackManager.acceptHandoff(requestId);
+      logger.debug('acceptHandoff returned', {
+        requestId,
+        success: result.success,
+      });
 
       if (result.success) {
         progress.status = 'completed';
