@@ -36,6 +36,7 @@ import { registerLinearListCommand } from './commands/linear-list.js';
 import { registerLinearMigrateCommand } from './commands/linear-migrate.js';
 import { registerLinearCreateCommand } from './commands/linear-create.js';
 import { createChromaDBCommand } from './commands/chromadb.js';
+import { createInfiniteStorageCommand } from './commands/infinite-storage.js';
 import { createSessionCommands } from './commands/session.js';
 import { registerWorktreeCommands } from './commands/worktree.js';
 import { registerOnboardingCommand } from './commands/onboard.js';
@@ -1289,6 +1290,9 @@ registerLinearCreateCommand(program);
 
 // Add ChromaDB command
 program.addCommand(createChromaDBCommand());
+
+// Add Infinite Storage command
+program.addCommand(createInfiniteStorageCommand());
 
 // Register session management commands
 program.addCommand(createSessionCommands());

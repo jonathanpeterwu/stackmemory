@@ -1,4 +1,5 @@
 {
+  "version": "1.0.0",
   "hooks": {
     "pre-message": {
       "description": "Retrieve context before processing message",
@@ -27,6 +28,64 @@
       "env": {
         "DECISION_TEXT": "{{MATCHED_TEXT}}"
       }
+    },
+    "on-startup": {
+      "description": "Load context from ChromaDB and setup periodic saves",
+      "command": "node",
+      "args": ["{{PROJECT_ROOT}}/.claude/hooks/on-startup.js"],
+      "async": true,
+      "enabled": true
+    },
+    "on-code-change": {
+      "description": "Save context when code is modified",
+      "triggers": ["edit", "create", "delete"],
+      "command": "node",
+      "args": ["{{PROJECT_ROOT}}/.claude/hooks/on-code-change.js"],
+      "enabled": true
+    },
+    "on-task-complete": {
+      "description": "Save context and update Linear when tasks complete",
+      "triggers": ["task_done", "todo_complete", "completed", "finished"],
+      "command": "node",
+      "args": ["{{PROJECT_ROOT}}/.claude/hooks/on-task-complete.js"],
+      "enabled": true
+    },
+    "periodic-save": {
+      "description": "Save context every 1-5 minutes based on activity",
+      "command": "node",
+      "args": ["{{PROJECT_ROOT}}/.claude/hooks/periodic-save.js"],
+      "interval": 60000,
+      "enabled": true,
+      "adaptive": true
+    },
+    "linear-update": {
+      "description": "Auto-update Linear tasks",
+      "triggers": ["STA-", "completed", "implemented", "in progress", "blocked"],
+      "command": "node",
+      "args": ["{{PROJECT_ROOT}}/.claude/hooks/linear-update-hook.js"],
+      "enabled": true
+    }
+  },
+  "settings": {
+    "chromadb": {
+      "enabled": true,
+      "api_key_env": "CHROMADB_API_KEY",
+      "api_url_env": "CHROMADB_API_URL",
+      "collection": "claude_context",
+      "auto_load_on_startup": true,
+      "save_interval": 900000
+    },
+    "linear": {
+      "enabled": true,
+      "api_key_env": "LINEAR_API_KEY",
+      "auto_update": true,
+      "update_on_complete": true
+    },
+    "logging": {
+      "enabled": true,
+      "log_dir": "~/.stackmemory/logs",
+      "max_log_size": 10485760,
+      "rotate_logs": true
     }
   }
 }

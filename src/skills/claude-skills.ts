@@ -811,11 +811,21 @@ export class ClaudeSkillsManager {
   private handoffSkill: HandoffSkill;
   private checkpointSkill: CheckpointSkill;
   private archaeologistSkill: ArchaeologistSkill;
+  private dashboardLauncher: any; // DashboardLauncherSkill
 
   constructor(private context: SkillContext) {
     this.handoffSkill = new HandoffSkill(context);
     this.checkpointSkill = new CheckpointSkill(context);
     this.archaeologistSkill = new ArchaeologistSkill(context);
+
+    // Initialize dashboard launcher (lazy import to avoid circular deps)
+    import('./dashboard-launcher.js').then((module) => {
+      this.dashboardLauncher = new module.DashboardLauncherSkill();
+      // Auto-launch on session start
+      this.dashboardLauncher.launch().catch((error: any) => {
+        logger.warn('Dashboard auto-launch failed:', error);
+      });
+    });
   }
 
   async executeSkill(
@@ -848,6 +858,37 @@ export class ClaudeSkillsManager {
       case 'dig':
         return this.archaeologistSkill.dig(args[0], options);
 
+      case 'dashboard':
+        const dashboardCmd = args[0];
+        if (!this.dashboardLauncher) {
+          return {
+            success: false,
+            message: 'Dashboard launcher not yet initialized',
+          };
+        }
+        switch (dashboardCmd) {
+          case 'launch':
+            await this.dashboardLauncher.launch();
+            return {
+              success: true,
+              message: 'Dashboard launched',
+              action: 'open-browser',
+            };
+          case 'stop':
+            await this.dashboardLauncher.stop();
+            return {
+              success: true,
+              message: 'Dashboard stopped',
+            };
+          default:
+            await this.dashboardLauncher.launch();
+            return {
+              success: true,
+              message: 'Dashboard launched',
+              action: 'open-browser',
+            };
+        }
+
       default:
         return {
           success: false,
@@ -857,7 +898,7 @@ export class ClaudeSkillsManager {
   }
 
   getAvailableSkills(): string[] {
-    return ['handoff', 'checkpoint', 'dig'];
+    return ['handoff', 'checkpoint', 'dig', 'dashboard'];
   }
 
   getSkillHelp(skillName: string): string {
@@ -881,6 +922,15 @@ Create and manage recovery points
         return `
 /dig "query" [--depth 6months] [--patterns] [--decisions] [--timeline]
 Deep historical context retrieval across sessions
+`;
+
+      case 'dashboard':
+        return `
+/dashboard [launch|stop]
+Launch the StackMemory web dashboard for real-time monitoring
+- launch: Start the web dashboard and open in browser (default)
+- stop: Stop the dashboard server
+Auto-launches on new sessions when configured
 `;
 
       default:
