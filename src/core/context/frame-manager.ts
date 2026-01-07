@@ -91,6 +91,11 @@ export interface Event {
   ts: number;
 }
 
+export interface FrameManagerOptions {
+  skipContextBridge?: boolean;
+  runId?: string;
+}
+
 export class FrameManager {
   private db: Database.Database;
   private currentRunId: string;
@@ -99,9 +104,24 @@ export class FrameManager {
   private activeStack: string[] = []; // Stack of active frame IDs
   private queryMode: FrameQueryMode = FrameQueryMode.PROJECT_ACTIVE;
 
-  constructor(db: Database.Database, projectId: string, runId?: string) {
+  constructor(
+    db: Database.Database, 
+    projectId: string, 
+    runIdOrOptions?: string | FrameManagerOptions
+  ) {
     this.db = db;
     this.projectId = projectId;
+
+    // Handle both legacy string runId and new options object
+    let runId: string | undefined;
+    let skipContextBridge = false;
+    
+    if (typeof runIdOrOptions === 'string') {
+      runId = runIdOrOptions;
+    } else if (runIdOrOptions) {
+      runId = runIdOrOptions.runId;
+      skipContextBridge = runIdOrOptions.skipContextBridge || false;
+    }
 
     // Use session manager for run ID if available
     const session = sessionManager.getCurrentSession();
@@ -117,8 +137,14 @@ export class FrameManager {
     this.loadActiveStack();
 
     // Initialize context bridge for automatic shared context
-    // Skip in test environment to avoid async method wrapping
-    if (process.env.NODE_ENV !== 'test' && !process.env.VITEST) {
+    // Skip in test environment, when explicitly requested, or for CLI usage
+    const shouldInitializeBridge = 
+      !skipContextBridge && 
+      process.env.NODE_ENV !== 'test' && 
+      !process.env.VITEST &&
+      !process.env.STACKMEMORY_CLI;
+      
+    if (shouldInitializeBridge) {
       contextBridge
         .initialize(this, {
           autoSync: true,

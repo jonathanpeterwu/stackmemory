@@ -49,7 +49,9 @@ export function createContextCommands(): Command {
           // metadata table doesn't exist, use default
         }
 
-        const frameManager = new FrameManager(db, projectId);
+        const frameManager = new FrameManager(db, projectId, { 
+          skipContextBridge: true 
+        });
 
         const depth = frameManager.getStackDepth();
         const activePath = frameManager.getActiveFramePath();
@@ -129,7 +131,9 @@ export function createContextCommands(): Command {
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
-        const frameManager = new FrameManager(db, projectId);
+        const frameManager = new FrameManager(db, projectId, { 
+          skipContextBridge: true 
+        });
 
         // Get current top frame as parent
         const activePath = frameManager.getActiveFramePath();
@@ -193,7 +197,9 @@ export function createContextCommands(): Command {
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
-        const frameManager = new FrameManager(db, projectId);
+        const frameManager = new FrameManager(db, projectId, { 
+          skipContextBridge: true 
+        });
 
         const activePath = frameManager.getActiveFramePath();
 
@@ -252,7 +258,9 @@ export function createContextCommands(): Command {
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
-        const frameManager = new FrameManager(db, projectId);
+        const frameManager = new FrameManager(db, projectId, { 
+          skipContextBridge: true 
+        });
 
         const activePath = frameManager.getActiveFramePath();
 
@@ -324,7 +332,9 @@ export function createContextCommands(): Command {
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
-        const frameManager = new FrameManager(db, projectId);
+        const frameManager = new FrameManager(db, projectId, { 
+          skipContextBridge: true 
+        });
 
         if (options.list || action === 'list') {
           // List all worktree contexts

@@ -1,0 +1,242 @@
+<!-- START - META event routing -->
+<script>
+(function () {
+  'use strict';
+
+  var CFG = {
+    debug: true,
+
+    // AUM identifiers
+    aumKey: "aum_summary",
+    aumVarName: "var_aum_summary",
+
+    // Meta
+    metaPixelId: "1526342581370749",
+    metaEventName: "otp_verification_over250k"
+  };
+
+  var STATE = {
+    aumValue: "",
+    under250k: false,
+    lastAumSource: "",
+    metaFired: false
+  };
+
+  function log() {
+    if (!CFG.debug || !window.console) return;
+    try { console.log.apply(console, arguments); } catch (e) {}
+  }
+  function warn() {
+    if (!CFG.debug || !window.console) return;
+    try { (console.warn || console.log).apply(console, arguments); } catch (e) {}
+  }
+  function err() {
+    if (!CFG.debug || !window.console) return;
+    try { (console.error || console.log).apply(console, arguments); } catch (e) {}
+  }
+
+  function normalize(v) {
+    if (v === null || v === undefined) return "";
+    var s = String(v).toLowerCase();
+    s = s.replace(/_/g, " ");
+    s = s.replace(/\s+/g, " ").trim();
+    return s;
+  }
+
+  function getAumCategory(answer) {
+    var s = normalize(answer);
+    if (!s) return "unknown";
+
+    // under 100k
+    if (/\bunder\s*100k\b/.test(s)) return "under_100k";
+
+    // 100k-250k (various dashes)
+    if (/\b100k\s*[-–—]\s*250k\b/.test(s)) return "100k_250k";
+
+    // over 250k variants
+    if (/\b(over|>=?|more than)\s*250k\b/.test(s) || /\b250k\s*\+\b/.test(s)) return "over_250k";
+
+    return "unknown";
+  }
+
+  // under250k = under 100k OR 100k-250k
+  function isUnder250k(answer) {
+    var c = getAumCategory(answer);
+    return c === "under_100k" || c === "100k_250k";
+  }
+
+  function firstNonEmpty(values) {
+    var i;
+    for (i = 0; i < values.length; i++) {
+      if (values[i] !== undefined && values[i] !== null && String(values[i]) !== "") return values[i];
+    }
+    return "";
+  }
+
+  function readAum(detail) {
+    if (!detail) return { value: "", source: "no_detail" };
+
+    var v1 = detail.fieldsSimple && detail.fieldsSimple[CFG.aumKey];
+    var v2 = detail.fields && detail.fields[CFG.aumKey];
+    var v3 = detail.variables && detail.variables[CFG.aumVarName];
+
+    var v4 = "";
+    try {
+      var api = detail.flowAPI && detail.flowAPI.v1;
+      if (api && typeof api.getValue === "function") {
+        v4 = api.getValue(CFG.aumVarName);
+      }
+    } catch (e) {}
+
+    var value = firstNonEmpty([v1, v2, v3, v4]);
+
+    var shouldBe = value;
+    var source = "none";
+    if (shouldBe === v1 && shouldBe !== "") source = "detail.fieldsSimple[aum_summary]";
+    else if (shouldBe === v2 && shouldBe !== "") source = "detail.fields[aum_summary]";
+    else if (shouldBe === v3 && shouldBe !== "") source = "detail.variables[var_aum_summary]";
+    else if (shouldBe === v4 && shouldBe !== "") source = "detail.flowAPI.v1.getValue(var_aum_summary)";
+
+    return { value: value, source: source };
+  }
+
+  function ensureMetaReady() {
+    if (typeof window.fbq === "function") {
+      if (!window._hf_meta_inited) {
+        try { window.fbq("init", CFG.metaPixelId); } catch (e1) { err("[HF TRACE] fbq init error:", e1); }
+        window._hf_meta_inited = true;
+      }
+      return true;
+    }
+
+    try {
+      !(function(f,b,e,v,n,t,s){
+        if(f.fbq) return;
+        n=f.fbq=function(){ n.callMethod ? n.callMethod.apply(n,arguments) : n.queue.push(arguments); };
+        if(!f._fbq) f._fbq=n;
+        n.push=n; n.loaded=!0; n.version='2.0'; n.queue=[];
+        t=b.createElement(e); t.async=!0; t.src=v;
+        s=b.getElementsByTagName(e)[0]; s.parentNode.insertBefore(t,s);
+      })(window, document, "script", "https://connect.facebook.net/en_US/fbevents.js");
+
+      try { window.fbq("init", CFG.metaPixelId); } catch (e2) { err("[HF TRACE] fbq init error:", e2); }
+      window._hf_meta_inited = true;
+      return true;
+    } catch (e3) {
+      err("[HF TRACE] ensureMetaReady error:", e3);
+      return false;
+    }
+  }
+
+  function fireMetaOver250kOnSubmit(detail) {
+    log("------------------------------------------------------------");
+    log("[HF TRACE] SUBMIT EVENT RECEIVED — evaluating Meta fire");
+
+    // One-time guard per page load
+    if (STATE.metaFired) {
+      warn("[HF TRACE] STOP: meta already fired once this page load");
+      return;
+    }
+
+    // Prefer live read at submit, else fall back to cached
+    var r = readAum(detail);
+    var aum = r.value || STATE.aumValue;
+    var category = getAumCategory(aum);
+
+    var under = (category === "under_100k" || category === "100k_250k");
+    var shouldFire = (category === "over_250k");
+
+    log("[HF TRACE] Submit evaluation:", {
+      aum: aum,
+      normalized: normalize(aum),
+      category: category,
+      under250k: under,
+      shouldFire_over250k: shouldFire,
+      submitReadSource: r.source,
+      cachedAum: STATE.aumValue,
+      cachedUnder250k: STATE.under250k
+    });
+
+    if (category === "unknown") {
+      log("[HF TRACE] STOP: AUM unknown; not firing Meta.");
+      return;
+    }
+
+    if (!shouldFire) {
+      log("[HF TRACE] STOP: under250k is true; not firing Meta (this is <250k).");
+      return;
+    }
+
+    if (!ensureMetaReady()) {
+      err("[HF TRACE] STOP: Meta not ready");
+      return;
+    }
+
+    try {
+      var params = { segment: "over250k" };
+      if (aum) params.aum_summary = aum;
+
+      var opts = {};
+      try {
+        if (window.crypto && window.crypto.randomUUID) {
+          opts.eventID = "otp_over250k_" + window.crypto.randomUUID();
+        }
+      } catch (_) {}
+
+      window.fbq("trackCustom", CFG.metaEventName, params, opts);
+      STATE.metaFired = true;
+      log("[HF TRACE] ✅ Meta fired ON SUBMIT:", CFG.metaEventName, (opts && opts.eventID) ? opts.eventID : "(no eventID)");
+    } catch (e) {
+      err("[HF TRACE] Meta fire error:", e);
+    }
+  }
+
+  // ---------------------------
+  // INIT
+  // ---------------------------
+  log("[HF TRACE] Script loaded. Logging AUM changes (deduped). Meta fires ONLY on heyflow-submit.");
+
+  // Capture AUM, log only when it changes
+  window.addEventListener("heyflow-change", function (e) {
+    try {
+      var detail = e && e.detail;
+      if (!detail) return;
+
+      var r = readAum(detail);
+      if (!r.value) return;
+
+      if (normalize(STATE.aumValue) === normalize(r.value)) return; // dedupe on normalized value
+
+      STATE.aumValue = r.value;
+      STATE.under250k = isUnder250k(r.value);
+      STATE.lastAumSource = r.source;
+
+      log("[HF TRACE] AUM UPDATED →", "value:", STATE.aumValue, "| under250k:", STATE.under250k, "| source:", STATE.lastAumSource);
+    } catch (ex) {
+      err("[HF TRACE] heyflow-change error:", ex);
+    }
+  });
+
+  // ✅ ONLY ACTION THAT FIRES META
+  window.addEventListener("heyflow-submit", function (e) {
+    try {
+      fireMetaOver250kOnSubmit(e && e.detail);
+    } catch (ex2) {
+      err("[HF TRACE] heyflow-submit handler error:", ex2);
+    }
+  });
+
+  // (Optional) Keep this for debugging only — does NOT fire Meta.
+  // You can remove it once you're confident submit fires reliably.
+  window.addEventListener("heyflow-button-click", function (e) {
+    try {
+      var d = e && e.detail;
+      log("[HF TRACE] button-click:", (d && d.customEventName) ? d.customEventName : "(no name)");
+    } catch (ex3) {}
+  });
+
+})();
+</script>
+
+<!--END - META event routing -->
+

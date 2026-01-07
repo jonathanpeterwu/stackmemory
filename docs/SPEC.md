@@ -2,7 +2,7 @@
 
 ## Executive Summary
 
-StackMemory is a **lossless, project-scoped memory runtime** for AI coding and writing tools that preserves full project context across sessions using a call stack metaphor instead of linear chat logs. It organizes memory as nested frames with intelligent retrieval, enabling AI tools to maintain context across thread resets, model switches, and long-running projects.
+StackMemory is a **lossless, project-scoped memory runtime** for development tools that preserves full project context across sessions using a call stack metaphor instead of linear chat logs. It organizes memory as nested frames with smart retrieval, maintaining context across thread resets, model switches, and long-running projects.
 
 ## Core Architecture
 
@@ -690,30 +690,33 @@ integrations:
 
 ## Implementation Priorities
 
-### Phase 1: Core Runtime (Current)
+### Phase 1: Core Runtime ✅ COMPLETE (v0.1.x)
 - [x] Frame stack management
 - [x] Local SQLite storage
 - [x] MCP server
 - [x] Basic scoring
 - [x] Claude Code integration
 
-### Phase 2: Intelligence Layer
-- [ ] LLM-driven retrieval
-- [ ] Hybrid digest generation
-- [ ] Smart trace detection
-- [ ] Configurable scoring
+### Phase 2: Intelligence Layer ✅ COMPLETE (v0.2.x)
+- [x] LLM-driven retrieval
+- [x] Hybrid digest generation (60/40 deterministic/AI)
+- [x] Smart trace detection and bundling
+- [x] Configurable scoring with weight profiles
+- [x] Railway storage optimization (3-tier)
 
-### Phase 3: Collaboration
-- [ ] Shared team stacks
-- [ ] Frame handoff
-- [ ] Merge conflict resolution
-- [ ] Team analytics
+### Phase 3: Collaboration ✅ COMPLETE (v0.3.x)
+- [x] Shared team stacks (dual stack architecture)
+- [x] Frame handoff workflows (v0.3.4)
+- [x] Context bridge for cross-session sync
+- [x] Linear integration with bidirectional sync
+- [x] Claude Skills for workflow automation
 
-### Phase 4: Scale
-- [ ] Remote infinite storage
-- [ ] Incremental GC
-- [ ] Performance optimization
-- [ ] Enterprise features
+### Phase 4: Scale (Next - v0.4.x)
+- [ ] Remote infinite storage (S3/GCS)
+- [ ] Incremental garbage collection
+- [ ] Performance optimization (<100ms p50)
+- [ ] Enterprise features (SSO, audit logs)
+- [ ] Multi-repository support
 
 ## Success Metrics
 

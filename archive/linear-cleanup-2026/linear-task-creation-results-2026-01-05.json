@@ -1,0 +1,94 @@
+{
+  "summary": {
+    "created": 14,
+    "failed": 0,
+    "total": 14
+  },
+  "results": [
+    {
+      "original": "STA-301: Implement LLM-Driven Context Retrieval",
+      "created": "STA-279",
+      "url": "https://linear.app/stackmemoryai/issue/STA-279/sta-301-implement-llm-driven-context-retrieval",
+      "success": true
+    },
+    {
+      "original": "STA-302: Complete Hybrid Digest Generation (60/40 Split)",
+      "created": "STA-280",
+      "url": "https://linear.app/stackmemoryai/issue/STA-280/sta-302-complete-hybrid-digest-generation-6040-split",
+      "success": true
+    },
+    {
+      "original": "STA-303: Implement Smart Trace Detection and Bundling",
+      "created": "STA-281",
+      "url": "https://linear.app/stackmemoryai/issue/STA-281/sta-303-implement-smart-trace-detection-and-bundling",
+      "success": true
+    },
+    {
+      "original": "STA-304: Implement Configurable Tool Scoring System",
+      "created": "STA-282",
+      "url": "https://linear.app/stackmemoryai/issue/STA-282/sta-304-implement-configurable-tool-scoring-system",
+      "success": true
+    },
+    {
+      "original": "STA-305: Implement Dual Stack Architecture (Individual + Shared)",
+      "created": "STA-283",
+      "url": "https://linear.app/stackmemoryai/issue/STA-283/sta-305-implement-dual-stack-architecture-individual-shared",
+      "success": true
+    },
+    {
+      "original": "STA-306: Build Frame Handoff Mechanism with Ownership Tracking",
+      "created": "STA-284",
+      "url": "https://linear.app/stackmemoryai/issue/STA-284/sta-306-build-frame-handoff-mechanism-with-ownership-tracking",
+      "success": true
+    },
+    {
+      "original": "STA-307: Implement Merge Conflict Resolution for Shared Frames",
+      "created": "STA-285",
+      "url": "https://linear.app/stackmemoryai/issue/STA-285/sta-307-implement-merge-conflict-resolution-for-shared-frames",
+      "success": true
+    },
+    {
+      "original": "STA-308: Build Team Analytics and Collaboration Metrics",
+      "created": "STA-286",
+      "url": "https://linear.app/stackmemoryai/issue/STA-286/sta-308-build-team-analytics-and-collaboration-metrics",
+      "success": true
+    },
+    {
+      "original": "STA-309: Implement Remote Infinite Storage System",
+      "created": "STA-287",
+      "url": "https://linear.app/stackmemoryai/issue/STA-287/sta-309-implement-remote-infinite-storage-system",
+      "success": true
+    },
+    {
+      "original": "STA-310: Build Incremental Garbage Collection System",
+      "created": "STA-288",
+      "url": "https://linear.app/stackmemoryai/issue/STA-288/sta-310-build-incremental-garbage-collection-system",
+      "success": true
+    },
+    {
+      "original": "STA-311: Performance Optimization and SLA Achievement",
+      "created": "STA-289",
+      "url": "https://linear.app/stackmemoryai/issue/STA-289/sta-311-performance-optimization-and-sla-achievement",
+      "success": true
+    },
+    {
+      "original": "STA-312: Enterprise Security and Privacy Features",
+      "created": "STA-290",
+      "url": "https://linear.app/stackmemoryai/issue/STA-290/sta-312-enterprise-security-and-privacy-features",
+      "success": true
+    },
+    {
+      "original": "STA-313: Complete All TODO Comments and Code Cleanup",
+      "created": "STA-291",
+      "url": "https://linear.app/stackmemoryai/issue/STA-291/sta-313-complete-all-todo-comments-and-code-cleanup",
+      "success": true
+    },
+    {
+      "original": "STA-314: Improve Error Handling and System Resilience",
+      "created": "STA-292",
+      "url": "https://linear.app/stackmemoryai/issue/STA-292/sta-314-improve-error-handling-and-system-resilience",
+      "success": true
+    }
+  ],
+  "timestamp": "2026-01-05T17:28:41.302Z"
+}

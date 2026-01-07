@@ -1,0 +1,703 @@
+{
+  "summary": {
+    "deleted": 99,
+    "failed": 0,
+    "total": 99
+  },
+  "results": [
+    {
+      "id": "4fbb4cb1-24cd-4ac3-9d5e-a0cfaae2b2f9",
+      "identifier": "STA-278",
+      "title": "[ENG-131] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "f41e3de7-b27d-4185-9408-233bdff2c402",
+      "identifier": "STA-269",
+      "title": "[ENG-135] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "9a587e8d-e898-4933-b555-fafbf57ba3bc",
+      "identifier": "STA-261",
+      "title": "[ENG-137] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "8c9099b6-f604-401e-9dcd-9c0a409257f1",
+      "identifier": "STA-257",
+      "title": "[ENG-141] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "1c1d6b04-023f-49fd-9120-6259d5d98621",
+      "identifier": "STA-252",
+      "title": "[ENG-146] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "2b595d95-c876-4cec-8ffd-7b2946c51281",
+      "identifier": "STA-247",
+      "title": "[ENG-151] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "83d25bd7-bfb1-478d-bc74-1a9a098ba024",
+      "identifier": "STA-245",
+      "title": "[ENG-153] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "7f9262ae-41ab-4453-b64b-f5005e66978e",
+      "identifier": "STA-242",
+      "title": "[ENG-156] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "2516a939-2615-45c3-a760-be3d1a1e40e1",
+      "identifier": "STA-239",
+      "title": "[ENG-160] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "5dd91c76-4445-43e9-bbf7-5319d9f2091f",
+      "identifier": "STA-234",
+      "title": "[ENG-166] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "de56fadc-d413-42e4-b9cc-c80d3baafe5d",
+      "identifier": "STA-229",
+      "title": "[ENG-171] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "fb5dc978-e585-4bdd-bfb7-428e353ce04d",
+      "identifier": "STA-226",
+      "title": "[ENG-174] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "ae6cee5d-d42b-4247-bda0-e8afd1f6ac22",
+      "identifier": "STA-224",
+      "title": "[ENG-176] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "1e751d51-70c3-4a56-b952-d113a8d14c9b",
+      "identifier": "STA-219",
+      "title": "[ENG-181] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "774aba30-4fb8-40a0-9147-56f63f3b6912",
+      "identifier": "STA-213",
+      "title": "[ENG-187] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "f74e2975-20d5-4f21-86db-353b6295b6c3",
+      "identifier": "STA-209",
+      "title": "[ENG-192] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "6f7a7610-b31c-4a75-82b1-1cf7d2cdb16f",
+      "identifier": "STA-201",
+      "title": "[ENG-208] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "9e585cbe-b394-477d-8114-024de906c7e2",
+      "identifier": "STA-157",
+      "title": "[ENG-208] Engineering x Leadership Meeting",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "d26b95d7-6b1a-4129-bc92-fa09b213d5b8",
+      "identifier": "STA-191",
+      "title": "[ENG-222] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "84fab287-49bf-4733-afc5-3d0943b51193",
+      "identifier": "STA-175",
+      "title": "[STA-25] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "cd743df5-49d6-47e0-a5c7-bcfc9ce671ad",
+      "identifier": "STA-173",
+      "title": "[STA-39] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "6e31868d-d4ba-42a1-9dad-c5c710d369dd",
+      "identifier": "STA-170",
+      "title": "[STA-54] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "49bc765d-5206-41f0-9a8a-6f65adcf33be",
+      "identifier": "STA-166",
+      "title": "[ENG-222] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "9ec9ef86-5a1f-46f1-92fb-69079e221a6b",
+      "identifier": "STA-163",
+      "title": "[STA-67] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "c02cc87d-9ff0-4eb6-8ee1-efd201c0370c",
+      "identifier": "STA-161",
+      "title": "[STA-81] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "8dc81d4d-e4ee-49ac-9ae8-25b53a899c30",
+      "identifier": "STA-138",
+      "title": "[ENG-222] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "1b232bd5-3223-4663-bf3e-d525043d43d6",
+      "identifier": "STA-125",
+      "title": "[STA-25] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "57514df2-c2a7-424a-af8b-3a51101f19fe",
+      "identifier": "STA-123",
+      "title": "[STA-39] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "5e69a9c1-0296-42c9-a08e-7cd734d423be",
+      "identifier": "STA-121",
+      "title": "[STA-54] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "12734e0a-e1a0-4145-875e-f3c8a9d740ff",
+      "identifier": "STA-119",
+      "title": "[STA-67] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "889ce89a-e6c8-45f0-b8a6-1a788cfb7525",
+      "identifier": "STA-117",
+      "title": "[STA-81] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "188cfa1a-ad0a-4b49-9b17-08fa012595f5",
+      "identifier": "STA-105",
+      "title": "[ENG-222] [LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "1bf45038-b139-4ae3-b54a-b239ce9ecca3",
+      "identifier": "STA-81",
+      "title": "[LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "7ef0de50-3c5b-4e49-947d-dc6559ad3b30",
+      "identifier": "STA-67",
+      "title": "[LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "f4548d3a-2525-4434-bc52-09f9a9eee50b",
+      "identifier": "STA-54",
+      "title": "[LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "7b8269c4-77d3-4c97-9b32-1e23673fa230",
+      "identifier": "STA-39",
+      "title": "[LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "b9877e62-180a-4fad-a1a5-4dc14bb0df11",
+      "identifier": "STA-25",
+      "title": "[LOW] Complete Documentation TODOs",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "508ec1c0-8244-4ea2-89a6-ed12070396d7",
+      "identifier": "STA-267",
+      "title": "[ENG-200] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "99ea6e7c-e7d4-4b3a-a0e2-e13960f3b237",
+      "identifier": "STA-266",
+      "title": "[ENG-205] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "ab618fa5-6a6b-49ee-949f-8a61171c7bbc",
+      "identifier": "STA-265",
+      "title": "[ENG-223] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "830187b2-9e5b-43fd-a7a5-573152dbe4b6",
+      "identifier": "STA-198",
+      "title": "[ENG-195] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "578c1838-0811-4c69-947b-b039d4738124",
+      "identifier": "STA-196",
+      "title": "[ENG-200] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "7c491d88-1e8f-4e0e-9ad6-c45cc4db9e2a",
+      "identifier": "STA-195",
+      "title": "[ENG-205] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "d8d26a18-c988-46db-9939-af506eaa368f",
+      "identifier": "STA-193",
+      "title": "[ENG-223] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "60930764-9a09-43e0-8a29-a34049867cbc",
+      "identifier": "STA-178",
+      "title": "[STA-17] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "dccf97d1-509f-4d26-b5fe-bb98df95a024",
+      "identifier": "STA-177",
+      "title": "[STA-7] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "500a58f6-8b02-42bd-a4a3-9ff8a8441072",
+      "identifier": "STA-176",
+      "title": "[STA-12] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "dcf5e671-a5e8-4b81-8c66-2e7c7105e174",
+      "identifier": "STA-174",
+      "title": "[STA-26] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "283c4eaf-d65a-4113-b240-46e5014d0ab9",
+      "identifier": "STA-172",
+      "title": "[STA-40] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "43011772-2162-4ef1-a111-0fc9526649dc",
+      "identifier": "STA-171",
+      "title": "[ENG-195] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "d8cd47b3-b727-4d73-b023-c48aac3f1486",
+      "identifier": "STA-169",
+      "title": "[ENG-200] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "cc88875e-84b2-40ea-b3c8-5f9367afa23e",
+      "identifier": "STA-168",
+      "title": "[ENG-205] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "4a1a54c4-b722-4b42-9e3d-d6a98b245fa7",
+      "identifier": "STA-167",
+      "title": "[ENG-223] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "1717d7b8-af6f-4177-8caa-0462ae332884",
+      "identifier": "STA-164",
+      "title": "[STA-55] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "12251ba8-98d7-4655-b669-66d51c39a670",
+      "identifier": "STA-162",
+      "title": "[STA-68] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "52751540-f39a-4f52-a14d-2dff913c6480",
+      "identifier": "STA-156",
+      "title": "[STA-82] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "ec736f52-61c2-4d62-bf79-0add7ea5c7d2",
+      "identifier": "STA-145",
+      "title": "[ENG-195] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "5dd8c44f-ae68-4f58-a62c-8d75a52f6a15",
+      "identifier": "STA-143",
+      "title": "[ENG-200] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "d14f3ff6-e270-480f-b67c-798d48df5765",
+      "identifier": "STA-141",
+      "title": "[ENG-205] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "e162856f-18d4-49fd-9690-0cacde6fb102",
+      "identifier": "STA-140",
+      "title": "[ENG-223] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "38ac2400-8440-486f-bbbe-ef17a6634d41",
+      "identifier": "STA-128",
+      "title": "[STA-17] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "ac6adb63-d7d3-4122-a4b8-afd13bf324fb",
+      "identifier": "STA-127",
+      "title": "[STA-7] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "ce00e1a5-59e1-4d57-b577-ffe4009ef879",
+      "identifier": "STA-126",
+      "title": "[STA-12] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "f91a1e69-eae6-438c-9d45-752336febae8",
+      "identifier": "STA-124",
+      "title": "[STA-26] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "895af0e8-62c7-467e-ab98-38b348e2ebaa",
+      "identifier": "STA-122",
+      "title": "[STA-40] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "b565e83a-8be9-4cb4-a228-f722de44afbb",
+      "identifier": "STA-120",
+      "title": "[STA-55] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "99585245-fc00-4c54-8383-165140a4ac5e",
+      "identifier": "STA-118",
+      "title": "[STA-68] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "ed1cce0d-f3ee-4a37-bc81-216cb4aa3515",
+      "identifier": "STA-116",
+      "title": "[STA-82] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "35966783-dd57-4202-9325-186c091e9c26",
+      "identifier": "STA-109",
+      "title": "[ENG-195] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "ca7a7bd6-49be-4f98-bbd5-176c2e42c52d",
+      "identifier": "STA-108",
+      "title": "[ENG-200] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "2f232c5f-8b7d-417f-a257-41c5932a1fd3",
+      "identifier": "STA-107",
+      "title": "[ENG-205] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "1ba01f56-2188-4280-be5a-e5ecf4b20ab6",
+      "identifier": "STA-106",
+      "title": "[ENG-223] Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "4b650096-5c90-4005-85f2-fe67c4c1e5bd",
+      "identifier": "STA-82",
+      "title": "Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "5cdac58b-cbdc-4c17-8830-9df3ba3c20c2",
+      "identifier": "STA-68",
+      "title": "Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "afa42ac0-fc33-45e4-a5cf-305f6c497cb4",
+      "identifier": "STA-55",
+      "title": "Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "9a358bd6-3de0-4683-af07-211ebe462016",
+      "identifier": "STA-40",
+      "title": "Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "8fd73418-cc30-4d27-a1eb-466b353b4e16",
+      "identifier": "STA-26",
+      "title": "Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "da065b5f-917b-476d-a098-03819db6bb0e",
+      "identifier": "STA-17",
+      "title": "Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "73312843-2d99-4e33-9ef8-723db7db6b90",
+      "identifier": "STA-12",
+      "title": "Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "9dee59e2-5db4-4c43-babc-c4569a2ecda7",
+      "identifier": "STA-7",
+      "title": "Task Analytics Dashboard",
+      "state": "Backlog",
+      "deleted": true
+    },
+    {
+      "id": "53d5e3b6-0142-4f3f-9bab-492fba18bbdc",
+      "identifier": "STA-62",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Duplicate",
+      "deleted": true
+    },
+    {
+      "id": "4a69320e-913b-4538-88f3-edd3c5a517bf",
+      "identifier": "STA-49",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Duplicate",
+      "deleted": true
+    },
+    {
+      "id": "7b87b730-15d5-4370-821a-54e3c8afb1e0",
+      "identifier": "STA-47",
+      "title": "[TEST] StackMemory Integration Test",
+      "state": "Duplicate",
+      "deleted": true
+    },
+    {
+      "id": "6d9cbb46-ce27-4b0b-a4f6-73da5b0a1f04",
+      "identifier": "STA-19",
+      "title": "Linear API Integration",
+      "state": "Duplicate",
+      "deleted": true
+    },
+    {
+      "id": "66454c87-6d66-4d3b-901e-b7fe39ae565f",
+      "identifier": "STA-18",
+      "title": "Performance Optimization",
+      "state": "Duplicate",
+      "deleted": true
+    },
+    {
+      "id": "df474e99-b025-473e-8f95-fb5f13fd6922",
+      "identifier": "STA-14",
+      "title": "Linear API Integration",
+      "state": "Duplicate",
+      "deleted": true
+    },
+    {
+      "id": "27a35998-dcae-42ac-a3b3-f32c1c75ecda",
+      "identifier": "STA-8",
+      "title": "Performance Optimization",
+      "state": "Duplicate",
+      "deleted": true
+    },
+    {
+      "id": "1479585a-8737-46ea-9cca-3c9c701b6986",
+      "identifier": "STA-185",
+      "title": "[ENG-227] [HIGH] Fix Linear Integration TypeScript Errors",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "f8ebda97-4e5b-4654-87b6-9c7fd86cd85b",
+      "identifier": "STA-98",
+      "title": "Phase 2: Trace Detection and Bundling",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "9552d050-13a1-491f-95c7-70a028642907",
+      "identifier": "STA-97",
+      "title": "Phase 2: Configurable Weight Profiles",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "dccc8933-6eb8-4c6c-a927-fa5318d0c8b0",
+      "identifier": "STA-95",
+      "title": "Phase 2: LLM-Driven Context Retrieval",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "ae209a99-6f72-43ea-be26-58abe3f3a75b",
+      "identifier": "STA-94",
+      "title": "Phase 2: Implement Query Language Parser",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "25554168-5735-4c4d-8025-ff4bb306f064",
+      "identifier": "STA-57",
+      "title": "[HIGH] Implement Proper Error Handling",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "ff431bbb-8ed1-492a-80a9-3d7d73353218",
+      "identifier": "STA-56",
+      "title": "[HIGH] Implement Comprehensive Testing Suite",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "c05b215c-9461-4870-a7b2-c0954b4f4a2c",
+      "identifier": "STA-48",
+      "title": "Fix npm package CLI execution",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "f4d819a2-5c59-4ca7-86af-9fd715ccb822",
+      "identifier": "STA-2",
+      "title": "Set up your teams",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "e56e5a00-66b7-4871-9718-72ba6bea8366",
+      "identifier": "STA-1",
+      "title": "Get familiar with Linear",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "abc5eafa-b559-4fb9-a4d6-11b10a053df8",
+      "identifier": "STA-3",
+      "title": "Connect your tools",
+      "state": "Done",
+      "deleted": true
+    },
+    {
+      "id": "4c4024a3-3257-431f-9083-fd3ea82a9e30",
+      "identifier": "STA-4",
+      "title": "Import your data",
+      "state": "Done",
+      "deleted": true
+    }
+  ],
+  "timestamp": "2026-01-05T17:26:08.320Z"
+}
