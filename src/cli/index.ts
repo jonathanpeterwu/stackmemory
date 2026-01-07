@@ -4,6 +4,9 @@
  * Command-line interface for StackMemory operations
  */
 
+// Set environment flag for CLI usage to skip async context bridge
+process.env.STACKMEMORY_CLI = 'true';
+
 import { program } from 'commander';
 import { logger } from '../core/monitoring/logger.js';
 import { FrameManager } from '../core/context/frame-manager.js';
@@ -32,6 +35,7 @@ import { registerLinearTestCommand } from './commands/linear-test.js';
 import { registerLinearListCommand } from './commands/linear-list.js';
 import { registerLinearMigrateCommand } from './commands/linear-migrate.js';
 import { registerLinearCreateCommand } from './commands/linear-create.js';
+import { createChromaDBCommand } from './commands/chromadb.js';
 import { createSessionCommands } from './commands/session.js';
 import { registerWorktreeCommands } from './commands/worktree.js';
 import { registerOnboardingCommand } from './commands/onboard.js';
@@ -1282,6 +1286,9 @@ registerLinearTestCommand(program);
 registerLinearListCommand(program);
 registerLinearMigrateCommand(program);
 registerLinearCreateCommand(program);
+
+// Add ChromaDB command
+program.addCommand(createChromaDBCommand());
 
 // Register session management commands
 program.addCommand(createSessionCommands());

@@ -1,0 +1,8 @@
+- Always run tests and lint and build after code change tasks are complete
+- Always attempto build and fix npm build issues after a task is complete
+- Never fallback to mock or fake data try to fix error
+- Ensure whenever we create scripts, files, test, etc to place them in the correct folder based on the repo folder structure provided in the reposiutory
+- Always review most recent commit to load context and stackmemory.json if possible as well as recent frames to remember session whenever claude code is loaded
+- When syncing from linear fallback to using the api script if its not working
+- always check .env for api keys first and .zsrhc before asking for it
+- Whenever needing to test page builds use the browser mcp or chrome claude mcp extension, if you need to do visual research do it using browser mcp

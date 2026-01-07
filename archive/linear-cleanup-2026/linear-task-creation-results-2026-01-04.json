@@ -1,0 +1,80 @@
+{
+  "summary": {
+    "created": 0,
+    "failed": 14,
+    "total": 14
+  },
+  "results": [
+    {
+      "original": "STA-301: Implement LLM-Driven Context Retrieval",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-302: Complete Hybrid Digest Generation (60/40 Split)",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-303: Implement Smart Trace Detection and Bundling",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-304: Implement Configurable Tool Scoring System",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-305: Implement Dual Stack Architecture (Individual + Shared)",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-306: Build Frame Handoff Mechanism with Ownership Tracking",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-307: Implement Merge Conflict Resolution for Shared Frames",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-308: Build Team Analytics and Collaboration Metrics",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-309: Implement Remote Infinite Storage System",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-310: Build Incremental Garbage Collection System",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-311: Performance Optimization and SLA Achievement",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-312: Enterprise Security and Privacy Features",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-313: Complete All TODO Comments and Code Cleanup",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    },
+    {
+      "original": "STA-314: Improve Error Handling and System Resilience",
+      "error": "Linear API error: 400 Bad Request",
+      "success": false
+    }
+  ],
+  "timestamp": "2026-01-04T21:34:16.759Z"
+}

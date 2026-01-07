@@ -1,0 +1,67 @@
+{
+  "summary": {
+    "attempted": 8,
+    "deleted": 8,
+    "failed": 0,
+    "success_rate": 100
+  },
+  "results": [
+    {
+      "id": "d76d2a44-1809-45fc-8961-cacfe6d73a8d",
+      "identifier": "STA-262",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Backlog",
+      "status": "deleted"
+    },
+    {
+      "id": "742eaca2-3d6a-48a6-8591-bcfe6072a692",
+      "identifier": "STA-207",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Backlog",
+      "status": "deleted"
+    },
+    {
+      "id": "58f6857f-14cc-4920-9365-a6b68177e5cc",
+      "identifier": "STA-189",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Backlog",
+      "status": "deleted"
+    },
+    {
+      "id": "079788cc-b0a5-4f94-9801-9dda54e4d937",
+      "identifier": "STA-165",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Backlog",
+      "status": "deleted"
+    },
+    {
+      "id": "d3cb13d0-17f7-47ff-8b98-448c259653f2",
+      "identifier": "STA-136",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Backlog",
+      "status": "deleted"
+    },
+    {
+      "id": "054aa62a-60a6-4bad-b7f0-db044878a82e",
+      "identifier": "STA-104",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Backlog",
+      "status": "deleted"
+    },
+    {
+      "id": "cf1cf1f6-4c0c-49ef-b631-615485e2f430",
+      "identifier": "STA-76",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Backlog",
+      "status": "deleted"
+    },
+    {
+      "id": "abb1b733-5eda-4561-a5f6-25cfa1c776ad",
+      "identifier": "STA-20",
+      "title": "[CRITICAL] Enable TypeScript Strict Mode",
+      "state": "Backlog",
+      "status": "deleted"
+    }
+  ],
+  "timestamp": "2026-01-07T16:13:56.036Z"
+}

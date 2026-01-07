@@ -3,7 +3,10 @@
  * Custom skills that integrate with Claude Code to enhance workflow
  */
 
-import { FrameHandoffManager, type HandoffMetadata } from '../core/context/frame-handoff-manager.js';
+import {
+  FrameHandoffManager,
+  type HandoffMetadata,
+} from '../core/context/frame-handoff-manager.js';
 import { DualStackManager } from '../core/context/dual-stack-manager.js';
 import { SQLiteAdapter } from '../core/database/sqlite-adapter.js';
 import { ContextRetriever } from '../core/retrieval/context-retriever.js';
@@ -46,34 +49,38 @@ export class HandoffSkill {
   ): Promise<SkillResult> {
     try {
       const activeStack = this.context.dualStackManager.getActiveStack();
-      
+
       // Auto-detect frames if not specified
       let framesToHandoff = options?.frames || [];
       if (options?.autoDetect !== false && framesToHandoff.length === 0) {
         // Get recent frames that are completed or have errors
         const allFrames = await activeStack.getAllFrames();
         // Filter for completed frames OR frames with errors (not both conditions required)
-        const relevantFrames = allFrames.filter(f => 
-          f.state === 'completed' || 
-          (f.outputs && Array.isArray(f.outputs) && f.outputs.some(o => o.type === 'error'))
+        const relevantFrames = allFrames.filter(
+          (f) =>
+            f.state === 'completed' ||
+            (f.outputs &&
+              Array.isArray(f.outputs) &&
+              f.outputs.some((o) => o.type === 'error'))
         );
         framesToHandoff = relevantFrames
           .slice(-5) // Last 5 relevant frames
-          .map(f => f.frameId);
+          .map((f) => f.frameId);
       }
 
       if (framesToHandoff.length === 0) {
         return {
           success: false,
-          message: 'No frames to handoff. Specify frames or complete some work first.',
+          message:
+            'No frames to handoff. Specify frames or complete some work first.',
         };
       }
 
       // Generate comprehensive handoff summary
       const frameDetails = await Promise.all(
-        framesToHandoff.map(id => activeStack.getFrame(id))
+        framesToHandoff.map((id) => activeStack.getFrame(id))
       );
-      
+
       const summary = this.generateHandoffSummary(frameDetails, message);
 
       // Create handoff metadata
@@ -83,7 +90,9 @@ export class HandoffSkill {
         targetUserId: targetUser,
         frameContext: {
           totalFrames: framesToHandoff.length,
-          frameTypes: [...new Set(frameDetails.map(f => f?.type || 'unknown'))],
+          frameTypes: [
+            ...new Set(frameDetails.map((f) => f?.type || 'unknown')),
+          ],
           estimatedSize: JSON.stringify(frameDetails).length,
           dependencies: this.extractDependencies(frameDetails),
         },
@@ -94,9 +103,12 @@ export class HandoffSkill {
       };
 
       // Get target stack (shared or create new)
-      const availableStacks = await this.context.dualStackManager.getAvailableStacks();
-      let targetStackId = availableStacks.find(s => s.type === 'shared')?.stackId;
-      
+      const availableStacks =
+        await this.context.dualStackManager.getAvailableStacks();
+      let targetStackId = availableStacks.find(
+        (s) => s.type === 'shared'
+      )?.stackId;
+
       if (!targetStackId) {
         targetStackId = await this.context.dualStackManager.createSharedStack(
           'team',
@@ -139,40 +151,52 @@ export class HandoffSkill {
   }
 
   private generateHandoffSummary(frames: any[], message: string): string {
-    const completed = frames.filter(f => f?.state === 'completed').length;
-    const blocked = frames.filter(f => f?.outputs?.some(o => o.type === 'error')).length;
-    
+    const completed = frames.filter((f) => f?.state === 'completed').length;
+    const blocked = frames.filter((f) =>
+      f?.outputs?.some((o) => o.type === 'error')
+    ).length;
+
     return `
 ## Handoff Summary
 **Message**: ${message}
 **Frames**: ${frames.length} total (${completed} completed, ${blocked} blocked)
 
 ### Work Completed:
-${frames.filter(f => f?.state === 'completed')
-  .map(f => `- ${f.name}: ${f.digest_deterministic?.summary || 'No summary'}`)
+${frames
+  .filter((f) => f?.state === 'completed')
+  .map((f) => `- ${f.name}: ${f.digest_deterministic?.summary || 'No summary'}`)
   .join('\n')}
 
 ### Attention Required:
-${frames.filter(f => f?.outputs?.some(o => o.type === 'error'))
-  .map(f => `- ${f.name}: ${f.outputs.find(o => o.type === 'error')?.content || 'Error'}`)
-  .join('\n') || 'None'}
+${
+  frames
+    .filter((f) => f?.outputs?.some((o) => o.type === 'error'))
+    .map(
+      (f) =>
+        `- ${f.name}: ${f.outputs.find((o) => o.type === 'error')?.content || 'Error'}`
+    )
+    .join('\n') || 'None'
+}
 
 ### Context:
-${frames.map(f => f?.digest_ai?.context || '').filter(Boolean).join('\n')}
+${frames
+  .map((f) => f?.digest_ai?.context || '')
+  .filter(Boolean)
+  .join('\n')}
     `.trim();
   }
 
   private extractDependencies(frames: any[]): string[] {
     const deps = new Set<string>();
-    frames.forEach(frame => {
+    frames.forEach((frame) => {
       if (frame?.inputs?.dependencies) {
         if (Array.isArray(frame.inputs.dependencies)) {
-          frame.inputs.dependencies.forEach(d => deps.add(d));
+          frame.inputs.dependencies.forEach((d) => deps.add(d));
         }
       }
       // Extract from outputs
       if (frame?.outputs) {
-        frame.outputs.forEach(output => {
+        frame.outputs.forEach((output) => {
           if (output.type === 'dependency') {
             deps.add(output.content);
           }
@@ -184,30 +208,32 @@ ${frames.map(f => f?.digest_ai?.context || '').filter(Boolean).join('\n')}
 
   private generateActionItems(frames: any[]): string[] {
     const items: string[] = [];
-    
-    frames.forEach(frame => {
+
+    frames.forEach((frame) => {
       // Check for TODOs in outputs
       if (frame?.outputs) {
-        frame.outputs.forEach(output => {
+        frame.outputs.forEach((output) => {
           if (output.type === 'todo' || output.content?.includes('TODO')) {
             items.push(output.content);
           }
         });
       }
-      
+
       // Check for errors that need resolution
-      if (frame?.outputs?.some(o => o.type === 'error')) {
+      if (frame?.outputs?.some((o) => o.type === 'error')) {
         items.push(`Resolve error in ${frame.name}`);
       }
-      
+
       // Check for pending tests - look in multiple places
-      if (frame?.inputs?.tests === 'pending' || 
-          frame?.type === 'implementation' ||
-          (frame?.name && frame.name.toLowerCase().includes('implementation'))) {
+      if (
+        frame?.inputs?.tests === 'pending' ||
+        frame?.type === 'implementation' ||
+        (frame?.name && frame.name.toLowerCase().includes('implementation'))
+      ) {
         items.push(`Write tests for ${frame.name}`);
       }
     });
-    
+
     return items;
   }
 }
@@ -240,12 +266,12 @@ export class CheckpointSkill {
     try {
       const timestamp = Date.now();
       const checkpointId = `checkpoint-${timestamp}-${Math.random().toString(36).slice(2, 8)}`;
-      
+
       // Get current context
       const activeStack = this.context.dualStackManager.getActiveStack();
       const currentContext = this.context.dualStackManager.getCurrentContext();
       const allFrames = await activeStack.getAllFrames();
-      
+
       // Create checkpoint data
       const checkpoint = {
         id: checkpointId,
@@ -261,21 +287,25 @@ export class CheckpointSkill {
         metadata: {
           ...options?.metadata,
           frameCount: allFrames.length,
-          activeFrames: allFrames.filter(f => f.state === 'active').length,
-          completedFrames: allFrames.filter(f => f.state === 'completed').length,
+          activeFrames: allFrames.filter((f) => f.state === 'active').length,
+          completedFrames: allFrames.filter((f) => f.state === 'completed')
+            .length,
         },
         files: options?.includeFiles || [],
       };
 
       // Save checkpoint
-      const checkpointPath = path.join(this.checkpointDir, `${checkpointId}.json`);
+      const checkpointPath = path.join(
+        this.checkpointDir,
+        `${checkpointId}.json`
+      );
       fs.writeFileSync(checkpointPath, JSON.stringify(checkpoint, null, 2));
 
       // Save file backups if specified
       if (options?.includeFiles && options.includeFiles.length > 0) {
         const filesDir = path.join(this.checkpointDir, checkpointId, 'files');
         fs.mkdirSync(filesDir, { recursive: true });
-        
+
         for (const file of options.includeFiles) {
           if (fs.existsSync(file)) {
             const basename = path.basename(file);
@@ -297,14 +327,16 @@ export class CheckpointSkill {
           'drop',
           'migrate', // Add more specific pattern
         ];
-        
-        const isRisky = allFrames.some(frame => {
-          const nameMatches = frame.name && 
-            riskyPatterns.some(pattern => 
+
+        const isRisky = allFrames.some((frame) => {
+          const nameMatches =
+            frame.name &&
+            riskyPatterns.some((pattern) =>
               frame.name.toLowerCase().includes(pattern)
             );
-          const commandMatches = frame.inputs?.command && 
-            riskyPatterns.some(pattern => 
+          const commandMatches =
+            frame.inputs?.command &&
+            riskyPatterns.some((pattern) =>
               frame.inputs.command.toLowerCase().includes(pattern)
             );
           return nameMatches || commandMatches;
@@ -315,7 +347,7 @@ export class CheckpointSkill {
           checkpoint.metadata.autoCheckpoint = true;
         }
       }
-      
+
       // Update the checkpoint data after risky operation detection
       fs.writeFileSync(checkpointPath, JSON.stringify(checkpoint, null, 2));
 
@@ -343,12 +375,15 @@ export class CheckpointSkill {
 
   async restore(checkpointId: string): Promise<SkillResult> {
     try {
-      const checkpointPath = path.join(this.checkpointDir, `${checkpointId}.json`);
-      
+      const checkpointPath = path.join(
+        this.checkpointDir,
+        `${checkpointId}.json`
+      );
+
       if (!fs.existsSync(checkpointPath)) {
         // Try to find by partial ID
         const files = fs.readdirSync(this.checkpointDir);
-        const match = files.find(f => f.includes(checkpointId));
+        const match = files.find((f) => f.includes(checkpointId));
         if (match) {
           checkpointId = match.replace('.json', '');
         } else {
@@ -362,22 +397,26 @@ export class CheckpointSkill {
       const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, 'utf-8'));
 
       // Switch to checkpoint's stack
-      await this.context.dualStackManager.switchToStack(checkpoint.context.stackId);
+      await this.context.dualStackManager.switchToStack(
+        checkpoint.context.stackId
+      );
 
       // Restore frames (this is a simplified version - real implementation would be more complex)
       // const activeStack = this.context.dualStackManager.getActiveStack();
-      
+
       // Clear current frames and restore from checkpoint
       // Note: This is a conceptual implementation - actual frame restoration
       // would need more sophisticated state management
-      
+
       // Restore files if they exist
       const filesDir = path.join(this.checkpointDir, checkpointId, 'files');
       if (fs.existsSync(filesDir)) {
         const files = fs.readdirSync(filesDir);
         for (const file of files) {
           const backupPath = path.join(filesDir, file);
-          const originalPath = checkpoint.files.find(f => path.basename(f) === file);
+          const originalPath = checkpoint.files.find(
+            (f) => path.basename(f) === file
+          );
           if (originalPath && fs.existsSync(backupPath)) {
             fs.copyFileSync(backupPath, originalPath);
           }
@@ -408,21 +447,24 @@ export class CheckpointSkill {
 
   async list(options?: { limit?: number; since?: Date }): Promise<SkillResult> {
     try {
-      const files = fs.readdirSync(this.checkpointDir)
-        .filter(f => f.endsWith('.json'))
-        .map(f => {
+      const files = fs
+        .readdirSync(this.checkpointDir)
+        .filter((f) => f.endsWith('.json'))
+        .map((f) => {
           const checkpointPath = path.join(this.checkpointDir, f);
-          const checkpoint = JSON.parse(fs.readFileSync(checkpointPath, 'utf-8'));
+          const checkpoint = JSON.parse(
+            fs.readFileSync(checkpointPath, 'utf-8')
+          );
           return checkpoint;
         })
-        .filter(c => !options?.since || c.timestamp > options.since.getTime())
+        .filter((c) => !options?.since || c.timestamp > options.since.getTime())
         .sort((a, b) => b.timestamp - a.timestamp)
         .slice(0, options?.limit || 10);
 
       return {
         success: true,
         message: `Found ${files.length} checkpoints`,
-        data: files.map(c => ({
+        data: files.map((c) => ({
           id: c.id,
           description: c.description,
           timestamp: new Date(c.timestamp).toISOString(),
@@ -454,14 +496,14 @@ export class CheckpointSkill {
       const diff = {
         timeDiff: Math.abs(cp2.timestamp - cp1.timestamp),
         framesDiff: cp2.frames.length - cp1.frames.length,
-        newFrames: cp2.frames.filter(f2 => 
-          !cp1.frames.some(f1 => f1.frameId === f2.frameId)
+        newFrames: cp2.frames.filter(
+          (f2) => !cp1.frames.some((f1) => f1.frameId === f2.frameId)
         ),
-        removedFrames: cp1.frames.filter(f1 => 
-          !cp2.frames.some(f2 => f2.frameId === f1.frameId)
+        removedFrames: cp1.frames.filter(
+          (f1) => !cp2.frames.some((f2) => f2.frameId === f1.frameId)
         ),
-        modifiedFrames: cp2.frames.filter(f2 => {
-          const f1 = cp1.frames.find(f => f.frameId === f2.frameId);
+        modifiedFrames: cp2.frames.filter((f2) => {
+          const f1 = cp1.frames.find((f) => f.frameId === f2.frameId);
           return f1 && JSON.stringify(f1) !== JSON.stringify(f2);
         }),
       };
@@ -471,7 +513,8 @@ export class CheckpointSkill {
         message: `Diff between ${cp1.description} and ${cp2.description}`,
         data: {
           timeDiff: `${Math.round(diff.timeDiff / 1000 / 60)} minutes`,
-          framesDiff: diff.framesDiff > 0 ? `+${diff.framesDiff}` : `${diff.framesDiff}`,
+          framesDiff:
+            diff.framesDiff > 0 ? `+${diff.framesDiff}` : `${diff.framesDiff}`,
           newFrames: diff.newFrames.length,
           removedFrames: diff.removedFrames.length,
           modifiedFrames: diff.modifiedFrames.length,
@@ -488,19 +531,22 @@ export class CheckpointSkill {
   }
 
   private async loadCheckpoint(checkpointId: string): Promise<any> {
-    const checkpointPath = path.join(this.checkpointDir, `${checkpointId}.json`);
+    const checkpointPath = path.join(
+      this.checkpointDir,
+      `${checkpointId}.json`
+    );
     if (fs.existsSync(checkpointPath)) {
       return JSON.parse(fs.readFileSync(checkpointPath, 'utf-8'));
     }
-    
+
     // Try partial match
     const files = fs.readdirSync(this.checkpointDir);
-    const match = files.find(f => f.includes(checkpointId));
+    const match = files.find((f) => f.includes(checkpointId));
     if (match) {
       const path = path.join(this.checkpointDir, match);
       return JSON.parse(fs.readFileSync(path, 'utf-8'));
     }
-    
+
     return null;
   }
 }
@@ -535,8 +581,8 @@ export class ArchaeologistSkill {
       });
 
       // Filter by date if specified
-      const filtered = results.filter(r => 
-        !depth || new Date(r.timestamp) > since
+      const filtered = results.filter(
+        (r) => !depth || new Date(r.timestamp) > since
       );
 
       // Extract patterns if requested
@@ -575,7 +621,7 @@ export class ArchaeologistSkill {
             from: since.toISOString(),
             to: new Date().toISOString(),
           },
-          topResults: topResults.map(r => ({
+          topResults: topResults.map((r) => ({
             frameId: r.frameId,
             score: r.score,
             timestamp: r.timestamp,
@@ -628,7 +674,7 @@ export class ArchaeologistSkill {
 
   private extractPatterns(results: any[]): any[] {
     const patterns: Map<string, number> = new Map();
-    
+
     // Common patterns to look for
     const patternTypes = [
       { regex: /test.*then.*implement/i, name: 'TDD' },
@@ -640,8 +686,8 @@ export class ArchaeologistSkill {
       { regex: /optimize|performance/i, name: 'Optimization' },
     ];
 
-    results.forEach(result => {
-      patternTypes.forEach(pattern => {
+    results.forEach((result) => {
+      patternTypes.forEach((pattern) => {
         if (pattern.regex.test(result.content)) {
           patterns.set(pattern.name, (patterns.get(pattern.name) || 0) + 1);
         }
@@ -655,7 +701,7 @@ export class ArchaeologistSkill {
 
   private extractDecisions(results: any[]): any[] {
     const decisions: any[] = [];
-    
+
     // Keywords that indicate decisions
     const decisionKeywords = [
       'decided',
@@ -668,15 +714,15 @@ export class ArchaeologistSkill {
       'solution',
     ];
 
-    results.forEach(result => {
+    results.forEach((result) => {
       const content = result.content.toLowerCase();
-      if (decisionKeywords.some(keyword => content.includes(keyword))) {
+      if (decisionKeywords.some((keyword) => content.includes(keyword))) {
         // Extract sentence containing the decision
         const sentences = result.content.split(/[.!?]+/);
-        const decisionSentence = sentences.find(s => 
-          decisionKeywords.some(k => s.toLowerCase().includes(k))
+        const decisionSentence = sentences.find((s) =>
+          decisionKeywords.some((k) => s.toLowerCase().includes(k))
         );
-        
+
         if (decisionSentence) {
           decisions.push({
             frameId: result.frameId,
@@ -694,8 +740,8 @@ export class ArchaeologistSkill {
   private generateTimeline(results: any[]): any[] {
     // Group by day
     const timeline: Map<string, any[]> = new Map();
-    
-    results.forEach(result => {
+
+    results.forEach((result) => {
       const date = new Date(result.timestamp).toDateString();
       if (!timeline.has(date)) {
         timeline.set(date, []);
@@ -707,7 +753,7 @@ export class ArchaeologistSkill {
       .map(([date, items]) => ({
         date,
         itemCount: items.length,
-        highlights: items.slice(0, 3).map(item => ({
+        highlights: items.slice(0, 3).map((item) => ({
           frameId: item.frameId,
           summary: item.content.slice(0, 50) + '...',
         })),
@@ -725,7 +771,7 @@ export class ArchaeologistSkill {
 
     if (results.length > 0) {
       summary += `### Most Relevant Context (${results.length} results)\n`;
-      results.slice(0, 3).forEach(r => {
+      results.slice(0, 3).forEach((r) => {
         summary += `- **${new Date(r.timestamp).toLocaleDateString()}**: ${r.content.slice(0, 100)}...\n`;
       });
       summary += '\n';
@@ -733,7 +779,7 @@ export class ArchaeologistSkill {
 
     if (patterns.length > 0) {
       summary += `### Detected Patterns\n`;
-      patterns.slice(0, 5).forEach(p => {
+      patterns.slice(0, 5).forEach((p) => {
         summary += `- ${p.name}: ${p.count} occurrences\n`;
       });
       summary += '\n';
@@ -741,7 +787,7 @@ export class ArchaeologistSkill {
 
     if (decisions.length > 0) {
       summary += `### Key Decisions\n`;
-      decisions.slice(0, 5).forEach(d => {
+      decisions.slice(0, 5).forEach((d) => {
         summary += `- **${new Date(d.timestamp).toLocaleDateString()}**: ${d.decision}\n`;
       });
       summary += '\n';
@@ -749,7 +795,7 @@ export class ArchaeologistSkill {
 
     if (timeline.length > 0) {
       summary += `### Activity Timeline\n`;
-      timeline.slice(0, 5).forEach(t => {
+      timeline.slice(0, 5).forEach((t) => {
         summary += `- **${t.date}**: ${t.itemCount} activities\n`;
       });
     }
@@ -780,7 +826,7 @@ export class ClaudeSkillsManager {
     switch (skillName) {
       case 'handoff':
         return this.handoffSkill.execute(args[0], args[1], options);
-      
+
       case 'checkpoint':
         const subcommand = args[0];
         switch (subcommand) {
@@ -798,10 +844,10 @@ export class ClaudeSkillsManager {
               message: `Unknown checkpoint subcommand: ${subcommand}`,
             };
         }
-      
+
       case 'dig':
         return this.archaeologistSkill.dig(args[0], options);
-      
+
       default:
         return {
           success: false,
@@ -821,7 +867,7 @@ export class ClaudeSkillsManager {
 /handoff @user "message" [--priority high] [--frames frame1,frame2]
 Streamline frame handoffs between team members
 `;
-      
+
       case 'checkpoint':
         return `
 /checkpoint create "description" [--files file1,file2] [--auto-detect-risky]
@@ -830,13 +876,13 @@ Streamline frame handoffs between team members
 /checkpoint diff <id1> <id2>
 Create and manage recovery points
 `;
-      
+
       case 'dig':
         return `
 /dig "query" [--depth 6months] [--patterns] [--decisions] [--timeline]
 Deep historical context retrieval across sessions
 `;
-      
+
       default:
         return `Unknown skill: ${skillName}`;
     }

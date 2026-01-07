@@ -1,0 +1,1157 @@
+{
+  "timestamp": "2026-01-07T16:02:36.936Z",
+  "summary": {
+    "totalWorkspace": 190,
+    "totalSTA": 190,
+    "toDelete": 142,
+    "capacityFreed": 142,
+    "remainingSTA": 48,
+    "remainingTotal": 48
+  },
+  "categories": {
+    "Duplicate STA numbers": [],
+    "Similar/duplicate titles": [
+      "STA-5",
+      "STA-6",
+      "STA-9",
+      "STA-10",
+      "STA-11",
+      "STA-13",
+      "STA-15",
+      "STA-16",
+      "STA-21",
+      "STA-22",
+      "STA-23",
+      "STA-24",
+      "STA-27",
+      "STA-28",
+      "STA-29",
+      "STA-30",
+      "STA-31",
+      "STA-32",
+      "STA-35",
+      "STA-36",
+      "STA-37",
+      "STA-38",
+      "STA-41",
+      "STA-42",
+      "STA-43",
+      "STA-44",
+      "STA-45",
+      "STA-46",
+      "STA-50",
+      "STA-51",
+      "STA-52",
+      "STA-53",
+      "STA-58",
+      "STA-59",
+      "STA-60",
+      "STA-61",
+      "STA-63",
+      "STA-64",
+      "STA-65",
+      "STA-66",
+      "STA-69",
+      "STA-70",
+      "STA-71",
+      "STA-72",
+      "STA-73",
+      "STA-74",
+      "STA-77",
+      "STA-78",
+      "STA-80",
+      "STA-83",
+      "STA-84",
+      "STA-85",
+      "STA-86",
+      "STA-87",
+      "STA-88",
+      "STA-89",
+      "STA-90",
+      "STA-91",
+      "STA-100",
+      "STA-103",
+      "STA-110",
+      "STA-111",
+      "STA-112",
+      "STA-113",
+      "STA-114",
+      "STA-115",
+      "STA-129",
+      "STA-130",
+      "STA-131",
+      "STA-132",
+      "STA-133",
+      "STA-134",
+      "STA-137",
+      "STA-139",
+      "STA-142",
+      "STA-144",
+      "STA-146",
+      "STA-147",
+      "STA-148",
+      "STA-149",
+      "STA-150",
+      "STA-151",
+      "STA-152",
+      "STA-153",
+      "STA-154",
+      "STA-158",
+      "STA-159",
+      "STA-160",
+      "STA-179",
+      "STA-182",
+      "STA-183",
+      "STA-184",
+      "STA-190",
+      "STA-192",
+      "STA-194",
+      "STA-197",
+      "STA-199",
+      "STA-200",
+      "STA-202",
+      "STA-203",
+      "STA-204",
+      "STA-205",
+      "STA-210",
+      "STA-211",
+      "STA-212",
+      "STA-214",
+      "STA-215",
+      "STA-216",
+      "STA-217",
+      "STA-218",
+      "STA-220",
+      "STA-221",
+      "STA-222",
+      "STA-223",
+      "STA-225",
+      "STA-227",
+      "STA-228",
+      "STA-230",
+      "STA-231",
+      "STA-232",
+      "STA-233",
+      "STA-235",
+      "STA-236",
+      "STA-237",
+      "STA-238",
+      "STA-240",
+      "STA-241",
+      "STA-243",
+      "STA-244",
+      "STA-246",
+      "STA-248",
+      "STA-249",
+      "STA-250",
+      "STA-251",
+      "STA-253",
+      "STA-254",
+      "STA-255",
+      "STA-256",
+      "STA-258",
+      "STA-259",
+      "STA-260",
+      "STA-263"
+    ],
+    "Completed tasks": [],
+    "Canceled tasks": [],
+    "Low-value/auto-generated": []
+  },
+  "tasks": [
+    {
+      "id": "3a904aa7-e89f-4151-978e-dbbd5c45a8fe",
+      "identifier": "STA-5",
+      "title": "Enhanced CLI Commands",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "0cea006a-c3c7-47f1-a1cd-001075b8cbd5",
+      "identifier": "STA-6",
+      "title": "Git Hooks Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "449f99a6-f325-4e45-9ed4-62f48058d82c",
+      "identifier": "STA-9",
+      "title": "Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "7c4074c2-d4af-4cc1-86d8-4a3f5fed5cf5",
+      "identifier": "STA-10",
+      "title": "Enhanced CLI Commands",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "5f1922dd-59c6-4196-8733-64594a2095ed",
+      "identifier": "STA-11",
+      "title": "Git Hooks Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "4acf107e-dfb4-4d5a-aa83-454d0a8ea048",
+      "identifier": "STA-13",
+      "title": "Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "59fdf18c-c4e3-41a3-8f85-61e9c8deb04e",
+      "identifier": "STA-15",
+      "title": "Enhanced CLI Commands",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "2c05a49b-83e2-44fd-b509-ad76dcbaf8c6",
+      "identifier": "STA-16",
+      "title": "Git Hooks Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "ae4ed01d-b5b1-493c-9df2-b422ed9a4842",
+      "identifier": "STA-21",
+      "title": "[MEDIUM] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "805c4d62-e1d2-4a1d-9f8a-05f159fb726f",
+      "identifier": "STA-22",
+      "title": "[MEDIUM] Refactor Large Files",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "a338ef31-83fd-49d7-a7ba-3ac125083541",
+      "identifier": "STA-23",
+      "title": "Enhanced CLI Commands",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "22e8b55c-21a9-46c0-b441-a7d4975b01d8",
+      "identifier": "STA-24",
+      "title": "Git Hooks Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "0537c788-cf3b-41ec-85b6-967dc01c0115",
+      "identifier": "STA-27",
+      "title": "[HIGH] Implement Comprehensive Testing Suite",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "bb45756f-ea90-48c7-b3c6-3a7f0d7f4be8",
+      "identifier": "STA-28",
+      "title": "[HIGH] Implement Proper Error Handling",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "6485a712-9105-4922-a8fc-267a97392b81",
+      "identifier": "STA-29",
+      "title": "[HIGH] Security Audit and Input Validation",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "c0b8ef9c-b384-4d25-9f9e-b49d6fc67c5a",
+      "identifier": "STA-30",
+      "title": "[HIGH] Fix Linear Integration TypeScript Errors",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "2b561c5b-55bf-42c8-a442-ca7244eee13e",
+      "identifier": "STA-31",
+      "title": "Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "a2be060d-ac96-4dd9-ac3a-27f872ee8e6b",
+      "identifier": "STA-32",
+      "title": "Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "ad51370d-ae90-49bc-bb10-8fd0f20e783b",
+      "identifier": "STA-35",
+      "title": "[MEDIUM] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "94e62aa6-6083-479b-b8c3-0d720877d86c",
+      "identifier": "STA-36",
+      "title": "[MEDIUM] Refactor Large Files",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "776216e8-cd7a-41be-bdfa-aba69872acc0",
+      "identifier": "STA-37",
+      "title": "Enhanced CLI Commands",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "d4b0083d-22a1-4fa0-b63f-ec2187d71452",
+      "identifier": "STA-38",
+      "title": "Git Hooks Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "b1335606-95c4-4c5d-aa7a-460ae9d49e3a",
+      "identifier": "STA-41",
+      "title": "[HIGH] Implement Comprehensive Testing Suite",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "963d0937-c789-41b6-b59b-aa600d690ecf",
+      "identifier": "STA-42",
+      "title": "[HIGH] Implement Proper Error Handling",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "33cc6a83-9f89-403e-b630-37e4a581a522",
+      "identifier": "STA-43",
+      "title": "[HIGH] Security Audit and Input Validation",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "b63ff708-1560-46e2-a8d7-47dd364ab951",
+      "identifier": "STA-44",
+      "title": "[HIGH] Fix Linear Integration TypeScript Errors",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "3f2f861e-bda5-4e29-979a-32956d35767f",
+      "identifier": "STA-45",
+      "title": "Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "0c7d3eb8-85f0-4364-9c29-9033884830fc",
+      "identifier": "STA-46",
+      "title": "Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "67ae7681-6a8c-4475-a608-afb1ea999327",
+      "identifier": "STA-50",
+      "title": "[MEDIUM] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "01f07efa-7aa3-42ef-8c47-a6565578244b",
+      "identifier": "STA-51",
+      "title": "[MEDIUM] Refactor Large Files",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "4e6119ca-73e3-4a54-b918-735328cfe1b8",
+      "identifier": "STA-52",
+      "title": "Enhanced CLI Commands",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "c8df584d-f250-46a3-a702-6e31583ebf72",
+      "identifier": "STA-53",
+      "title": "Git Hooks Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "2f8ede6b-22c3-4fc0-9356-70ec57ccd33f",
+      "identifier": "STA-58",
+      "title": "[HIGH] Security Audit and Input Validation",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "efa404ac-d34f-4dcd-93c3-3949857c427d",
+      "identifier": "STA-59",
+      "title": "[HIGH] Fix Linear Integration TypeScript Errors",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "603e0570-a738-4050-a5d1-a9b7ff915f09",
+      "identifier": "STA-60",
+      "title": "Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "7d2e0af7-eedf-4fab-a5e1-fd2cec71fa2d",
+      "identifier": "STA-61",
+      "title": "Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "9cfb9a1d-3ef8-46be-a22e-5e611254f2cb",
+      "identifier": "STA-63",
+      "title": "[MEDIUM] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "6178e983-30c1-4f20-ab37-047642d4608f",
+      "identifier": "STA-64",
+      "title": "[MEDIUM] Refactor Large Files",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "c6db3cec-5cbb-4452-afb7-cb4c5b337687",
+      "identifier": "STA-65",
+      "title": "Enhanced CLI Commands",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "739835a1-8350-4c31-9b03-f287269234fd",
+      "identifier": "STA-66",
+      "title": "Git Hooks Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "39276f5f-a32a-49e2-96c2-233f71b9204d",
+      "identifier": "STA-69",
+      "title": "[HIGH] Implement Comprehensive Testing Suite",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "e04bbb20-7191-4430-b473-8dd0a085184a",
+      "identifier": "STA-70",
+      "title": "[HIGH] Implement Proper Error Handling",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "5a474228-0e18-4a9c-84fc-7b0198af2955",
+      "identifier": "STA-71",
+      "title": "[HIGH] Security Audit and Input Validation",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "90d58e8c-db6b-427f-b310-ec628577f875",
+      "identifier": "STA-72",
+      "title": "[HIGH] Fix Linear Integration TypeScript Errors",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "c67ae3bd-9764-4245-a773-5d08420f51f9",
+      "identifier": "STA-73",
+      "title": "Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "467da635-54a1-4638-98ee-70cc768c9465",
+      "identifier": "STA-74",
+      "title": "Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "c0f9f245-096c-42bf-93fa-89e2c1ec5e7f",
+      "identifier": "STA-77",
+      "title": "[MEDIUM] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "b5d5dc4b-53fe-4b0c-b10c-81562e5e86c4",
+      "identifier": "STA-78",
+      "title": "[MEDIUM] Refactor Large Files",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "b776050e-5768-47e9-90bb-e9cb0d8f5c89",
+      "identifier": "STA-80",
+      "title": "Git Hooks Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "306e1274-78ff-4628-8e53-012f2e618311",
+      "identifier": "STA-83",
+      "title": "[HIGH] Implement Comprehensive Testing Suite",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "5462517a-38b4-45f5-bf15-a784881f685d",
+      "identifier": "STA-84",
+      "title": "[HIGH] Implement Proper Error Handling",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "72290c35-8600-4014-8ddb-c7a55995c047",
+      "identifier": "STA-85",
+      "title": "[HIGH] Security Audit and Input Validation",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "8a047e4b-50da-4b2c-8cf7-a13672322e24",
+      "identifier": "STA-86",
+      "title": "[HIGH] Fix Linear Integration TypeScript Errors",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "cefcfeb2-c5cb-4eb1-9e80-50df0ad6fcfa",
+      "identifier": "STA-87",
+      "title": "Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "573aabf5-d0aa-4294-a40e-517540d9da83",
+      "identifier": "STA-88",
+      "title": "Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "551f5fbf-4887-4094-8968-224868d7ad82",
+      "identifier": "STA-89",
+      "title": "Complete Context Frame Manager Tests",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "eb9fb4b7-5f6b-4689-bbed-5123a2bbc8ee",
+      "identifier": "STA-90",
+      "title": "Complete Linear MCP Integration Documentation",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "82b4609c-6c3f-4e31-b000-a281a5b48a38",
+      "identifier": "STA-91",
+      "title": "Finalize Session Persistence Design",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "e3fc2c67-439d-4d85-a521-97c1fd5cb7c7",
+      "identifier": "STA-100",
+      "title": "Phase 3: Frame Handoff Mechanism",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "75c1c93b-5134-4356-ab2b-b1622b813aaa",
+      "identifier": "STA-103",
+      "title": "Phase 4: Incremental Garbage Collection",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "af0d52f4-6a73-4b41-ba8e-e42cf3d585aa",
+      "identifier": "STA-110",
+      "title": "[STA-103] Phase 4: Incremental Garbage Collection",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "e5314380-5b6f-4d9e-8e4e-95bbf5ac8b87",
+      "identifier": "STA-111",
+      "title": "[STA-99] Phase 3: Dual Stack Architecture",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "2f4c321a-b81a-4592-ad03-3e97d3a12d7b",
+      "identifier": "STA-112",
+      "title": "[STA-100] Phase 3: Frame Handoff Mechanism",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "6b938670-b4a8-4a83-ab7f-b3024c2bccd4",
+      "identifier": "STA-113",
+      "title": "[STA-91] Finalize Session Persistence Design",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "069dca80-aa3b-47da-b10d-ad50840e125c",
+      "identifier": "STA-114",
+      "title": "[STA-90] Complete Linear MCP Integration Documentation",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "e5808dc3-812f-4987-8dfb-b7e7ab3e7989",
+      "identifier": "STA-115",
+      "title": "[STA-89] Complete Context Frame Manager Tests",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "ce0e8359-3bdb-424d-ae62-c96e97dbd260",
+      "identifier": "STA-129",
+      "title": "[MEDIUM] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "903212a3-cf7e-4166-b019-6e80361c25ae",
+      "identifier": "STA-130",
+      "title": "[MEDIUM] Refactor Large Files",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "10a9a29c-0eab-4283-8778-14c7e3618b32",
+      "identifier": "STA-131",
+      "title": "Git Hooks Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "82e49d36-035f-4f4d-8f48-e1ce3d37ac98",
+      "identifier": "STA-132",
+      "title": "[ENG-157] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "0c8e53ec-d556-4d59-a8d3-10d0d378c7d9",
+      "identifier": "STA-133",
+      "title": "[ENG-229] Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "9c7fb089-a2bb-4789-b02c-1760d4aae2c5",
+      "identifier": "STA-134",
+      "title": "[ENG-228] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "d85b4621-a586-4a33-8076-ebcbcb57288f",
+      "identifier": "STA-137",
+      "title": "[ENG-225] [HIGH] Implement Proper Error Handling",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "fa615083-8e2d-4cc4-8ceb-b9edab6b0ee5",
+      "identifier": "STA-139",
+      "title": "[ENG-226] [HIGH] Security Audit and Input Validation",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "0fa47656-f952-4e7c-adb8-9e934d0a80db",
+      "identifier": "STA-142",
+      "title": "[ENG-224] [HIGH] Implement Comprehensive Testing Suite",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "a75883dd-500a-403e-ae30-5192c21e3fb2",
+      "identifier": "STA-144",
+      "title": "[ENG-216] Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "4933e6f6-a4b9-4f34-ac1f-db8eedb2a7bb",
+      "identifier": "STA-146",
+      "title": "[ENG-215] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "2f0cbc22-b94d-45f8-8e92-aba2163a58f1",
+      "identifier": "STA-147",
+      "title": "[ENG-211] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "66691140-c397-438c-9035-23e5b059f044",
+      "identifier": "STA-148",
+      "title": "[STA-103] Phase 4: Incremental Garbage Collection",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "8e4ea8cf-37fa-4c71-ba91-583e8150d655",
+      "identifier": "STA-149",
+      "title": "[ENG-210] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "86e3b467-6177-4a64-af7c-6770a50e7447",
+      "identifier": "STA-150",
+      "title": "[STA-99] Phase 3: Dual Stack Architecture",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "aa08674d-e37d-4239-8a06-2f6b9048baf0",
+      "identifier": "STA-151",
+      "title": "[ENG-209] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "a9d2cf47-16e9-41c0-80c0-aeb92954be23",
+      "identifier": "STA-152",
+      "title": "[STA-100] Phase 3: Frame Handoff Mechanism",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "411877c5-0df8-4195-bb43-6cbc7e667515",
+      "identifier": "STA-153",
+      "title": "[STA-91] Finalize Session Persistence Design",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "ad33fc23-80e6-419f-8c69-b2cafbcd495b",
+      "identifier": "STA-154",
+      "title": "[STA-90] Complete Linear MCP Integration Documentation",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "21e71f35-db43-43c7-bc2a-af82095a1f9f",
+      "identifier": "STA-158",
+      "title": "[ENG-206] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "52cb2df4-a85e-442f-9cf4-6baac491e1a9",
+      "identifier": "STA-159",
+      "title": "[ENG-202] Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "918e2d21-7683-41f8-a607-c182d107976a",
+      "identifier": "STA-160",
+      "title": "[ENG-207] Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "29c14c25-cc16-4cb9-a86d-919e77be96b6",
+      "identifier": "STA-179",
+      "title": "[MEDIUM] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "4973fc6b-15f2-4422-b217-d4f809c1c669",
+      "identifier": "STA-182",
+      "title": "[ENG-157] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "923c2260-96d4-47be-99d4-0d4039bd8d19",
+      "identifier": "STA-183",
+      "title": "[ENG-229] Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "31d247cd-f2c4-483a-a517-0684ab7da9e6",
+      "identifier": "STA-184",
+      "title": "[ENG-228] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "f7ee26ff-82b9-4f65-970d-c4e27efb20c8",
+      "identifier": "STA-190",
+      "title": "[ENG-216] Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "424361fa-15aa-4676-bb20-e89d87a8fc4e",
+      "identifier": "STA-192",
+      "title": "[ENG-215] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "35b2e0eb-34a8-4e2f-b537-38866a44edeb",
+      "identifier": "STA-194",
+      "title": "[ENG-211] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "cca7bf85-14c4-4b52-8ba6-ea64059a19bd",
+      "identifier": "STA-197",
+      "title": "[ENG-210] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "1a749fd2-1b1d-4e1a-bd50-d685a67de258",
+      "identifier": "STA-199",
+      "title": "[ENG-209] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "7bb7be7a-b670-41e0-ba70-075f09020d18",
+      "identifier": "STA-200",
+      "title": "[STA-103] Phase 4: Incremental Garbage Collection",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "4edf2f1f-f325-4266-8710-c2e426ae6962",
+      "identifier": "STA-202",
+      "title": "[ENG-206] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "40258a7d-df03-499a-9ac5-b47cd98fff97",
+      "identifier": "STA-203",
+      "title": "[ENG-202] Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "1befd0f1-df15-4fc6-aa3b-c92edc560882",
+      "identifier": "STA-204",
+      "title": "[ENG-207] Linear API Integration",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "6ca8a112-84cd-4bb2-a419-72df0f050b24",
+      "identifier": "STA-205",
+      "title": "[ENG-201] Performance Optimization",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "e5eaa4c6-8d88-4d3f-a401-fe8c4cae2859",
+      "identifier": "STA-210",
+      "title": "[ENG-191] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "b039f697-9059-4338-b261-2a23a672fb9e",
+      "identifier": "STA-211",
+      "title": "[ENG-190] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "8e6909b5-72b1-45f6-943d-782b9ec63125",
+      "identifier": "STA-212",
+      "title": "[ENG-189] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "38b45047-3d19-41aa-a74a-e3f6cf6c8fc1",
+      "identifier": "STA-214",
+      "title": "[ENG-186] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "c479824e-6c03-410a-bbc0-b649f7bcf72a",
+      "identifier": "STA-215",
+      "title": "[ENG-185] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "6296ed14-496f-43c2-b21d-b804d842cf8b",
+      "identifier": "STA-216",
+      "title": "[ENG-184] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "88d057d8-2bcb-45ae-9430-c0de7767daed",
+      "identifier": "STA-217",
+      "title": "[ENG-183] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "beb896cd-3e4d-4bf0-81c1-1e8500cfc275",
+      "identifier": "STA-218",
+      "title": "[ENG-182] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "8bf0eef0-850e-4576-9960-265a64dbf7c0",
+      "identifier": "STA-220",
+      "title": "[ENG-180] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "1ccd0134-8982-47e5-bc15-a20f00f53974",
+      "identifier": "STA-221",
+      "title": "[ENG-179] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "c0c1e292-d215-4012-b946-9c22d4822536",
+      "identifier": "STA-222",
+      "title": "[ENG-178] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "5b0c4c0a-2b08-460a-88bd-cce38f138cc3",
+      "identifier": "STA-223",
+      "title": "[ENG-177] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "1f476af6-182f-4b2b-8e12-354278c4db01",
+      "identifier": "STA-225",
+      "title": "[ENG-175] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "d59576a6-43c9-4a27-95e1-4eb63cd9dc69",
+      "identifier": "STA-227",
+      "title": "[ENG-173] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "e7f81366-8d1b-4d13-a07e-a3a60e2bf0c8",
+      "identifier": "STA-228",
+      "title": "[ENG-172] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "e900410b-5446-4a95-b7dd-2664a744ff29",
+      "identifier": "STA-230",
+      "title": "[ENG-170] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "1e6a62a5-a6fe-48c3-8bee-607207e93d52",
+      "identifier": "STA-231",
+      "title": "[ENG-169] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "ab1319fc-c423-42f4-8ef6-f28d1f88a9c5",
+      "identifier": "STA-232",
+      "title": "[ENG-168] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "6ec361d3-c798-4a0f-a6bb-e52fc50b02e0",
+      "identifier": "STA-233",
+      "title": "[ENG-167] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "7905186e-b620-48a6-81a5-dc3cc31deb9f",
+      "identifier": "STA-235",
+      "title": "[ENG-165] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "7b8813e2-2eb1-49fc-8691-b36592fc6591",
+      "identifier": "STA-236",
+      "title": "[ENG-163] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "eaf4a938-fe0f-41ed-9586-81bc129882fd",
+      "identifier": "STA-237",
+      "title": "[ENG-162] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "f975c3a2-7d5c-487d-96ef-a993422bfc80",
+      "identifier": "STA-238",
+      "title": "[ENG-161] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "7880767b-83d8-492c-b68c-e5b47c567b00",
+      "identifier": "STA-240",
+      "title": "[ENG-164] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "7c47b9cc-244c-4992-b087-5b2d9dad7e38",
+      "identifier": "STA-241",
+      "title": "[ENG-159] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "248db2c4-3724-49c8-9ab0-e6d737c2e879",
+      "identifier": "STA-243",
+      "title": "[ENG-154] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "1c0c1b57-2293-4323-a187-1ff18a7c88b7",
+      "identifier": "STA-244",
+      "title": "[ENG-155] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "77a18425-254f-40fd-a55a-289032450f8e",
+      "identifier": "STA-246",
+      "title": "[ENG-158] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "4097b4cf-dd71-40ba-b772-912bbfa23561",
+      "identifier": "STA-248",
+      "title": "[ENG-150] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "e4af214f-bda2-44f9-8377-937959dec2df",
+      "identifier": "STA-249",
+      "title": "[ENG-152] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "34631130-5fc9-489b-b283-7b560f40a8e9",
+      "identifier": "STA-250",
+      "title": "[ENG-148] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "a03956da-24be-4337-a9dd-68d74c1dc831",
+      "identifier": "STA-251",
+      "title": "[ENG-149] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "4e524bce-9522-46f2-b01d-de1b0dc63059",
+      "identifier": "STA-253",
+      "title": "[ENG-145] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "f29673da-866b-48a4-8797-4b81d76765bd",
+      "identifier": "STA-254",
+      "title": "[ENG-144] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "d9f9c13c-61bf-4e1c-9835-8cf0476af7d4",
+      "identifier": "STA-255",
+      "title": "[ENG-143] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "25e2c0e9-2a28-48e8-bb87-1a8122422dc1",
+      "identifier": "STA-256",
+      "title": "[ENG-147] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "9e4d9b7f-2ef3-4b1d-b65d-07d8488d162b",
+      "identifier": "STA-258",
+      "title": "[ENG-140] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "70592301-e683-484c-b9c0-e0f81b51b5b0",
+      "identifier": "STA-259",
+      "title": "[ENG-139] Engineering x Marketing Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "9152fe61-1413-4dae-94ac-31dac2554d4e",
+      "identifier": "STA-260",
+      "title": "[ENG-138] Engineering x Success Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    },
+    {
+      "id": "7e2ffd66-a1e7-4983-a081-c6ad09ecf57d",
+      "identifier": "STA-263",
+      "title": "[ENG-136] Engineering x Operations Team",
+      "state": "Backlog",
+      "team": "Stackmemoryai"
+    }
+  ]
+}
