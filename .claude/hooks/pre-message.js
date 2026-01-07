@@ -11,6 +11,24 @@ const fs = require('fs');
 const projectRoot = process.env.PROJECT_ROOT || process.cwd();
 const userMessage = process.env.USER_MESSAGE || '';
 
+// Track Claude activity
+function trackActivity() {
+  try {
+    const activityFile = path.join(require('os').homedir(), '.stackmemory', '.claude-activity');
+    const dir = path.dirname(activityFile);
+    
+    if (!fs.existsSync(dir)) {
+      fs.mkdirSync(dir, { recursive: true });
+    }
+    
+    fs.writeFileSync(activityFile, new Date().toISOString());
+  } catch {
+    // Silent fail
+  }
+}
+
+trackActivity();
+
 // Initialize database
 const dbPath = path.join(projectRoot, '.stackmemory', 'context.db');
 if (!fs.existsSync(dbPath)) {

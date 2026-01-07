@@ -7,7 +7,7 @@ import { EventEmitter } from 'events';
 import Database from 'better-sqlite3';
 import { SessionManager } from '../../../core/session/session-manager.js';
 import { FrameManager } from '../../../core/context/frame-manager.js';
-import { PebblesTaskStore } from '../../tasks/pebbles-task-store.js';
+import { LinearTaskReader } from './linear-task-reader.js';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import type {
@@ -24,7 +24,7 @@ export class DataService extends EventEmitter {
   private db: Database.Database | null = null;
   private sessionManager: SessionManager | null = null;
   private frameManager: FrameManager | null = null;
-  private taskStore: PebblesTaskStore | null = null;
+  private taskReader: LinearTaskReader | null = null;
   private linearMappings: Map<string, any> = new Map();
   private cache: Map<string, { data: any; timestamp: number }> = new Map();
   private cacheTimeout = 5000; // 5 seconds
@@ -46,25 +46,20 @@ export class DataService extends EventEmitter {
         }
       }
 
-      // Initialize task store for local synced tasks
+      // Initialize task reader for Linear-synced tasks
       try {
-        this.taskStore = new PebblesTaskStore();
-
-        // Load Linear mappings if they exist
-        const mappingsPath = join(
-          process.env.PROJECT_ROOT || process.cwd(),
-          '.stackmemory',
-          'linear-mappings.json'
-        );
-        if (existsSync(mappingsPath)) {
-          const mappingsData = JSON.parse(readFileSync(mappingsPath, 'utf8'));
-          mappingsData.forEach((mapping: any) => {
-            this.linearMappings.set(mapping.stackmemoryId, mapping);
-          });
+        this.taskReader = new LinearTaskReader(process.env.PROJECT_ROOT || process.cwd());
+        
+        // Load Linear mappings
+        this.linearMappings = this.taskReader.getMappings();
+        
+        if (process.env.DEBUG) {
+          const tasks = this.taskReader.getTasks();
+          console.log(`LinearTaskReader initialized with ${tasks.length} tasks`);
         }
       } catch (tsError) {
         if (process.env.DEBUG) {
-          console.log('Task store initialization failed:', tsError.message);
+          console.log('Task reader initialization failed:', tsError.message);
         }
       }
 
@@ -167,43 +162,11 @@ export class DataService extends EventEmitter {
 
     // ONLY use locally synced tasks - no direct Linear API calls
     // Tasks should be synced via webhook or scheduled sync scripts
-    if (this.taskStore) {
+    if (this.taskReader) {
       try {
-        const localTasks = this.taskStore.getActiveTasks();
-
-        // Convert local tasks to TUI display format
-        localTasks.forEach((localTask) => {
-          const mapping = this.linearMappings.get(localTask.id);
-
-          // Extract identifier from title (e.g., "[ENG-123] Task title")
-          const identifierMatch = localTask.title.match(/\[(\w+-\d+)\]/);
-          const identifier = identifierMatch
-            ? identifierMatch[1]
-            : mapping?.linearIdentifier || 'LOCAL-' + localTask.id.slice(-6);
-
-          // Format local task for TUI display
-          const linearTask: LinearTask = {
-            id: mapping?.linearId || localTask.id,
-            identifier: identifier,
-            title: localTask.title.replace(/\[\w+-\d+\]\s*/, ''), // Remove identifier from title
-            description: localTask.description,
-            state: this.mapLocalStatusToLinearState(localTask.status),
-            priority: this.mapLocalPriorityToLinear(localTask.priority),
-            estimate: localTask.estimated_effort
-              ? Math.ceil(localTask.estimated_effort / 60)
-              : undefined,
-            assignee: localTask.assignee,
-            createdAt: new Date(localTask.created_at * 1000).toISOString(),
-            updatedAt: new Date(localTask.timestamp * 1000).toISOString(),
-            // Add sync metadata
-            lastSyncedAt: mapping?.lastSyncTimestamp
-              ? new Date(mapping.lastSyncTimestamp).toISOString()
-              : undefined,
-            syncStatus: mapping ? 'synced' : 'local',
-          };
-
-          tasks.push(linearTask);
-        });
+        // LinearTaskReader already returns tasks in the correct format
+        const localTasks = this.taskReader.getTasks();
+        tasks.push(...localTasks);
 
         if (process.env.DEBUG) {
           console.log(

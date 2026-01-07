@@ -1,0 +1,47 @@
+{
+  "name": "linear-update",
+  "description": "Automatically update Linear tasks based on Claude's work",
+  "enabled": true,
+  "triggers": {
+    "keywords": [
+      "completed",
+      "done",
+      "finished",
+      "implemented",
+      "in progress",
+      "blocked",
+      "STA-"
+    ],
+    "patterns": [
+      "STA-\\d+",
+      "linear\\.app/.*issue",
+      "task.*complete",
+      "implement.*STA"
+    ]
+  },
+  "actions": {
+    "update_task": {
+      "script": "scripts/claude-linear-skill.js",
+      "command": "update",
+      "auto": true
+    },
+    "detect_status": {
+      "script": "scripts/claude-linear-skill.js",
+      "command": "detect",
+      "auto": false
+    }
+  },
+  "config": {
+    "api_key_env": "LINEAR_API_KEY",
+    "auto_update": true,
+    "add_implementation_details": true,
+    "log_file": "~/.stackmemory/logs/linear-skill.log"
+  },
+  "states": {
+    "todo": "backlog",
+    "in_progress": "started",
+    "completed": "completed",
+    "blocked": "blocked",
+    "cancelled": "cancelled"
+  }
+}

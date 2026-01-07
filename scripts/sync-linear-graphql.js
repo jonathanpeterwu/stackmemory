@@ -43,7 +43,14 @@ async function syncLinearTasks() {
     process.exit(1);
   }
   
-  console.log('🔄 Connecting to Linear API...');
+  // Check for --mirror flag to do a complete replacement
+  const isMirrorMode = process.argv.includes('--mirror');
+  
+  if (isMirrorMode) {
+    console.log('🔄 Running in MIRROR mode - will replace all local tasks with Linear tasks...');
+  } else {
+    console.log('🔄 Connecting to Linear API...');
+  }
   
   try {
     // Test connection
@@ -68,36 +75,56 @@ async function syncLinearTasks() {
       console.log(`  - ${team.key}: ${team.name}`);
     }
     
-    // Get issues from all teams
-    const issuesData = await queryLinear(`
-      query {
-        issues(first: 100, orderBy: updatedAt) {
-          nodes {
-            id
-            identifier
-            title
-            description
-            state {
-              name
-              type
+    // Get ALL issues from all teams using pagination
+    let allIssues = [];
+    let hasNextPage = true;
+    let endCursor = null;
+    
+    while (hasNextPage) {
+      const issuesData = await queryLinear(`
+        query($after: String) {
+          issues(first: 100, orderBy: updatedAt, after: $after) {
+            nodes {
+              id
+              identifier
+              title
+              description
+              state {
+                name
+                type
+              }
+              priority
+              priorityLabel
+              team {
+                key
+                name
+              }
+              assignee {
+                name
+                email
+              }
+              createdAt
+              updatedAt
+              url
             }
-            priority
-            priorityLabel
-            team {
-              key
-              name
+            pageInfo {
+              hasNextPage
+              endCursor
             }
-            assignee {
-              name
-              email
-            }
-            createdAt
-            updatedAt
-            url
           }
         }
+      `, { after: endCursor });
+      
+      allIssues = allIssues.concat(issuesData.issues.nodes);
+      hasNextPage = issuesData.issues.pageInfo.hasNextPage;
+      endCursor = issuesData.issues.pageInfo.endCursor;
+      
+      if (hasNextPage) {
+        console.log(`  Fetched ${allIssues.length} issues so far...`);
       }
-    `);
+    }
+    
+    const issuesData = { issues: { nodes: allIssues } };
     
     console.log(`\n📥 Found ${issuesData.issues.nodes.length} issues total`);
     
@@ -117,10 +144,16 @@ async function syncLinearTasks() {
     
     // Load local tasks
     const tasksFile = path.join(__dirname, '..', '.stackmemory', 'tasks.jsonl');
-    const localTasks = [];
+    let localTasks = [];
     const localLinearIds = new Set();
     
-    if (fs.existsSync(tasksFile)) {
+    if (isMirrorMode) {
+      // In mirror mode, we'll replace everything
+      console.log('\n🧹 Mirror mode: Clearing existing tasks...');
+      if (fs.existsSync(tasksFile)) {
+        fs.writeFileSync(tasksFile, ''); // Clear the file
+      }
+    } else if (fs.existsSync(tasksFile)) {
       const lines = fs.readFileSync(tasksFile, 'utf8').split('\n').filter(l => l.trim());
       for (const line of lines) {
         try {
@@ -141,20 +174,31 @@ async function syncLinearTasks() {
     console.log(`\n📂 Local tasks: ${localTasks.length}`);
     console.log(`🌐 Linear issues: ${issuesData.issues.nodes.length}`);
     
-    // Find issues not in local tasks
-    const missingLocally = [];
-    for (const issue of issuesData.issues.nodes) {
-      if (!localLinearIds.has(issue.identifier)) {
-        missingLocally.push(issue);
+    // In mirror mode, sync ALL issues; otherwise just missing ones
+    const issuesToSync = isMirrorMode ? issuesData.issues.nodes : [];
+    
+    if (!isMirrorMode) {
+      // Find issues not in local tasks
+      for (const issue of issuesData.issues.nodes) {
+        if (!localLinearIds.has(issue.identifier)) {
+          issuesToSync.push(issue);
+        }
       }
     }
     
-    if (missingLocally.length > 0) {
-      console.log(`\n🆕 Issues in Linear but not in local tasks (${missingLocally.length}):`);
+    if (issuesToSync.length > 0) {
+      const modeText = isMirrorMode ? 'Mirroring ALL' : 'Adding new';
+      console.log(`\n🆕 ${modeText} Linear issues (${issuesToSync.length}):`);
       
       const newTasks = [];
-      for (const issue of missingLocally.slice(0, 20)) {
-        console.log(`  - ${issue.identifier}: ${issue.title}`);
+      const displayLimit = Math.min(issuesToSync.length, 20);
+      
+      for (let i = 0; i < issuesToSync.length; i++) {
+        const issue = issuesToSync[i];
+        
+        if (i < displayLimit) {
+          console.log(`  - ${issue.identifier}: ${issue.title}`);
+        }
         
         const taskId = `tsk-${Math.random().toString(36).substr(2, 8)}`;
         const task = {
@@ -175,23 +219,25 @@ async function syncLinearTasks() {
             linear_id: issue.id,
             linear_identifier: issue.identifier,
             linear_url: issue.url,
-            team: issue.team.key
+            team: issue.team.key,
+            assignee: issue.assignee?.email || null,
+            state_name: issue.state.name
           }
         };
         
         newTasks.push(JSON.stringify(task));
       }
       
-      if (missingLocally.length > 20) {
-        console.log(`  ... and ${missingLocally.length - 20} more`);
+      if (issuesToSync.length > displayLimit) {
+        console.log(`  ... and ${issuesToSync.length - displayLimit} more`);
       }
       
       if (newTasks.length > 0) {
-        console.log(`\n💾 Adding ${newTasks.length} tasks to local storage...`);
-        fs.appendFileSync(tasksFile, '\n' + newTasks.join('\n') + '\n');
+        console.log(`\n💾 Writing ${newTasks.length} tasks to local storage...`);
+        fs.appendFileSync(tasksFile, newTasks.join('\n') + '\n');
         console.log('✅ Tasks synced successfully!');
       }
-    } else {
+    } else if (!isMirrorMode) {
       console.log('\n✅ All Linear issues already exist locally');
     }
     
@@ -218,8 +264,12 @@ async function syncLinearTasks() {
     console.log('\n📊 Sync Summary:');
     console.log(`  Total Linear issues: ${issuesData.issues.nodes.length}`);
     console.log(`  Total local tasks: ${localTasks.length}`);
-    console.log(`  Added to local: ${Math.min(missingLocally.length, 20)}`);
-    console.log(`  Local-only tasks: ${missingInLinear.length}`);
+    if (!isMirrorMode) {
+      console.log(`  Added to local: ${issuesToSync.length}`);
+      console.log(`  Local-only tasks: ${missingInLinear.length}`);
+    } else {
+      console.log(`  Mirrored: ${issuesToSync.length} tasks`);
+    }
     
   } catch (error) {
     console.error('❌ Error syncing with Linear:', error.message);
