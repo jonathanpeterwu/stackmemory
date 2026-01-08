@@ -4,6 +4,21 @@
  */
 
 import { logger } from '../../../core/monitoring/logger.js';
+
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 import {
   SkillStorageService,
   getSkillStorage,
@@ -37,7 +52,7 @@ export class SkillHandlers {
    */
   private getStorage(): SkillStorageService {
     if (!this.skillStorage) {
-      const url = this.redisUrl || process.env.REDIS_URL;
+      const url = this.redisUrl || process.env['REDIS_URL'];
       if (!url) {
         throw new Error('REDIS_URL not configured for skill storage');
       }
@@ -60,7 +75,7 @@ export class SkillHandlers {
    * Check if skill storage is available
    */
   isAvailable(): boolean {
-    return !!(this.redisUrl || process.env.REDIS_URL);
+    return !!(this.redisUrl || process.env['REDIS_URL']);
   }
 
   // ============================================================
@@ -100,7 +115,7 @@ export class SkillHandlers {
       });
 
       return { success: true, skill };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to record skill', { error: message });
       return { success: false, error: message };
@@ -130,7 +145,7 @@ export class SkillHandlers {
       const limited = args.limit ? skills.slice(0, args.limit) : skills;
 
       return { success: true, skills: limited };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to get relevant skills', { error: message });
       return { success: false, error: message };
@@ -172,7 +187,7 @@ export class SkillHandlers {
       const skills = await storage.querySkills(query);
 
       return { success: true, skills, total: skills.length };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to query skills', { error: message });
       return { success: false, error: message };
@@ -194,7 +209,7 @@ export class SkillHandlers {
       }
 
       return { success: true, skill };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to validate skill', { error: message });
       return { success: false, error: message };
@@ -225,7 +240,7 @@ export class SkillHandlers {
       }
 
       return { success: true, skill };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to update skill', { error: message });
       return { success: false, error: message };
@@ -247,7 +262,7 @@ export class SkillHandlers {
       }
 
       return { success: true };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to delete skill', { error: message });
       return { success: false, error: message };
@@ -284,7 +299,7 @@ export class SkillHandlers {
       );
 
       return { success: true, entryId: entry.id };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to record journal entry', { error: message });
       return { success: false, error: message };
@@ -307,7 +322,7 @@ export class SkillHandlers {
       const entries = await storage.getSessionJournal(sessionId);
 
       return { success: true, entries };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to get session journal', { error: message });
       return { success: false, error: message };
@@ -336,7 +351,7 @@ export class SkillHandlers {
       }
 
       return { success: true, skill };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to promote journal entry', { error: message });
       return { success: false, error: message };
@@ -357,7 +372,7 @@ export class SkillHandlers {
       const storage = this.getStorage();
       await storage.startSession(args.session_id);
       return { success: true };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to start session', { error: message });
       return { success: false, error: message };
@@ -379,7 +394,7 @@ export class SkillHandlers {
       }
 
       return { success: true, summary };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to end session', { error: message });
       return { success: false, error: message };
@@ -402,7 +417,7 @@ export class SkillHandlers {
       const storage = this.getStorage();
       const skills = await storage.getPromotionCandidates();
       return { success: true, skills };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to get promotion candidates', { error: message });
       return { success: false, error: message };
@@ -424,7 +439,7 @@ export class SkillHandlers {
       }
 
       return { success: true, skill };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to promote skill priority', { error: message });
       return { success: false, error: message };
@@ -441,7 +456,7 @@ export class SkillHandlers {
       const storage = this.getStorage();
       const count = await storage.archiveStaleSkills(args.days_threshold || 90);
       return { success: true, archivedCount: count };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to archive stale skills', { error: message });
       return { success: false, error: message };
@@ -460,7 +475,7 @@ export class SkillHandlers {
       const storage = this.getStorage();
       const metrics = await storage.getMetrics();
       return { success: true, metrics };
-    } catch (error) {
+    } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unknown error';
       logger.error('Failed to get skill metrics', { error: message });
       return { success: false, error: message };

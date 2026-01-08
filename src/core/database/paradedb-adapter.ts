@@ -298,7 +298,7 @@ export class ParadeDBAdapter extends FeatureAwareDatabaseAdapter {
 
       await client.query('COMMIT');
       logger.info('ParadeDB schema initialized successfully');
-    } catch (error) {
+    } catch (error: unknown) {
       await client.query('ROLLBACK');
       throw error;
     } finally {
@@ -1018,7 +1018,7 @@ export class ParadeDBAdapter extends FeatureAwareDatabaseAdapter {
         meanTime: parseFloat(row.mean_time),
         totalTime: parseFloat(row.total_time),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn('pg_stat_statements not available', error);
       return [];
     } finally {
@@ -1056,10 +1056,10 @@ export class ParadeDBAdapter extends FeatureAwareDatabaseAdapter {
     try {
       await callback(this);
       await this.commitTransaction();
-    } catch (error) {
+    } catch (error: unknown) {
       try {
         await this.rollbackTransaction();
-      } catch (rollbackError) {
+      } catch (rollbackError: unknown) {
         // Log rollback failure but don't mask original error
         console.error('Transaction rollback failed:', rollbackError);
         // Connection might be in bad state - mark as unusable if connection pool exists
@@ -1155,7 +1155,7 @@ export class ParadeDBAdapter extends FeatureAwareDatabaseAdapter {
           `Format ${format} not yet implemented for ParadeDB import`
         );
       }
-    } catch (error) {
+    } catch (error: unknown) {
       await client.query('ROLLBACK');
       throw error;
     } finally {

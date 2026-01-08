@@ -108,7 +108,7 @@ export function registerWorktreeCommands(program: Command): void {
           } else {
             contextStatus = '○ Not initialized';
           }
-        } catch (error) {
+        } catch (error: unknown) {
           contextStatus = '✗ Error';
         }
 
@@ -149,7 +149,7 @@ export function registerWorktreeCommands(program: Command): void {
 
       // Detect current worktree
       const worktrees = manager.detectWorktrees(currentPath);
-      const current = worktrees.find(w => currentPath.startsWith(w.path));
+      const current = worktrees.find((w: any) => currentPath.startsWith(w.path));
 
       if (!current) {
         console.log(chalk.yellow('Not in a git worktree'));
@@ -188,7 +188,7 @@ export function registerWorktreeCommands(program: Command): void {
             console.log(chalk.yellow('\nContext not initialized'));
             console.log(chalk.gray('  Run "stackmemory init" to initialize'));
           }
-        } catch (error) {
+        } catch (error: unknown) {
           console.log(chalk.red('\nError accessing context:'), (error as Error).message);
         }
       } else {
@@ -244,7 +244,7 @@ export function registerWorktreeCommands(program: Command): void {
           console.log(chalk.gray('  stackmemory init'));
         }
         console.log(chalk.gray('  # Start working in isolated context'));
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(chalk.red('Failed to create worktree:'), (error as Error).message);
         process.exit(1);
       }
@@ -269,8 +269,8 @@ export function registerWorktreeCommands(program: Command): void {
       const worktrees = manager.detectWorktrees();
       
       // Find source and target
-      let source = worktrees.find(w => w.branch === options.source);
-      let target = worktrees.find(w => w.branch === options.target);
+      let source = worktrees.find((w: any) => w.branch === options.source);
+      let target = worktrees.find((w: any) => w.branch === options.target);
       
       if (!source || !target) {
         // Interactive selection if not specified
@@ -282,7 +282,7 @@ export function registerWorktreeCommands(program: Command): void {
               type: 'list',
               name: 'sourceBranch',
               message: 'Select source worktree:',
-              choices: worktrees.map(w => ({
+              choices: worktrees.map((w: any) => ({
                 name: `${w.branch} (${w.path})`,
                 value: w,
               })),
@@ -298,8 +298,8 @@ export function registerWorktreeCommands(program: Command): void {
               name: 'targetBranch',
               message: 'Select target worktree:',
               choices: worktrees
-                .filter(w => w.path !== source!.path)
-                .map(w => ({
+                .filter((w: any) => w.path !== source!.path)
+                .map((w: any) => ({
                   name: `${w.branch} (${w.path})`,
                   value: w,
                 })),
@@ -322,7 +322,7 @@ export function registerWorktreeCommands(program: Command): void {
         );
         
         console.log(chalk.green('✓ Context sync completed'));
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(chalk.red('Sync failed:'), (error as Error).message);
         process.exit(1);
       }
@@ -349,8 +349,8 @@ export function registerWorktreeCommands(program: Command): void {
         const active = manager.detectWorktrees();
         const stored = manager.listActiveWorktrees();
         
-        const activePaths = new Set(active.map(w => w.path));
-        const stale = stored.filter(w => !activePaths.has(w.path));
+        const activePaths = new Set(active.map((w: any) => w.path));
+        const stale = stored.filter((w: any) => !activePaths.has(w.path));
         
         if (stale.length === 0) {
           console.log(chalk.green('No stale contexts found'));
@@ -371,7 +371,7 @@ export function registerWorktreeCommands(program: Command): void {
       const manager = WorktreeManager.getInstance();
       const worktrees = manager.detectWorktrees();
       
-      const target = worktrees.find(w => w.branch === branch);
+      const target = worktrees.find((w: any) => w.branch === branch);
       if (!target) {
         console.log(chalk.red(`Worktree '${branch}' not found`));
         console.log(chalk.gray('\nAvailable worktrees:'));

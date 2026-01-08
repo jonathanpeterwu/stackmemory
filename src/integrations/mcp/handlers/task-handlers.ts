@@ -50,7 +50,7 @@ export class TaskHandlers {
           priority: taskPriority,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error creating task', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -95,7 +95,7 @@ export class TaskHandlers {
           progress,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error updating task status', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -168,7 +168,7 @@ export class TaskHandlers {
           filters,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error getting active tasks', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -209,7 +209,7 @@ ${Object.entries(metrics.by_status || {})
         ],
         metadata: metrics,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error getting task metrics', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -250,7 +250,7 @@ ${Object.entries(metrics.by_status || {})
           dependencyType: dependency_type,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error adding task dependency', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }

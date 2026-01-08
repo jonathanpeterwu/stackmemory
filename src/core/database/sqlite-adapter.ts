@@ -713,7 +713,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     try {
       await callback(this);
       await this.commitTransaction();
-    } catch (error) {
+    } catch (error: unknown) {
       await this.rollbackTransaction();
       throw error;
     }

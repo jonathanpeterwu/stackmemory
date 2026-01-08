@@ -5,7 +5,7 @@
  */
 
 // Set environment flag for CLI usage to skip async context bridge
-process.env.STACKMEMORY_CLI = 'true';
+process.env['STACKMEMORY_CLI'] = 'true';
 
 import { program } from 'commander';
 import { logger } from '../core/monitoring/logger.js';
@@ -37,6 +37,7 @@ import { registerLinearMigrateCommand } from './commands/linear-migrate.js';
 import { registerLinearCreateCommand } from './commands/linear-create.js';
 import { createChromaDBCommand } from './commands/chromadb.js';
 import { createInfiniteStorageCommand } from './commands/infinite-storage.js';
+import { createGCCommand } from './commands/gc.js';
 import { createSessionCommands } from './commands/session.js';
 import { registerWorktreeCommands } from './commands/worktree.js';
 import { registerOnboardingCommand } from './commands/onboard.js';
@@ -58,6 +59,19 @@ import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
 
 const VERSION = '0.3.1';
 
@@ -91,7 +105,7 @@ program
       console.log('✅ StackMemory initialized in', projectRoot);
 
       db.close();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to initialize StackMemory', error as Error);
       console.error('❌ Initialization failed:', (error as Error).message);
       process.exit(1);
@@ -289,7 +303,7 @@ program
       }
 
       db.close();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to get status', error as Error);
       console.error('❌ Status check failed:', (error as Error).message);
       process.exit(1);
@@ -321,7 +335,7 @@ linearCommand
         console.log('\n📋 Next step: Complete authorization and run:');
         console.log('stackmemory linear authorize <auth-code>');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear setup failed', error as Error);
       console.error('❌ Setup failed:', (error as Error).message);
       process.exit(1);
@@ -358,7 +372,7 @@ linearCommand
         console.error('❌ Authorization failed. Please try again.');
         process.exit(1);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear authorization failed', error as Error);
       console.error('❌ Authorization failed:', (error as Error).message);
       process.exit(1);
@@ -404,7 +418,7 @@ linearCommand
       } else {
         console.log('\n💡 Run "stackmemory linear setup" to get started');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear status check failed', error as Error);
       console.error('❌ Status check failed:', (error as Error).message);
       process.exit(1);
@@ -434,7 +448,7 @@ linearCommand
       const authManager = new LinearAuthManager(projectRoot);
 
       // Check for API key from environment first
-      if (!process.env.LINEAR_API_KEY && !authManager.isConfigured()) {
+      if (!process.env['LINEAR_API_KEY'] && !authManager.isConfigured()) {
         console.log(
           '❌ Linear not configured. Set LINEAR_API_KEY environment variable or run "stackmemory linear setup" first.'
         );
@@ -494,7 +508,7 @@ linearCommand
       }
 
       db.close();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear sync failed', error as Error);
       console.error('❌ Sync failed:', (error as Error).message);
       process.exit(1);
@@ -614,7 +628,7 @@ linearCommand
           '\nExample: stackmemory linear auto-sync --start --interval 10'
         );
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear auto-sync command failed', error as Error);
       console.error('❌ Auto-sync failed:', (error as Error).message);
       process.exit(1);
@@ -637,7 +651,7 @@ linearCommand
         );
         console.log('   stackmemory linear sync');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Force sync failed', error as Error);
       console.error('❌ Force sync failed:', (error as Error).message);
       process.exit(1);
@@ -759,7 +773,7 @@ linearCommand
         }
         db.close();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to update Linear task', error as Error);
       console.error('❌ Failed to update task:', (error as Error).message);
       process.exit(1);
@@ -916,7 +930,7 @@ linearCommand
         console.log('💡 Use --show to view current configuration');
         console.log('💡 Use --help to see all configuration options');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear config command failed', error as Error);
       console.error('❌ Config failed:', (error as Error).message);
       process.exit(1);
@@ -930,7 +944,7 @@ program
     try {
       console.log('🔍 Checking for updates...');
       await UpdateChecker.forceCheck(VERSION);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Update check failed', error as Error);
       console.error('❌ Update check failed:', (error as Error).message);
       process.exit(1);
@@ -1102,7 +1116,7 @@ program
         <div class="card"><div class="metric-label">Completion</div><div class="metric-value">\${metrics.data.metrics.completionRate.toFixed(0)}%</div></div>
       \`;
       
-      document.getElementById('tasks').innerHTML = tasks.data.tasks.slice(0, 10).map(t => \`
+      document.getElementById('tasks').innerHTML = tasks.data.tasks.slice(0, 10).map((t: any) => \`
         <div class="task-item \${t.state}">
           <span class="status \${t.state}">\${t.state}</span>
           <strong>\${t.title}</strong>
@@ -1146,7 +1160,7 @@ program
 
       // Keep the process alive
       await new Promise(() => {});
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Analytics command failed', error as Error);
       console.error('❌ Analytics failed:', (error as Error).message);
       process.exit(1);
@@ -1170,7 +1184,7 @@ program
 
       const progress = new ProgressTracker(projectRoot);
       console.log(progress.getSummary());
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to show progress', error as Error);
       console.error('❌ Failed to show progress:', (error as Error).message);
       process.exit(1);
@@ -1186,7 +1200,7 @@ program
       const { runMCPServer } = await import('../integrations/mcp/server.js');
 
       // Set project root
-      process.env.PROJECT_ROOT = options.project;
+      process.env['PROJECT_ROOT'] = options.project;
 
       console.log('🚀 Starting StackMemory MCP Server...');
       console.log(`   Project: ${options.project}`);
@@ -1197,7 +1211,7 @@ program
 
       // Start the MCP server
       await runMCPServer();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to start MCP server', error as Error);
       console.error('❌ MCP server failed:', (error as Error).message);
       process.exit(1);
@@ -1268,7 +1282,7 @@ program
       );
 
       db.close();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Test context failed', error as Error);
       console.error('❌ Test failed:', (error as Error).message);
       process.exit(1);
@@ -1293,6 +1307,7 @@ program.addCommand(createChromaDBCommand());
 
 // Add Infinite Storage command
 program.addCommand(createInfiniteStorageCommand());
+program.addCommand(createGCCommand());
 
 // Register session management commands
 program.addCommand(createSessionCommands());
@@ -1359,7 +1374,7 @@ program
       console.log('🚀 Launching StackMemory TUI Dashboard...');
 
       // Set environment variables
-      process.env.STACKMEMORY_WS_URL = options.wsUrl;
+      process.env['STACKMEMORY_WS_URL'] = options.wsUrl;
 
       // Get TUI module path
       const tuiPath = join(__dirname, '../features/tui/index.js');
@@ -1385,7 +1400,7 @@ program
           process.exit(code || 1);
         }
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('❌ Failed to launch TUI:', (error as Error).message);
       console.log('\n💡 Try "stackmemory dashboard" for a simpler view');
       process.exit(1);

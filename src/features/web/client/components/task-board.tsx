@@ -27,7 +27,7 @@ export function TaskBoard() {
   return (
     <ScrollArea className="h-[400px]">
       <div className="space-y-4">
-        {states.map(state => {
+        {states.map((state: any) => {
           const stateTasks = tasksByState[state] || []
           if (stateTasks.length === 0) return null
 
@@ -40,7 +40,7 @@ export function TaskBoard() {
                 </Badge>
               </div>
               <div className="space-y-1">
-                {stateTasks.slice(0, 5).map(task => (
+                {stateTasks.slice(0, 5).map((task: any) => (
                   <div
                     key={task.id}
                     className="p-2 border rounded-lg hover:bg-accent transition-colors"

@@ -166,7 +166,7 @@ export class PostTaskHooks extends EventEmitter {
       if (scripts.lint) {
         this.config.testFrameworks.lintCommand = 'npm run lint';
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('Could not detect test frameworks:', error);
     }
   }
@@ -246,7 +246,7 @@ export class PostTaskHooks extends EventEmitter {
           }
         }, 2000); // 2 second debounce
       });
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn('File watching not available:', error);
     }
   }
@@ -660,7 +660,7 @@ Provide specific, actionable feedback.
         // Update frame with quality results
         await this.frameManager.updateFrame(frameId, frame);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to record quality results:', error);
     }
   }

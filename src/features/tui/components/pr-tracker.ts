@@ -56,7 +56,7 @@ export class PRTracker extends EventEmitter {
 
   private formatIssueItem(issue: IssueData): string {
     const status = issue.state === 'open' ? '{green-fg}●{/}' : '{gray-fg}●{/}';
-    const assignees = issue.assignees?.map(a => `@${a}`).join(', ') || 'unassigned';
+    const assignees = issue.assignees?.map((a: any) => `@${a}`).join(', ') || 'unassigned';
     
     let item = `${status} #${issue.number}: ${issue.title}\n`;
     item += `   {gray-fg}@${issue.author.login} | ${assignees} | 💬${issue.comments}{/}`;
@@ -79,8 +79,8 @@ export class PRTracker extends EventEmitter {
   }
 
   private getReviewStatus(reviews: PRData['reviews']): string {
-    const approved = reviews.filter(r => r.state === 'approved').length;
-    const changes = reviews.filter(r => r.state === 'changes_requested').length;
+    const approved = reviews.filter((r: any) => r.state === 'approved').length;
+    const changes = reviews.filter((r: any) => r.state === 'changes_requested').length;
     
     if (changes > 0) return `{red-fg}👎${changes}{/}`;
     if (approved > 0) return `{green-fg}👍${approved}{/}`;
@@ -106,12 +106,12 @@ export class PRTracker extends EventEmitter {
     let label = '';
     
     if (this.viewMode === 'prs') {
-      items = Array.from(this.prs.values()).map(pr => this.formatPRItem(pr));
-      const open = Array.from(this.prs.values()).filter(pr => pr.state === 'open').length;
+      items = Array.from(this.prs.values()).map((pr: any) => this.formatPRItem(pr));
+      const open = Array.from(this.prs.values()).filter((pr: any) => pr.state === 'open').length;
       label = ` 🔀 Pull Requests (${open}/${this.prs.size}) [Tab] Issues `;
     } else {
-      items = Array.from(this.issues.values()).map(issue => this.formatIssueItem(issue));
-      const open = Array.from(this.issues.values()).filter(i => i.state === 'open').length;
+      items = Array.from(this.issues.values()).map((issue: any) => this.formatIssueItem(issue));
+      const open = Array.from(this.issues.values()).filter((i: any) => i.state === 'open').length;
       label = ` 🐛 Issues (${open}/${this.issues.size}) [Tab] PRs `;
     }
     

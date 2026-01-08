@@ -674,7 +674,7 @@ export class GraphRetrieval {
           JSON.stringify(edge.metadata.evidence || []),
           edge.metadata.bidirectional ? 1 : 0
         );
-    } catch (error) {
+    } catch (error: unknown) {
       // Ignore duplicate edges
     }
   }

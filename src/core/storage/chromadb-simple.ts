@@ -30,7 +30,7 @@ export class ChromaDBAdapter {
         // In-memory/local configuration (no external service needed)
         this.client = new ChromaClient();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Fallback to in-memory client
       console.log('Using in-memory ChromaDB client');
       this.client = new ChromaClient();

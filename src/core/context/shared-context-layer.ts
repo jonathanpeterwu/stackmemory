@@ -15,6 +15,20 @@ import * as path from 'path';
 import { logger } from '../monitoring/logger.js';
 import { sessionManager } from '../session/session-manager.js';
 import type { Frame } from '../frame-manager/frame-manager.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface SharedContext {
   projectId: string;
@@ -79,7 +93,7 @@ export class SharedContextLayer {
   private lastCacheClean = Date.now();
 
   private constructor() {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
     this.contextDir = path.join(homeDir, '.stackmemory', 'shared-context');
   }
 
@@ -257,7 +271,7 @@ export class SharedContextLayer {
       const frameIds = results.map((r) => r.frameId);
       index.recentlyAccessed = [
         ...frameIds,
-        ...index.recentlyAccessed.filter(id => !frameIds.includes(id))
+        ...index.recentlyAccessed.filter((id: any) => !frameIds.includes(id))
       ].slice(0, 100);
       
       // Save the updated context with recently accessed frames

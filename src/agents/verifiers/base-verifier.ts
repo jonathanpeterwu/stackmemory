@@ -150,7 +150,7 @@ export abstract class BaseVerifier {
       const result = await operation();
       this.retryCount.delete(key); // Clear on success
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       if (currentRetries < maxRetries) {
         this.retryCount.set(key, currentRetries + 1);
         logger.warn(`Retrying ${this.config.name} verification`, {

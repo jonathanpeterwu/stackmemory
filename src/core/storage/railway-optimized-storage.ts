@@ -14,6 +14,20 @@ import { Trace, CompressedTrace, ToolCall } from '../trace/types.js';
 import { ConfigManager } from '../config/config-manager.js';
 import * as zlib from 'zlib';
 import { promisify } from 'util';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 const gzipAsync = promisify(zlib.gzip);
 const gunzipAsync = promisify(zlib.gunzip);
@@ -51,21 +65,21 @@ export interface RailwayStorageConfig {
 
 export const DEFAULT_RAILWAY_CONFIG: RailwayStorageConfig = {
   redis: {
-    url: process.env.REDIS_URL || 'redis://localhost:6379',
+    url: process.env['REDIS_URL'] || 'redis://localhost:6379',
     ttlSeconds: 86400,  // 24 hours
     maxMemoryMb: 100,    // 100MB Redis limit
   },
   railwayBuckets: {
-    endpoint: process.env.RAILWAY_BUCKET_ENDPOINT || 'https://buckets.railway.app',
-    bucket: process.env.RAILWAY_BUCKET_NAME || 'stackmemory-warm',
-    accessKeyId: process.env.RAILWAY_BUCKET_ACCESS_KEY || '',
-    secretAccessKey: process.env.RAILWAY_BUCKET_SECRET_KEY || '',
+    endpoint: process.env['RAILWAY_BUCKET_ENDPOINT'] || 'https://buckets.railway.app',
+    bucket: process.env['RAILWAY_BUCKET_NAME'] || 'stackmemory-warm',
+    accessKeyId: process.env['RAILWAY_BUCKET_ACCESS_KEY'] || '',
+    secretAccessKey: process.env['RAILWAY_BUCKET_SECRET_KEY'] || '',
     region: 'us-east-1',
   },
   gcs: {
-    bucketName: process.env.GCS_BUCKET || 'stackmemory-cold',
-    projectId: process.env.GCP_PROJECT_ID || 'stackmemory',
-    keyFilename: process.env.GCP_KEY_FILE,
+    bucketName: process.env['GCS_BUCKET'] || 'stackmemory-cold',
+    projectId: process.env['GCP_PROJECT_ID'] || 'stackmemory',
+    keyFilename: process.env['GCP_KEY_FILE'],
   },
   tiers: {
     hotHours: 24,
@@ -130,7 +144,7 @@ export class RailwayOptimizedStorage {
         await this.redisClient.configSet('maxmemory-policy', 'allkeys-lru');
         
         logger.info('Redis connected for hot tier storage');
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn('Redis connection failed, falling back to SQLite only', error);
       }
     }
@@ -159,7 +173,7 @@ export class RailwayOptimizedStorage {
         });
         
         logger.info('GCS configured for cold tier storage');
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn('GCS setup failed, will use Railway buckets only', error);
       }
     }
@@ -289,7 +303,7 @@ export class RailwayOptimizedStorage {
         compressed: data.length > 10000,
       });
       
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to store in Redis', error);
       throw error;
     }
@@ -342,7 +356,7 @@ export class RailwayOptimizedStorage {
         compressionRatio: (1 - compressed.length / data.length).toFixed(2),
       });
       
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to store in Railway Buckets', error);
       throw error;
     }
@@ -392,7 +406,7 @@ export class RailwayOptimizedStorage {
             Bucket: this.config.railwayBuckets.bucket,
             Key: warmKey,
           }));
-        } catch (error) {
+        } catch (error: unknown) {
           // Ignore deletion errors
         }
       }
@@ -404,7 +418,7 @@ export class RailwayOptimizedStorage {
         compressedSize: compressed.length,
       });
       
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to store in GCS', error);
       throw error;
     }
@@ -430,7 +444,7 @@ export class RailwayOptimizedStorage {
       },
       toolSummary: {
         count: trace.tools.length,
-        types: [...new Set(trace.tools.map(t => t.tool))],
+        types: [...new Set(trace.tools.map((t: any) => t.tool))],
         firstTool: trace.tools[0]?.tool,
         lastTool: trace.tools[trace.tools.length - 1]?.tool,
       },
@@ -495,7 +509,7 @@ export class RailwayOptimizedStorage {
       
       return JSON.parse(traceData);
       
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to retrieve from Redis', error);
       return null;
     }
@@ -521,7 +535,7 @@ export class RailwayOptimizedStorage {
       const decompressed = await gunzipAsync(Buffer.from(compressed));
       return JSON.parse(decompressed.toString());
       
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to retrieve from Railway Buckets', error);
       return null;
     }
@@ -543,7 +557,7 @@ export class RailwayOptimizedStorage {
       // Note: Returns minimal trace from cold storage
       return JSON.parse(decompressed.toString());
       
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to retrieve from GCS', error);
       return null;
     }
@@ -648,7 +662,7 @@ export class RailwayOptimizedStorage {
             results.warmToCold++;
           }
         }
-      } catch (error) {
+      } catch (error: unknown) {
         results.errors.push(`Failed to migrate ${candidate.trace_id}: ${error}`);
       }
     }

@@ -4,6 +4,20 @@
  */
 
 import type { TraceConfig } from './debug-trace.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export {
   trace,
@@ -41,30 +55,30 @@ export {
 export function initializeTracing(): void {
   const config = {
     // Main control
-    DEBUG_TRACE: process.env.DEBUG_TRACE === 'true',
-    STACKMEMORY_DEBUG: process.env.STACKMEMORY_DEBUG === 'true',
+    DEBUG_TRACE: process.env['DEBUG_TRACE'] === 'true',
+    STACKMEMORY_DEBUG: process.env['STACKMEMORY_DEBUG'] === 'true',
     
     // Output control
-    TRACE_OUTPUT: process.env.TRACE_OUTPUT || 'console', // console|file|both
-    TRACE_VERBOSITY: process.env.TRACE_VERBOSITY || 'full', // full|errors|summary
+    TRACE_OUTPUT: process.env['TRACE_OUTPUT'] || 'console', // console|file|both
+    TRACE_VERBOSITY: process.env['TRACE_VERBOSITY'] || 'full', // full|errors|summary
     
     // Content control
-    TRACE_PARAMS: process.env.TRACE_PARAMS !== 'false', // Include parameters
-    TRACE_RESULTS: process.env.TRACE_RESULTS !== 'false', // Include results
-    TRACE_MASK_SENSITIVE: process.env.TRACE_MASK_SENSITIVE !== 'false', // Mask sensitive data
+    TRACE_PARAMS: process.env['TRACE_PARAMS'] !== 'false', // Include parameters
+    TRACE_RESULTS: process.env['TRACE_RESULTS'] !== 'false', // Include results
+    TRACE_MASK_SENSITIVE: process.env['TRACE_MASK_SENSITIVE'] !== 'false', // Mask sensitive data
     
     // Performance
-    TRACE_PERF_THRESHOLD: parseInt(process.env.TRACE_PERF_THRESHOLD || '100'), // ms
-    TRACE_MEMORY: process.env.TRACE_MEMORY === 'true', // Track memory usage
-    TRACE_MAX_DEPTH: parseInt(process.env.TRACE_MAX_DEPTH || '20'), // Max call depth
+    TRACE_PERF_THRESHOLD: parseInt(process.env['TRACE_PERF_THRESHOLD'] || '100'), // ms
+    TRACE_MEMORY: process.env['TRACE_MEMORY'] === 'true', // Track memory usage
+    TRACE_MAX_DEPTH: parseInt(process.env['TRACE_MAX_DEPTH'] || '20'), // Max call depth
     
     // Database specific
-    TRACE_DB: process.env.TRACE_DB === 'true', // Enable database tracing
-    TRACE_DB_SLOW: parseInt(process.env.TRACE_DB_SLOW || '100'), // Slow query threshold
+    TRACE_DB: process.env['TRACE_DB'] === 'true', // Enable database tracing
+    TRACE_DB_SLOW: parseInt(process.env['TRACE_DB_SLOW'] || '100'), // Slow query threshold
     
     // API specific
-    TRACE_API: process.env.TRACE_API === 'true', // Enable API tracing
-    TRACE_API_SLOW: parseInt(process.env.TRACE_API_SLOW || '1000'), // Slow API threshold
+    TRACE_API: process.env['TRACE_API'] === 'true', // Enable API tracing
+    TRACE_API_SLOW: parseInt(process.env['TRACE_API_SLOW'] || '1000'), // Slow API threshold
   };
   
   // Log configuration if debugging is enabled
@@ -98,24 +112,24 @@ export function withTracing<T>(
   fn: () => T,
   options?: Partial<TraceConfig>
 ): T {
-  const originalEnv = process.env.DEBUG_TRACE;
+  const originalEnv = process.env['DEBUG_TRACE'];
   
   try {
     // Temporarily enable tracing
-    process.env.DEBUG_TRACE = 'true';
+    process.env['DEBUG_TRACE'] = 'true';
     
     // Apply custom options if provided
     if (options) {
-      if (options.output) process.env.TRACE_OUTPUT = options.output;
-      if (options.verbosity) process.env.TRACE_VERBOSITY = options.verbosity;
+      if (options.output) process.env['TRACE_OUTPUT'] = options.output;
+      if (options.verbosity) process.env['TRACE_VERBOSITY'] = options.verbosity;
       if (options.includeParams !== undefined) {
-        process.env.TRACE_PARAMS = String(options.includeParams);
+        process.env['TRACE_PARAMS'] = String(options.includeParams);
       }
       if (options.includeResults !== undefined) {
-        process.env.TRACE_RESULTS = String(options.includeResults);
+        process.env['TRACE_RESULTS'] = String(options.includeResults);
       }
       if (options.performanceThreshold !== undefined) {
-        process.env.TRACE_PERF_THRESHOLD = String(options.performanceThreshold);
+        process.env['TRACE_PERF_THRESHOLD'] = String(options.performanceThreshold);
       }
     }
     
@@ -123,9 +137,9 @@ export function withTracing<T>(
   } finally {
     // Restore original environment
     if (originalEnv === undefined) {
-      delete process.env.DEBUG_TRACE;
+      delete process.env['DEBUG_TRACE'];
     } else {
-      process.env.DEBUG_TRACE = originalEnv;
+      process.env['DEBUG_TRACE'] = originalEnv;
     }
   }
 }
@@ -134,29 +148,29 @@ export function withTracing<T>(
  * Quick enable/disable functions for debugging
  */
 export const enableTracing = () => {
-  process.env.DEBUG_TRACE = 'true';
+  process.env['DEBUG_TRACE'] = 'true';
   console.log('✅ Tracing enabled');
 };
 
 export const disableTracing = () => {
-  delete process.env.DEBUG_TRACE;
+  delete process.env['DEBUG_TRACE'];
   console.log('❌ Tracing disabled');
 };
 
 export const enableVerboseTracing = () => {
-  process.env.DEBUG_TRACE = 'true';
-  process.env.TRACE_VERBOSITY = 'full';
-  process.env.TRACE_PARAMS = 'true';
-  process.env.TRACE_RESULTS = 'true';
-  process.env.TRACE_MEMORY = 'true';
+  process.env['DEBUG_TRACE'] = 'true';
+  process.env['TRACE_VERBOSITY'] = 'full';
+  process.env['TRACE_PARAMS'] = 'true';
+  process.env['TRACE_RESULTS'] = 'true';
+  process.env['TRACE_MEMORY'] = 'true';
   console.log('✅ Verbose tracing enabled');
 };
 
 export const enableMinimalTracing = () => {
-  process.env.DEBUG_TRACE = 'true';
-  process.env.TRACE_VERBOSITY = 'summary';
-  process.env.TRACE_PARAMS = 'false';
-  process.env.TRACE_RESULTS = 'false';
-  process.env.TRACE_MEMORY = 'false';
+  process.env['DEBUG_TRACE'] = 'true';
+  process.env['TRACE_VERBOSITY'] = 'summary';
+  process.env['TRACE_PARAMS'] = 'false';
+  process.env['TRACE_RESULTS'] = 'false';
+  process.env['TRACE_MEMORY'] = 'false';
   console.log('✅ Minimal tracing enabled');
 };

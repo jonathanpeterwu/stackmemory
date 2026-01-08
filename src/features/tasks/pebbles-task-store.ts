@@ -149,7 +149,7 @@ export class PebblesTaskStore extends EventEmitter {
         CREATE INDEX IF NOT EXISTS idx_task_timestamp ON task_cache(timestamp);
         CREATE INDEX IF NOT EXISTS idx_task_parent ON task_cache(parent_id);
       `);
-    } catch (error) {
+    } catch (error: unknown) {
       const dbError = errorHandler(error, {
         operation: 'initializeCache',
         schema: 'task_cache',
@@ -204,7 +204,7 @@ export class PebblesTaskStore extends EventEmitter {
               ttl: 3600000, // 1 hour cache
             });
             loaded++;
-          } catch (error) {
+          } catch (error: unknown) {
             errors++;
             logger.warn('Failed to cache task', {
               taskId: task.id,
@@ -220,7 +220,7 @@ export class PebblesTaskStore extends EventEmitter {
         file: this.tasksFile,
         cacheStats: this.taskCache.getStats(),
       });
-    } catch (error) {
+    } catch (error: unknown) {
       const systemError = errorHandler(error, {
         operation: 'loadFromJSONL',
         file: this.tasksFile,
@@ -264,7 +264,7 @@ export class PebblesTaskStore extends EventEmitter {
             });
             loaded++;
           }
-        } catch (error) {
+        } catch (error: unknown) {
           errors++;
           logger.warn('Failed to parse JSONL line', {
             error: error instanceof Error ? error.message : String(error),
@@ -277,7 +277,7 @@ export class PebblesTaskStore extends EventEmitter {
         errors,
         file: this.tasksFile,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to load tasks from JSONL', error as Error);
     }
   }
@@ -474,7 +474,7 @@ export class PebblesTaskStore extends EventEmitter {
 
       const rows = this.db.prepare(query).all(...params) as any[];
       return this.hydrateTasks(rows);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to get active tasks',
         ErrorCode.DB_QUERY_FAILED,
@@ -501,7 +501,7 @@ export class PebblesTaskStore extends EventEmitter {
         .get(taskId) as any;
 
       return row ? this.hydrateTask(row) : undefined;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get task: ${taskId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -531,7 +531,7 @@ export class PebblesTaskStore extends EventEmitter {
         .all() as any[];
 
       return this.hydrateTasks(rows);
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to get blocking tasks',
         ErrorCode.DB_QUERY_FAILED,
@@ -611,7 +611,7 @@ export class PebblesTaskStore extends EventEmitter {
         blocked_tasks: blockedTasks,
         overdue_tasks: 0, // TODO: implement due dates
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to get task metrics',
         ErrorCode.DB_QUERY_FAILED,
@@ -700,7 +700,7 @@ export class PebblesTaskStore extends EventEmitter {
         title: task.title,
         status: task.status,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new SystemError(
         `Failed to append task: ${task.id}`,
         ErrorCode.INTERNAL_ERROR,
@@ -749,7 +749,7 @@ export class PebblesTaskStore extends EventEmitter {
           task.context_score,
           task.last_accessed
         );
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to upsert task to cache: ${task.id}`,
         ErrorCode.DB_QUERY_FAILED,

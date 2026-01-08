@@ -8,6 +8,20 @@ import { LinearClient } from '../client.js';
 import { ContextService } from '../../../services/context-service.js';
 import { ConfigService } from '../../../services/config-service.js';
 import { TaskStatus, TaskPriority, Task } from '../../../types/task.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 // Create mock instances that can be configured
 const mockLinearClientInstance = {
@@ -73,7 +87,7 @@ describe('LinearSyncService', () => {
     originalEnv = process.env;
 
     // Set required environment variable
-    process.env.LINEAR_API_KEY = 'test-api-key';
+    process.env['LINEAR_API_KEY'] = 'test-api-key';
 
     // Reset mock functions
     mockLinearClientInstance.getIssues.mockReset();
@@ -108,7 +122,7 @@ describe('LinearSyncService', () => {
     });
 
     it('should throw error when LINEAR_API_KEY is not set', () => {
-      delete process.env.LINEAR_API_KEY;
+      delete process.env['LINEAR_API_KEY'];
 
       expect(() => {
         new LinearSyncService();

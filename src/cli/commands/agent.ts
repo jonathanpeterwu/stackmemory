@@ -57,7 +57,7 @@ export function createAgentCommand(): Command {
 
         // Execute task with feedback loop
         await executeTaskWithFeedback(taskManager, session, options.verify);
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Agent execution failed');
         console.error(
           chalk.red('Error:'),
@@ -101,7 +101,7 @@ export function createAgentCommand(): Command {
           );
           console.log('');
         }
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to load sessions');
         console.error(
           chalk.red('Error:'),
@@ -137,7 +137,7 @@ export function createAgentCommand(): Command {
 
         // Execute with feedback
         await executeTaskWithFeedback(taskManager, newSession, true);
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Retry failed');
         console.error(
           chalk.red('Error:'),
@@ -194,7 +194,7 @@ export function createAgentCommand(): Command {
           chalk.yellow('Total estimated turns:'),
           subtasks.reduce((sum, st) => sum + st.estimatedTurns, 0)
         );
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Breakdown failed');
         console.error(
           chalk.red('Error:'),

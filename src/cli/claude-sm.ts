@@ -13,6 +13,19 @@ import { program } from 'commander';
 import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
 import { initializeTracing, trace } from '../core/trace/index.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
 
 interface ClaudeConfig {
   instanceId: string;
@@ -166,7 +179,7 @@ class ClaudeSM {
       }
 
       return worktreePath;
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(chalk.red('❌ Failed to create worktree:'), err);
       return null;
     }
@@ -315,20 +328,20 @@ class ClaudeSM {
     // Initialize tracing system if enabled
     if (this.config.tracingEnabled) {
       // Set up environment for tracing
-      process.env.DEBUG_TRACE = 'true';
-      process.env.STACKMEMORY_DEBUG = 'true';
-      process.env.TRACE_OUTPUT = 'file'; // Write to file to not clutter Claude output
-      process.env.TRACE_MASK_SENSITIVE = 'true'; // Always mask sensitive data
+      process.env['DEBUG_TRACE'] = 'true';
+      process.env['STACKMEMORY_DEBUG'] = 'true';
+      process.env['TRACE_OUTPUT'] = 'file'; // Write to file to not clutter Claude output
+      process.env['TRACE_MASK_SENSITIVE'] = 'true'; // Always mask sensitive data
 
       if (this.config.verboseTracing) {
-        process.env.TRACE_VERBOSITY = 'full';
-        process.env.TRACE_PARAMS = 'true';
-        process.env.TRACE_RESULTS = 'true';
-        process.env.TRACE_MEMORY = 'true';
+        process.env['TRACE_VERBOSITY'] = 'full';
+        process.env['TRACE_PARAMS'] = 'true';
+        process.env['TRACE_RESULTS'] = 'true';
+        process.env['TRACE_MEMORY'] = 'true';
       } else {
-        process.env.TRACE_VERBOSITY = 'summary';
-        process.env.TRACE_PARAMS = 'true';
-        process.env.TRACE_RESULTS = 'false';
+        process.env['TRACE_VERBOSITY'] = 'summary';
+        process.env['TRACE_PARAMS'] = 'true';
+        process.env['TRACE_RESULTS'] = 'false';
       }
 
       // Initialize the tracing system
@@ -385,9 +398,9 @@ class ClaudeSM {
     this.loadContext();
 
     // Setup environment
-    process.env.CLAUDE_INSTANCE_ID = this.config.instanceId;
+    process.env['CLAUDE_INSTANCE_ID'] = this.config.instanceId;
     if (this.config.worktreePath) {
-      process.env.CLAUDE_WORKTREE_PATH = this.config.worktreePath;
+      process.env['CLAUDE_WORKTREE_PATH'] = this.config.worktreePath;
     }
 
     console.log(chalk.gray(`🤖 Instance ID: ${this.config.instanceId}`));

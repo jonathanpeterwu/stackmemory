@@ -152,7 +152,7 @@ export class PerformanceMonitor extends EventEmitter {
       const result = await fn();
       this.endOperation(operationId, { success: true });
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       this.endOperation(operationId, {
         success: false,
         error: error instanceof Error ? error.message : String(error),
@@ -173,7 +173,7 @@ export class PerformanceMonitor extends EventEmitter {
       const result = fn();
       this.endOperation(operationId, { success: true });
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       this.endOperation(operationId, {
         success: false,
         error: error instanceof Error ? error.message : String(error),

@@ -121,7 +121,7 @@ export class AnalyticsPanel extends EventEmitter {
       {
         title: 'Error Rate (%)',
         x: this.data.performance.errorRate.map((_, i) => i.toString()),
-        y: this.data.performance.errorRate.map(r => r * 100),
+        y: this.data.performance.errorRate.map((r: any) => r * 100),
         style: { line: 'red' }
       }
     ];

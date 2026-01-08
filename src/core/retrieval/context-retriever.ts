@@ -195,7 +195,7 @@ export class ContextRetriever {
       });
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Context retrieval failed:', error);
 
       // Return fallback empty result
@@ -418,7 +418,7 @@ export class ContextRetriever {
         // Use text or vector search
         rawResults = await this.adapter.search(searchOptions);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn(`Strategy ${strategy.name} failed, trying fallback:`, error);
 
       if (strategy.fallbackStrategy) {

@@ -5,6 +5,20 @@ import * as path from 'path';
 import Database from 'better-sqlite3';
 import { sessionManager } from '../../core/session/session-manager.js';
 import { sharedContextLayer } from '../../core/context/shared-context-layer.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 describe('CLI Shared Context Integration', () => {
   const testProjectDir = '/tmp/test-stackmemory-project';
@@ -59,7 +73,7 @@ describe('CLI Shared Context Integration', () => {
     it('should show shared context discovery on status command', async () => {
       // Create mock shared context
       const sharedContextDir = path.join(
-        process.env.HOME || '',
+        process.env['HOME'] || '',
         '.stackmemory',
         'shared-context',
         'projects'
@@ -189,7 +203,7 @@ describe('CLI Shared Context Integration', () => {
       // Should find frames from both mock data and newly added frames
       expect(sharedFrames.length).toBeGreaterThanOrEqual(1);
       // The mock data already has a frame with title 'Important Decision'
-      const titles = sharedFrames.map(f => f.title);
+      const titles = sharedFrames.map((f: any) => f.title);
       expect(titles).toContain('Important Decision');
 
       // Auto-discover should find the previous session
@@ -326,7 +340,7 @@ describe('CLI Shared Context Integration', () => {
       expect(discovery.suggestedFrames.length).toBeGreaterThanOrEqual(0);
       expect(discovery.lastDecisions.length).toBeGreaterThan(0);
       // Most recent decision should be the TDD one we just added
-      const decisions = discovery.lastDecisions.map(d => d.decision);
+      const decisions = discovery.lastDecisions.map((d: any) => d.decision);
       expect(decisions).toContain('Use TDD approach');
       expect(decisions).toContain('Use TypeScript for type safety');
     });

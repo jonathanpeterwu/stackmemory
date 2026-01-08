@@ -48,7 +48,7 @@ export class LinearConfigManager {
     try {
       const configData = readFileSync(this.configPath, 'utf8');
       return JSON.parse(configData);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'Failed to load Linear auto-sync configuration:',
         error as Error
@@ -72,7 +72,7 @@ export class LinearConfigManager {
     try {
       writeFileSync(this.configPath, JSON.stringify(updatedConfig, null, 2));
       logger.info('Linear auto-sync configuration saved');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'Failed to save Linear auto-sync configuration:',
         error as Error

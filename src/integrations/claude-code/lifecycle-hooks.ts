@@ -251,7 +251,7 @@ echo "✅ Handoff saved. Ready to resume anytime."
 
       if (stdout) console.log(stdout);
       if (stderr) console.error(stderr);
-    } catch (error) {
+    } catch (error: unknown) {
       // Hook doesn't exist or failed
       console.debug(`Hook ${hookName} not found or failed:`, error);
     }

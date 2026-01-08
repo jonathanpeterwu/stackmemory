@@ -81,7 +81,7 @@ export class RefactoredFrameManager {
       logger.info('Frame manager initialization completed', {
         stackDepth: this.frameStack.getDepth(),
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new SystemError(
         'Failed to initialize frame manager',
         ErrorCode.SYSTEM_INIT_FAILED,
@@ -446,14 +446,14 @@ export class RefactoredFrameManager {
   private closeChildFrames(parentFrameId: string): void {
     try {
       const activeFrames = this.frameDb.getFramesByProject(this.projectId, 'active');
-      const childFrames = activeFrames.filter(f => f.parent_frame_id === parentFrameId);
+      const childFrames = activeFrames.filter((f: any) => f.parent_frame_id === parentFrameId);
 
       for (const childFrame of childFrames) {
         if (this.frameStack.isFrameActive(childFrame.frame_id)) {
           this.closeFrame(childFrame.frame_id);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn('Failed to close child frames', { parentFrameId, error });
     }
   }

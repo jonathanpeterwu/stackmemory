@@ -76,8 +76,8 @@ export class SessionMonitor extends EventEmitter {
     if (session.recentActivities) {
       // File-based tagging
       const files = session.recentActivities
-        .filter(a => a.type === 'file_edit')
-        .map(a => a.data?.path || '');
+        .filter((a: any) => a.type === 'file_edit')
+        .map((a: any) => a.data?.path || '');
       
       if (files.some(f => f.includes('test'))) tags.push('testing');
       if (files.some(f => f.includes('.tsx') || f.includes('.jsx'))) tags.push('frontend');
@@ -86,8 +86,8 @@ export class SessionMonitor extends EventEmitter {
       
       // Command-based tagging
       const commands = session.recentActivities
-        .filter(a => a.type === 'command')
-        .map(a => a.data?.command || '');
+        .filter((a: any) => a.type === 'command')
+        .map((a: any) => a.data?.command || '');
       
       if (commands.some(c => c.includes('npm test') || c.includes('jest'))) tags.push('testing');
       if (commands.some(c => c.includes('git'))) tags.push('git-ops');
@@ -99,7 +99,7 @@ export class SessionMonitor extends EventEmitter {
     if (session.linearTask) {
       tags.push(`linear:${session.linearTask.identifier}`);
       if (session.linearTask.labels) {
-        tags.push(...session.linearTask.labels.map(l => l.toLowerCase()));
+        tags.push(...session.linearTask.labels.map((l: any) => l.toLowerCase()));
       }
     }
 
@@ -203,12 +203,12 @@ export class SessionMonitor extends EventEmitter {
     });
 
     // Update list display
-    const items = sessions.map(session => this.formatSessionItem(session));
+    const items = sessions.map((session: any) => this.formatSessionItem(session));
     this.sessionList.setItems(items);
 
     // Update footer statistics
-    const active = sessions.filter(s => this.getSessionStatus(s) === 'active').length;
-    const idle = sessions.filter(s => this.getSessionStatus(s) === 'idle').length;
+    const active = sessions.filter((s: any) => this.getSessionStatus(s) === 'active').length;
+    const idle = sessions.filter((s: any) => this.getSessionStatus(s) === 'idle').length;
     const total = sessions.length;
     
     const footer = this.container.children[1] as blessed.Widgets.BoxElement;

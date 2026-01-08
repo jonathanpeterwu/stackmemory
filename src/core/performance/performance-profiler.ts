@@ -6,6 +6,20 @@
 import { logger } from '../monitoring/logger.js';
 import { getQueryStatistics } from '../trace/db-trace-wrapper.js';
 import Database from 'better-sqlite3';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface PerformanceMetrics {
   operationName: string;
@@ -101,7 +115,7 @@ export class PerformanceProfiler {
       const result = await fn();
       endTimer(metadata);
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       endTimer({ ...metadata, error: true });
       throw error;
     }
@@ -312,7 +326,7 @@ export class PerformanceProfiler {
     const samples = this.samples.get(operationName);
     if (!samples || samples.length === 0) return 0;
 
-    const durations = samples.map(s => s.duration).sort((a, b) => a - b);
+    const durations = samples.map((s: any) => s.duration).sort((a, b) => a - b);
     const index = Math.floor(durations.length * 0.95);
     return durations[index] || 0;
   }
@@ -366,7 +380,7 @@ let globalProfiler: PerformanceProfiler | null = null;
 export function getProfiler(): PerformanceProfiler {
   if (!globalProfiler) {
     globalProfiler = new PerformanceProfiler({
-      enabled: process.env.NODE_ENV !== 'production' || process.env.STACKMEMORY_PROFILING === 'true',
+      enabled: process.env['NODE_ENV'] !== 'production' || process.env['STACKMEMORY_PROFILING'] === 'true',
     });
   }
   return globalProfiler;

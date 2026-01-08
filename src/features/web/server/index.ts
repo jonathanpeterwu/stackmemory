@@ -13,12 +13,26 @@ import { FrameManager } from '../../../core/context/frame-manager.js';
 import Database from 'better-sqlite3';
 import { existsSync } from 'fs';
 import { join } from 'path';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 const app = express();
 const httpServer = createServer(app);
 const io = new SocketServer(httpServer, {
   cors: {
-    origin: process.env.CLIENT_URL || 'http://localhost:3000',
+    origin: process.env['CLIENT_URL'] || 'http://localhost:3000',
     methods: ['GET', 'POST'],
   },
 });
@@ -52,7 +66,7 @@ function initializeServices() {
       db = new Database(dbPath);
       frameManager = new FrameManager(db, 'web');
       console.log('💾 Database and FrameManager initialized');
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('❌ Failed to initialize database:', error);
     }
   }
@@ -67,7 +81,7 @@ app.get('/api/tasks', (req, res) => {
   try {
     const tasks = taskReader.getTasks();
     res.json({ tasks, total: tasks.length });
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(500).json({ error: 'Failed to fetch tasks' });
   }
 });
@@ -76,7 +90,7 @@ app.get('/api/tasks/active', (req, res) => {
   try {
     const tasks = taskReader.getActiveTasks();
     res.json({ tasks, total: tasks.length });
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(500).json({ error: 'Failed to fetch active tasks' });
   }
 });
@@ -85,7 +99,7 @@ app.get('/api/tasks/by-state/:state', (req, res) => {
   try {
     const tasks = taskReader.getTasksByState(req.params.state);
     res.json({ tasks, total: tasks.length });
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(500).json({ error: 'Failed to fetch tasks by state' });
   }
 });
@@ -94,7 +108,7 @@ app.get('/api/sessions', (req, res) => {
   try {
     const sessions = sessionManager?.getActiveSessions ? sessionManager.getActiveSessions() : [];
     res.json({ sessions, total: sessions.length });
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(500).json({ error: 'Failed to fetch sessions' });
   }
 });
@@ -107,7 +121,7 @@ app.get('/api/frames', (req, res) => {
     }
     const frames = frameManager.getAllFrames();
     res.json({ frames, total: frames.length });
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(500).json({ error: 'Failed to fetch frames' });
   }
 });
@@ -122,8 +136,8 @@ app.get('/api/analytics', (req, res) => {
     const analytics = {
       summary: {
         totalTasks: tasks.length,
-        activeTasks: tasks.filter(t => t.state === 'In Progress').length,
-        completedTasks: tasks.filter(t => t.state === 'Done').length,
+        activeTasks: tasks.filter((t: any) => t.state === 'In Progress').length,
+        completedTasks: tasks.filter((t: any) => t.state === 'Done').length,
         totalSessions: sessions.length,
         totalFrames: frames.length,
       },
@@ -137,12 +151,12 @@ app.get('/api/analytics', (req, res) => {
         return acc;
       }, {} as Record<number, number>),
       recentActivity: {
-        tasksUpdatedToday: tasks.filter(t => {
+        tasksUpdatedToday: tasks.filter((t: any) => {
           const updated = new Date(t.updatedAt);
           const today = new Date();
           return updated.toDateString() === today.toDateString();
         }).length,
-        sessionsToday: sessions.filter(s => {
+        sessionsToday: sessions.filter((s: any) => {
           const started = new Date(s.startTime);
           const today = new Date();
           return started.toDateString() === today.toDateString();
@@ -151,7 +165,7 @@ app.get('/api/analytics', (req, res) => {
     };
     
     res.json(analytics);
-  } catch (error) {
+  } catch (error: unknown) {
     res.status(500).json({ error: 'Failed to fetch analytics' });
   }
 });
@@ -194,13 +208,13 @@ setInterval(() => {
     const sessions = sessionManager?.getActiveSessions ? sessionManager.getActiveSessions() : [];
     io.emit('sessions:update', sessions);
     io.emit('frames:update', frameManager?.getAllFrames() || []);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('Error in periodic update:', error);
   }
 }, 5000);
 
 // Start server
-const PORT = process.env.WS_PORT || 8080;
+const PORT = process.env['WS_PORT'] || 8080;
 
 initializeServices();
 

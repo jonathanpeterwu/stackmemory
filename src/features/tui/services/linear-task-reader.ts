@@ -30,7 +30,7 @@ export class LinearTaskReader {
       const content = readFileSync(this.tasksFile, 'utf8');
       const lines = content.split('\n').filter(Boolean);
       
-      const tasks: LinearTask[] = lines.map(line => {
+      const tasks: LinearTask[] = lines.map((line: any) => {
         const task = JSON.parse(line);
         
         // Convert from synced format to TUI LinearTask format
@@ -51,7 +51,7 @@ export class LinearTaskReader {
       });
 
       return tasks;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error reading tasks:', error);
       return [];
     }
@@ -69,7 +69,7 @@ export class LinearTaskReader {
       const content = readFileSync(this.mappingsFile, 'utf8');
       const mappings = JSON.parse(content);
       return new Map(Object.entries(mappings));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error reading mappings:', error);
       return new Map();
     }
@@ -80,7 +80,7 @@ export class LinearTaskReader {
    */
   getActiveTasks(): LinearTask[] {
     const allTasks = this.getTasks();
-    return allTasks.filter(task => 
+    return allTasks.filter((task: any) => 
       task.state !== 'Done' && 
       task.state !== 'Canceled' &&
       task.state !== 'Duplicate'
@@ -92,7 +92,7 @@ export class LinearTaskReader {
    */
   getTasksByState(state: string): LinearTask[] {
     const allTasks = this.getTasks();
-    return allTasks.filter(task => task.state === state);
+    return allTasks.filter((task: any) => task.state === state);
   }
 
   /**

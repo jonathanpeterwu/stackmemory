@@ -40,7 +40,7 @@ export class AnalyticsAPI {
           lastUpdated: dashboardState.lastUpdated,
         },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       this.handleError(res, error);
     }
   }
@@ -58,7 +58,7 @@ export class AnalyticsAPI {
           total: dashboardState.metrics.totalTasks,
         },
       });
-    } catch (error) {
+    } catch (error: unknown) {
       this.handleError(res, error);
     }
   }
@@ -98,7 +98,7 @@ export class AnalyticsAPI {
           data: userMetrics,
         });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.handleError(res, error);
     }
   }
@@ -119,7 +119,7 @@ export class AnalyticsAPI {
         success: true,
         message: 'Task added successfully',
       });
-    } catch (error) {
+    } catch (error: unknown) {
       this.handleError(res, error);
     }
   }
@@ -139,7 +139,7 @@ export class AnalyticsAPI {
         success: true,
         message: 'Task updated successfully',
       });
-    } catch (error) {
+    } catch (error: unknown) {
       this.handleError(res, error);
     }
   }
@@ -152,7 +152,7 @@ export class AnalyticsAPI {
         success: true,
         message: 'Linear tasks synced successfully',
       });
-    } catch (error) {
+    } catch (error: unknown) {
       this.handleError(res, error);
     }
   }
@@ -178,7 +178,7 @@ export class AnalyticsAPI {
           data: dashboardState,
         });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.handleError(res, error);
     }
   }
@@ -310,7 +310,7 @@ export class AnalyticsAPI {
               })
             );
           }
-        } catch (error) {
+        } catch (error: unknown) {
           ws.send(
             JSON.stringify({
               type: 'error',

@@ -70,7 +70,7 @@ export class ChromaDBAdapter {
       });
 
       this.logger.info(`ChromaDB collection '${collectionName}' initialized`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to initialize ChromaDB collection', error);
       throw error;
     }
@@ -116,7 +116,7 @@ export class ChromaDBAdapter {
       });
 
       this.logger.debug(`Stored frame ${frame.frameId} for user ${this.userId}`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to store frame ${frame.frameId}`, error);
       throw error;
     }
@@ -165,7 +165,7 @@ export class ChromaDBAdapter {
       });
 
       this.logger.debug(`Stored ${type} for user ${this.userId}`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to store ${type}`, error);
       throw error;
     }
@@ -249,7 +249,7 @@ export class ChromaDBAdapter {
 
       this.logger.debug(`Found ${contexts.length} contexts for query`);
       return contexts;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to query contexts', error);
       throw error;
     }
@@ -298,7 +298,7 @@ export class ChromaDBAdapter {
       }
 
       return contexts;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to get recent contexts', error);
       throw error;
     }
@@ -335,7 +335,7 @@ export class ChromaDBAdapter {
 
       this.logger.info(`Deleted ${results.ids.length} old contexts`);
       return results.ids.length;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to delete old contexts', error);
       throw error;
     }
@@ -372,7 +372,7 @@ export class ChromaDBAdapter {
       }
 
       return contexts;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to get team contexts', error);
       return [];
     }
@@ -475,7 +475,7 @@ export class ChromaDBAdapter {
       stats.totalDocuments = stats.userDocuments + (stats.teamDocuments || 0);
 
       return stats;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to get stats', error);
       throw error;
     }

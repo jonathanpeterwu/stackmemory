@@ -543,7 +543,7 @@ export class EnhancedPreClearHooks extends EventEmitter {
           timestamp: new Date().toISOString(),
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         branch: 'unknown',
         ahead: 0,
@@ -582,7 +582,7 @@ export class EnhancedPreClearHooks extends EventEmitter {
             relatedFiles: [],
           };
         });
-    } catch (error) {
+    } catch (error: unknown) {
       return [];
     }
   }
@@ -617,7 +617,7 @@ export class EnhancedPreClearHooks extends EventEmitter {
       );
 
       return deps;
-    } catch (error) {
+    } catch (error: unknown) {
       return [];
     }
   }
@@ -668,7 +668,7 @@ export class EnhancedPreClearHooks extends EventEmitter {
         encoding: 'utf-8',
         cwd: this.projectRoot,
       }).trim();
-    } catch (error) {
+    } catch (error: unknown) {
       return 'unknown';
     }
   }
@@ -680,7 +680,7 @@ export class EnhancedPreClearHooks extends EventEmitter {
         'utf-8'
       );
       return JSON.parse(content);
-    } catch (error) {
+    } catch (error: unknown) {
       return null;
     }
   }
@@ -725,7 +725,7 @@ export class EnhancedPreClearHooks extends EventEmitter {
       // Additional restoration logic would go here
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to restore enhanced context:', error);
       return false;
     }

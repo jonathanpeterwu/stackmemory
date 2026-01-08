@@ -283,7 +283,7 @@ async function mergeDuplicateTasks(dryRun = true) {
 
             console.log(`   ✅ Canceled ${duplicateId} as duplicate`);
             totalCanceled++;
-          } catch (error) {
+          } catch (error: unknown) {
             const errorMessage =
               error instanceof Error ? error.message : String(error);
             console.log(
@@ -326,7 +326,7 @@ async function mergeDuplicateTasks(dryRun = true) {
           );
           totalUpdates++;
         }
-      } catch (error) {
+      } catch (error: unknown) {
         const errorMessage =
           error instanceof Error ? error.message : String(error);
         console.error(`   ❌ Error processing group: ${errorMessage}`);

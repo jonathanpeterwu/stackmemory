@@ -563,7 +563,7 @@ Respond with only the JSON object, no other text.`;
           fallbackUsed: false,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn('Failed to parse LLM response, using fallback', {
         error,
         response,
@@ -603,7 +603,7 @@ Respond with only the JSON object, no other text.`;
     let tokensUsed = 0;
 
     // Preload frames for better performance
-    const frameIds = analysis.framesToRetrieve.map(p => p.frameId);
+    const frameIds = analysis.framesToRetrieve.map((p: any) => p.frameId);
     await this.lazyLoader.preloadContext(frameIds, {
       parallel: true,
       depth: 2, // Load frames, anchors, and events
@@ -638,7 +638,7 @@ Respond with only the JSON object, no other text.`;
           events.push(...frameEvents);
           tokensUsed += frameEvents.length * 30;
         }
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn('Failed to retrieve frame', {
           frameId: plan.frameId,
           error,

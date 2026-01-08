@@ -14,24 +14,38 @@ import Database from 'better-sqlite3';
 import { BrowserMCPIntegration } from '../../features/browser/browser-mcp.js';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 // Configuration
 const config = {
-  port: parseInt(process.env.PORT || '3000'),
-  environment: process.env.NODE_ENV || 'development',
-  corsOrigins: process.env.CORS_ORIGINS?.split(',') || [
+  port: parseInt(process.env['PORT'] || '3000'),
+  environment: process.env['NODE_ENV'] || 'development',
+  corsOrigins: process.env['CORS_ORIGINS']?.split(',') || [
     'http://localhost:3000',
   ],
-  authMode: process.env.AUTH_MODE || 'api_key',
-  apiKeySecret: process.env.API_KEY_SECRET || 'development-secret',
-  jwtSecret: process.env.JWT_SECRET || 'development-jwt-secret',
+  authMode: process.env['AUTH_MODE'] || 'api_key',
+  apiKeySecret: process.env['API_KEY_SECRET'] || 'development-secret',
+  jwtSecret: process.env['JWT_SECRET'] || 'development-jwt-secret',
   databaseUrl:
-    process.env.DATABASE_URL ||
+    process.env['DATABASE_URL'] ||
     join(process.cwd(), '.stackmemory', 'railway.db'),
-  rateLimitEnabled: process.env.RATE_LIMIT_ENABLED === 'true',
-  rateLimitFree: parseInt(process.env.RATE_LIMIT_FREE || '100'),
-  enableWebSocket: process.env.ENABLE_WEBSOCKET !== 'false',
-  enableAnalytics: process.env.ENABLE_ANALYTICS === 'true',
+  rateLimitEnabled: process.env['RATE_LIMIT_ENABLED'] === 'true',
+  rateLimitFree: parseInt(process.env['RATE_LIMIT_FREE'] || '100'),
+  enableWebSocket: process.env['ENABLE_WEBSOCKET'] !== 'false',
+  enableAnalytics: process.env['ENABLE_ANALYTICS'] === 'true',
 };
 
 // Simple in-memory rate limiter

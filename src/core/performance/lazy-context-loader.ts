@@ -322,7 +322,7 @@ export class LazyContextLoader {
         ...row,
         metadata: JSON.parse(row.metadata || '{}'),
       };
-    } catch (error) {
+    } catch (error: unknown) {
       // Return mock frame if table doesn't exist (for benchmarking)
       if (frameId.startsWith('frame-')) {
         return {
@@ -346,7 +346,7 @@ export class LazyContextLoader {
         'SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at DESC'
       ).all(frameId) as any[];
 
-      return rows.map(row => ({
+      return rows.map((row: any) => ({
         ...row,
         metadata: JSON.parse(row.metadata || '{}'),
       }));
@@ -361,7 +361,7 @@ export class LazyContextLoader {
         'SELECT * FROM events WHERE frame_id = ? ORDER BY timestamp DESC LIMIT ?'
       ).all(frameId, limit) as any[];
 
-      return rows.map(row => ({
+      return rows.map((row: any) => ({
         ...row,
         data: JSON.parse(row.data || '{}'),
         metadata: JSON.parse(row.metadata || '{}'),
@@ -385,7 +385,7 @@ export class LazyContextLoader {
             ORDER BY updated_at DESC
           `;
           const rows = this.db.prepare(query).all(...frameIds) as any[];
-          return rows.map(r => r.id);
+          return rows.map((r: any) => r.id);
         }
         
         case 'relevance': {
@@ -396,7 +396,7 @@ export class LazyContextLoader {
             ORDER BY score DESC
           `;
           const rows = this.db.prepare(query).all(...frameIds) as any[];
-          return rows.map(r => r.id);
+          return rows.map((r: any) => r.id);
         }
         
         case 'frequency': {
@@ -410,7 +410,7 @@ export class LazyContextLoader {
             ORDER BY event_count DESC
           `;
           const rows = this.db.prepare(query).all(...frameIds) as any[];
-          return rows.map(r => r.id);
+          return rows.map((r: any) => r.id);
         }
         
         default:

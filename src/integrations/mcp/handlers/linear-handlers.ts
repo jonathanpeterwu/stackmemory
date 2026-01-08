@@ -60,7 +60,7 @@ export class LinearHandlers {
         ],
         metadata: result,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear sync failed', error instanceof Error ? error : new Error(String(error)));
       
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -135,7 +135,7 @@ export class LinearHandlers {
           result,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error updating Linear task', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -183,7 +183,7 @@ export class LinearHandlers {
       // TODO: Implement getLinearIssues public method
       const issues: any[] = [];
 
-      const issuesSummary = issues.map(issue => ({
+      const issuesSummary = issues.map((issue: any) => ({
         id: issue.id,
         identifier: issue.identifier,
         title: issue.title,
@@ -195,7 +195,7 @@ export class LinearHandlers {
       }));
 
       const summaryText = issuesSummary.length > 0
-        ? issuesSummary.map(i => 
+        ? issuesSummary.map((i: any) => 
             `${i.identifier}: ${i.title} [${i.state}] (${i.assignee})`
           ).join('\n')
         : 'No Linear issues found';
@@ -213,7 +213,7 @@ export class LinearHandlers {
           filters,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error getting Linear tasks', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -275,7 +275,7 @@ export class LinearHandlers {
           syncStats,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error getting Linear status', error instanceof Error ? error : new Error(String(error)));
       
       return {

@@ -55,7 +55,7 @@ export class TraceDetector {
       const cutoff = Date.now() - 24 * 60 * 60 * 1000;
 
       this.traces = recentTraces.filter((t) => t.metadata.startTime >= cutoff);
-    } catch (error) {
+    } catch (error: unknown) {
       // If loading fails, start with empty traces
       console.error('Failed to load traces from store:', error);
       this.traces = [];
@@ -166,7 +166,7 @@ export class TraceDetector {
     if (this.traceStore) {
       try {
         this.traceStore.saveTrace(trace);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Failed to persist trace:', error);
       }
     }
@@ -465,7 +465,7 @@ export class TraceDetector {
    */
   private compressSelective(trace: Trace, threshold: number = 0.5): CompressedTrace {
     // Calculate individual tool scores
-    const significantTools = trace.tools.filter(tool => {
+    const significantTools = trace.tools.filter((tool: any) => {
       const score = this.configManager.calculateScore(tool.tool, {
         filesAffected: tool.filesAffected?.length || 0,
         isPermanent: this.isPermanentChange(tool),
@@ -475,8 +475,8 @@ export class TraceDetector {
     });
     
     const pattern = significantTools.length > 0 
-      ? significantTools.map(t => t.tool).join('→')
-      : trace.tools.map(t => t.tool).join('→');
+      ? significantTools.map((t: any) => t.tool).join('→')
+      : trace.tools.map((t: any) => t.tool).join('→');
     
     return {
       pattern,
@@ -615,7 +615,7 @@ export class TraceDetector {
           trace.tools = []; // Clear tool data for maximum compression
         } else if (strategy === CompressionStrategy.SELECTIVE) {
           // Keep only high-score tools
-          trace.tools = trace.tools.filter(tool => {
+          trace.tools = trace.tools.filter((tool: any) => {
             const score = this.configManager.calculateScore(tool.tool, {
               filesAffected: tool.filesAffected?.length || 0,
               isPermanent: this.isPermanentChange(tool),
@@ -631,7 +631,7 @@ export class TraceDetector {
         if (this.traceStore) {
           try {
             this.traceStore.updateCompression(trace.id, trace.compressed, strategy);
-          } catch (error) {
+          } catch (error: unknown) {
             console.error('Failed to update trace compression in store:', error);
           }
         }

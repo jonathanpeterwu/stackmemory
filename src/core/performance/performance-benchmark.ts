@@ -46,7 +46,7 @@ export class PerformanceBenchmark {
     let baselineCount = 0;
     for (let i = 0; i < iterations; i++) {
       const content = readFileSync(filePath, 'utf8');
-      const lines = content.split('\n').filter(l => l.trim());
+      const lines = content.split('\n').filter((l: any) => l.trim());
       for (const line of lines) {
         try {
           JSON.parse(line);
@@ -191,7 +191,7 @@ export class PerformanceBenchmark {
       frames = db.prepare(
         'SELECT id FROM frames ORDER BY updated_at DESC LIMIT ?'
       ).all(frameCount) as any[];
-    } catch (error) {
+    } catch (error: unknown) {
       // Create mock frame IDs if table doesn't exist
       logger.warn('Frames table not found, using mock data for benchmark');
       frames = Array.from({ length: Math.min(frameCount, 10) }, (_, i) => ({
@@ -295,9 +295,9 @@ export class PerformanceBenchmark {
     
     const totalDuration = performance.now() - suiteStart;
     const averageImprovement = this.results
-      .filter(r => r.improvement !== undefined)
+      .filter((r: any) => r.improvement !== undefined)
       .reduce((sum, r) => sum + (r.improvement || 0), 0) / 
-      this.results.filter(r => r.improvement !== undefined).length;
+      this.results.filter((r: any) => r.improvement !== undefined).length;
     
     const suite: BenchmarkSuite = {
       name: 'Performance Optimization Suite',
@@ -341,7 +341,7 @@ export class PerformanceBenchmark {
       suite: suite.name,
       duration: suite.totalDuration,
       avgImprovement: suite.averageImprovement,
-      results: suite.results.map(r => ({
+      results: suite.results.map((r: any) => ({
         name: r.name,
         improvement: r.improvement,
         throughput: r.throughput,

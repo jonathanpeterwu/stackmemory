@@ -359,7 +359,7 @@ export function getQueryCache(): StackMemoryQueryCache {
  * Create a cache key from query parameters
  */
 export function createCacheKey(queryName: string, params: any[]): string {
-  const paramsStr = params.map(p => 
+  const paramsStr = params.map((p: any) => 
     typeof p === 'object' ? JSON.stringify(p) : String(p)
   ).join(':');
   

@@ -5,6 +5,20 @@
 
 import { EventEmitter } from 'events';
 import WebSocket from 'ws';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export class WebSocketClient extends EventEmitter {
   private ws: WebSocket | null = null;
@@ -26,7 +40,7 @@ export class WebSocketClient extends EventEmitter {
         const handleError = (error: Error) => {
           clearTimeout(connectionTimeout);
           // Silent error handling - continue in offline mode
-          if (process.env.DEBUG) {
+          if (process.env['DEBUG']) {
             console.log('WebSocket connection failed:', error.message);
           }
           if (this.ws) {
@@ -51,7 +65,7 @@ export class WebSocketClient extends EventEmitter {
 
         try {
           this.ws = new WebSocket(this.url);
-        } catch (wsError) {
+        } catch (wsError: unknown) {
           handleError(wsError as Error);
           return;
         }
@@ -64,7 +78,7 @@ export class WebSocketClient extends EventEmitter {
           // Remove the error handler and add a new one for ongoing errors
           this.ws?.removeListener('error', handleError);
           this.ws?.on('error', (error: Error) => {
-            if (process.env.DEBUG) {
+            if (process.env['DEBUG']) {
               console.error('WebSocket error during operation:', error);
             }
             this.emit('error', error);
@@ -91,7 +105,7 @@ export class WebSocketClient extends EventEmitter {
           resolve();
         });
 
-      } catch (error) {
+      } catch (error: unknown) {
         // If anything fails, continue in offline mode
         console.log('⚠️  Running in offline mode');
         this.emit('offline');
@@ -136,7 +150,7 @@ export class WebSocketClient extends EventEmitter {
         default:
           this.emit('message', message);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to parse WebSocket message:', error);
     }
   }

@@ -14,6 +14,21 @@ import {
 } from '../../features/tasks/pebbles-task-store.js';
 import { LinearClient, LinearIssue, LinearCreateIssueInput } from './client.js';
 import { LinearAuthManager } from './auth.js';
+import { LinearDuplicateDetector } from './sync-enhanced.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface SyncConfig {
   enabled: boolean;
@@ -80,7 +95,7 @@ export class LinearSyncEngine {
     );
 
     // Check for API key from environment variable first
-    const apiKey = process.env.LINEAR_API_KEY;
+    const apiKey = process.env['LINEAR_API_KEY'];
 
     if (apiKey) {
       // Use API key from environment
@@ -138,7 +153,7 @@ export class LinearSyncEngine {
 
     try {
       // Update client with valid token if not using environment API key
-      const apiKey = process.env.LINEAR_API_KEY;
+      const apiKey = process.env['LINEAR_API_KEY'];
       if (!apiKey) {
         const token = await this.authManager.getValidToken();
         this.linearClient = new LinearClient({
@@ -181,7 +196,7 @@ export class LinearSyncEngine {
       }
 
       this.saveMappings();
-    } catch (error) {
+    } catch (error: unknown) {
       result.success = false;
       result.errors.push(`Sync failed: ${String(error)}`);
       logger.error('Linear sync failed:', error as Error);
@@ -209,6 +224,9 @@ export class LinearSyncEngine {
     const maxBatchSize = this.config.maxBatchSize || 10;
     const rateLimitDelay = this.config.rateLimitDelay || 500;
 
+    // Initialize duplicate detector
+    const duplicateDetector = new LinearDuplicateDetector(this.linearClient);
+
     // Get unsynced tasks from StackMemory
     const unsyncedTasks = this.getUnsyncedTasks();
 
@@ -223,7 +241,31 @@ export class LinearSyncEngine {
 
     for (const task of tasksToSync) {
       try {
-        const linearIssue = await this.createLinearIssueFromTask(task);
+        // Check for duplicates before creating
+        const duplicateCheck = await duplicateDetector.checkForDuplicate(
+          task.title,
+          this.config.defaultTeamId
+        );
+
+        let linearIssue: LinearIssue;
+        
+        if (duplicateCheck.isDuplicate && duplicateCheck.existingIssue) {
+          // Found duplicate - merge instead of creating
+          logger.info(
+            `Found existing Linear issue for "${task.title}": ${duplicateCheck.existingIssue.identifier} (${Math.round((duplicateCheck.similarity || 0) * 100)}% match)`
+          );
+          
+          // Merge task content into existing issue
+          linearIssue = await duplicateDetector.mergeIntoExisting(
+            duplicateCheck.existingIssue,
+            task.title,
+            this.formatDescriptionForLinear(task),
+            `StackMemory Task ID: ${task.id}\nFrame: ${task.frame_id}`
+          );
+        } else {
+          // No duplicate found, create new issue
+          linearIssue = await this.createLinearIssueFromTask(task);
+        }
 
         // Create mapping
         const mapping: TaskMapping = {
@@ -247,7 +289,7 @@ export class LinearSyncEngine {
 
         // Rate limit delay between creates
         await this.delay(rateLimitDelay);
-      } catch (error) {
+      } catch (error: unknown) {
         const errorMsg = String(error);
         // Stop syncing on rate limit errors
         if (
@@ -281,7 +323,7 @@ export class LinearSyncEngine {
 
         result.updated++;
         logger.info(`Updated Linear issue: ${mapping.linearIdentifier}`);
-      } catch (error) {
+      } catch (error: unknown) {
         result.errors.push(
           `Failed to update Linear issue for task ${task.id}: ${String(error)}`
         );
@@ -379,7 +421,7 @@ export class LinearSyncEngine {
           result.updated++;
           logger.info(`Updated StackMemory task from Linear: ${task.title}`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         result.errors.push(
           `Failed to sync from Linear for task ${taskId}: ${String(error)}`
         );
@@ -589,7 +631,7 @@ export class LinearSyncEngine {
         (state) => state.type === targetStateType
       );
       return matchingState?.id;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn(
         'Failed to map status to Linear state:',
         error instanceof Error ? { error } : undefined
@@ -628,7 +670,7 @@ export class LinearSyncEngine {
           this.mappings.set(mapping.stackmemoryId, mapping);
         }
         logger.info(`Loaded ${this.mappings.size} task mappings from disk`);
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn('Failed to load mappings, starting fresh');
       }
     }
@@ -639,7 +681,7 @@ export class LinearSyncEngine {
       const mappingsArray = Array.from(this.mappings.values());
       writeFileSync(this.mappingsPath, JSON.stringify(mappingsArray, null, 2));
       logger.info(`Saved ${this.mappings.size} task mappings to disk`);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to save mappings:', error as Error);
     }
   }
@@ -701,7 +743,7 @@ export class LinearSyncEngine {
             result.imported++;
             logger.info(`Imported ${issue.identifier}: ${issue.title}`);
           }
-        } catch (error) {
+        } catch (error: unknown) {
           result.errors.push(
             `Failed to import ${issue.identifier}: ${String(error)}`
           );
@@ -710,7 +752,7 @@ export class LinearSyncEngine {
       }
 
       this.saveMappings();
-    } catch (error) {
+    } catch (error: unknown) {
       result.errors.push(`Import failed: ${String(error)}`);
       logger.error('Linear import failed:', error as Error);
     }
@@ -760,7 +802,7 @@ export class LinearSyncEngine {
       }
 
       return taskId;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         `Failed to create task from Linear issue ${issue.identifier}: ${String(error)}`
       );

@@ -28,6 +28,20 @@ import { logger } from '../../core/monitoring/logger.js';
 import { MCPHandlerFactory, MCPHandlerDependencies } from './handlers/index.js';
 import { MCPToolDefinitions } from './tool-definitions.js';
 import { ToolScoringMiddleware } from './middleware/tool-scoring.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 /**
  * Configuration for MCP server
@@ -114,7 +128,7 @@ class RefactoredStackMemoryMCP {
     // Browser integration (if enabled)
     if (config.enableBrowser !== false) {
       this.browserMCP = new BrowserMCPIntegration({
-        headless: config.headless ?? process.env.BROWSER_HEADLESS !== 'false',
+        headless: config.headless ?? process.env['BROWSER_HEADLESS'] !== 'false',
         defaultViewport: { 
           width: config.viewportWidth ?? 1280, 
           height: config.viewportHeight ?? 720 
@@ -293,7 +307,7 @@ class RefactoredStackMemoryMCP {
 
           return result;
 
-        } catch (error) {
+        } catch (error: unknown) {
           const duration = Date.now() - startTime;
           const errorMessage = error instanceof Error ? error.message : String(error);
 
@@ -361,7 +375,7 @@ class RefactoredStackMemoryMCP {
       // Setup cleanup handlers
       this.setupCleanup();
 
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to start MCP server', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -384,7 +398,7 @@ class RefactoredStackMemoryMCP {
         }
         
         logger.info('MCP server shutdown complete');
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Error during cleanup', error instanceof Error ? error : new Error(String(error)));
       }
       
@@ -430,7 +444,7 @@ class RefactoredStackMemoryMCP {
       if (match) {
         return match[1];
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.debug('Could not get git remote URL', error);
     }
 
@@ -444,15 +458,15 @@ class RefactoredStackMemoryMCP {
 async function main(): Promise<void> {
   try {
     const config: MCPServerConfig = {
-      headless: process.env.BROWSER_HEADLESS !== 'false',
-      enableTracing: process.env.DISABLE_TRACING !== 'true',
-      enableBrowser: process.env.DISABLE_BROWSER !== 'true',
+      headless: process.env['BROWSER_HEADLESS'] !== 'false',
+      enableTracing: process.env['DISABLE_TRACING'] !== 'true',
+      enableBrowser: process.env['DISABLE_BROWSER'] !== 'true',
     };
 
     const server = new RefactoredStackMemoryMCP(config);
     await server.start();
 
-  } catch (error) {
+  } catch (error: unknown) {
     logger.error('Failed to start server', error instanceof Error ? error : new Error(String(error)));
     process.exit(1);
   }

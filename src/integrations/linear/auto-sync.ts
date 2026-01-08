@@ -115,7 +115,7 @@ export class LinearAutoSyncService {
 
       // Perform initial sync
       this.performSync();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to start Linear auto-sync service:', error as Error);
       throw error;
     }
@@ -254,7 +254,7 @@ export class LinearAutoSyncService {
       } else {
         throw new Error(`Sync failed: ${result.errors.join(', ')}`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear auto-sync failed:', error as Error);
 
       this.retryCount++;

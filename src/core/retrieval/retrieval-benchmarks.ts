@@ -287,7 +287,7 @@ export class RetrievalBenchmarks {
         result.tokenUsage.used,
         'Standard flat embedding retrieval'
       );
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Flat retrieval failed', error);
       return this.createErrorResult('flat', query, error as Error);
     }
@@ -322,7 +322,7 @@ export class RetrievalBenchmarks {
         context.length / 4, // Estimate tokens
         'Hierarchical retrieval with progressive summarization'
       );
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Hierarchical retrieval failed', error);
       return this.createErrorResult('hierarchical', query, error as Error);
     }
@@ -363,7 +363,7 @@ export class RetrievalBenchmarks {
         paths.length * 100, // Estimate tokens
         'Graph-based retrieval with explicit relationships'
       );
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Graph retrieval failed', error);
       return this.createErrorResult('graph', query, error as Error);
     }

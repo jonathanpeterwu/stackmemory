@@ -139,7 +139,7 @@ export class ContextCache<T = any> extends EventEmitter {
 
     this.cache.delete(key);
     this.currentSize -= entry.size;
-    this.accessOrder = this.accessOrder.filter(k => k !== key);
+    this.accessOrder = this.accessOrder.filter((k: any) => k !== key);
     
     this.stats.size = this.currentSize;
     this.stats.itemCount = this.cache.size;

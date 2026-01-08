@@ -6,6 +6,20 @@
 import { Command } from 'commander';
 import { trace } from './debug-trace.js';
 import { logger } from '../monitoring/logger.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export function wrapCommand(command: Command): Command {
   const originalAction = command.action.bind(command);
@@ -23,9 +37,9 @@ export function wrapCommand(command: Command): Command {
       options: typeof options === 'object' ? options : {},
       cwd: process.cwd(),
       env: {
-        NODE_ENV: process.env.NODE_ENV,
-        DEBUG_TRACE: process.env.DEBUG_TRACE,
-        LINEAR_API_KEY: process.env.LINEAR_API_KEY ? '[SET]' : '[NOT SET]',
+        NODE_ENV: process.env['NODE_ENV'],
+        DEBUG_TRACE: process.env['DEBUG_TRACE'],
+        LINEAR_API_KEY: process.env['LINEAR_API_KEY'] ? '[SET]' : '[NOT SET]',
       },
       timestamp: new Date().toISOString(),
     };
@@ -41,14 +55,14 @@ export function wrapCommand(command: Command): Command {
         
         // Log successful completion
         logger.info(`CLI Command Completed: ${commandPath}`, {
-          duration: trace.exportTraces().find(t => t.name === commandPath)?.duration,
+          duration: trace.exportTraces().find((t: any) => t.name === commandPath)?.duration,
         });
         
         // Show execution summary if verbose
-        if (process.env.DEBUG_TRACE === 'true') {
+        if (process.env['DEBUG_TRACE'] === 'true') {
           console.log(trace.getExecutionSummary());
         }
-      } catch (error) {
+      } catch (error: unknown) {
         // Enhanced error logging for CLI commands
         logger.error(`CLI Command Failed: ${commandPath}`, error as Error, context);
         
@@ -110,7 +124,7 @@ export function wrapProgram(program: Command): Command {
     });
     
     // Show trace summary on error
-    if (process.env.DEBUG_TRACE === 'true') {
+    if (process.env['DEBUG_TRACE'] === 'true') {
       console.error('\n' + trace.getExecutionSummary());
     }
     

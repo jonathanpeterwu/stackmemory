@@ -78,7 +78,7 @@ export class FrameDatabase {
       `);
 
       logger.info('Frame database schema initialized');
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to initialize frame database schema',
         ErrorCode.DB_SCHEMA_ERROR,
@@ -123,7 +123,7 @@ export class FrameDatabase {
       }
 
       return createdFrame;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to insert frame: ${frame.frame_id}`,
         ErrorCode.DB_INSERT_FAILED,
@@ -154,7 +154,7 @@ export class FrameDatabase {
         outputs: JSON.parse(row.outputs || '{}'),
         digest_json: JSON.parse(row.digest_json || '{}'),
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get frame: ${frameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -212,7 +212,7 @@ export class FrameDatabase {
       if (result.changes === 0) {
         throw new Error(`Frame not found: ${frameId}`);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to update frame: ${frameId}`,
         ErrorCode.DB_UPDATE_FAILED,
@@ -234,13 +234,13 @@ export class FrameDatabase {
       const params = state ? [projectId, state] : [projectId];
       const rows = this.db.prepare(query).all(...params) as any[];
 
-      return rows.map(row => ({
+      return rows.map((row: any) => ({
         ...row,
         inputs: JSON.parse(row.inputs || '{}'),
         outputs: JSON.parse(row.outputs || '{}'),
         digest_json: JSON.parse(row.digest_json || '{}'),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get frames for project: ${projectId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -282,7 +282,7 @@ export class FrameDatabase {
         ...createdEvent,
         payload: JSON.parse(createdEvent.payload),
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to insert event: ${event.event_id}`,
         ErrorCode.DB_INSERT_FAILED,
@@ -304,11 +304,11 @@ export class FrameDatabase {
       const params = limit ? [frameId, limit] : [frameId];
       const rows = this.db.prepare(query).all(...params) as any[];
 
-      return rows.map(row => ({
+      return rows.map((row: any) => ({
         ...row,
         payload: JSON.parse(row.payload),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get events for frame: ${frameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -328,7 +328,7 @@ export class FrameDatabase {
         .get(frameId) as { max_seq: number | null };
 
       return (result.max_seq || 0) + 1;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get next event sequence for frame: ${frameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -370,7 +370,7 @@ export class FrameDatabase {
         ...createdAnchor,
         metadata: JSON.parse(createdAnchor.metadata || '{}'),
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to insert anchor: ${anchor.anchor_id}`,
         ErrorCode.DB_INSERT_FAILED,
@@ -389,11 +389,11 @@ export class FrameDatabase {
         .prepare('SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC')
         .all(frameId) as any[];
 
-      return rows.map(row => ({
+      return rows.map((row: any) => ({
         ...row,
         metadata: JSON.parse(row.metadata || '{}'),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get anchors for frame: ${frameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -414,7 +414,7 @@ export class FrameDatabase {
       this.db.prepare('DELETE FROM frames WHERE frame_id = ?').run(frameId);
 
       logger.info('Frame deleted', { frameId });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to delete frame: ${frameId}`,
         ErrorCode.DB_DELETE_FAILED,
@@ -440,7 +440,7 @@ export class FrameDatabase {
         totalAnchors: anchorCount.count,
         activeFrames: activeFrames.count,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn('Failed to get database statistics', {
         error: error instanceof Error ? error.message : String(error)
       });

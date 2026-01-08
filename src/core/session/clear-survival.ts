@@ -220,7 +220,7 @@ export class ClearSurvival {
       }
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to restore from ledger:', error);
       return false;
     }
@@ -578,7 +578,7 @@ export class ClearSurvival {
       );
       const content = await fs.readFile(latestPath, 'utf-8');
       return JSON.parse(content) as ContinuityLedger;
-    } catch (error) {
+    } catch (error: unknown) {
       return null;
     }
   }

@@ -7,6 +7,20 @@ import { createHash, randomBytes } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../core/monitoring/logger.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface LinearAuthConfig {
   clientId: string;
@@ -69,7 +83,7 @@ export class LinearAuthManager {
       const configData = readFileSync(this.configPath, 'utf8');
       this.config = JSON.parse(configData);
       return this.config!;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to load Linear configuration:', error as Error);
       return null;
     }
@@ -248,7 +262,7 @@ export class LinearAuthManager {
     try {
       const tokensData = readFileSync(this.tokensPath, 'utf8');
       return JSON.parse(tokensData);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to load Linear tokens:', error as Error);
       return null;
     }
@@ -298,10 +312,10 @@ export class LinearOAuthSetup {
     // In a full implementation, this could open a browser or use a local server
 
     const config: LinearAuthConfig = {
-      clientId: process.env.LINEAR_CLIENT_ID || '',
-      clientSecret: process.env.LINEAR_CLIENT_SECRET || '',
+      clientId: process.env['LINEAR_CLIENT_ID'] || '',
+      clientSecret: process.env['LINEAR_CLIENT_SECRET'] || '',
       redirectUri:
-        process.env.LINEAR_REDIRECT_URI ||
+        process.env['LINEAR_REDIRECT_URI'] ||
         'http://localhost:3456/auth/linear/callback',
       scopes: DEFAULT_LINEAR_SCOPES,
     };
@@ -326,7 +340,7 @@ export class LinearOAuthSetup {
     const { url, codeVerifier } = this.authManager.generateAuthUrl();
 
     // Store code verifier temporarily (in a real app, this would be in a secure session store)
-    process.env._LINEAR_CODE_VERIFIER = codeVerifier;
+    process.env['_LINEAR_CODE_VERIFIER'] = codeVerifier;
 
     return {
       authUrl: url,
@@ -346,7 +360,7 @@ export class LinearOAuthSetup {
    */
   async completeAuth(authCode: string): Promise<boolean> {
     try {
-      const codeVerifier = process.env._LINEAR_CODE_VERIFIER;
+      const codeVerifier = process.env['_LINEAR_CODE_VERIFIER'];
       if (!codeVerifier) {
         throw new Error(
           'Code verifier not found. Please restart the setup process.'
@@ -354,11 +368,11 @@ export class LinearOAuthSetup {
       }
 
       await this.authManager.exchangeCodeForToken(authCode, codeVerifier);
-      delete process.env._LINEAR_CODE_VERIFIER;
+      delete process.env['_LINEAR_CODE_VERIFIER'];
 
       logger.info('Linear OAuth setup completed successfully!');
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to complete Linear OAuth setup:', error as Error);
       return false;
     }
@@ -396,7 +410,7 @@ export class LinearOAuthSetup {
       }
 
       return false;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear connection test failed:', error as Error);
       return false;
     }

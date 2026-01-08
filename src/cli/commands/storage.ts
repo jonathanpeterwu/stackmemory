@@ -11,6 +11,20 @@ import { existsSync } from 'fs';
 import { RailwayOptimizedStorage } from '../../core/storage/railway-optimized-storage.js';
 import { ConfigManager } from '../../core/config/config-manager.js';
 import { formatBytes, formatDuration } from '../../utils/formatting.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export function createStorageCommand(): Command {
   const storage = new Command('storage').description(
@@ -104,7 +118,7 @@ export function createStorageCommand(): Command {
         
         db.close();
         
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to load storage statistics');
         console.error(error);
         process.exit(1);
@@ -196,7 +210,7 @@ export function createStorageCommand(): Command {
         
         db.close();
         
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Migration failed');
         console.error(error);
         process.exit(1);
@@ -241,7 +255,7 @@ export function createStorageCommand(): Command {
         
         db.close();
         
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Cleanup failed');
         console.error(error);
         process.exit(1);
@@ -301,7 +315,7 @@ export function createStorageCommand(): Command {
         
         db.close();
         
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to retrieve trace');
         console.error(error);
         process.exit(1);
@@ -316,20 +330,20 @@ export function createStorageCommand(): Command {
       console.log(chalk.gray('━'.repeat(50)));
       
       console.log(chalk.red('\n🔥 Hot Tier (Redis):'));
-      console.log(`  URL: ${process.env.REDIS_URL ? chalk.green('Configured') : chalk.yellow('Not configured')}`);
+      console.log(`  URL: ${process.env['REDIS_URL'] ? chalk.green('Configured') : chalk.yellow('Not configured')}`);
       console.log(`  TTL: 24 hours`);
       console.log(`  Max Memory: 100MB`);
       
       console.log(chalk.yellow('\n☁️  Warm Tier (Railway Buckets):'));
-      console.log(`  Endpoint: ${process.env.RAILWAY_BUCKET_ENDPOINT || 'Not configured'}`);
-      console.log(`  Bucket: ${process.env.RAILWAY_BUCKET_NAME || 'stackmemory-warm'}`);
-      console.log(`  Access Key: ${process.env.RAILWAY_BUCKET_ACCESS_KEY ? chalk.green('Set') : chalk.yellow('Not set')}`);
+      console.log(`  Endpoint: ${process.env['RAILWAY_BUCKET_ENDPOINT'] || 'Not configured'}`);
+      console.log(`  Bucket: ${process.env['RAILWAY_BUCKET_NAME'] || 'stackmemory-warm'}`);
+      console.log(`  Access Key: ${process.env['RAILWAY_BUCKET_ACCESS_KEY'] ? chalk.green('Set') : chalk.yellow('Not set')}`);
       console.log(`  Retention: 30 days`);
       
       console.log(chalk.cyan('\n❄️  Cold Tier (GCS):'));
-      console.log(`  Project: ${process.env.GCP_PROJECT_ID || 'Not configured'}`);
-      console.log(`  Bucket: ${process.env.GCS_BUCKET || 'stackmemory-cold'}`);
-      console.log(`  Key File: ${process.env.GCP_KEY_FILE ? chalk.green('Set') : chalk.yellow('Not set')}`);
+      console.log(`  Project: ${process.env['GCP_PROJECT_ID'] || 'Not configured'}`);
+      console.log(`  Bucket: ${process.env['GCS_BUCKET'] || 'stackmemory-cold'}`);
+      console.log(`  Key File: ${process.env['GCP_KEY_FILE'] ? chalk.green('Set') : chalk.yellow('Not set')}`);
       console.log(`  Storage Class: Coldline`);
       console.log(`  Retention: Infinite`);
       

@@ -176,7 +176,7 @@ export class EnhancedHybridDigestGenerator extends HybridDigestGenerator {
       `
         )
         .run(frameId);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to prioritize frame', error as Error);
     }
   }

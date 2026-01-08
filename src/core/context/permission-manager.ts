@@ -5,6 +5,20 @@
 import { ValidationError, ErrorCode } from '../errors/index.js';
 import type { StackPermissions, StackContext } from './dual-stack-manager.js';
 import { logger } from '../monitoring/logger.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export type Operation = 'read' | 'write' | 'handoff' | 'merge' | 'administer';
 
@@ -72,7 +86,7 @@ export class PermissionManager {
           });
           return false;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Permission check failed', error);
       return false;
     }
@@ -183,7 +197,7 @@ export class PermissionManager {
    */
   private initializeDefaultPermissions(): void {
     // Set up default admin user if needed
-    const defaultAdmin = process.env.STACKMEMORY_DEFAULT_ADMIN;
+    const defaultAdmin = process.env['STACKMEMORY_DEFAULT_ADMIN'];
     if (defaultAdmin) {
       this.grantAdminAccess(defaultAdmin);
     }

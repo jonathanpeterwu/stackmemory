@@ -77,7 +77,7 @@ export function createQualityCommand(): Command {
           // Default: show status
           await showStatus(projectRoot, frameManager, db);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail(chalk.red(`Error: ${error}`));
         process.exit(1);
       }
@@ -126,7 +126,7 @@ async function enableQualityGates(
     console.log('  • Real-time file change monitoring');
 
     console.log(chalk.gray('\nDisable with: stackmemory quality --disable'));
-  } catch (error) {
+  } catch (error: unknown) {
     spinner.fail(chalk.red(`Failed to enable quality gates: ${error}`));
   }
 }
@@ -161,7 +161,7 @@ async function disableQualityGates(projectRoot: string, spinner: ora.Ora) {
     }
 
     spinner.succeed(chalk.green('✅ Quality gates disabled'));
-  } catch (error) {
+  } catch (error: unknown) {
     spinner.fail(chalk.red(`Failed to disable quality gates: ${error}`));
   }
 }
@@ -222,7 +222,7 @@ async function showStatus(
         );
       });
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(chalk.red('Failed to get status:', error));
   }
 }
@@ -300,7 +300,7 @@ async function configureQualityGates(projectRoot: string) {
 
     console.log(chalk.green('\n✅ Configuration saved'));
     console.log(chalk.gray('Enable with: stackmemory quality --enable'));
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(chalk.red('Configuration failed:', error));
   }
 }
@@ -369,7 +369,7 @@ async function runQualityGates(
         chalk.yellow('\n⚠️ Some quality gates failed. See details above.')
       );
     }
-  } catch (error) {
+  } catch (error: unknown) {
     spinner.fail(chalk.red(`Quality gates failed: ${error}`));
   }
 }
@@ -405,7 +405,7 @@ async function showHistory(frameManager: FrameManager) {
 
       if (index < results.length - 1) console.log('');
     });
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(chalk.red('Failed to get history:', error));
   }
 }

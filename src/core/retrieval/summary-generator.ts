@@ -245,7 +245,7 @@ export class CompressedSummaryGenerator {
         avgEventsPerFrame:
           totalFrames > 0 ? (eventCount.count || 0) / totalFrames : 0,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn('Error generating stats, using defaults', { error });
       return {
         totalFrames: 0,

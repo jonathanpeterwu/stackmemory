@@ -164,7 +164,7 @@ export class TraceStore {
       logger.debug(
         `Saved trace ${trace.id} with ${trace.tools.length} tool calls`
       );
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(`Failed to save trace ${trace.id}:`, error as Error);
       throw error;
     }

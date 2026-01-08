@@ -102,7 +102,7 @@ export class FormatterVerifier extends BaseVerifier {
           context.filePath!
         );
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'Formatter verification failed',
         error instanceof Error ? error : undefined

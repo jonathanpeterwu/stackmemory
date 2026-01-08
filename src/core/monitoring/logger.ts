@@ -4,6 +4,20 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export enum LogLevel {
   ERROR = 0,
@@ -28,7 +42,7 @@ export class Logger {
 
   private constructor() {
     // Set log level from environment
-    const envLevel = process.env.STACKMEMORY_LOG_LEVEL?.toUpperCase();
+    const envLevel = process.env['STACKMEMORY_LOG_LEVEL']?.toUpperCase();
     switch (envLevel) {
       case 'ERROR':
         this.logLevel = LogLevel.ERROR;
@@ -44,10 +58,10 @@ export class Logger {
     }
 
     // Set up log file if in debug mode or if specified
-    if (this.logLevel === LogLevel.DEBUG || process.env.STACKMEMORY_LOG_FILE) {
+    if (this.logLevel === LogLevel.DEBUG || process.env['STACKMEMORY_LOG_FILE']) {
       this.logFile =
-        process.env.STACKMEMORY_LOG_FILE ||
-        path.join(process.env.HOME || '.', '.stackmemory', 'logs', 'cli.log');
+        process.env['STACKMEMORY_LOG_FILE'] ||
+        path.join(process.env['HOME'] || '.', '.stackmemory', 'logs', 'cli.log');
       this.ensureLogDirectory();
     }
   }
@@ -66,7 +80,7 @@ export class Logger {
       if (!fs.existsSync(logDir)) {
         fs.mkdirSync(logDir, { recursive: true });
       }
-    } catch (err) {
+    } catch (err: unknown) {
       // Disable file logging if we cannot create the directory (e.g., ENOSPC)
       this.logFile = undefined;
       if (!this.fileLoggingDisabledNotified) {
@@ -88,7 +102,7 @@ export class Logger {
     if (this.logFile) {
       try {
         fs.appendFileSync(this.logFile, logLine);
-      } catch (err) {
+      } catch (err: unknown) {
         // Disable file logging on error (e.g., ENOSPC) to avoid repeated failures
         this.logFile = undefined;
         if (!this.fileLoggingDisabledNotified) {

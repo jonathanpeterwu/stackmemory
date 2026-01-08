@@ -8,6 +8,20 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { FrameManager, FrameType } from '../../core/context/frame-manager.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export function createContextCommands(): Command {
   const context = new Command('context')
@@ -92,7 +106,7 @@ export function createContextCommands(): Command {
         }
 
         console.log('');
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Failed to show context:', (error as Error).message);
       } finally {
         db.close();
@@ -163,7 +177,7 @@ export function createContextCommands(): Command {
         console.log(`   ID: ${frameId.slice(0, 10)}`);
         console.log(`   Type: ${options.type}`);
         console.log(`   Depth: ${frameManager.getStackDepth()}`);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Failed to push context:', (error as Error).message);
       } finally {
         db.close();
@@ -223,7 +237,7 @@ export function createContextCommands(): Command {
           );
           console.log(`   Depth: ${frameManager.getStackDepth()}`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Failed to pop context:', (error as Error).message);
       } finally {
         db.close();
@@ -296,7 +310,7 @@ export function createContextCommands(): Command {
         console.log(
           `✅ Added ${type}: ${message.slice(0, 50)}${message.length > 50 ? '...' : ''}`
         );
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Failed to add event:', (error as Error).message);
       } finally {
         db.close();
@@ -371,7 +385,7 @@ export function createContextCommands(): Command {
           }
         } else if (action === 'save') {
           // Save current worktree context
-          const instanceId = options.instance || process.env.CLAUDE_INSTANCE_ID;
+          const instanceId = options.instance || process.env['CLAUDE_INSTANCE_ID'];
           const branch = options.branch || 'unknown';
 
           if (!instanceId) {
@@ -395,7 +409,7 @@ export function createContextCommands(): Command {
           console.log(`   Frame ID: ${frameId.slice(0, 10)}`);
         } else if (action === 'load') {
           // Load worktree context
-          const instanceId = options.instance || process.env.CLAUDE_INSTANCE_ID;
+          const instanceId = options.instance || process.env['CLAUDE_INSTANCE_ID'];
 
           if (!instanceId) {
             console.log('⚠️ No instance ID provided.');
@@ -427,7 +441,7 @@ export function createContextCommands(): Command {
         } else {
           console.log('Usage: stackmemory context worktree [save|load|list]');
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           '❌ Failed to manage worktree context:',
           (error as Error).message

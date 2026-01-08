@@ -182,7 +182,7 @@ export class DualStackManager {
       await this.adapter.commitTransaction();
 
       logger.info('Dual stack schema initialized successfully');
-    } catch (error) {
+    } catch (error: unknown) {
       await this.adapter.rollbackTransaction();
       logger.error('Failed to initialize dual stack schema', error);
       throw new DatabaseError(
@@ -209,7 +209,7 @@ export class DualStackManager {
       try {
         rawDb.exec(sql);
         logger.debug('Executed schema query successfully');
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to execute schema query', { sql, error });
         throw error;
       }
@@ -314,7 +314,7 @@ export class DualStackManager {
       logger.info(`Switched to stack: ${input.stackId}`, {
         type: stackContext.type,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new ValidationError(
         `Failed to switch to stack: ${input.stackId}`,
         ErrorCode.OPERATION_FAILED,
@@ -413,7 +413,7 @@ export class DualStackManager {
 
       logger.info(`Created shared stack: ${stackId}`, { teamId, name });
       return stackId;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to create shared stack`,
         ErrorCode.OPERATION_FAILED,
@@ -469,7 +469,7 @@ export class DualStackManager {
       });
 
       return requestId;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to initiate handoff`,
         ErrorCode.OPERATION_FAILED,
@@ -540,7 +540,7 @@ export class DualStackManager {
       });
 
       return syncResult;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('acceptHandoff caught error', {
         error: error instanceof Error ? error.message : error,
       });
@@ -637,7 +637,7 @@ export class DualStackManager {
             }
             result.mergedFrames.push(frameId);
           }
-        } catch (error) {
+        } catch (error: unknown) {
           result.errors.push({
             frameId,
             error: error instanceof Error ? error.message : String(error),
@@ -656,7 +656,7 @@ export class DualStackManager {
       });
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Stack sync failed`,
         ErrorCode.OPERATION_FAILED,
@@ -714,7 +714,7 @@ export class DualStackManager {
             frameId,
             sourceStackId,
           });
-        } catch (error) {
+        } catch (error: unknown) {
           logger.warn('Failed to delete frame from source stack', {
             frameId,
             error,
@@ -827,7 +827,7 @@ export class DualStackManager {
         createdAt: new Date(row.created_at),
         lastActive: new Date(row.last_active),
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to load stack context', { stackId, error });
       return null;
     }
@@ -863,7 +863,7 @@ export class DualStackManager {
       );
 
       logger.debug('Saved stack context', { stackId: context.stackId });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to save stack context', {
         stackId: context.stackId,
         error,
@@ -892,7 +892,7 @@ export class DualStackManager {
 
       query.run(Date.now(), stackId);
       logger.debug('Updated stack activity', { stackId });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to update stack activity', { stackId, error });
       // Don't throw - activity updates are not critical
     }
@@ -937,7 +937,7 @@ export class DualStackManager {
           return request;
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to load handoff request from database', {
         requestId,
         error,
@@ -980,7 +980,7 @@ export class DualStackManager {
 
       // Also keep in-memory for fast access
       this.handoffRequests.set(request.requestId, request);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to save handoff request', {
         requestId: request.requestId,
         error,
@@ -1039,7 +1039,7 @@ export class DualStackManager {
               )
             );
             stacks.push(context);
-          } catch (permissionError) {
+          } catch (permissionError: unknown) {
             // Skip stacks user doesn't have access to
             logger.debug('User lacks access to stack', {
               stackId: context.stackId,
@@ -1050,7 +1050,7 @@ export class DualStackManager {
       }
 
       return stacks;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to get available stacks', error);
       // Return at least the current individual stack
       return [this.activeContext];

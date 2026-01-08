@@ -10,11 +10,26 @@ import ora from 'ora';
 import { ChromaDBAdapter } from '../../core/storage/chromadb-adapter.js';
 import { FrameManager } from '../../core/context/frame-manager.js';
 import { Logger } from '../../core/monitoring/logger.js';
+import { RepoIngestionSkill } from '../../skills/repo-ingestion-skill.js';
 import Table from 'cli-table3';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -47,13 +62,13 @@ export function createChromaDBCommand(): Command {
       try {
         // Get config from options or environment
         const config = {
-          apiKey: options.apiKey || process.env.CHROMADB_API_KEY || '',
-          tenant: options.tenant || process.env.CHROMADB_TENANT || '',
-          database: options.database || process.env.CHROMADB_DATABASE || 'stackmemory',
+          apiKey: options.apiKey || process.env['CHROMADB_API_KEY'] || '',
+          tenant: options.tenant || process.env['CHROMADB_TENANT'] || '',
+          database: options.database || process.env['CHROMADB_DATABASE'] || 'stackmemory',
         };
 
-        const userId = options.userId || process.env.USER || 'default';
-        const teamId = options.teamId || process.env.CHROMADB_TEAM_ID;
+        const userId = options.userId || process.env['USER'] || 'default';
+        const teamId = options.teamId || process.env['CHROMADB_TEAM_ID'];
 
         if (!config.apiKey || !config.tenant) {
           spinner.fail('Missing ChromaDB credentials');
@@ -102,7 +117,7 @@ export function createChromaDBCommand(): Command {
         if (teamId) {
           console.log(`  Team ID: ${teamId}`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to initialize ChromaDB');
         logger.error('Initialization error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -121,13 +136,13 @@ export function createChromaDBCommand(): Command {
 
       try {
         const config = {
-          apiKey: process.env.CHROMADB_API_KEY || '',
-          tenant: process.env.CHROMADB_TENANT || '',
-          database: process.env.CHROMADB_DATABASE || 'stackmemory',
+          apiKey: process.env['CHROMADB_API_KEY'] || '',
+          tenant: process.env['CHROMADB_TENANT'] || '',
+          database: process.env['CHROMADB_DATABASE'] || 'stackmemory',
         };
 
-        const userId = process.env.USER || 'default';
-        const teamId = process.env.CHROMADB_TEAM_ID;
+        const userId = process.env['USER'] || 'default';
+        const teamId = process.env['CHROMADB_TEAM_ID'];
 
         const adapter = new ChromaDBAdapter(config, userId, teamId);
         await adapter.initialize();
@@ -150,8 +165,8 @@ export function createChromaDBCommand(): Command {
           };
           
           // Only add session_id if it exists
-          if (process.env.STACKMEMORY_SESSION_ID) {
-            metadata.session_id = process.env.STACKMEMORY_SESSION_ID;
+          if (process.env['STACKMEMORY_SESSION_ID']) {
+            metadata.session_id = process.env['STACKMEMORY_SESSION_ID'];
           }
           
           await adapter.storeContext(
@@ -162,7 +177,7 @@ export function createChromaDBCommand(): Command {
           
           spinner.succeed(`Stored ${options.type}`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to store context');
         logger.error('Store error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -181,13 +196,13 @@ export function createChromaDBCommand(): Command {
 
       try {
         const config = {
-          apiKey: process.env.CHROMADB_API_KEY || '',
-          tenant: process.env.CHROMADB_TENANT || '',
-          database: process.env.CHROMADB_DATABASE || 'stackmemory',
+          apiKey: process.env['CHROMADB_API_KEY'] || '',
+          tenant: process.env['CHROMADB_TENANT'] || '',
+          database: process.env['CHROMADB_DATABASE'] || 'stackmemory',
         };
 
-        const userId = process.env.USER || 'default';
-        const teamId = process.env.CHROMADB_TEAM_ID;
+        const userId = process.env['USER'] || 'default';
+        const teamId = process.env['CHROMADB_TEAM_ID'];
 
         const adapter = new ChromaDBAdapter(config, userId, teamId);
         await adapter.initialize();
@@ -234,7 +249,7 @@ export function createChromaDBCommand(): Command {
 
         console.log(table.toString());
         console.log(chalk.green(`\n✅ Found ${results.length} results`));
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to query contexts');
         logger.error('Query error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -252,13 +267,13 @@ export function createChromaDBCommand(): Command {
 
       try {
         const config = {
-          apiKey: process.env.CHROMADB_API_KEY || '',
-          tenant: process.env.CHROMADB_TENANT || '',
-          database: process.env.CHROMADB_DATABASE || 'stackmemory',
+          apiKey: process.env['CHROMADB_API_KEY'] || '',
+          tenant: process.env['CHROMADB_TENANT'] || '',
+          database: process.env['CHROMADB_DATABASE'] || 'stackmemory',
         };
 
-        const userId = process.env.USER || 'default';
-        const teamId = process.env.CHROMADB_TEAM_ID;
+        const userId = process.env['USER'] || 'default';
+        const teamId = process.env['CHROMADB_TEAM_ID'];
 
         const adapter = new ChromaDBAdapter(config, userId, teamId);
         await adapter.initialize();
@@ -297,7 +312,7 @@ export function createChromaDBCommand(): Command {
 
         console.log(table.toString());
         console.log(chalk.green(`\n✅ Found ${results.length} recent contexts`));
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to get recent contexts');
         logger.error('Recent error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -313,13 +328,13 @@ export function createChromaDBCommand(): Command {
 
       try {
         const config = {
-          apiKey: process.env.CHROMADB_API_KEY || '',
-          tenant: process.env.CHROMADB_TENANT || '',
-          database: process.env.CHROMADB_DATABASE || 'stackmemory',
+          apiKey: process.env['CHROMADB_API_KEY'] || '',
+          tenant: process.env['CHROMADB_TENANT'] || '',
+          database: process.env['CHROMADB_DATABASE'] || 'stackmemory',
         };
 
-        const userId = process.env.USER || 'default';
-        const teamId = process.env.CHROMADB_TEAM_ID;
+        const userId = process.env['USER'] || 'default';
+        const teamId = process.env['CHROMADB_TEAM_ID'];
 
         const adapter = new ChromaDBAdapter(config, userId, teamId);
         await adapter.initialize();
@@ -340,7 +355,7 @@ export function createChromaDBCommand(): Command {
         for (const [type, count] of Object.entries(stats.documentsByType)) {
           console.log(`  ${type}: ${count}`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to get statistics');
         logger.error('Stats error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -357,13 +372,13 @@ export function createChromaDBCommand(): Command {
 
       try {
         const config = {
-          apiKey: process.env.CHROMADB_API_KEY || '',
-          tenant: process.env.CHROMADB_TENANT || '',
-          database: process.env.CHROMADB_DATABASE || 'stackmemory',
+          apiKey: process.env['CHROMADB_API_KEY'] || '',
+          tenant: process.env['CHROMADB_TENANT'] || '',
+          database: process.env['CHROMADB_DATABASE'] || 'stackmemory',
         };
 
-        const userId = process.env.USER || 'default';
-        const teamId = process.env.CHROMADB_TEAM_ID;
+        const userId = process.env['USER'] || 'default';
+        const teamId = process.env['CHROMADB_TEAM_ID'];
 
         const adapter = new ChromaDBAdapter(config, userId, teamId);
         await adapter.initialize();
@@ -371,9 +386,244 @@ export function createChromaDBCommand(): Command {
         const deleted = await adapter.deleteOldContexts(parseInt(options.days));
 
         spinner.succeed(`Deleted ${deleted} old contexts`);
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to clean contexts');
         logger.error('Clean error', error);
+        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+      }
+    });
+
+  // Ingest repository
+  chromadb
+    .command('ingest <name>')
+    .description('Ingest a repository into ChromaDB for code search')
+    .option('--path <path>', 'Repository path (default: current directory)')
+    .option('--incremental', 'Only process changed files')
+    .option('--include-tests', 'Include test files')
+    .option('--include-docs', 'Include documentation files')
+    .option('--force-update', 'Force re-indexing of all files')
+    .option('--max-file-size <bytes>', 'Maximum file size to process')
+    .option('--chunk-size <lines>', 'Lines per chunk')
+    .action(async (name, options) => {
+      const spinner = ora('Ingesting repository...').start();
+
+      try {
+        const config = {
+          apiKey: process.env['CHROMADB_API_KEY'] || '',
+          tenant: process.env['CHROMADB_TENANT'] || '',
+          database: process.env['CHROMADB_DATABASE'] || 'stackmemory',
+          collectionName: 'stackmemory_repos',
+        };
+
+        if (!config.apiKey || !config.tenant) {
+          spinner.fail('ChromaDB not configured');
+          console.log(chalk.yellow('\nPlease run: stackmemory chromadb init'));
+          return;
+        }
+
+        const userId = process.env['USER'] || 'default';
+        const teamId = process.env['CHROMADB_TEAM_ID'];
+
+        const skill = new RepoIngestionSkill(config, userId, teamId);
+        await skill.initialize();
+
+        const repoPath = options.path || process.cwd();
+        const result = await skill.ingestRepository(repoPath, name, {
+          incremental: options.incremental,
+          forceUpdate: options.forceUpdate,
+          includeTests: options.includeTests,
+          includeDocs: options.includeDocs,
+          maxFileSize: options.maxFileSize ? parseInt(options.maxFileSize) : undefined,
+          chunkSize: options.chunkSize ? parseInt(options.chunkSize) : undefined,
+        });
+
+        if (result.success) {
+          spinner.succeed(result.message);
+          if (result.stats) {
+            console.log(chalk.green('\n📊 Ingestion Statistics:'));
+            console.log(`  Files processed: ${result.stats.filesProcessed}`);
+            console.log(`  Chunks created: ${result.stats.chunksCreated}`);
+            console.log(`  Total size: ${(result.stats.totalSize / 1024 / 1024).toFixed(2)} MB`);
+            console.log(`  Time elapsed: ${(result.stats.timeElapsed / 1000).toFixed(2)} seconds`);
+          }
+        } else {
+          spinner.fail(result.message);
+        }
+      } catch (error: unknown) {
+        spinner.fail('Failed to ingest repository');
+        logger.error('Ingestion error', error);
+        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+      }
+    });
+
+  // Update repository
+  chromadb
+    .command('update <name>')
+    .description('Update an existing repository in ChromaDB')
+    .option('--path <path>', 'Repository path (default: current directory)')
+    .option('--force-update', 'Force re-indexing of all files')
+    .action(async (name, options) => {
+      const spinner = ora('Updating repository...').start();
+
+      try {
+        const config = {
+          apiKey: process.env['CHROMADB_API_KEY'] || '',
+          tenant: process.env['CHROMADB_TENANT'] || '',
+          database: process.env['CHROMADB_DATABASE'] || 'stackmemory',
+          collectionName: 'stackmemory_repos',
+        };
+
+        if (!config.apiKey || !config.tenant) {
+          spinner.fail('ChromaDB not configured');
+          console.log(chalk.yellow('\nPlease run: stackmemory chromadb init'));
+          return;
+        }
+
+        const userId = process.env['USER'] || 'default';
+        const teamId = process.env['CHROMADB_TEAM_ID'];
+
+        const skill = new RepoIngestionSkill(config, userId, teamId);
+        await skill.initialize();
+
+        const repoPath = options.path || process.cwd();
+        const result = await skill.updateRepository(repoPath, name, {
+          forceUpdate: options.forceUpdate,
+        });
+
+        if (result.success) {
+          spinner.succeed(result.message);
+          if (result.stats) {
+            console.log(chalk.green('\n📊 Update Statistics:'));
+            console.log(`  Files updated: ${result.stats.filesUpdated}`);
+            console.log(`  Files added: ${result.stats.filesAdded}`);
+            console.log(`  Files removed: ${result.stats.filesRemoved}`);
+            console.log(`  Time elapsed: ${(result.stats.timeElapsed / 1000).toFixed(2)} seconds`);
+          }
+        } else {
+          spinner.fail(result.message);
+        }
+      } catch (error: unknown) {
+        spinner.fail('Failed to update repository');
+        logger.error('Update error', error);
+        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+      }
+    });
+
+  // Search code
+  chromadb
+    .command('search-code <query>')
+    .description('Search code in ingested repositories')
+    .option('--repo <name>', 'Filter by repository name')
+    .option('--language <lang>', 'Filter by programming language')
+    .option('--limit <n>', 'Maximum results', '20')
+    .action(async (query, options) => {
+      const spinner = ora('Searching code...').start();
+
+      try {
+        const config = {
+          apiKey: process.env['CHROMADB_API_KEY'] || '',
+          tenant: process.env['CHROMADB_TENANT'] || '',
+          database: process.env['CHROMADB_DATABASE'] || 'stackmemory',
+          collectionName: 'stackmemory_repos',
+        };
+
+        if (!config.apiKey || !config.tenant) {
+          spinner.fail('ChromaDB not configured');
+          console.log(chalk.yellow('\nPlease run: stackmemory chromadb init'));
+          return;
+        }
+
+        const userId = process.env['USER'] || 'default';
+        const teamId = process.env['CHROMADB_TEAM_ID'];
+
+        const skill = new RepoIngestionSkill(config, userId, teamId);
+        await skill.initialize();
+
+        const results = await skill.searchCode(query, {
+          repoName: options.repo,
+          language: options.language,
+          limit: parseInt(options.limit),
+        });
+
+        spinner.stop();
+
+        if (results.length === 0) {
+          console.log(chalk.yellow('No results found'));
+          return;
+        }
+
+        console.log(chalk.cyan(`\n🔍 Found ${results.length} code matches:\n`));
+
+        for (const result of results) {
+          console.log(chalk.green(`📁 ${result.repoName}/${result.filePath}`));
+          console.log(chalk.gray(`   Lines ${result.startLine}-${result.endLine} | Score: ${result.score.toFixed(3)}`));
+          
+          // Show snippet
+          const lines = result.content.split('\n').slice(0, 3);
+          lines.forEach(line => {
+            console.log(chalk.dim(`   ${line.slice(0, 80)}${line.length > 80 ? '...' : ''}`));
+          });
+          console.log();
+        }
+      } catch (error: unknown) {
+        spinner.fail('Failed to search code');
+        logger.error('Search error', error);
+        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+      }
+    });
+
+  // Repository stats
+  chromadb
+    .command('repo-stats [name]')
+    .description('Get statistics for ingested repositories')
+    .action(async (name) => {
+      const spinner = ora('Fetching repository statistics...').start();
+
+      try {
+        const config = {
+          apiKey: process.env['CHROMADB_API_KEY'] || '',
+          tenant: process.env['CHROMADB_TENANT'] || '',
+          database: process.env['CHROMADB_DATABASE'] || 'stackmemory',
+          collectionName: 'stackmemory_repos',
+        };
+
+        if (!config.apiKey || !config.tenant) {
+          spinner.fail('ChromaDB not configured');
+          console.log(chalk.yellow('\nPlease run: stackmemory chromadb init'));
+          return;
+        }
+
+        const userId = process.env['USER'] || 'default';
+        const teamId = process.env['CHROMADB_TEAM_ID'];
+
+        const skill = new RepoIngestionSkill(config, userId, teamId);
+        await skill.initialize();
+
+        const stats = await skill.getRepoStats(name);
+
+        spinner.stop();
+
+        console.log(chalk.cyan('\n📊 Repository Statistics\n'));
+        console.log(`Total repositories: ${chalk.bold(stats.totalRepos)}`);
+        console.log(`Total files: ${chalk.bold(stats.totalFiles)}`);
+        console.log(`Total chunks: ${chalk.bold(stats.totalChunks)}`);
+        
+        if (Object.keys(stats.languages).length > 0) {
+          console.log('\nLanguages:');
+          for (const [lang, count] of Object.entries(stats.languages)) {
+            console.log(`  ${lang}: ${count}`);
+          }
+        }
+        
+        if (Object.keys(stats.frameworks).length > 0) {
+          console.log('\nFrameworks:');
+          for (const [framework, count] of Object.entries(stats.frameworks)) {
+            console.log(`  ${framework}: ${count}`);
+          }
+        }
+      } catch (error: unknown) {
+        spinner.fail('Failed to get repository statistics');
+        logger.error('Stats error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
       }
     });

@@ -2,11 +2,25 @@
 
 import { createClient } from 'redis';
 import dotenv from 'dotenv';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 dotenv.config();
 
 async function checkRedis() {
-  const client = createClient({ url: process.env.REDIS_URL });
+  const client = createClient({ url: process.env['REDIS_URL'] });
   await client.connect();
 
   const keys = await client.keys('trace:*');

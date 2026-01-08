@@ -70,7 +70,7 @@ export function createMonitorCommand(): Command {
           // Default: show status
           await showStatus(projectRoot);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail(chalk.red(`Error: ${error}`));
         process.exit(1);
       }
@@ -163,7 +163,7 @@ async function stopMonitor(projectRoot: string, spinner: ora.Ora) {
     await fs.unlink(pidFile);
 
     spinner.succeed(chalk.green('✅ Monitor daemon stopped'));
-  } catch (error) {
+  } catch (error: unknown) {
     spinner.fail(chalk.yellow('Monitor not running'));
   }
 }

@@ -8,6 +8,20 @@ import { Storage } from '@google-cloud/storage';
 import { logger } from '../monitoring/logger.js';
 import { Trace, CompressedTrace } from '../trace/types.js';
 import Database from 'better-sqlite3';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export enum StorageTier {
   HOT = 'hot',           // < 7 days - Railway Buckets or GCS Standard
@@ -52,7 +66,7 @@ export const DEFAULT_REMOTE_CONFIG: RemoteStorageConfig = {
   provider: 'gcs',  // Default to GCS for better pricing
   gcs: {
     bucketName: 'stackmemory-traces',
-    projectId: process.env.GCP_PROJECT_ID || 'stackmemory',
+    projectId: process.env['GCP_PROJECT_ID'] || 'stackmemory',
   },
   timeseries: {
     type: 'sqlite',  // Use SQLite for development
@@ -287,7 +301,7 @@ export class RemoteStorageManager {
     
     try {
       // Process in batches
-      const toMigrate = candidates.filter(c => c.shouldMigrate);
+      const toMigrate = candidates.filter((c: any) => c.shouldMigrate);
       const batches = this.createBatches(toMigrate, this.config.migration.batchSize);
       
       for (const batch of batches) {
@@ -368,7 +382,7 @@ export class RemoteStorageManager {
         results.success++;
         results.totalSize += candidate.size;
         
-      } catch (error) {
+      } catch (error: unknown) {
         results.failed++;
         results.errors.push(
           `Failed to migrate ${candidate.traceId}: ${error}`

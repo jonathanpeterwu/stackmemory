@@ -12,6 +12,20 @@ import { Logger } from '../../core/monitoring/logger.js';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -43,19 +57,19 @@ export function createInfiniteStorageCommand(): Command {
       try {
         const config: StorageConfig = {
           redis: {
-            url: options.redisUrl || process.env.REDIS_URL || 'redis://localhost:6379',
+            url: options.redisUrl || process.env['REDIS_URL'] || 'redis://localhost:6379',
             ttlSeconds: 3600,
-            maxMemoryMB: parseInt(process.env.REDIS_MAX_MEMORY_MB || '512'),
+            maxMemoryMB: parseInt(process.env['REDIS_MAX_MEMORY_MB'] || '512'),
           },
           timeseries: {
-            connectionString: options.timeseriesUrl || process.env.TIMESERIES_URL || '',
+            connectionString: options.timeseriesUrl || process.env['TIMESERIES_URL'] || '',
             retentionDays: 30,
           },
           s3: {
-            bucket: options.s3Bucket || process.env.S3_BUCKET || '',
-            region: options.s3Region || process.env.AWS_REGION || 'us-east-1',
-            accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+            bucket: options.s3Bucket || process.env['S3_BUCKET'] || '',
+            region: options.s3Region || process.env['AWS_REGION'] || 'us-east-1',
+            accessKeyId: process.env['AWS_ACCESS_KEY_ID'],
+            secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'],
           },
           tiers: [],
         };
@@ -75,13 +89,13 @@ export function createInfiniteStorageCommand(): Command {
         const envPath = path.join(__dirname, '../../../.env');
         const updates: string[] = [];
         
-        if (!process.env.REDIS_URL && options.redisUrl) {
+        if (!process.env['REDIS_URL'] && options.redisUrl) {
           updates.push(`REDIS_URL=${options.redisUrl}`);
         }
-        if (!process.env.TIMESERIES_URL && options.timeseriesUrl) {
+        if (!process.env['TIMESERIES_URL'] && options.timeseriesUrl) {
           updates.push(`TIMESERIES_URL=${options.timeseriesUrl}`);
         }
-        if (!process.env.S3_BUCKET && options.s3Bucket) {
+        if (!process.env['S3_BUCKET'] && options.s3Bucket) {
           updates.push(`S3_BUCKET=${options.s3Bucket}`);
         }
         
@@ -89,7 +103,7 @@ export function createInfiniteStorageCommand(): Command {
           const fs = await import('fs');
           fs.appendFileSync(envPath, '\n# Infinite Storage Configuration\n' + updates.join('\n') + '\n');
         }
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to initialize storage');
         logger.error('Initialization error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -112,14 +126,14 @@ export function createInfiniteStorageCommand(): Command {
 
         const frameManager = new FrameManager();
         const frames = frameManager.getAllFrames();
-        const userId = options.user || process.env.USER || 'default';
+        const userId = options.user || process.env['USER'] || 'default';
 
         for (const frame of frames) {
           await storage.storeFrame(frame, userId);
         }
 
         spinner.succeed(`Stored ${frames.length} frames`);
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to store frames');
         logger.error('Store error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -139,7 +153,7 @@ export function createInfiniteStorageCommand(): Command {
         const storage = new InfiniteStorageSystem(config);
         await storage.initialize();
 
-        const userId = options.user || process.env.USER || 'default';
+        const userId = options.user || process.env['USER'] || 'default';
         const frame = await storage.retrieveFrame(frameId, userId);
 
         spinner.stop();
@@ -150,7 +164,7 @@ export function createInfiniteStorageCommand(): Command {
         } else {
           console.log(chalk.yellow('Frame not found'));
         }
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to retrieve frame');
         logger.error('Retrieve error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -205,7 +219,7 @@ export function createInfiniteStorageCommand(): Command {
         
         console.log(`  P50 ≤ 50ms: ${p50Target ? chalk.green('✅ PASS') : chalk.red('❌ FAIL')} (${metrics.p50LatencyMs}ms)`);
         console.log(`  P99 ≤ 500ms: ${p99Target ? chalk.green('✅ PASS') : chalk.red('❌ FAIL')} (${metrics.p99LatencyMs}ms)`);
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to get metrics');
         logger.error('Metrics error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -229,7 +243,7 @@ export function createInfiniteStorageCommand(): Command {
         await storage.migrateAgedData();
 
         spinner.succeed('Migration completed');
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Migration failed');
         logger.error('Migration error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -289,7 +303,7 @@ export function createInfiniteStorageCommand(): Command {
         }
 
         console.log('\n' + chalk.gray('Configure missing tiers with: stackmemory infinite-storage init'));
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.fail('Failed to check status');
         logger.error('Status error', error);
         console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
@@ -302,19 +316,19 @@ export function createInfiniteStorageCommand(): Command {
 function getStorageConfig(): StorageConfig {
   return {
     redis: {
-      url: process.env.REDIS_URL || 'redis://localhost:6379',
-      ttlSeconds: parseInt(process.env.REDIS_TTL || '3600'),
-      maxMemoryMB: parseInt(process.env.REDIS_MAX_MEMORY_MB || '512'),
+      url: process.env['REDIS_URL'] || 'redis://localhost:6379',
+      ttlSeconds: parseInt(process.env['REDIS_TTL'] || '3600'),
+      maxMemoryMB: parseInt(process.env['REDIS_MAX_MEMORY_MB'] || '512'),
     },
     timeseries: {
-      connectionString: process.env.TIMESERIES_URL || '',
-      retentionDays: parseInt(process.env.TIMESERIES_RETENTION_DAYS || '30'),
+      connectionString: process.env['TIMESERIES_URL'] || '',
+      retentionDays: parseInt(process.env['TIMESERIES_RETENTION_DAYS'] || '30'),
     },
     s3: {
-      bucket: process.env.S3_BUCKET || '',
-      region: process.env.AWS_REGION || 'us-east-1',
-      accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-      secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+      bucket: process.env['S3_BUCKET'] || '',
+      region: process.env['AWS_REGION'] || 'us-east-1',
+      accessKeyId: process.env['AWS_ACCESS_KEY_ID'],
+      secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'],
     },
     tiers: [],
   };

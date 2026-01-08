@@ -13,6 +13,20 @@ import {
 import path from 'path';
 import fs from 'fs';
 import os from 'os';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export class AnalyticsService {
   private metricsQueries: MetricsQueries;
@@ -32,7 +46,7 @@ export class AnalyticsService {
     // Initialize task store for syncing
     this.initializeTaskStore();
 
-    if (process.env.LINEAR_API_KEY) {
+    if (process.env['LINEAR_API_KEY']) {
       this.initializeLinearIntegration();
     }
   }
@@ -48,7 +62,7 @@ export class AnalyticsService {
         const db = new Database(contextDbPath);
         this.taskStore = new PebblesTaskStore(this.projectPath, db);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to initialize task store:', error);
     }
   }
@@ -72,7 +86,7 @@ export class AnalyticsService {
         this.linearClient = new LinearClient(config);
         await this.syncLinearTasks();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to initialize Linear integration:', error);
     }
   }
@@ -105,7 +119,7 @@ export class AnalyticsService {
           };
           this.metricsQueries.upsertTask(task);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Failed to sync from Linear API:', error);
       }
     }
@@ -142,7 +156,7 @@ export class AnalyticsService {
       }
 
       return synced;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to sync from task store:', error);
       return 0;
     }
@@ -186,7 +200,7 @@ export class AnalyticsService {
         tags: JSON.parse(row.tags || '[]'),
         depends_on: JSON.parse(row.depends_on || '[]'),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to get all tasks:', error);
       return [];
     }

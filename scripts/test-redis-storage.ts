@@ -17,13 +17,27 @@ import { Trace, TraceType, ToolCall } from '../src/core/trace/types.js';
 
 // Load environment variables
 import dotenv from 'dotenv';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 dotenv.config();
 
 async function testRedisConnection() {
   const spinner = ora('Testing Redis connection...').start();
 
   try {
-    const redisUrl = process.env.REDIS_URL || 'redis://localhost:6379';
+    const redisUrl = process.env['REDIS_URL'] || 'redis://localhost:6379';
     console.log(
       chalk.gray(
         `  Using Redis URL: ${redisUrl.replace(/:[^:@]+@/, ':****@')})`
@@ -53,7 +67,7 @@ async function testRedisConnection() {
 
     await client.quit();
     return true;
-  } catch (error) {
+  } catch (error: unknown) {
     spinner.fail(`Redis connection failed: ${error}`);
     return false;
   }
@@ -192,7 +206,7 @@ async function testStorageOperations() {
   // Initialize storage with Redis URL from environment
   const storage = new RailwayOptimizedStorage(db, configManager, {
     redis: {
-      url: process.env.REDIS_URL,
+      url: process.env['REDIS_URL'],
       ttlSeconds: 24 * 60 * 60, // 24 hours
       maxMemory: '100mb',
     },
@@ -262,7 +276,7 @@ async function testStorageOperations() {
       spinner.succeed(
         `Trace #${i + 1} stored in ${tierIcon} ${tier} tier (score: ${trace.score.toFixed(2)})`
       );
-    } catch (error) {
+    } catch (error: unknown) {
       spinner.fail(`Failed to store trace #${i + 1}: ${error}`);
     }
 
@@ -289,7 +303,7 @@ async function testStorageOperations() {
       } else {
         spinner.fail('Trace not found');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       spinner.fail(`Retrieval failed: ${error}`);
     }
   }
@@ -317,7 +331,7 @@ async function testStorageOperations() {
   // Test Redis-specific operations
   console.log(chalk.yellow('\n🔥 Testing Redis Hot Tier...'));
 
-  const redisClient = createClient({ url: process.env.REDIS_URL });
+  const redisClient = createClient({ url: process.env['REDIS_URL'] });
   await redisClient.connect();
 
   // Check stored traces in Redis

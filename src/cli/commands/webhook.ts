@@ -4,6 +4,20 @@ import { LinearWebhookServer } from '../../integrations/linear/webhook-server.js
 import { ConfigService } from '../../services/config-service.js';
 import { Logger } from '../../utils/logger.js';
 import ngrok from 'ngrok';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export function webhookCommand(): Command {
   const command = new Command('webhook');
@@ -31,7 +45,7 @@ export function webhookCommand(): Command {
         const server = new LinearWebhookServer({
           port: parseInt(options.port),
           host: options.host,
-          webhookSecret: process.env.LINEAR_WEBHOOK_SECRET,
+          webhookSecret: process.env['LINEAR_WEBHOOK_SECRET'],
         });
 
         await server.start();
@@ -40,8 +54,8 @@ export function webhookCommand(): Command {
           try {
             const url = await ngrok.connect({
               addr: options.port,
-              subdomain: process.env.NGROK_SUBDOMAIN,
-              authtoken: process.env.NGROK_AUTH_TOKEN,
+              subdomain: process.env['NGROK_SUBDOMAIN'],
+              authtoken: process.env['NGROK_AUTH_TOKEN'],
             });
             
             console.log(chalk.green('✓') + chalk.bold(' Ngrok Tunnel Created'));
@@ -98,7 +112,7 @@ export function webhookCommand(): Command {
         } else {
           console.log(chalk.red('✗ Webhook server not responding'));
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.log(chalk.red('✗ Webhook server not running'));
         console.log(chalk.dim('  Run "stackmemory webhook start" to start the server'));
       }

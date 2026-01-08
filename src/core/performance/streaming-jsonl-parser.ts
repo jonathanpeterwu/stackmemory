@@ -84,7 +84,7 @@ export class StreamingJSONLParser {
             batch = [];
             onProgress?.(processedCount);
           }
-        } catch (parseError) {
+        } catch (parseError: unknown) {
           errorCount++;
           logger.debug('Failed to parse JSONL line', {
             lineNumber: lineCount,
@@ -184,7 +184,7 @@ export class StreamingJSONLParser {
             if (transform) obj = transform(obj);
             
             this.push(obj);
-          } catch (error) {
+          } catch (error: unknown) {
             logger.debug('Transform parse error', { lineCount, error });
           }
         }
@@ -201,7 +201,7 @@ export class StreamingJSONLParser {
               if (transform) obj = transform(obj);
               this.push(obj);
             }
-          } catch (error) {
+          } catch (error: unknown) {
             logger.debug('Flush parse error', { error });
           }
         }

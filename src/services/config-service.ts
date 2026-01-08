@@ -45,7 +45,7 @@ export class ConfigService {
         this.config = JSON.parse(content);
         this.logger.debug('Loaded configuration', this.config);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.warn('Failed to load configuration, using defaults', error);
     }
   }
@@ -54,7 +54,7 @@ export class ConfigService {
     try {
       writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
       this.logger.debug('Saved configuration');
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to save configuration', error);
     }
   }

@@ -13,6 +13,19 @@ import { program } from 'commander';
 import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
 import { initializeTracing, trace } from '../core/trace/index.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
 
 interface CodexConfig {
   instanceId: string;
@@ -135,7 +148,7 @@ class CodexSM {
       }
 
       return worktreePath;
-    } catch (err) {
+    } catch (err: unknown) {
       console.error(chalk.red('❌ Failed to create worktree:'), err);
       return null;
     }
@@ -236,19 +249,19 @@ class CodexSM {
     }
 
     if (this.config.tracingEnabled) {
-      process.env.DEBUG_TRACE = 'true';
-      process.env.STACKMEMORY_DEBUG = 'true';
-      process.env.TRACE_OUTPUT = 'file';
-      process.env.TRACE_MASK_SENSITIVE = 'true';
+      process.env['DEBUG_TRACE'] = 'true';
+      process.env['STACKMEMORY_DEBUG'] = 'true';
+      process.env['TRACE_OUTPUT'] = 'file';
+      process.env['TRACE_MASK_SENSITIVE'] = 'true';
       if (this.config.verboseTracing) {
-        process.env.TRACE_VERBOSITY = 'full';
-        process.env.TRACE_PARAMS = 'true';
-        process.env.TRACE_RESULTS = 'true';
-        process.env.TRACE_MEMORY = 'true';
+        process.env['TRACE_VERBOSITY'] = 'full';
+        process.env['TRACE_PARAMS'] = 'true';
+        process.env['TRACE_RESULTS'] = 'true';
+        process.env['TRACE_MEMORY'] = 'true';
       } else {
-        process.env.TRACE_VERBOSITY = 'summary';
-        process.env.TRACE_PARAMS = 'true';
-        process.env.TRACE_RESULTS = 'false';
+        process.env['TRACE_VERBOSITY'] = 'summary';
+        process.env['TRACE_PARAMS'] = 'true';
+        process.env['TRACE_RESULTS'] = 'false';
       }
       initializeTracing();
       trace.command(
@@ -288,9 +301,9 @@ class CodexSM {
 
     this.loadContext();
 
-    process.env.CODEX_INSTANCE_ID = this.config.instanceId;
+    process.env['CODEX_INSTANCE_ID'] = this.config.instanceId;
     if (this.config.worktreePath)
-      process.env.CODEX_WORKTREE_PATH = this.config.worktreePath;
+      process.env['CODEX_WORKTREE_PATH'] = this.config.worktreePath;
 
     console.log(chalk.gray(`🤖 Instance ID: ${this.config.instanceId}`));
     console.log(chalk.gray(`📁 Working in: ${process.cwd()}`));

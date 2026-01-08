@@ -1,5 +1,19 @@
 import { logger } from '../../core/monitoring/logger.js';
 import crypto from 'crypto';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface EmbeddingProvider {
   createEmbedding(text: string): Promise<number[]>;
@@ -17,7 +31,7 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
   private dimensions: number;
 
   constructor(model = 'text-embedding-ada-002') {
-    this.apiKey = process.env.OPENAI_API_KEY;
+    this.apiKey = process.env['OPENAI_API_KEY'];
     this.model = model;
     this.dimensions = model === 'text-embedding-ada-002' ? 1536 : 3072; // ada-002 vs text-embedding-3-small
   }
@@ -48,7 +62,7 @@ export class OpenAIEmbeddingProvider implements EmbeddingProvider {
         data: Array<{ embedding: number[] }>;
       };
       return data.data[0].embedding;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'Failed to create OpenAI embedding',
         error instanceof Error ? error : new Error(String(error))
@@ -178,7 +192,7 @@ export class HybridEmbeddingProvider implements EmbeddingProvider {
   constructor(dimensions = 1536) {
     this.openai = new OpenAIEmbeddingProvider();
     this.local = new LocalEmbeddingProvider(dimensions);
-    this.useOpenAI = !!process.env.OPENAI_API_KEY;
+    this.useOpenAI = !!process.env['OPENAI_API_KEY'];
 
     if (!this.useOpenAI) {
       logger.warn('OPENAI_API_KEY not set, using local embeddings');
@@ -189,7 +203,7 @@ export class HybridEmbeddingProvider implements EmbeddingProvider {
     if (this.useOpenAI) {
       try {
         return await this.openai.createEmbedding(text);
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn(
           'OpenAI embedding failed, falling back to local',
           error instanceof Error ? error : undefined

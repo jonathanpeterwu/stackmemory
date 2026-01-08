@@ -83,7 +83,7 @@ export async function retry<T>(
         ]);
       }
       return await fn();
-    } catch (error) {
+    } catch (error: unknown) {
       lastError = error;
 
       // Don't retry if not retryable or last attempt
@@ -167,7 +167,7 @@ export class CircuitBreaker<T> {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       this.handleFailure(error);
       throw error;
     }
@@ -219,7 +219,7 @@ export async function withFallback<T>(
   // Try primary
   try {
     return await primary();
-  } catch (error) {
+  } catch (error: unknown) {
     errors.push(error);
     logger.warn('Primary operation failed, trying fallbacks', {
       error: getErrorMessage(error),
@@ -233,7 +233,7 @@ export async function withFallback<T>(
       const result = await fallbacks[i]();
       logger.info(`Fallback ${i + 1} succeeded`, { context });
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       errors.push(error);
       if (i < fallbacks.length - 1) {
         logger.warn(`Fallback ${i + 1} failed, trying next`, {
@@ -323,7 +323,7 @@ export async function gracefulDegrade<T, F>(
 ): Promise<T | F> {
   try {
     return await fn();
-  } catch (error) {
+  } catch (error: unknown) {
     logger.warn('Operation failed, using default value', {
       error: getErrorMessage(error),
       ...logContext,

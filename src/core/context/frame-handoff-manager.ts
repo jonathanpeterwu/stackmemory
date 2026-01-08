@@ -163,7 +163,7 @@ export class FrameHandoffManager {
       });
 
       return requestId;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to initiate handoff',
         ErrorCode.OPERATION_FAILED,
@@ -300,7 +300,7 @@ export class FrameHandoffManager {
           { errors: result.errors }
         );
       }
-    } catch (error) {
+    } catch (error: unknown) {
       progress.status = 'failed';
       progress.currentStep = 'Transfer error';
       progress.errors.push({
@@ -1073,7 +1073,7 @@ export class FrameHandoffManager {
             results.successful.push(requestId);
             break;
         }
-      } catch (error) {
+      } catch (error: unknown) {
         results.failed.push({
           requestId,
           error: error instanceof Error ? error.message : String(error),

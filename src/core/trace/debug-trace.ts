@@ -10,6 +10,20 @@ import { logger } from '../monitoring/logger.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface TraceConfig {
   enabled: boolean;
@@ -82,20 +96,20 @@ export class TraceContext {
 
   private loadConfig(): TraceConfig {
     return {
-      enabled: process.env.DEBUG_TRACE === 'true' || process.env.STACKMEMORY_DEBUG === 'true',
-      verbosity: (process.env.TRACE_VERBOSITY as any) || 'full',
-      output: (process.env.TRACE_OUTPUT as any) || 'console',
-      includeParams: process.env.TRACE_PARAMS !== 'false',
-      includeResults: process.env.TRACE_RESULTS !== 'false',
-      maskSensitive: process.env.TRACE_MASK_SENSITIVE !== 'false',
-      performanceThreshold: parseInt(process.env.TRACE_PERF_THRESHOLD || '100'),
-      maxDepth: parseInt(process.env.TRACE_MAX_DEPTH || '20'),
-      captureMemory: process.env.TRACE_MEMORY === 'true',
+      enabled: process.env['DEBUG_TRACE'] === 'true' || process.env['STACKMEMORY_DEBUG'] === 'true',
+      verbosity: (process.env['TRACE_VERBOSITY'] as any) || 'full',
+      output: (process.env['TRACE_OUTPUT'] as any) || 'console',
+      includeParams: process.env['TRACE_PARAMS'] !== 'false',
+      includeResults: process.env['TRACE_RESULTS'] !== 'false',
+      maskSensitive: process.env['TRACE_MASK_SENSITIVE'] !== 'false',
+      performanceThreshold: parseInt(process.env['TRACE_PERF_THRESHOLD'] || '100'),
+      maxDepth: parseInt(process.env['TRACE_MAX_DEPTH'] || '20'),
+      captureMemory: process.env['TRACE_MEMORY'] === 'true',
     };
   }
 
   private initializeOutputFile(): void {
-    const traceDir = path.join(process.env.HOME || '.', '.stackmemory', 'traces');
+    const traceDir = path.join(process.env['HOME'] || '.', '.stackmemory', 'traces');
     if (!fs.existsSync(traceDir)) {
       fs.mkdirSync(traceDir, { recursive: true });
     }
@@ -294,7 +308,7 @@ export class TraceContext {
       const result = await fn();
       this.endTrace(id, result);
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       this.endTrace(id, undefined, error);
       throw error;
     }
@@ -311,7 +325,7 @@ export class TraceContext {
       const result = fn();
       this.endTrace(id, result);
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       this.endTrace(id, undefined, error);
       throw error;
     }

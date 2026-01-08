@@ -15,6 +15,20 @@ import { ClearSurvival } from '../../core/session/clear-survival-stub.js';
 import { FrameManager } from '../../core/context/frame-manager.js';
 import { HandoffGenerator } from '../../core/session/handoff-generator.js';
 import { sessionManager } from '../../core/session/session-manager.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 const clearCommand = new Command('clear')
   .description('Manage context clearing with ledger preservation')
@@ -84,10 +98,10 @@ const clearCommand = new Command('clear')
         console.log('  --restore    Restore from ledger');
         console.log('  --auto       Auto-save if needed and clear');
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Don't exit in tests - just log the error
       console.error(chalk.red('Error: ' + (error as Error).message));
-      if (process.env.NODE_ENV !== 'test') {
+      if (process.env['NODE_ENV'] !== 'test') {
         process.exit(1);
       }
     }
