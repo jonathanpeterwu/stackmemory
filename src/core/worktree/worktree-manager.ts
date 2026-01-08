@@ -64,7 +64,7 @@ export class WorktreeManager {
       if (this.config.enabled) {
         this.initialize();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'Failed to initialize WorktreeManager',
         error instanceof Error ? error : new Error(String(error)),
@@ -138,7 +138,7 @@ export class WorktreeManager {
       CREATE INDEX IF NOT EXISTS idx_worktrees_project ON worktrees(project_id);
       CREATE INDEX IF NOT EXISTS idx_contexts_worktree ON worktree_contexts(worktree_id);
     `);
-    } catch (error) {
+    } catch (error: unknown) {
       errorHandler(error);
     }
   }
@@ -150,7 +150,7 @@ export class WorktreeManager {
     if (existsSync(this.configPath)) {
       try {
         return JSON.parse(readFileSync(this.configPath, 'utf-8'));
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to load worktree config', error as Error);
       }
     }
@@ -247,11 +247,11 @@ export class WorktreeManager {
 
       logger.info(`Detected ${worktrees.length} worktrees`, { 
         count: worktrees.length,
-        branches: worktrees.map(w => w.branch).filter(Boolean)
+        branches: worktrees.map((w: any) => w.branch).filter(Boolean)
       });
 
       return worktrees;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.debug('Not a git repository or git worktree not available');
       return [];
     }
@@ -345,7 +345,7 @@ export class WorktreeManager {
     }
 
     const worktree = this.worktreeCache.get(worktreePath) || 
-                     this.detectWorktrees(worktreePath).find(w => w.path === worktreePath);
+                     this.detectWorktrees(worktreePath).find((w: any) => w.path === worktreePath);
 
     if (!worktree) {
       throw new Error(`No worktree found at path: ${worktreePath}`);
@@ -491,7 +491,7 @@ export class WorktreeManager {
     for (const ctx of contexts) {
       try {
         stmt.run(ctx.id, ctx.type, ctx.content, ctx.metadata, ctx.created_at);
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn('Failed to merge context', { id: ctx.id, error });
       }
     }
@@ -512,7 +512,7 @@ export class WorktreeManager {
 
     const rows = stmt.all() as any[];
     
-    return rows.map(row => ({
+    return rows.map((row: any) => ({
       path: row.path,
       branch: row.branch,
       commit: row.commit,
@@ -531,7 +531,7 @@ export class WorktreeManager {
     if (!this.db) return;
 
     const activeWorktrees = this.detectWorktrees();
-    const activePaths = new Set(activeWorktrees.map(w => w.path));
+    const activePaths = new Set(activeWorktrees.map((w: any) => w.path));
 
     // Get all stored worktrees
     const stmt = this.db.prepare('SELECT * FROM worktrees');

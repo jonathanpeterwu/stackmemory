@@ -38,8 +38,8 @@ export default function DashboardPage() {
     }
   }, [socket, setTasks, setSessions])
 
-  const activeTasks = tasks.filter(t => t.state === 'In Progress').length
-  const completedTasks = tasks.filter(t => t.state === 'Done').length
+  const activeTasks = tasks.filter((t: any) => t.state === 'In Progress').length
+  const completedTasks = tasks.filter((t: any) => t.state === 'Done').length
   const totalTasks = tasks.length
 
   return (

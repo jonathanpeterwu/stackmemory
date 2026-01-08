@@ -182,7 +182,7 @@ export class StackMergeResolver {
       });
 
       return sessionId;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to start merge session', {
         error: error instanceof Error ? error.message : error,
         sourceStackId: input.sourceStackId,
@@ -250,7 +250,7 @@ export class StackMergeResolver {
         totalConflicts: session.conflicts.length,
         conflictFrames: session.metadata.conflictFrames,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       session.status = 'failed';
       this.activeSessions.set(sessionId, session);
       throw error;
@@ -435,7 +435,7 @@ export class StackMergeResolver {
           });
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn(
         `Failed to analyze event conflicts for frame: ${sourceFrame.frame_id}`,
         error
@@ -503,7 +503,7 @@ export class StackMergeResolver {
           });
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn(
         `Failed to analyze anchor conflicts for frame: ${sourceFrame.frame_id}`,
         error
@@ -680,7 +680,7 @@ export class StackMergeResolver {
       });
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to execute merge',
         ErrorCode.OPERATION_FAILED,

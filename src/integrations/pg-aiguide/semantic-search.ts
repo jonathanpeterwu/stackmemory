@@ -205,7 +205,7 @@ export class SemanticSearch {
     try {
       await this.pool.query(query);
       logger.info(`Reindexed ${sanitizedTable} embeddings`);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'Failed to reindex embeddings',
         error instanceof Error ? error : undefined

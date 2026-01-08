@@ -5,6 +5,20 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import { LinearRestClient } from '../../integrations/linear/rest-client.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export function registerLinearCreateCommand(parent: Command) {
   parent
@@ -17,7 +31,7 @@ export function registerLinearCreateCommand(parent: Command) {
     .option('--state <state>', 'Initial state: backlog, todo, started', 'backlog')
     .action(async (options) => {
       try {
-        const apiKey = options.apiKey || process.env.LINEAR_NEW_API_KEY;
+        const apiKey = options.apiKey || process.env['LINEAR_NEW_API_KEY'];
         
         if (!apiKey) {
           console.error(chalk.red('❌ API key required. Use --api-key or set LINEAR_NEW_API_KEY'));
@@ -92,7 +106,7 @@ export function registerLinearCreateCommand(parent: Command) {
           console.log(chalk.gray(`   Description: ${options.description}`));
         }
 
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(chalk.red('❌ Task creation failed:'), (error as Error).message);
       }
     });
@@ -103,7 +117,7 @@ export function registerLinearCreateCommand(parent: Command) {
     .option('--api-key <key>', 'Linear API key for target workspace')
     .action(async (options) => {
       try {
-        const apiKey = options.apiKey || process.env.LINEAR_NEW_API_KEY;
+        const apiKey = options.apiKey || process.env['LINEAR_NEW_API_KEY'];
         
         if (!apiKey) {
           console.error(chalk.red('❌ API key required. Use --api-key or set LINEAR_NEW_API_KEY'));
@@ -185,7 +199,7 @@ export function registerLinearCreateCommand(parent: Command) {
         console.log(chalk.blue(`📋 ${task.identifier}: ${task.title}`));
         console.log(chalk.gray(`   URL: ${task.url}`));
 
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(chalk.red('❌ Task creation failed:'), (error as Error).message);
       }
     });

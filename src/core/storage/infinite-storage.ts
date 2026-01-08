@@ -125,7 +125,7 @@ export class InfiniteStorageSystem {
       this.startMigrationWorker();
       
       this.logger.info('Infinite Storage System initialized');
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to initialize storage system', error);
       throw error;
     }
@@ -246,7 +246,7 @@ export class InfiniteStorageSystem {
       this.trackLatency(latency);
       
       this.logger.debug(`Stored frame ${frame.frameId} in ${latency}ms`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to store frame ${frame.frameId}`, error);
       throw error;
     }
@@ -357,7 +357,7 @@ export class InfiniteStorageSystem {
 
       this.logger.debug(`Frame ${frameId} not found in any tier`);
       return null;
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to retrieve frame ${frameId}`, error);
       throw error;
     }
@@ -381,7 +381,7 @@ export class InfiniteStorageSystem {
       );
       
       this.logger.debug(`Promoted frame ${frame.frameId} to hot tier`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to promote frame ${frame.frameId}`, error);
     }
   }
@@ -519,7 +519,7 @@ export class InfiniteStorageSystem {
       await this.s3Client.send(command);
       
       this.logger.debug(`Migrated frame ${row.frame_id} to S3 ${storageClass}`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error(`Failed to migrate frame ${row.frame_id} to S3`, error);
       throw error;
     }

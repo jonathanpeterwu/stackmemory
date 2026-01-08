@@ -7,6 +7,20 @@ import { spawn } from 'child_process';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import chalk from 'chalk';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,7 +53,7 @@ export const tuiCommand = {
     console.log(chalk.cyan('🚀 Launching StackMemory TUI Dashboard...'));
     
     // Set environment variables
-    process.env.STACKMEMORY_WS_URL = argv.wsUrl;
+    process.env['STACKMEMORY_WS_URL'] = argv.wsUrl;
     
     // Get script path
     const scriptPath = join(__dirname, '../../../scripts/start-tui.sh');
@@ -77,7 +91,7 @@ export const tuiCommand = {
 if (require.main === module) {
   tuiCommand.handler({
     server: process.argv.includes('--server'),
-    wsUrl: process.env.STACKMEMORY_WS_URL || 'ws://localhost:8080',
+    wsUrl: process.env['STACKMEMORY_WS_URL'] || 'ws://localhost:8080',
     refresh: 2000
   });
 }

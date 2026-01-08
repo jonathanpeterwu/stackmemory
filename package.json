@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Lossless memory runtime for AI coding tools - organizes context as a call stack instead of linear chat logs, with team collaboration and infinite retention",
   "engines": {
     "node": ">=20.0.0",
@@ -60,6 +60,9 @@
     "status": "node dist/scripts/status.js",
     "linear:sync": "node scripts/sync-linear-graphql.js",
     "linear:mirror": "node scripts/sync-linear-graphql.js --mirror",
+    "tui": "npm run build && node dist/features/tui/index.js",
+    "tui:dev": "./scripts/dev-tui.sh",
+    "tui:watch": "npm run build && nodemon --watch src/features/tui --watch src/cli --watch src/skills -e ts --exec 'npm run build && node dist/features/tui/index.js'",
     "claude:setup": "./scripts/setup-claude-autostart.sh",
     "daemons:start": "node scripts/claude-sm-autostart.js",
     "daemons:status": "node scripts/claude-sm-autostart.js status",
@@ -96,6 +99,7 @@
     "express": "^4.22.1",
     "glob": "^13.0.0",
     "helmet": "^8.1.0",
+    "ignore": "^7.0.5",
     "inquirer": "^9.3.8",
     "ioredis": "^5.8.2",
     "jsonwebtoken": "^9.0.3",

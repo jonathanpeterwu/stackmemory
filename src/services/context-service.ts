@@ -38,7 +38,7 @@ export class ContextService {
         this.db = new Database(dbPath);
         this.loadTasksFromDatabase();
       }
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.warn(
         'Could not connect to database, using in-memory storage',
         error
@@ -91,7 +91,7 @@ export class ContextService {
       }
 
       this.logger.info(`Loaded ${rows.length} tasks from database`);
-    } catch (error) {
+    } catch (error: unknown) {
       this.logger.error('Failed to load tasks from database', error);
     }
   }
@@ -154,7 +154,7 @@ export class ContextService {
           task.createdAt.getTime(),
           task.updatedAt.getTime()
         );
-      } catch (error) {
+      } catch (error: unknown) {
         this.logger.error('Failed to persist task to database', error);
       }
     }
@@ -203,7 +203,7 @@ export class ContextService {
           updatedTask.updatedAt.getTime(),
           id
         );
-      } catch (error) {
+      } catch (error: unknown) {
         this.logger.error('Failed to update task in database', error);
       }
     }
@@ -221,7 +221,7 @@ export class ContextService {
         try {
           const stmt = this.db.prepare('DELETE FROM tasks WHERE id = ?');
           stmt.run(id);
-        } catch (error) {
+        } catch (error: unknown) {
           this.logger.error('Failed to delete task from database', error);
         }
       }

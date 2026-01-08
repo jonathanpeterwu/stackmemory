@@ -13,6 +13,20 @@ import { LinearSyncService } from './sync-service.js';
 import { LinearIssue as ClientLinearIssue } from './client.js';
 import { Logger } from '../../utils/logger.js';
 import chalk from 'chalk';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface WebhookServerConfig {
   port?: number;
@@ -40,9 +54,9 @@ export class LinearWebhookServer {
     this.syncService = new LinearSyncService();
 
     this.config = {
-      port: config?.port || parseInt(process.env.WEBHOOK_PORT || '3456'),
-      host: config?.host || process.env.WEBHOOK_HOST || 'localhost',
-      webhookSecret: config?.webhookSecret || process.env.LINEAR_WEBHOOK_SECRET,
+      port: config?.port || parseInt(process.env['WEBHOOK_PORT'] || '3456'),
+      host: config?.host || process.env['WEBHOOK_HOST'] || 'localhost',
+      webhookSecret: config?.webhookSecret || process.env['LINEAR_WEBHOOK_SECRET'],
       maxPayloadSize: config?.maxPayloadSize || '10mb',
       rateLimit: {
         windowMs: config?.rateLimit?.windowMs || 60000,
@@ -99,7 +113,7 @@ export class LinearWebhookServer {
           status: 'accepted',
           queued: true,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         this.logger.error('Webhook processing error:', error);
         return res.status(500).json({ error: 'Internal server error' });
       }
@@ -141,7 +155,7 @@ export class LinearWebhookServer {
 
       try {
         await this.handleWebhookEvent(event);
-      } catch (error) {
+      } catch (error: unknown) {
         this.logger.error(`Failed to process event: ${event.type}`, error);
       }
     }

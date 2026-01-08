@@ -190,7 +190,7 @@ export class LinearSyncManager extends EventEmitter {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       const errorMessage =
         error instanceof Error ? error.message : String(error);
       logger.error(`Linear sync error: ${errorMessage}`);

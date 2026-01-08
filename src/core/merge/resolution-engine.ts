@@ -395,7 +395,7 @@ export class ResolutionEngine {
         rollbackPoint,
         notifications,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Merge execution failed', error as Error);
 
       return {

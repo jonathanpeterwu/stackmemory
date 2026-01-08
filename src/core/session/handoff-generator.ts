@@ -197,7 +197,7 @@ export class HandoffGenerator {
       );
 
       return JSON.parse(content) as HandoffDocument;
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Error loading handoff:', error);
       return null;
     }

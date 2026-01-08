@@ -13,6 +13,20 @@ import {
 import { join } from 'path';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 const projectRoot = process.cwd();
 
@@ -48,7 +62,7 @@ const configPath = join(stackDir, 'config.json');
 if (!existsSync(configPath)) {
   const config = {
     projectId: projectRoot.split('/').pop(),
-    userId: process.env.USER || 'default',
+    userId: process.env['USER'] || 'default',
     teamId: 'local',
     initialized: new Date().toISOString(),
   };
@@ -71,7 +85,7 @@ if (!existsSync(jsonlPath)) {
 
 // 5. Create MCP config for Claude Code
 const mcpConfigPath = join(
-  process.env.HOME || '~',
+  process.env['HOME'] || '~',
   '.config',
   'claude',
   'mcp.json'

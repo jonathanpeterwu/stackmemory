@@ -212,9 +212,9 @@ export class SubagentFleet extends EventEmitter {
     // Calculate statistics
     const stats = {
       total: agents.length,
-      active: agents.filter(a => a.status === 'active').length,
-      idle: agents.filter(a => a.status === 'idle').length,
-      error: agents.filter(a => a.status === 'error').length,
+      active: agents.filter((a: any) => a.status === 'active').length,
+      idle: agents.filter((a: any) => a.status === 'idle').length,
+      error: agents.filter((a: any) => a.status === 'error').length,
       totalTasks: agents.reduce((sum, a) => sum + a.tasksCompleted + a.tasksFailed, 0),
       successfulTasks: agents.reduce((sum, a) => sum + a.tasksCompleted, 0),
       failedTasks: agents.reduce((sum, a) => sum + a.tasksFailed, 0),
@@ -269,15 +269,15 @@ export class SubagentFleet extends EventEmitter {
     });
 
     // Update list display
-    const items = agents.map(agent => this.formatAgentItem(agent));
+    const items = agents.map((agent: any) => this.formatAgentItem(agent));
     this.agentList.setItems(items);
 
     // Update stats panel
     this.statsBox.setContent(this.getFleetStats());
 
     // Update footer
-    const active = agents.filter(a => a.status === 'active').length;
-    const idle = agents.filter(a => a.status === 'idle').length;
+    const active = agents.filter((a: any) => a.status === 'active').length;
+    const idle = agents.filter((a: any) => a.status === 'idle').length;
     const total = agents.length;
     
     const footer = this.container.children[2] as blessed.Widgets.BoxElement;

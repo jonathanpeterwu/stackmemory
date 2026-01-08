@@ -8,14 +8,14 @@
       "command": ["stackmemory", "mcp-server"],
       "enabled": true,
       "environment": {
-        "PROJECT_ROOT": ".",
+        "PROJECT_ROOT": "."
       },
-      "timeout": 10000,
-    },
+      "timeout": 10000
+    }
   },
 
   // Tool configuration - enable StackMemory tools globally
   "tools": {
-    "stackmemory*": true,
-  },
+    "stackmemory*": true
+  }
 }

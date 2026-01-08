@@ -120,7 +120,7 @@ export class LinearRestClient {
       logger.info(`Cached ${allTasks.length} Linear tasks in memory`);
 
       return allTasks;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to fetch Linear tasks:', error as Error);
       return Array.from(this.taskCache.values()); // Return cached data on error
     }
@@ -131,7 +131,7 @@ export class LinearRestClient {
    */
   async getTasksByStatus(status: string): Promise<LinearTask[]> {
     const tasks = await this.getAllTasks();
-    return tasks.filter(task => task.state.type === status);
+    return tasks.filter((task: any) => task.state.type === status);
   }
 
   /**
@@ -141,8 +141,8 @@ export class LinearRestClient {
     try {
       const viewer = await this.getViewer();
       const tasks = await this.getAllTasks();
-      return tasks.filter(task => task.assignee?.id === viewer.id);
-    } catch (error) {
+      return tasks.filter((task: any) => task.assignee?.id === viewer.id);
+    } catch (error: unknown) {
       logger.error('Failed to get assigned tasks:', error as Error);
       return [];
     }
@@ -170,7 +170,7 @@ export class LinearRestClient {
     const tasks = await this.getAllTasks();
     const searchTerm = query.toLowerCase();
 
-    return tasks.filter(task => 
+    return tasks.filter((task: any) => 
       task.title.toLowerCase().includes(searchTerm) ||
       task.description?.toLowerCase().includes(searchTerm) ||
       task.identifier.toLowerCase().includes(searchTerm)

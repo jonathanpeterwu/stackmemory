@@ -248,7 +248,7 @@ describe('MigrationManager', () => {
 
       try {
         await manager.migrate();
-      } catch (error) {
+      } catch (error: unknown) {
         // Expected to fail, but we should still have the warning
       }
 

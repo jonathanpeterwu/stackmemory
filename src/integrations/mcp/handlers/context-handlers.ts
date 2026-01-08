@@ -56,7 +56,7 @@ export class ContextHandlers {
               query,
             },
           };
-        } catch (error) {
+        } catch (error: unknown) {
           logger.warn('LLM context retrieval failed, falling back to hot stack', error instanceof Error ? error : new Error(String(error)));
         }
       }
@@ -84,7 +84,7 @@ export class ContextHandlers {
           },
         ],
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error getting context', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -130,7 +130,7 @@ export class ContextHandlers {
           },
         ],
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error adding decision', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -168,7 +168,7 @@ export class ContextHandlers {
           name,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error starting frame', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -212,7 +212,7 @@ export class ContextHandlers {
           },
         ],
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error closing frame', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -251,7 +251,7 @@ export class ContextHandlers {
           },
         ],
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error adding anchor', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -291,7 +291,7 @@ export class ContextHandlers {
           {
             type: 'text',
             text: `Hot Stack (${hotStack.length} frames):\n` +
-                  stackSummary.map(f => 
+                  stackSummary.map((f: any) => 
                     `  ${f.depth}: ${f.goal} (${f.anchors} anchors, ${f.recentEvents} events)`
                   ).join('\n'),
           },
@@ -300,7 +300,7 @@ export class ContextHandlers {
           stack: stackSummary,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error getting hot stack', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }

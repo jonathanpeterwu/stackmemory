@@ -119,7 +119,7 @@ export function createTaskCommands(): Command {
           }
         });
         console.log('');
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Failed to list tasks:', (error as Error).message);
       }
     });
@@ -154,7 +154,7 @@ export function createTaskCommands(): Command {
         console.log(`✅ Created task: ${taskId.slice(0, 10)}`);
         console.log(`   Title: ${title}`);
         console.log(`   Priority: ${options.priority}`);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Failed to add task:', (error as Error).message);
       }
     });
@@ -178,7 +178,7 @@ export function createTaskCommands(): Command {
 
         taskStore.updateTaskStatus(task.id, 'in_progress', 'Started from CLI');
         console.log(`🔄 Started: ${task.title}`);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Failed to start task:', (error as Error).message);
       }
     });
@@ -202,7 +202,7 @@ export function createTaskCommands(): Command {
 
         taskStore.updateTaskStatus(task.id, 'completed', 'Completed from CLI');
         console.log(`✅ Completed: ${task.title}`);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Failed to complete task:', (error as Error).message);
       }
     });
@@ -242,7 +242,7 @@ export function createTaskCommands(): Command {
           console.log(`\nTags: ${tags.join(', ')}`);
         }
         console.log('');
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('❌ Failed to show task:', (error as Error).message);
       }
     });

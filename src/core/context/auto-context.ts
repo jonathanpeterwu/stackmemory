@@ -33,7 +33,7 @@ export class AutoContext {
         frameId: sessionFrame,
         depth: this.frameManager.getStackDepth() 
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to initialize session context', error as Error);
     }
   }
@@ -56,7 +56,7 @@ export class AutoContext {
       });
       
       return frameId;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to create command context', error as Error);
       return null;
     }
@@ -76,7 +76,7 @@ export class AutoContext {
           timestamp: new Date().toISOString()
         }, currentFrame);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to auto-save context', error as Error);
     }
   }

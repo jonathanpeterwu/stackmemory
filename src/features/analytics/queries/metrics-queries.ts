@@ -20,7 +20,7 @@ export class MetricsQueries {
     try {
       this.db = new Database(dbPath, { readonly: false });
       this.initializeTables();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to initialize metrics database',
         ErrorCode.DB_CONNECTION_FAILED,
@@ -59,7 +59,7 @@ export class MetricsQueries {
         CREATE INDEX IF NOT EXISTS idx_task_created ON task_analytics(created_at);
         CREATE INDEX IF NOT EXISTS idx_task_assignee ON task_analytics(assignee_id);
       `);
-    } catch (error) {
+    } catch (error: unknown) {
       const dbError = errorHandler(error, {
         operation: 'initializeTables',
         schema: 'task_analytics',
@@ -171,7 +171,7 @@ export class MetricsQueries {
         blockingIssuesCount: result.blocking_issues_count || 0,
         velocityTrend,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to get task metrics',
         ErrorCode.DB_QUERY_FAILED,
@@ -223,7 +223,7 @@ export class MetricsQueries {
         labels: JSON.parse(row.labels),
         blockingIssues: JSON.parse(row.blocking_issues),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to get recent tasks',
         ErrorCode.DB_QUERY_FAILED,
@@ -277,7 +277,7 @@ export class MetricsQueries {
         labels: JSON.stringify(task.labels),
         blocking_issues: JSON.stringify(task.blockingIssues),
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to upsert task analytics: ${task.id}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -294,7 +294,7 @@ export class MetricsQueries {
   close(): void {
     try {
       this.db.close();
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to close analytics database',
         ErrorCode.DB_CONNECTION_FAILED,

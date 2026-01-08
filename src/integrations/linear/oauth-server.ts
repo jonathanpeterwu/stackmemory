@@ -9,6 +9,20 @@ import { URL } from 'url';
 import { logger } from '../../core/monitoring/logger.js';
 import { LinearAuthManager } from './auth.js';
 import chalk from 'chalk';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface OAuthServerConfig {
   port?: number;
@@ -86,7 +100,7 @@ export class LinearOAuthServer {
         // Get the code verifier for this session
         const codeVerifier = state 
           ? this.pendingCodeVerifiers.get(state as string)
-          : process.env._LINEAR_CODE_VERIFIER;
+          : process.env['_LINEAR_CODE_VERIFIER'];
 
         if (!codeVerifier) {
           throw new Error('Code verifier not found. Please restart the authorization process.');
@@ -100,7 +114,7 @@ export class LinearOAuthServer {
         if (state) {
           this.pendingCodeVerifiers.delete(state as string);
         }
-        delete process.env._LINEAR_CODE_VERIFIER;
+        delete process.env['_LINEAR_CODE_VERIFIER'];
 
         // Test the connection
         const testSuccess = await this.testConnection();
@@ -120,7 +134,7 @@ export class LinearOAuthServer {
 
         // Schedule server shutdown if auto-shutdown is enabled
         this.scheduleShutdown();
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to complete OAuth flow:', error as Error);
         res.send(this.generateErrorPage(
           'Authentication Failed',
@@ -157,7 +171,7 @@ export class LinearOAuthServer {
 
         // Redirect to Linear OAuth page
         res.redirect(url);
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to start OAuth flow:', error as Error);
         res.status(500).send(this.generateErrorPage(
           'OAuth Start Failed',
@@ -343,7 +357,7 @@ export class LinearOAuthServer {
       }
 
       return false;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Linear connection test failed:', error as Error);
       return false;
     }
@@ -420,7 +434,7 @@ export class LinearOAuthServer {
           }
         });
 
-      } catch (error) {
+      } catch (error: unknown) {
         reject(error);
       }
     });

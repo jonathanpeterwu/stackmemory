@@ -282,7 +282,7 @@ export async function traceQuery<T>(
       }
       
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       // Enhanced error logging for database errors
       logger.error(`Database query failed: ${queryName}`, error as Error, {
         query,
@@ -316,7 +316,7 @@ export function createTracedTransaction<T>(
       });
       
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       const duration = performance.now() - startTime;
       logger.error(`Transaction failed: ${name}`, error as Error, {
         duration,

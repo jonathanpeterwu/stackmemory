@@ -73,7 +73,7 @@ export class UpdateChecker {
       ) {
         this.displayUpdateNotification(currentVersion, latestVersion);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Log the error with proper context but don't interrupt user workflow
       const wrappedError = wrapError(
         error,
@@ -109,7 +109,7 @@ export class UpdateChecker {
         '',
         { operation: 'fetchLatestVersion', package: this.PACKAGE_NAME }
       );
-    } catch (error) {
+    } catch (error: unknown) {
       const wrappedError = wrapError(
         error,
         'Failed to fetch latest version from npm',
@@ -145,7 +145,7 @@ export class UpdateChecker {
         if (latestPart < currentPart) return false;
       }
       return false;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.debug('Version comparison failed:', {
         error: getErrorMessage(error),
         current,
@@ -194,7 +194,7 @@ export class UpdateChecker {
       }
 
       return cache;
-    } catch (error) {
+    } catch (error: unknown) {
       // Cache errors should not interrupt operation
       const wrappedError = wrapError(
         error,
@@ -234,7 +234,7 @@ export class UpdateChecker {
       } else {
         writeFileSync(this.CACHE_FILE, JSON.stringify(cache, null, 2));
       }
-    } catch (error) {
+    } catch (error: unknown) {
       // Cache save errors should not interrupt operation
       const wrappedError = wrapError(
         error,
@@ -270,7 +270,7 @@ export class UpdateChecker {
           console.log(`✅ StackMemory is up to date (v${currentVersion})`);
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('❌ Update check failed:', (error as Error).message);
     }
   }

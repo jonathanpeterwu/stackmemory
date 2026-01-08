@@ -10,7 +10,23 @@ import { FrameManager } from '../../../core/context/frame-manager.js';
 import { LinearTaskReader } from './linear-task-reader.js';
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
-import type {
+import type {} from './types.js';
+
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
+import {
   SessionData,
   LinearTask,
   FrameData,
@@ -33,32 +49,32 @@ export class DataService extends EventEmitter {
     try {
       // Initialize database with error handling
       try {
-        const dbPath = process.env.PROJECT_ROOT
-          ? `${process.env.PROJECT_ROOT}/.stackmemory/context.db`
+        const dbPath = process.env['PROJECT_ROOT']
+          ? `${process.env['PROJECT_ROOT']}/.stackmemory/context.db`
           : `${process.cwd()}/.stackmemory/context.db`;
 
         if (existsSync(dbPath)) {
           this.db = new Database(dbPath);
         }
-      } catch (dbError) {
-        if (process.env.DEBUG) {
+      } catch (dbError: unknown) {
+        if (process.env['DEBUG']) {
           console.log('Database not accessible, continuing without it');
         }
       }
 
       // Initialize task reader for Linear-synced tasks
       try {
-        this.taskReader = new LinearTaskReader(process.env.PROJECT_ROOT || process.cwd());
+        this.taskReader = new LinearTaskReader(process.env['PROJECT_ROOT'] || process.cwd());
         
         // Load Linear mappings
         this.linearMappings = this.taskReader.getMappings();
         
-        if (process.env.DEBUG) {
+        if (process.env['DEBUG']) {
           const tasks = this.taskReader.getTasks();
           console.log(`LinearTaskReader initialized with ${tasks.length} tasks`);
         }
-      } catch (tsError) {
-        if (process.env.DEBUG) {
+      } catch (tsError: unknown) {
+        if (process.env['DEBUG']) {
           console.log('Task reader initialization failed:', tsError.message);
         }
       }
@@ -68,8 +84,8 @@ export class DataService extends EventEmitter {
         this.sessionManager = new SessionManager({
           enableMonitoring: true,
         });
-      } catch (smError) {
-        if (process.env.DEBUG) {
+      } catch (smError: unknown) {
+        if (process.env['DEBUG']) {
           console.log('SessionManager initialization failed:', smError.message);
         }
         // Continue without session manager
@@ -78,8 +94,8 @@ export class DataService extends EventEmitter {
       if (this.db) {
         try {
           this.frameManager = new FrameManager(this.db, 'tui');
-        } catch (fmError) {
-          if (process.env.DEBUG) {
+        } catch (fmError: unknown) {
+          if (process.env['DEBUG']) {
             console.log('FrameManager initialization failed:', fmError.message);
           }
           // Continue without frame manager
@@ -88,15 +104,15 @@ export class DataService extends EventEmitter {
 
       // Note: Linear clients removed - all syncing happens via webhook or scheduled scripts
       // The TUI only displays locally synced tasks from the task store
-      if (process.env.DEBUG) {
+      if (process.env['DEBUG']) {
         console.log(
           'TUI: Using local task store only (no direct Linear API calls)'
         );
       }
 
       this.emit('data:ready');
-    } catch (error) {
-      if (process.env.DEBUG) {
+    } catch (error: unknown) {
+      if (process.env['DEBUG']) {
         console.error('DataService initialization error:', error);
       }
       // Don't throw, just emit ready with mock data
@@ -123,9 +139,9 @@ export class DataService extends EventEmitter {
             LIMIT 20
           `);
           recentSessions = stmt.all() || [];
-        } catch (dbError) {
+        } catch (dbError: unknown) {
           // Database table might not exist, continue with mock data
-          if (process.env.DEBUG) {
+          if (process.env['DEBUG']) {
             console.log('Sessions table not found, using mock data');
           }
         }
@@ -146,8 +162,8 @@ export class DataService extends EventEmitter {
 
       this.setCache('sessions', sessions);
       return sessions;
-    } catch (error) {
-      if (process.env.DEBUG) {
+    } catch (error: unknown) {
+      if (process.env['DEBUG']) {
         console.error('Error getting sessions:', error);
       }
       return this.getMockSessions();
@@ -168,13 +184,13 @@ export class DataService extends EventEmitter {
         const localTasks = this.taskReader.getTasks();
         tasks.push(...localTasks);
 
-        if (process.env.DEBUG) {
+        if (process.env['DEBUG']) {
           console.log(
             `Loaded ${tasks.length} tasks from local store (no Linear API calls)`
           );
         }
-      } catch (error) {
-        if (process.env.DEBUG) {
+      } catch (error: unknown) {
+        if (process.env['DEBUG']) {
           console.log('Failed to get local tasks:', error.message);
         }
       }
@@ -211,8 +227,8 @@ export class DataService extends EventEmitter {
       const formatted = frames.map(this.formatFrame);
       this.setCache('frames', formatted);
       return formatted;
-    } catch (error) {
-      if (process.env.DEBUG) {
+    } catch (error: unknown) {
+      if (process.env['DEBUG']) {
         console.error('Error getting frames:', error);
       }
       // Return mock frames on error
@@ -280,7 +296,7 @@ export class DataService extends EventEmitter {
 
       this.setCache('agents', agents);
       return agents;
-    } catch (error) {
+    } catch (error: unknown) {
       this.emit('error', error);
       return [];
     }
@@ -320,7 +336,7 @@ export class DataService extends EventEmitter {
 
       this.setCache('prs', prs);
       return prs;
-    } catch (error) {
+    } catch (error: unknown) {
       this.emit('error', error);
       return [];
     }
@@ -349,7 +365,7 @@ export class DataService extends EventEmitter {
 
       this.setCache('issues', issues);
       return issues;
-    } catch (error) {
+    } catch (error: unknown) {
       this.emit('error', error);
       return [];
     }
@@ -391,7 +407,7 @@ export class DataService extends EventEmitter {
 
       this.setCache('analytics', analytics);
       return analytics;
-    } catch (error) {
+    } catch (error: unknown) {
       this.emit('error', error);
       return {
         sessions: { labels: [], values: [] },

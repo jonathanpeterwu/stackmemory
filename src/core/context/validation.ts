@@ -122,7 +122,7 @@ export type StartMergeSessionInput = z.infer<typeof StartMergeSessionSchema>;
 export function validateInput<T>(schema: z.ZodSchema<T>, input: unknown): T {
   try {
     return schema.parse(input);
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       const details = error.errors
         .map((e) => `${e.path.join('.')}: ${e.message}`)
@@ -140,7 +140,7 @@ export function validateInputSafe<T>(
   try {
     const data = schema.parse(input);
     return { success: true, data };
-  } catch (error) {
+  } catch (error: unknown) {
     if (error instanceof z.ZodError) {
       const details = error.errors
         .map((e) => `${e.path.join('.')}: ${e.message}`)

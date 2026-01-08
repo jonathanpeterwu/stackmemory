@@ -18,6 +18,20 @@ import {
 import { retry, withTimeout } from '../errors/recovery.js';
 import { sessionManager, FrameQueryMode } from '../session/index.js';
 import { contextBridge } from './context-bridge.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 // Frame types based on architecture
 export type FrameType =
@@ -140,9 +154,9 @@ export class FrameManager {
     // Skip in test environment, when explicitly requested, or for CLI usage
     const shouldInitializeBridge = 
       !skipContextBridge && 
-      process.env.NODE_ENV !== 'test' && 
-      !process.env.VITEST &&
-      !process.env.STACKMEMORY_CLI;
+      process.env['NODE_ENV'] !== 'test' && 
+      !process.env['VITEST'] &&
+      !process.env['STACKMEMORY_CLI'];
       
     if (shouldInitializeBridge) {
       contextBridge
@@ -234,7 +248,7 @@ export class FrameManager {
         CREATE INDEX IF NOT EXISTS idx_handoff_requests_status ON handoff_requests(status);
         CREATE INDEX IF NOT EXISTS idx_handoff_requests_target ON handoff_requests(target_stack_id);
       `);
-    } catch (error) {
+    } catch (error: unknown) {
       const dbError = errorHandler(error, {
         operation: 'initializeSchema',
         schema: 'frames',
@@ -322,7 +336,7 @@ export class FrameManager {
         activeFrames: this.activeStack,
         queryMode: this.queryMode,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       const dbError = errorHandler(error, {
         query: 'Frame loading query',
         runId: this.currentRunId,
@@ -429,7 +443,7 @@ export class FrameManager {
           JSON.stringify(frame.inputs),
           frame.created_at
         );
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to create frame: ${options.name}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -526,7 +540,7 @@ export class FrameManager {
           JSON.stringify(digest.structured),
           targetFrameId
         );
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to close frame: ${targetFrameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -570,7 +584,7 @@ export class FrameManager {
       this.db.prepare('DELETE FROM frames WHERE frame_id = ?').run(frameId);
 
       logger.debug('Deleted frame completely', { frameId });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to delete frame', { frameId, error });
       throw error;
     }
@@ -590,7 +604,7 @@ export class FrameManager {
       children.forEach((child) => {
         try {
           this.closeFrame(child.frame_id);
-        } catch (error) {
+        } catch (error: unknown) {
           logger.error(
             'Failed to close child frame',
             error instanceof Error ? error : new Error(String(error)),
@@ -601,7 +615,7 @@ export class FrameManager {
           );
         }
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to close child frames for parent: ${parentFrameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -735,7 +749,7 @@ export class FrameManager {
           eventType,
           JSON.stringify(payload)
         );
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to add event to frame: ${targetFrameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -796,7 +810,7 @@ export class FrameManager {
           priority,
           JSON.stringify(metadata)
         );
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to add anchor to frame: ${targetFrameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -892,7 +906,7 @@ export class FrameManager {
         outputs: JSON.parse(row.outputs || '{}'),
         digest_json: JSON.parse(row.digest_json || '{}'),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to get recent frames', error as Error);
       return [];
     }
@@ -915,7 +929,7 @@ export class FrameManager {
       this.db
         .prepare(`UPDATE frames SET outputs = ? WHERE frame_id = ?`)
         .run(JSON.stringify(metadata), currentFrameId);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn('Failed to add context to frame', { error, key });
     }
   }
@@ -984,7 +998,7 @@ export class FrameManager {
         outputs: JSON.parse(row.outputs || '{}'),
         digest_json: JSON.parse(row.digest_json || '{}'),
       };
-    } catch (error) {
+    } catch (error: unknown) {
       // Log the error but return undefined instead of throwing
       logger.warn(`Failed to get frame: ${frameId}`, {
         error: error instanceof Error ? error.message : String(error),
@@ -1008,7 +1022,7 @@ export class FrameManager {
         ...row,
         payload: JSON.parse(row.payload),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get frame events: ${frameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -1036,7 +1050,7 @@ export class FrameManager {
         ...row,
         metadata: JSON.parse(row.metadata || '{}'),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get frame anchors: ${frameId}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -1060,7 +1074,7 @@ export class FrameManager {
         .get(frameId) as { max_seq: number | null };
 
       return (result.max_seq || 0) + 1;
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get next event sequence for frame: ${frameId}`,
         ErrorCode.DB_QUERY_FAILED,

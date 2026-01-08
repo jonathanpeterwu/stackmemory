@@ -33,7 +33,7 @@ export class PostgresAdapter implements PersistenceAdapter {
       await this.initialize();
       this.isInitialized = true;
       logger.info('PostgreSQL connected successfully');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'Failed to connect to PostgreSQL',
         error instanceof Error ? error : undefined
@@ -59,7 +59,7 @@ export class PostgresAdapter implements PersistenceAdapter {
           type: f.dataTypeID.toString(),
         })),
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'Query execution failed',
         error instanceof Error ? error : new Error(String(error)),
@@ -198,7 +198,7 @@ export class PostgresAdapter implements PersistenceAdapter {
       `);
 
       logger.info('TimescaleDB extension enabled');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn(
         'Failed to enable TimescaleDB',
         error instanceof Error ? error : undefined
@@ -230,7 +230,7 @@ export class PostgresAdapter implements PersistenceAdapter {
       `);
 
       logger.info('pgvector extension enabled');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn(
         'Failed to enable pgvector',
         error instanceof Error ? error : undefined
@@ -413,7 +413,7 @@ export class PostgresAdapter implements PersistenceAdapter {
 
       await this.commit();
       logger.info('Migration completed successfully');
-    } catch (error) {
+    } catch (error: unknown) {
       await this.rollback();
       logger.error(
         'Migration failed',

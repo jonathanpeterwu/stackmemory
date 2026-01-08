@@ -135,7 +135,7 @@ export class MigrationManager extends EventEmitter {
           dependencies: this.getTableDependencies(table),
           strategy: 'full',
         });
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn(`Failed to estimate rows for table ${table}:`, error);
         plan.push({
           table,
@@ -236,7 +236,7 @@ export class MigrationManager extends EventEmitter {
       this.updateProgress({ phase: 'completed', percentage: 100 });
       logger.info('Migration completed successfully');
       this.emit('completed', this.progress);
-    } catch (error) {
+    } catch (error: unknown) {
       this.updateProgress({ phase: 'failed' });
 
       // Sanitize error for logging
@@ -246,7 +246,7 @@ export class MigrationManager extends EventEmitter {
       if (strategy.fallbackOnError) {
         try {
           await this.rollbackMigration();
-        } catch (rollbackError) {
+        } catch (rollbackError: unknown) {
           logger.error('Rollback failed:', this.sanitizeError(rollbackError));
         }
       }
@@ -299,7 +299,7 @@ export class MigrationManager extends EventEmitter {
 
     try {
       await this.config.targetAdapter.initializeSchema();
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to initialize target schema:', error);
       throw new Error(`Target schema initialization failed: ${error}`);
     }
@@ -370,7 +370,7 @@ export class MigrationManager extends EventEmitter {
 
         // Adaptive delay based on system resources
         await this.sleep(this.calculateAdaptiveDelay());
-      } catch (error) {
+      } catch (error: unknown) {
         this.addError(plan.table, `Batch migration failed: ${error}`);
 
         if (this.config.retryAttempts > 0) {
@@ -509,7 +509,7 @@ export class MigrationManager extends EventEmitter {
 
         logger.info(`Retry successful for table ${table} at offset ${offset}`);
         return;
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn(
           `Retry ${attempt}/${this.config.retryAttempts} failed:`,
           error
@@ -553,7 +553,7 @@ export class MigrationManager extends EventEmitter {
             `Table ${tablePlan.table} verified: ${sourceCount} rows`
           );
         }
-      } catch (error) {
+      } catch (error: unknown) {
         this.addError(tablePlan.table, `Verification failed: ${error}`);
       }
     }
@@ -587,7 +587,7 @@ export class MigrationManager extends EventEmitter {
       logger.warn(
         'Rollback would clean target database - implement based on strategy'
       );
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Rollback failed:', error);
     }
   }

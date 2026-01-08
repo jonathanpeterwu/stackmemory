@@ -5,6 +5,20 @@
 import chalk from 'chalk';
 import { Command } from 'commander';
 import { LinearRestClient } from '../../integrations/linear/rest-client.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export function registerLinearListCommand(parent: Command) {
   parent
@@ -19,7 +33,7 @@ export function registerLinearListCommand(parent: Command) {
     .option('--count', 'Show count by status only')
     .action(async (options) => {
       try {
-        const apiKey = process.env.LINEAR_API_KEY;
+        const apiKey = process.env['LINEAR_API_KEY'];
         if (!apiKey) {
           console.log(chalk.yellow('⚠ Set LINEAR_API_KEY environment variable'));
           return;
@@ -85,7 +99,7 @@ export function registerLinearListCommand(parent: Command) {
 
         const cacheStats = restClient.getCacheStats();
         console.log(chalk.gray(`\n${displayTasks.length} shown, ${tasks.length} total • Cache: ${Math.round(cacheStats.age / 1000)}s old`));
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           chalk.red('Failed to list tasks:'),
           (error as Error).message

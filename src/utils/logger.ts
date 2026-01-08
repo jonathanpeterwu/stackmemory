@@ -1,4 +1,17 @@
 import chalk from 'chalk';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
 
 export type LogLevel = 'debug' | 'info' | 'warn' | 'error';
 
@@ -8,7 +21,7 @@ export class Logger {
 
   constructor(name: string, logLevel: LogLevel = 'info') {
     this.name = name;
-    this.logLevel = (process.env.LOG_LEVEL as LogLevel) || logLevel;
+    this.logLevel = (process.env['LOG_LEVEL'] as LogLevel) || logLevel;
   }
 
   private shouldLog(level: LogLevel): boolean {

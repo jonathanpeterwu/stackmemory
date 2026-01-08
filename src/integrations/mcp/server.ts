@@ -25,6 +25,20 @@ import { TraceDetector } from '../../core/trace/trace-detector.js';
 import { ToolCall, Trace } from '../../core/trace/types.js';
 import { LLMContextRetrieval } from '../../core/retrieval/index.js';
 import { v4 as uuidv4 } from 'uuid';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 // ============================================
 // Simple Local MCP Server
@@ -89,7 +103,7 @@ class LocalStackMemoryMCP {
 
     // Initialize Browser MCP integration
     this.browserMCP = new BrowserMCPIntegration({
-      headless: process.env.BROWSER_HEADLESS !== 'false',
+      headless: process.env['BROWSER_HEADLESS'] !== 'false',
       defaultViewport: { width: 1280, height: 720 },
     });
 
@@ -815,7 +829,7 @@ class LocalStackMemoryMCP {
             default:
               throw new Error(`Unknown tool: ${name}`);
           }
-        } catch (err) {
+        } catch (err: unknown) {
           error = err instanceof Error ? err : new Error(String(err));
           toolCall.error = error.message;
           throw err;
@@ -1156,7 +1170,7 @@ class LocalStackMemoryMCP {
           },
         ],
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         content: [
           {
@@ -1314,7 +1328,7 @@ class LocalStackMemoryMCP {
           },
         ],
       };
-    } catch (error) {
+    } catch (error: unknown) {
       return {
         content: [
           {

@@ -2,6 +2,20 @@ import { EventEmitter } from 'events';
 import * as fs from 'fs';
 import * as path from 'path';
 import { logger } from './logger.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 interface MetricEntry {
   timestamp: Date;
@@ -24,9 +38,9 @@ class MetricsCollector extends EventEmitter {
     super();
 
     // Set up metrics file if enabled
-    if (process.env.STACKMEMORY_METRICS_ENABLED === 'true') {
+    if (process.env['STACKMEMORY_METRICS_ENABLED'] === 'true') {
       const metricsDir = path.join(
-        process.env.HOME || '.',
+        process.env['HOME'] || '.',
         '.stackmemory',
         'metrics'
       );
@@ -128,7 +142,7 @@ class MetricsCollector extends EventEmitter {
       try {
         const lines = toFlush.map((m) => JSON.stringify(m)).join('\n') + '\n';
         await fs.promises.appendFile(this.metricsFile, lines);
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error(
           'Failed to write metrics',
           error instanceof Error ? error : new Error(String(error))

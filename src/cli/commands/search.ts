@@ -95,7 +95,7 @@ export function createSearchCommand(): Command {
             console.log('');
             totalResults += tasks.length;
           }
-        } catch (error) {
+        } catch (error: unknown) {
           // Task table might not exist
         }
       }
@@ -137,7 +137,7 @@ export function createSearchCommand(): Command {
             console.log('');
             totalResults += contexts.length;
           }
-        } catch (error) {
+        } catch (error: unknown) {
           // Frames table might not exist
         }
       }
@@ -175,7 +175,7 @@ export function createSearchCommand(): Command {
             console.log('');
             totalResults += events.length;
           }
-        } catch (error) {
+        } catch (error: unknown) {
           // Events table might not exist
         }
       }

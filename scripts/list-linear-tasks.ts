@@ -7,6 +7,20 @@
 import { LinearClient } from '../src/integrations/linear/client.js';
 import { LinearAuthManager } from '../src/integrations/linear/auth.js';
 import chalk from 'chalk';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 interface TasksByStatus {
   [status: string]: Array<{
@@ -25,7 +39,7 @@ async function main() {
     // Try to get authentication
     const authManager = new LinearAuthManager(process.cwd());
     const tokens = authManager.loadTokens();
-    const apiKey = process.env.LINEAR_API_KEY;
+    const apiKey = process.env['LINEAR_API_KEY'];
 
     if (!tokens && !apiKey) {
       console.log(chalk.red('❌ Not authenticated with Linear'));
@@ -138,7 +152,7 @@ async function main() {
       console.log(chalk.gray(`  ${status}: ${count} tasks`));
     });
     console.log(chalk.bold(`  Total: ${totalTasks} tasks`));
-  } catch (error) {
+  } catch (error: unknown) {
     console.error(chalk.red('❌ Error:'), (error as Error).message);
     process.exit(1);
   }

@@ -10,6 +10,20 @@ import { LinearAuthManager } from './auth.js';
 import { LinearClient } from './client.js';
 import { logger } from '../../core/monitoring/logger.js';
 import type { Request, Response } from 'express';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface LinearWebhookPayload {
   action: 'create' | 'update' | 'remove';
@@ -50,7 +64,7 @@ export class LinearWebhookHandler {
     this.webhookSecret = webhookSecret;
 
     // Initialize sync engine if API key is available
-    if (process.env.LINEAR_API_KEY) {
+    if (process.env['LINEAR_API_KEY']) {
       const authManager = new LinearAuthManager();
       this.syncEngine = new LinearSyncEngine(taskStore, authManager, {
         enabled: true,
@@ -111,7 +125,7 @@ export class LinearWebhookHandler {
       }
 
       res.status(200).json({ message: 'Webhook processed successfully' });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to process webhook:', error as Error);
       res.status(500).json({ error: 'Failed to process webhook' });
     }

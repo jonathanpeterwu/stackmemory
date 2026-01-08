@@ -70,7 +70,7 @@ export class LinearMigrator {
           team: sourceTeam
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       result.source = {
         success: false,
         error: (error as Error).message
@@ -88,7 +88,7 @@ export class LinearMigrator {
           team: targetTeam
         }
       };
-    } catch (error) {
+    } catch (error: unknown) {
       result.target = {
         success: false,
         error: (error as Error).message
@@ -124,7 +124,7 @@ export class LinearMigrator {
       // Filter by prefix (e.g., "STA-" tasks only)
       let tasksToMigrate = sourceTasks;
       if (this.config.taskPrefix) {
-        tasksToMigrate = sourceTasks.filter(task => 
+        tasksToMigrate = sourceTasks.filter((task: any) => 
           task.identifier.startsWith(this.config.taskPrefix!)
         );
         console.log(chalk.cyan(`📋 Filtered to ${tasksToMigrate.length} tasks with prefix "${this.config.taskPrefix}"`));
@@ -132,7 +132,7 @@ export class LinearMigrator {
 
       // Filter by states if specified
       if (this.config.includeStates?.length) {
-        tasksToMigrate = tasksToMigrate.filter(task => 
+        tasksToMigrate = tasksToMigrate.filter((task: any) => 
           this.config.includeStates!.includes(task.state.type)
         );
         console.log(chalk.cyan(`📋 Further filtered to ${tasksToMigrate.length} tasks matching states: ${this.config.includeStates.join(', ')}`));
@@ -187,7 +187,7 @@ export class LinearMigrator {
                 mapping.deleted = true;
                 result.deleted++;
                 console.log(chalk.gray(`🗑️  Deleted ${task.identifier} from source`));
-              } catch (deleteError) {
+              } catch (deleteError: unknown) {
                 result.deleteFailed++;
                 result.errors.push(`Delete failed for ${task.identifier}: ${(deleteError as Error).message}`);
                 console.log(chalk.yellow(`⚠️  Failed to delete ${task.identifier} from source: ${(deleteError as Error).message}`));
@@ -195,7 +195,7 @@ export class LinearMigrator {
             }
 
             result.taskMappings.push(mapping);
-          } catch (error) {
+          } catch (error: unknown) {
             const errorMsg = (error as Error).message;
             result.errors.push(`${task.identifier}: ${errorMsg}`);
             result.taskMappings.push({
@@ -215,7 +215,7 @@ export class LinearMigrator {
         }
       }
 
-    } catch (error) {
+    } catch (error: unknown) {
       result.errors.push(`Migration failed: ${(error as Error).message}`);
       logger.error('Migration failed:', error as Error);
     }

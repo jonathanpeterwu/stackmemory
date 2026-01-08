@@ -56,7 +56,7 @@ export class TraceHandlers {
         };
       }
 
-      const tracesSummary = traces.map(trace => {
+      const tracesSummary = traces.map((trace: any) => {
         const duration = trace.metadata.endTime && trace.metadata.startTime ? trace.metadata.endTime - trace.metadata.startTime : 'ongoing';
         return {
           id: trace.id,
@@ -68,7 +68,7 @@ export class TraceHandlers {
         };
       });
 
-      const summaryText = tracesSummary.map(t => 
+      const summaryText = tracesSummary.map((t: any) => 
         `${t.id}: ${t.pattern} (${t.toolCount} tools, ${t.duration}) [${t.status}]`
       ).join('\n');
 
@@ -92,7 +92,7 @@ export class TraceHandlers {
       }
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error getting traces', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -114,7 +114,7 @@ export class TraceHandlers {
       if (trace_id) {
         // Analyze specific trace
         const traces = this.deps.traceDetector.getTraces();
-        const trace = traces.find(t => t.id === trace_id);
+        const trace = traces.find((t: any) => t.id === trace_id);
         if (!trace) {
           throw new Error(`Trace not found: ${trace_id}`);
         }
@@ -178,7 +178,7 @@ export class TraceHandlers {
           traceId: trace_id,
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error analyzing traces', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -222,7 +222,7 @@ export class TraceHandlers {
           options: { headless, width, height, capture_screenshots },
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error starting browser debug session', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -261,7 +261,7 @@ export class TraceHandlers {
           timestamp: Date.now(),
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error taking screenshot', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -299,7 +299,7 @@ export class TraceHandlers {
           timestamp: Date.now(),
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error executing script', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -333,7 +333,7 @@ export class TraceHandlers {
           timestamp: Date.now(),
         },
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Error stopping browser debug session', error instanceof Error ? error : new Error(String(error)));
       throw error;
     }
@@ -355,7 +355,7 @@ export class TraceHandlers {
       summary: `Analysis of ${traces.length} recent traces`,
       totalTraces: traces.length,
       avgScore: traces.length > 0 ? traces.reduce((sum, t) => sum + t.score, 0) / traces.length : 0,
-      commonPatterns: traces.map(t => t.compressed?.pattern).filter(Boolean)
+      commonPatterns: traces.map((t: any) => t.compressed?.pattern).filter(Boolean)
     };
   }
 }

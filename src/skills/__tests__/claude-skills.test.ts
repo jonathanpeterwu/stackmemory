@@ -251,7 +251,7 @@ describe('Claude Skills', () => {
       
       // Load checkpoint and verify metadata
       const files = fs.readdirSync(tempDir);
-      const checkpointFile = files.find(f => f.endsWith('.json'));
+      const checkpointFile = files.find((f: any) => f.endsWith('.json'));
       const checkpoint = JSON.parse(
         fs.readFileSync(path.join(tempDir, checkpointFile!), 'utf-8')
       );
@@ -270,7 +270,7 @@ describe('Claude Skills', () => {
       expect(result.success).toBe(true);
       expect(result.data?.length).toBe(2);
       // The order depends on timestamp which might be the same in tests
-      const descriptions = result.data?.map(d => d.description);
+      const descriptions = result.data?.map((d: any) => d.description);
       expect(descriptions).toContain('First checkpoint');
       expect(descriptions).toContain('Second checkpoint');
     });

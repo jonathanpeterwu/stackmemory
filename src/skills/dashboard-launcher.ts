@@ -107,7 +107,7 @@ export class DashboardLauncherSkill {
       }
 
       throw new Error('Server failed to start');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to launch dashboard server:', error);
       throw error;
     }
@@ -165,7 +165,7 @@ export class DashboardLauncherSkill {
       }
 
       throw new Error('Web dashboard failed to start');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to launch web dashboard:', error);
       throw error;
     }
@@ -182,7 +182,7 @@ export class DashboardLauncherSkill {
       spawn('node', ['dist/features/tui/index.js'], {
         stdio: 'inherit',
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to launch TUI:', error);
       throw error;
     }
@@ -207,7 +207,7 @@ export class DashboardLauncherSkill {
 
       await execAsync(command);
       logger.info(`Opened dashboard in browser: ${url}`);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn('Failed to open browser:', error);
     }
   }
@@ -234,7 +234,7 @@ export class DashboardLauncherSkill {
       }
 
       logger.info('Dashboard launched successfully');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Dashboard launch failed:', error);
     }
   }

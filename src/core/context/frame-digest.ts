@@ -30,7 +30,7 @@ export class FrameDigestGenerator {
       const structured = this.generateStructuredDigest(frame, events, anchors);
 
       return { text, structured };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to generate frame digest', { frameId, error });
       
       return {
@@ -62,7 +62,7 @@ export class FrameDigestGenerator {
 
     // Key anchors
     const importantAnchors = anchors
-      .filter(a => a.priority >= 7)
+      .filter((a: any) => a.priority >= 7)
       .sort((a, b) => b.priority - a.priority);
 
     if (importantAnchors.length > 0) {
@@ -114,7 +114,7 @@ export class FrameDigestGenerator {
       activity: {
         totalEvents: events.length,
         eventsByType,
-        eventTimeline: events.slice(-10).map(e => ({
+        eventTimeline: events.slice(-10).map((e: any) => ({
           type: e.event_type,
           timestamp: e.ts,
           summary: this.summarizeEvent(e),
@@ -124,14 +124,14 @@ export class FrameDigestGenerator {
         totalAnchors: anchors.length,
         anchorsByType,
         keyDecisions: anchors
-          .filter(a => a.type === 'DECISION' && a.priority >= 7)
-          .map(a => a.text),
+          .filter((a: any) => a.type === 'DECISION' && a.priority >= 7)
+          .map((a: any) => a.text),
         constraints: anchors
-          .filter(a => a.type === 'CONSTRAINT')
-          .map(a => a.text),
+          .filter((a: any) => a.type === 'CONSTRAINT')
+          .map((a: any) => a.text),
         risks: anchors
-          .filter(a => a.type === 'RISK')
-          .map(a => a.text),
+          .filter((a: any) => a.type === 'RISK')
+          .map((a: any) => a.text),
       },
       outcomes: {
         outputs: frame.outputs,
@@ -174,7 +174,7 @@ export class FrameDigestGenerator {
     }
 
     // Error summary
-    const errorEvents = events.filter(e => 
+    const errorEvents = events.filter((e: any) => 
       e.payload.error || e.payload.status === 'error'
     );
     if (errorEvents.length > 0) {

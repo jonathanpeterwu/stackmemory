@@ -15,11 +15,25 @@ import { SQLiteAdapter } from '../../core/database/sqlite-adapter.js';
 import { ConfigManager } from '../../core/config/config-manager.js';
 import * as path from 'path';
 import * as os from 'os';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 async function initializeSkillContext(): Promise<SkillContext> {
   const config = ConfigManager.getInstance();
   const projectId = config.get('project.id');
-  const userId = config.get('user.id') || process.env.USER || 'default';
+  const userId = config.get('user.id') || process.env['USER'] || 'default';
   
   const dbPath = path.join(
     os.homedir(),
@@ -91,7 +105,7 @@ export function createSkillsCommand(): Command {
         }
 
         await context.database.disconnect();
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.stop();
         console.error(chalk.red('Error:'), error.message);
         process.exit(1);
@@ -134,7 +148,7 @@ export function createSkillsCommand(): Command {
         }
 
         await context.database.disconnect();
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.stop();
         console.error(chalk.red('Error:'), error.message);
         process.exit(1);
@@ -167,7 +181,7 @@ export function createSkillsCommand(): Command {
         }
 
         await context.database.disconnect();
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.stop();
         console.error(chalk.red('Error:'), error.message);
         process.exit(1);
@@ -210,7 +224,7 @@ export function createSkillsCommand(): Command {
         }
 
         await context.database.disconnect();
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.stop();
         console.error(chalk.red('Error:'), error.message);
         process.exit(1);
@@ -245,7 +259,7 @@ export function createSkillsCommand(): Command {
         }
 
         await context.database.disconnect();
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.stop();
         console.error(chalk.red('Error:'), error.message);
         process.exit(1);
@@ -323,7 +337,7 @@ export function createSkillsCommand(): Command {
         }
 
         await context.database.disconnect();
-      } catch (error) {
+      } catch (error: unknown) {
         spinner.stop();
         console.error(chalk.red('Error:'), error.message);
         process.exit(1);

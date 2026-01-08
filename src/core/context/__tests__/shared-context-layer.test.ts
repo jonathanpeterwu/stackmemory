@@ -7,6 +7,20 @@ import {
 } from '../shared-context-layer.js';
 import { sessionManager } from '../../session/session-manager.js';
 import type { Frame } from '../frame-manager.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 vi.mock('fs/promises');
 vi.mock('../../session/session-manager.js');
@@ -30,7 +44,7 @@ describe('SharedContextLayer', () => {
 
   beforeEach(async () => {
     vi.clearAllMocks();
-    process.env.HOME = mockHomeDir;
+    process.env['HOME'] = mockHomeDir;
 
     // Mock file system
     vi.mocked(fs.mkdir).mockResolvedValue(undefined);

@@ -40,7 +40,7 @@ async function runBenchmarks() {
     }
 
     process.exit(0);
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('\n❌ Benchmark failed:', error);
     logger.error('Benchmark error', error as Error);
     process.exit(1);

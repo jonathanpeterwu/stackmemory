@@ -9,6 +9,20 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { logger } from '../monitoring/logger.js';
 import { SystemError, ErrorCode } from '../errors/index.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface Session {
   sessionId: string;
@@ -47,7 +61,7 @@ export class SessionManager {
   private readonly STALE_THRESHOLD = 24 * 60 * 60 * 1000; // 24 hours
 
   private constructor() {
-    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const homeDir = process.env['HOME'] || process.env['USERPROFILE'] || '';
     this.sessionsDir = path.join(homeDir, '.stackmemory', 'sessions');
   }
 
@@ -67,7 +81,7 @@ export class SessionManager {
       await fs.mkdir(path.join(this.sessionsDir, 'history'), {
         recursive: true,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       throw new SystemError(
         'Failed to initialize session directories',
         ErrorCode.INITIALIZATION_ERROR,
@@ -87,7 +101,7 @@ export class SessionManager {
     }
 
     // 2. Check environment variable
-    const envSessionId = process.env.STACKMEMORY_SESSION;
+    const envSessionId = process.env['STACKMEMORY_SESSION'];
     if (envSessionId) {
       const session = await this.loadSession(envSessionId);
       if (session) {
@@ -147,9 +161,9 @@ export class SessionManager {
       lastActiveAt: Date.now(),
       metadata: {
         ...params.metadata,
-        user: process.env.USER,
-        environment: process.env.NODE_ENV || 'development',
-        cliVersion: process.env.npm_package_version,
+        user: process.env['USER'],
+        environment: process.env['NODE_ENV'] || 'development',
+        cliVersion: process.env['npm_package_version'],
       },
       state: 'active',
     };
@@ -174,7 +188,7 @@ export class SessionManager {
       const sessionPath = path.join(this.sessionsDir, `${sessionId}.json`);
       const data = await fs.readFile(sessionPath, 'utf-8');
       return JSON.parse(data) as Session;
-    } catch (error) {
+    } catch (error: unknown) {
       // Check history
       try {
         const historyPath = path.join(

@@ -111,10 +111,10 @@ export class TaskBoard extends EventEmitter {
       this.moveTaskToColumn(1);
     });
 
-    // Quick actions
+    // Quick actions - Enter opens task completion menu
     container.key(['enter'], () => {
       if (this.selectedTask) {
-        this.showTaskDetails(this.tasks.get(this.selectedTask)!);
+        this.showTaskCompletionMenu(this.tasks.get(this.selectedTask)!);
       }
     });
 
@@ -132,6 +132,25 @@ export class TaskBoard extends EventEmitter {
       if (this.selectedTask) {
         this.assignTask(this.selectedTask);
       }
+    });
+
+    // Update task status (u key)
+    container.key(['u'], () => {
+      if (this.selectedTask) {
+        this.showStatusUpdateDialog(this.selectedTask);
+      }
+    });
+
+    // Start working on task with Claude (c key)
+    container.key(['c'], () => {
+      if (this.selectedTask) {
+        this.startTaskWithClaude(this.selectedTask);
+      }
+    });
+
+    // Sync with Linear (s key)
+    container.key(['s'], () => {
+      this.syncWithLinear();
     });
   }
 
@@ -184,7 +203,15 @@ export class TaskBoard extends EventEmitter {
 
     const labels = task.labels?.map((l) => `{cyan-fg}#${l}{/}`).join(' ') || '';
 
-    let taskStr = `${priority} ${task.identifier}: ${task.title}\n`;
+    // Show task identifier (STA-100) prominently with description preview
+    let taskStr = `${priority} {bold}${task.identifier}{/}: ${task.title}\n`;
+    
+    // Add description preview if available (first line or 60 chars)
+    if (task.description && task.description.trim()) {
+      const descPreview = task.description.split('\n')[0].substring(0, 60).trim();
+      taskStr += `  {gray-fg}${descPreview}${task.description.length > 60 ? '...' : ''}{/}\n`;
+    }
+    
     taskStr += `  {gray-fg}${assignee} ${estimate} ${labels}{/}`;
 
     // Add progress indicators
@@ -540,4 +567,731 @@ export class TaskBoard extends EventEmitter {
       (col) => col === this.container.screen.focused
     );
   }
+
+  private showStatusUpdateDialog(taskId: string): void {
+    const task = this.tasks.get(taskId);
+    if (!task) return;
+
+    // Create status selection dialog
+    const dialog = blessed.list({
+      parent: this.container.screen,
+      top: 'center',
+      left: 'center',
+      width: '50%',
+      height: 12,
+      border: {
+        type: 'line',
+      },
+      style: {
+        border: {
+          fg: 'yellow',
+        },
+        selected: {
+          bg: 'blue',
+          fg: 'white',
+        },
+      },
+      label: ` Update Status: ${task.title.substring(0, 40)}... `,
+      items: [
+        '1. Backlog',
+        '2. Todo',
+        '3. In Progress',
+        '4. In Review',
+        '5. Done',
+        '6. Canceled',
+        '',
+        'ESC to cancel',
+      ],
+      keys: true,
+      vi: true,
+      mouse: true,
+    });
+
+    dialog.on('select', (item: any, index: number) => {
+      const statusMap = ['backlog', 'todo', 'in_progress', 'review', 'completed', 'cancelled'];
+      if (index < statusMap.length) {
+        this.updateTaskStatus(taskId, statusMap[index]);
+      }
+      dialog.destroy();
+      this.container.screen.render();
+    });
+
+    dialog.key(['escape'], () => {
+      dialog.destroy();
+      this.container.screen.render();
+    });
+
+    dialog.focus();
+    this.container.screen.render();
+  }
+
+  private async updateTaskStatus(taskId: string, newStatus: string): Promise<void> {
+    const task = this.tasks.get(taskId);
+    if (!task) return;
+
+    // Update local state immediately for responsiveness
+    task.state = this.mapStatusToLinearState(newStatus);
+    this.update(Array.from(this.tasks.values()));
+
+    // Emit event for status update
+    this.emit('task:status:update', {
+      taskId,
+      oldStatus: task.state,
+      newStatus,
+      linearId: task.identifier,
+    });
+
+    // Show notification
+    const notification = blessed.message({
+      parent: this.container.screen,
+      top: 'center',
+      left: 'center',
+      width: '50%',
+      height: 3,
+      border: {
+        type: 'line',
+      },
+      style: {
+        border: {
+          fg: 'green',
+        },
+      },
+      content: `Task status updated to: ${newStatus}`,
+    });
+
+    setTimeout(() => {
+      notification.destroy();
+      this.container.screen.render();
+    }, 1500);
+
+    this.container.screen.render();
+  }
+
+  private async startTaskWithClaude(taskId: string): Promise<void> {
+    const task = this.tasks.get(taskId);
+    if (!task) return;
+
+    try {
+      const { exec } = await import('child_process');
+      const fs = await import('fs/promises');
+      const os = await import('os');
+      const path = await import('path');
+      
+      // Create a context file with task details
+      const contextDir = path.join(os.homedir(), '.stackmemory', 'task-contexts');
+      await fs.mkdir(contextDir, { recursive: true });
+      const contextFile = path.join(contextDir, `${task.identifier}-context.md`);
+      const contextContent = `# Task: ${task.identifier} - ${task.title}
+
+## Description
+${task.description || 'No description provided'}
+
+## Status
+Current: ${task.state}
+Priority: ${this.getPriorityLabel(task.priority)}
+
+## Linear Task ID
+${task.identifier}
+
+## Quick Commands
+- Update status: stackmemory task:update "${task.identifier}" --status <status>
+- Add comment: stackmemory task:comment "${task.identifier}" --message "<comment>"
+- View details: stackmemory task:show "${task.identifier}"
+
+---
+This task has been loaded from Linear. The context above provides the task details.
+Start working on this task below:
+`;
+      
+      await fs.writeFile(contextFile, contextContent);
+      
+      // Build the claude-sm command
+      const command = `claude-sm --task "${task.identifier}: ${task.title}" --context "${contextFile}"`;
+      
+      // Show launching notification
+      const notification = blessed.message({
+        parent: this.container.screen,
+        top: 'center',
+        left: 'center',
+        width: '60%',
+        height: 5,
+        border: {
+          type: 'line',
+        },
+        style: {
+          border: {
+            fg: 'cyan',
+          },
+        },
+        content: `Launching Claude for task:\n${task.identifier}: ${task.title}\n\nCommand: ${command}`,
+      });
+      
+      this.container.screen.render();
+      
+      // Execute in background
+      exec(command, (error, stdout, stderr) => {
+        if (error) {
+          const errorMsg = blessed.message({
+            parent: this.container.screen,
+            top: 'center',
+            left: 'center',
+            width: '50%',
+            height: 4,
+            border: {
+              type: 'line',
+            },
+            style: {
+              border: {
+                fg: 'red',
+              },
+            },
+            content: `Failed to launch Claude: ${error.message}`,
+          });
+          
+          setTimeout(() => {
+            errorMsg.destroy();
+            this.container.screen.render();
+          }, 3000);
+        }
+      });
+      
+      setTimeout(() => {
+        notification.destroy();
+        this.container.screen.render();
+      }, 2000);
+      
+      // Emit event for tracking
+      this.emit('task:launch:claude', {
+        taskId,
+        command,
+        task,
+        contextFile,
+      });
+      
+    } catch (error: any) {
+      const errorMsg = blessed.message({
+        parent: this.container.screen,
+        top: 'center',
+        left: 'center',
+        width: '50%',
+        height: 4,
+        border: {
+          type: 'line',
+        },
+        style: {
+          border: {
+            fg: 'red',
+          },
+        },
+        content: `Error: ${error.message}`,
+      });
+      
+      setTimeout(() => {
+        errorMsg.destroy();
+        this.container.screen.render();
+      }, 3000);
+      
+      this.container.screen.render();
+    }
+  }
+
+  private showTaskCompletionMenu(task: LinearTask): void {
+    // Create completion menu with task details and actions
+    const menuBox = blessed.box({
+      parent: this.container.screen,
+      top: 'center',
+      left: 'center',
+      width: '70%',
+      height: '80%',
+      border: {
+        type: 'line',
+      },
+      style: {
+        border: {
+          fg: 'cyan',
+        },
+      },
+      label: ` Task Completion Menu: ${task.identifier} `,
+      keys: true,
+      mouse: true,
+    });
+
+    // Task header with ID and description
+    const header = blessed.text({
+      parent: menuBox,
+      top: 1,
+      left: 2,
+      width: '100%-4',
+      height: 5,
+      content: `{bold}${task.identifier}: ${task.title}{/}\n\n` +
+               `{gray-fg}${(task.description || 'No description').substring(0, 200)}{/}`,
+      tags: true,
+      wrap: true,
+    });
+
+    // Current status display
+    const statusDisplay = blessed.text({
+      parent: menuBox,
+      top: 7,
+      left: 2,
+      content: `{bold}Current Status:{/} ${this.formatStatus(task.state)}`,
+      tags: true,
+    });
+
+    // Menu options
+    const menu = blessed.list({
+      parent: menuBox,
+      top: 9,
+      left: 2,
+      width: '100%-4',
+      height: 12,
+      border: {
+        type: 'line',
+      },
+      style: {
+        border: {
+          fg: 'gray',
+        },
+        selected: {
+          bg: 'blue',
+          fg: 'white',
+        },
+      },
+      label: ' Quick Actions ',
+      items: [
+        '1. ✅ Mark as Done',
+        '2. 🔄 Change Status',
+        '3. 🎯 Update Priority',
+        '4. 👤 Assign to Someone',
+        '5. 💬 Add Comment',
+        '6. 📝 Edit Description',
+        '7. 🚀 Start with Claude',
+        '8. 🔍 View Full Details',
+        '9. ❌ Cancel Task',
+      ],
+      keys: true,
+      vi: true,
+      mouse: true,
+    });
+
+    // Task metadata
+    const metadata = blessed.text({
+      parent: menuBox,
+      bottom: 3,
+      left: 2,
+      width: '100%-4',
+      height: 4,
+      content: this.formatTaskMetadata(task),
+      tags: true,
+    });
+
+    // Instructions
+    const instructions = blessed.text({
+      parent: menuBox,
+      bottom: 1,
+      left: 2,
+      content: '{gray-fg}Use arrows/numbers to select • Enter to execute • ESC to close{/}',
+      tags: true,
+    });
+
+    // Handle menu selection
+    menu.on('select', (item, index) => {
+      menuBox.destroy();
+      
+      switch (index) {
+        case 0: // Mark as Done
+          this.updateTaskStatus(task.id, 'completed');
+          this.showNotification(`✅ Task ${task.identifier} marked as done`);
+          break;
+        case 1: // Change Status
+          this.showStatusUpdateDialog(task.id);
+          break;
+        case 2: // Update Priority
+          this.showPriorityUpdateDialog(task);
+          break;
+        case 3: // Assign
+          this.showAssignDialog(task);
+          break;
+        case 4: // Add Comment
+          this.showCommentDialog(task);
+          break;
+        case 5: // Edit Description
+          this.showEditDescriptionDialog(task);
+          break;
+        case 6: // Start with Claude
+          this.startTaskWithClaude(task.id);
+          break;
+        case 7: // View Full Details
+          this.showTaskDetails(task);
+          break;
+        case 8: // Cancel Task
+          this.updateTaskStatus(task.id, 'canceled');
+          this.showNotification(`❌ Task ${task.identifier} canceled`);
+          break;
+      }
+      
+      this.container.screen.render();
+    });
+
+    // Handle number keys for quick selection
+    menu.key(['1', '2', '3', '4', '5', '6', '7', '8', '9'], (ch) => {
+      const index = parseInt(ch, 10) - 1;
+      if (index < menu.items.length) {
+        menu.select(index);
+        menu.emit('select', menu.items[index], index);
+      }
+    });
+
+    // ESC to close
+    menuBox.key(['escape', 'q'], () => {
+      menuBox.destroy();
+      this.container.screen.render();
+    });
+
+    menu.focus();
+    this.container.screen.render();
+  }
+
+  private formatStatus(state: string): string {
+    const statusColors: Record<string, string> = {
+      backlog: '{gray-fg}📋 Backlog{/}',
+      unstarted: '{yellow-fg}⏸️ Todo{/}',
+      started: '{blue-fg}▶️ In Progress{/}',
+      completed: '{green-fg}✅ Done{/}',
+      canceled: '{red-fg}❌ Canceled{/}',
+    };
+    return statusColors[state.toLowerCase()] || state;
+  }
+
+  private formatTaskMetadata(task: LinearTask): string {
+    let meta = '';
+    
+    if (task.assignee) {
+      const name = typeof task.assignee === 'string' ? task.assignee : task.assignee.name;
+      meta += `{bold}Assignee:{/} ${name}  `;
+    }
+    
+    if (task.priority !== undefined) {
+      meta += `{bold}Priority:{/} ${this.getPriorityLabel(task.priority)}  `;
+    }
+    
+    if (task.estimate) {
+      meta += `{bold}Points:{/} ${task.estimate}  `;
+    }
+    
+    if (task.dueDate) {
+      const daysUntil = this.getDaysUntilDue(task.dueDate);
+      const color = daysUntil < 0 ? 'red' : daysUntil <= 1 ? 'yellow' : 'white';
+      meta += `{bold}Due:{/} {${color}-fg}${new Date(task.dueDate).toLocaleDateString()}{/}`;
+    }
+    
+    return meta;
+  }
+
+  private getPriorityLabel(priority?: number): string {
+    if (priority === undefined || priority === null) return 'None';
+    const labels = ['Urgent', 'High', 'Medium', 'Low', 'None'];
+    return labels[priority] || 'None';
+  }
+
+  private showPriorityUpdateDialog(task: LinearTask): void {
+    const dialog = blessed.list({
+      parent: this.container.screen,
+      top: 'center',
+      left: 'center',
+      width: '40%',
+      height: 9,
+      border: {
+        type: 'line',
+      },
+      style: {
+        border: {
+          fg: 'magenta',
+        },
+        selected: {
+          bg: 'magenta',
+          fg: 'white',
+        },
+      },
+      label: ` Set Priority: ${task.identifier} `,
+      items: [
+        '🔴 Urgent (P0)',
+        '🟡 High (P1)',
+        '🟢 Medium (P2)',
+        '🔵 Low (P3)',
+        '⚪ None',
+      ],
+      keys: true,
+      vi: true,
+    });
+
+    dialog.on('select', (item, index) => {
+      const priority = index < 4 ? index : undefined;
+      this.emit('task:update', {
+        taskId: task.id,
+        updates: { priority },
+      });
+      dialog.destroy();
+      this.showNotification(`🎯 Priority updated for ${task.identifier}`);
+      this.container.screen.render();
+    });
+
+    dialog.key(['escape'], () => {
+      dialog.destroy();
+      this.container.screen.render();
+    });
+
+    dialog.focus();
+    this.container.screen.render();
+  }
+
+  private showAssignDialog(task: LinearTask): void {
+    // Placeholder for assignment dialog
+    this.showNotification('Assignment dialog coming soon!');
+  }
+
+  private showCommentDialog(task: LinearTask): void {
+    const form = blessed.form({
+      parent: this.container.screen,
+      top: 'center',
+      left: 'center',
+      width: '60%',
+      height: 10,
+      border: {
+        type: 'line',
+      },
+      style: {
+        border: {
+          fg: 'green',
+        },
+      },
+      label: ` Add Comment to ${task.identifier} `,
+      keys: true,
+    });
+
+    const commentInput = blessed.textarea({
+      parent: form,
+      top: 1,
+      left: 1,
+      width: '100%-2',
+      height: 5,
+      inputOnFocus: true,
+      style: {
+        focus: {
+          fg: 'white',
+          bg: 'blue',
+        },
+      },
+    });
+
+    const submitBtn = blessed.button({
+      parent: form,
+      content: ' Add Comment ',
+      bottom: 1,
+      left: 'center',
+      shrink: true,
+      style: {
+        focus: {
+          bg: 'green',
+          fg: 'white',
+        },
+      },
+    });
+
+    submitBtn.on('press', () => {
+      const comment = commentInput.getValue();
+      if (comment) {
+        this.emit('task:comment', { taskId: task.id, comment });
+        this.showNotification(`💬 Comment added to ${task.identifier}`);
+      }
+      form.destroy();
+      this.container.screen.render();
+    });
+
+    form.key(['escape'], () => {
+      form.destroy();
+      this.container.screen.render();
+    });
+
+    commentInput.focus();
+    this.container.screen.render();
+  }
+
+  private showEditDescriptionDialog(task: LinearTask): void {
+    const form = blessed.form({
+      parent: this.container.screen,
+      top: 'center',
+      left: 'center',
+      width: '70%',
+      height: 15,
+      border: {
+        type: 'line',
+      },
+      style: {
+        border: {
+          fg: 'cyan',
+        },
+      },
+      label: ` Edit Description: ${task.identifier} `,
+      keys: true,
+    });
+
+    const descInput = blessed.textarea({
+      parent: form,
+      top: 1,
+      left: 1,
+      width: '100%-2',
+      height: 10,
+      inputOnFocus: true,
+      content: task.description || '',
+      style: {
+        focus: {
+          fg: 'white',
+          bg: 'blue',
+        },
+      },
+    });
+
+    const submitBtn = blessed.button({
+      parent: form,
+      content: ' Save Description ',
+      bottom: 1,
+      left: 'center',
+      shrink: true,
+      style: {
+        focus: {
+          bg: 'cyan',
+          fg: 'white',
+        },
+      },
+    });
+
+    submitBtn.on('press', () => {
+      const description = descInput.getValue();
+      this.emit('task:update', {
+        taskId: task.id,
+        updates: { description },
+      });
+      this.showNotification(`📝 Description updated for ${task.identifier}`);
+      form.destroy();
+      this.container.screen.render();
+    });
+
+    form.key(['escape'], () => {
+      form.destroy();
+      this.container.screen.render();
+    });
+
+    descInput.focus();
+    this.container.screen.render();
+  }
+
+  private showNotification(message: string): void {
+    const notification = blessed.box({
+      parent: this.container.screen,
+      top: 1,
+      right: 1,
+      width: message.length + 4,
+      height: 3,
+      content: ` ${message} `,
+      style: {
+        fg: 'white',
+        bg: 'blue',
+      },
+      border: {
+        type: 'line',
+        fg: 'cyan',
+      },
+    });
+
+    this.container.screen.render();
+
+    // Auto-hide after 3 seconds
+    setTimeout(() => {
+      notification.destroy();
+      this.container.screen.render();
+    }, 3000);
+  }
+
+
+  private async syncWithLinear(): Promise<void> {
+    try {
+      // Show syncing notification
+      const notification = blessed.box({
+        parent: this.container.screen,
+        top: 'center',
+        left: 'center',
+        width: '40%',
+        height: 5,
+        border: {
+          type: 'line',
+        },
+        style: {
+          border: {
+            fg: 'cyan',
+          },
+        },
+        content: '{center}Syncing with Linear...{/center}',
+        tags: true,
+      });
+      
+      this.container.screen.render();
+      
+      const { exec } = await import('child_process');
+      const util = await import('util');
+      const execAsync = util.promisify(exec);
+      
+      // Run the sync command
+      await execAsync('cd /Users/jwu/Dev/stackmemory && npm run linear:sync');
+      
+      // Update notification
+      notification.setContent('{center}✓ Sync complete! Refreshing...{/center}');
+      notification.style.border.fg = 'green';
+      
+      setTimeout(() => {
+        notification.destroy();
+        // Trigger refresh of tasks
+        this.emit('tasks:refresh');
+        this.container.screen.render();
+      }, 1000);
+      
+    } catch (error: any) {
+      const errorMsg = blessed.message({
+        parent: this.container.screen,
+        top: 'center',
+        left: 'center',
+        width: '50%',
+        height: 4,
+        border: {
+          type: 'line',
+        },
+        style: {
+          border: {
+            fg: 'red',
+          },
+        },
+        content: `Sync failed: ${error.message}`,
+      });
+      
+      setTimeout(() => {
+        errorMsg.destroy();
+        this.container.screen.render();
+      }, 3000);
+      
+      this.container.screen.render();
+    }
+  }
+
+  private mapStatusToLinearState(status: string): string {
+    const mapping: Record<string, string> = {
+      'backlog': 'Backlog',
+      'todo': 'Todo', 
+      'in_progress': 'In Progress',
+      'review': 'In Review',
+      'completed': 'Done',
+      'cancelled': 'Canceled',
+    };
+    return mapping[status] || 'Backlog';
+  }
+
 }

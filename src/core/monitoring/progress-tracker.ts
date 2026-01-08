@@ -5,6 +5,20 @@
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface TaskProgress {
   task: string;
@@ -70,7 +84,7 @@ export class ProgressTracker {
 
     // Default structure
     return {
-      version: process.env.npm_package_version || '0.2.3',
+      version: process.env['npm_package_version'] || '0.2.3',
       lastUpdated: new Date().toISOString(),
       recentChanges: [],
     };

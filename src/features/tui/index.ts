@@ -18,6 +18,20 @@ import { AnalyticsPanel } from './components/analytics-panel.js';
 import { DataService } from './services/data-service.js';
 import { WebSocketClient } from './services/websocket-client.js';
 import type { DashboardConfig, SessionData, TaskData } from './types.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 // Configure terminal environment before creating any blessed elements
 terminalCompat.configureEnvironment();
@@ -58,14 +72,14 @@ export class StackMemoryTUI extends EventEmitter {
       autoPadding: true,
     });
 
-    // Add header
+    // Add header with keyboard shortcuts
     const header = blessed.box({
       parent: screen,
       top: 0,
       left: 0,
       width: '100%',
       height: 3,
-      content: '{center}🚀 StackMemory TUI Dashboard v1.0.0{/center}',
+      content: '{center}🚀 StackMemory TUI Dashboard v1.0.0 | [u]pdate status | [c]laude task | [s]ync | [q]uit{/center}',
       tags: true,
       style: {
         fg: 'white',
@@ -279,7 +293,7 @@ export class StackMemoryTUI extends EventEmitter {
 
       this.updateStatusBar(`Last updated: ${new Date().toLocaleTimeString()}`);
       this.screen.render();
-    } catch (error) {
+    } catch (error: unknown) {
       this.showError(`Update failed: ${error.message}`);
     }
   }
@@ -361,7 +375,7 @@ export class StackMemoryTUI extends EventEmitter {
       }
 
       // Show terminal capabilities in debug mode
-      if (process.env.DEBUG || process.env.TUI_DEBUG) {
+      if (process.env['DEBUG'] || process.env['TUI_DEBUG']) {
         console.log('🔍 Terminal Capabilities:');
         console.log(`   ${terminalCompat.getCapabilitiesString()}`);
         console.log('');
@@ -371,7 +385,7 @@ export class StackMemoryTUI extends EventEmitter {
       // Connect WebSocket (but don't fail if it can't connect)
       try {
         await this.wsClient.connect();
-      } catch (wsError) {
+      } catch (wsError: unknown) {
         console.log('⚠️  Running in offline mode (no WebSocket connection)');
       }
 
@@ -383,7 +397,7 @@ export class StackMemoryTUI extends EventEmitter {
         this.refreshInterval = setInterval(() => {
           this.updateAll().catch((error) => {
             // Silent error handling for refresh failures
-            if (process.env.DEBUG) {
+            if (process.env['DEBUG']) {
               console.error('Update error:', error);
             }
           });
@@ -395,11 +409,11 @@ export class StackMemoryTUI extends EventEmitter {
 
       // Render screen
       this.screen.render();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('\n❌ TUI startup error:', error);
       if (error instanceof Error) {
         console.error('Error details:', error.message);
-        if (process.env.DEBUG) {
+        if (process.env['DEBUG']) {
           console.error('Stack trace:', error.stack);
         }
       }
@@ -464,9 +478,9 @@ if (isMainModule) {
   try {
     tui = new StackMemoryTUI({
       refreshInterval: 2000,
-      wsUrl: process.env.STACKMEMORY_WS_URL || 'ws://localhost:8080',
+      wsUrl: process.env['STACKMEMORY_WS_URL'] || 'ws://localhost:8080',
     });
-  } catch (constructorError) {
+  } catch (constructorError: unknown) {
     console.error(
       '\n❌ Failed to create TUI:',
       constructorError.message || constructorError

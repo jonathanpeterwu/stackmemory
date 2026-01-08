@@ -12,6 +12,20 @@ import BetterSqlite3 from 'better-sqlite3';
 import { logger } from '../../core/monitoring/logger.js';
 import { metrics } from '../../core/monitoring/metrics.js';
 import { getUserModel, UserModel, User } from '../../models/user.model.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface AuthUser {
   id: string;
@@ -54,7 +68,7 @@ export class AuthMiddleware {
 
     // Initialize database
     const dbPath =
-      config.dbPath || process.env.STACKMEMORY_DB || '.stackmemory/auth.db';
+      config.dbPath || process.env['STACKMEMORY_DB'] || '.stackmemory/auth.db';
     this.db = new BetterSqlite3(dbPath);
     this.userModel = getUserModel(this.db);
 
@@ -168,7 +182,7 @@ export class AuthMiddleware {
       }
 
       // Development bypass
-      if (this.config.bypassAuth && process.env.NODE_ENV === 'development') {
+      if (this.config.bypassAuth && process.env['NODE_ENV'] === 'development') {
         req.user = this.getMockUser();
         return next();
       }
@@ -358,7 +372,7 @@ export class AuthMiddleware {
       }) as any;
 
       return await this.loadUser(verified.sub, verified);
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'WebSocket authentication failed',
         error instanceof Error ? error : undefined

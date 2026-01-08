@@ -272,7 +272,7 @@ describe('Real Database Workflow Integration', () => {
     expect(new Set(frameIds).size).toBe(10); // All IDs should be unique
     
     // Concurrent reads
-    const readOps = frameIds.map(id => adapter.getFrame(id));
+    const readOps = frameIds.map((id: any) => adapter.getFrame(id));
     const frames = await Promise.all(readOps);
     
     expect(frames.every(f => f !== null)).toBe(true);

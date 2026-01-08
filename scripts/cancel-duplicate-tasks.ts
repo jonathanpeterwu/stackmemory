@@ -206,7 +206,7 @@ async function cancelDuplicateTasks(dryRun = true) {
 
           console.log(`      ✅ Successfully canceled ${duplicate.identifier}`);
           totalCanceled++;
-        } catch (error) {
+        } catch (error: unknown) {
           const errorMessage =
             error instanceof Error ? error.message : String(error);
           console.log(

@@ -194,7 +194,7 @@ export class ConnectionPool extends EventEmitter {
       this.updateHealthMetrics(true, responseTime);
 
       logger.debug(`Health check passed in ${responseTime}ms`);
-    } catch (error) {
+    } catch (error: unknown) {
       const responseTime = Date.now() - startTime;
       this.updateHealthMetrics(false, responseTime);
 
@@ -275,7 +275,7 @@ export class ConnectionPool extends EventEmitter {
       }
 
       return client;
-    } catch (error) {
+    } catch (error: unknown) {
       this.metrics.totalErrors++;
       logger.error('Failed to acquire connection:', error);
       throw error;
@@ -428,10 +428,10 @@ export class ConnectionPool extends EventEmitter {
       const result = await callback(client);
       await client.query('COMMIT');
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       try {
         await client.query('ROLLBACK');
-      } catch (rollbackError) {
+      } catch (rollbackError: unknown) {
         logger.error('Transaction rollback failed:', rollbackError);
         this.markConnectionAsBad(client);
       }

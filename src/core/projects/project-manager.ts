@@ -125,7 +125,7 @@ export class ProjectManager {
       });
 
       return project;
-    } catch (error) {
+    } catch (error: unknown) {
       const wrappedError = errorHandler(error, {
         projectPath: path,
         operation: 'detectProject',
@@ -209,7 +209,7 @@ export class ProjectManager {
       // Extract project name from remote
       const match = info.remote.match(/\/([^\/]+?)(\.git)?$/);
       info.name = match ? match[1] : basename(projectPath);
-    } catch (error) {
+    } catch (error: unknown) {
       // Not a git repository or git not available
       logger.debug('Git info extraction failed, using directory name', {
         projectPath,
@@ -478,7 +478,7 @@ export class ProjectManager {
         CREATE INDEX IF NOT EXISTS idx_projects_type ON projects(account_type);
         CREATE INDEX IF NOT EXISTS idx_contexts_project ON project_contexts(project_id);
       `);
-    } catch (error) {
+    } catch (error: unknown) {
       const dbError = errorHandler(error, {
         dbPath,
         operation: 'initializeDatabase',
@@ -522,7 +522,7 @@ export class ProjectManager {
         project.lastAccessed.toISOString(),
         JSON.stringify(project.metadata)
       );
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to save project: ${project.name}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -549,7 +549,7 @@ export class ProjectManager {
         for (const org of config.organizations || []) {
           this.organizations.set(org.name, org);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error(
           'Failed to load organizations config',
           error instanceof Error ? error : undefined
@@ -589,7 +589,7 @@ export class ProjectManager {
           });
         }
       }
-    } catch (error) {
+    } catch (error: unknown) {
       const wrappedError = errorHandler(error, {
         operation: 'autoDiscoverOrganizations',
       });
@@ -651,7 +651,7 @@ export class ProjectManager {
         lastAccessed: new Date(p.last_accessed),
         metadata: JSON.parse(p.metadata || '{}'),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         'Failed to get all projects',
         ErrorCode.DB_QUERY_FAILED,
@@ -681,7 +681,7 @@ export class ProjectManager {
         lastAccessed: new Date(p.last_accessed),
         metadata: JSON.parse(p.metadata || '{}'),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get projects by organization: ${organization}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -712,7 +712,7 @@ export class ProjectManager {
         lastAccessed: new Date(p.last_accessed),
         metadata: JSON.parse(p.metadata || '{}'),
       }));
-    } catch (error) {
+    } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get projects by account type: ${accountType}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -762,7 +762,7 @@ export class ProjectManager {
       `);
 
       stmt.run(org.name, org.type, org.accountType, JSON.stringify(org));
-    } catch (error) {
+    } catch (error: unknown) {
       const wrappedError = errorHandler(error, {
         orgName: org.name,
         operation: 'saveOrganization',
@@ -816,7 +816,7 @@ export class ProjectManager {
           try {
             await this.detectProject(projectPath);
             logger.info(`Discovered project: ${projectPath}`);
-          } catch (error) {
+          } catch (error: unknown) {
             logger.warn(
               `Failed to analyze project: ${projectPath}`,
               {
@@ -827,7 +827,7 @@ export class ProjectManager {
             );
           }
         }
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn(
           `Failed to scan ${basePath}`,
           error instanceof Error ? { error } : undefined

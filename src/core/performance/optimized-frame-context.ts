@@ -77,7 +77,7 @@ export class OptimizedContextAssembler {
       const assemblyTimeMs = performance.now() - startTime;
 
       // Add performance stats to each context
-      return contexts.map(context => ({
+      return contexts.map((context: any) => ({
         ...context,
         performance: {
           assemblyTimeMs: assemblyTimeMs / contexts.length,
@@ -85,7 +85,7 @@ export class OptimizedContextAssembler {
         },
       }));
 
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to assemble hot stack context', error as Error, {
         activeStack,
         options,
@@ -145,7 +145,7 @@ export class OptimizedContextAssembler {
 
       return result;
 
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to get frame context', error as Error, { frameId });
       throw error;
     }
@@ -434,7 +434,7 @@ export class OptimizedContextAssembler {
       );
 
       logger.info('Prepared statements initialized for optimized context assembly');
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to initialize prepared statements', error as Error);
       throw error;
     }

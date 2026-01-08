@@ -8,6 +8,21 @@ import 'dotenv/config';
 import Redis from 'ioredis';
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../monitoring/logger.js';
+
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 import {
   Skill,
   CreateSkillInput,
@@ -975,7 +990,7 @@ export function initializeSkillStorage(
   userId: string,
   redisUrl?: string
 ): SkillStorageService {
-  const url = redisUrl || process.env.REDIS_URL;
+  const url = redisUrl || process.env['REDIS_URL'];
 
   if (!url) {
     throw new Error('REDIS_URL environment variable not set');
@@ -989,9 +1004,9 @@ export function initializeSkillStorage(
  */
 export function getDefaultUserId(): string {
   return (
-    process.env.STACKMEMORY_USER_ID ||
-    process.env.USER ||
-    process.env.USERNAME ||
+    process.env['STACKMEMORY_USER_ID'] ||
+    process.env['USER'] ||
+    process.env['USERNAME'] ||
     'default'
   );
 }

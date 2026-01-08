@@ -187,7 +187,7 @@ export class ExponentialRateLimiter {
         }
 
         next();
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error(
           'Rate limiter error',
           error instanceof Error ? error : new Error(String(error))

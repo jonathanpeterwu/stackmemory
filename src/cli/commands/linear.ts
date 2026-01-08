@@ -27,6 +27,20 @@ import { existsSync, mkdirSync } from 'fs';
 import { logger } from '../../core/monitoring/logger.js';
 import Table from 'cli-table3';
 import { SyncResult } from '../../integrations/linear/sync.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 /**
  * Display sync result in a formatted way
@@ -97,7 +111,7 @@ export function registerLinearCommands(parent: Command) {
     .option('--count', 'Show count by status only')
     .action(async (options) => {
       try {
-        const apiKey = process.env.LINEAR_API_KEY;
+        const apiKey = process.env['LINEAR_API_KEY'];
         if (!apiKey) {
           console.log(
             chalk.yellow('⚠ Set LINEAR_API_KEY environment variable')
@@ -179,7 +193,7 @@ export function registerLinearCommands(parent: Command) {
             `\n${displayTasks.length} shown, ${tasks.length} total tasks`
           )
         );
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           chalk.red('Failed to list tasks:'),
           (error as Error).message
@@ -197,7 +211,7 @@ export function registerLinearCommands(parent: Command) {
       try {
         if (options.apiKey) {
           // Set API key as environment variable
-          process.env.LINEAR_API_KEY = options.apiKey;
+          process.env['LINEAR_API_KEY'] = options.apiKey;
           console.log(chalk.green('✓ Linear API key set'));
 
           // Test the connection
@@ -214,8 +228,8 @@ export function registerLinearCommands(parent: Command) {
           const authManager = new LinearAuthManager(process.cwd());
 
           // Check if client ID and secret are configured
-          const clientId = process.env.LINEAR_CLIENT_ID;
-          const clientSecret = process.env.LINEAR_CLIENT_SECRET;
+          const clientId = process.env['LINEAR_CLIENT_ID'];
+          const clientSecret = process.env['LINEAR_CLIENT_SECRET'];
 
           if (!clientId || !clientSecret) {
             console.log(chalk.yellow('\n⚠ Linear OAuth app not configured'));
@@ -271,7 +285,7 @@ export function registerLinearCommands(parent: Command) {
             )
           );
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           chalk.red('Authentication failed:'),
           (error as Error).message
@@ -398,7 +412,7 @@ export function registerLinearCommands(parent: Command) {
           displaySyncResult(result);
           db.close();
         }
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Sync failed', error as Error);
         console.error(chalk.red('Sync failed:'), (error as Error).message);
         process.exit(1);
@@ -413,7 +427,7 @@ export function registerLinearCommands(parent: Command) {
       try {
         const authManager = new LinearAuthManager(process.cwd());
         const tokens = authManager.loadTokens();
-        const apiKey = process.env.LINEAR_API_KEY;
+        const apiKey = process.env['LINEAR_API_KEY'];
 
         if (!tokens && !apiKey) {
           console.log(chalk.yellow('⚠ Not authenticated with Linear'));
@@ -449,7 +463,7 @@ export function registerLinearCommands(parent: Command) {
         } else {
           console.log(chalk.red('❌ Could not connect to Linear'));
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           chalk.red('Status check failed:'),
           (error as Error).message
@@ -471,7 +485,7 @@ export function registerLinearCommands(parent: Command) {
     .option('--refresh', 'Force refresh cache')
     .action(async (options) => {
       try {
-        const apiKey = process.env.LINEAR_API_KEY;
+        const apiKey = process.env['LINEAR_API_KEY'];
         if (!apiKey) {
           console.log(
             chalk.yellow('⚠ Set LINEAR_API_KEY environment variable')
@@ -548,7 +562,7 @@ export function registerLinearCommands(parent: Command) {
             `Cache: ${cacheStats.size} tasks, age: ${Math.round(cacheStats.age / 1000)}s`
           )
         );
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           chalk.red('Failed to list tasks:'),
           (error as Error).message
@@ -644,7 +658,7 @@ export function registerLinearCommands(parent: Command) {
           console.log(chalk.cyan(`  Status: ${updatedIssue.state.name}`));
         }
         console.log(chalk.gray(`  ${updatedIssue.url}`));
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(
           chalk.red('Failed to update task:'),
           (error as Error).message
@@ -701,7 +715,7 @@ export function registerLinearCommands(parent: Command) {
         console.log(`  Interval: ${config.interval} minutes`);
         console.log(`  Direction: ${config.direction}`);
         console.log(`  Conflicts: ${config.conflictResolution}`);
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(chalk.red('Config failed:'), (error as Error).message);
       }
     });

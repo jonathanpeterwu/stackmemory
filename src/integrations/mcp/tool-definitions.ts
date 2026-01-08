@@ -556,7 +556,7 @@ export class MCPToolDefinitions {
    * Get tool definition by name
    */
   getToolDefinition(name: string): MCPToolDefinition | undefined {
-    return this.getAllToolDefinitions().find(tool => tool.name === name);
+    return this.getAllToolDefinitions().find((tool: any) => tool.name === name);
   }
 
   /**

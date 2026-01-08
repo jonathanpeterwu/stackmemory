@@ -56,7 +56,7 @@ export function createSessionCommands(): Command {
         });
 
         console.log(chalk.gray(`Total: ${sessions.length} session(s)`));
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to list sessions', error as Error);
         console.error('❌ Failed to list sessions:', (error as Error).message);
         process.exit(1);
@@ -94,7 +94,7 @@ export function createSessionCommands(): Command {
         if (session.metadata.tags && session.metadata.tags.length > 0) {
           console.log(`Tags: ${session.metadata.tags.join(', ')}`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to show current session', error as Error);
         console.error('❌ Failed to show current session:', (error as Error).message);
         process.exit(1);
@@ -122,7 +122,7 @@ export function createSessionCommands(): Command {
         if (session.branch) {
           console.log(`  Branch: ${session.branch}`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to switch session', error as Error);
         console.error('❌ Failed to switch session:', (error as Error).message);
         process.exit(1);
@@ -139,7 +139,7 @@ export function createSessionCommands(): Command {
         
         const id = sessionId || sessionManager.getCurrentSession()?.sessionId;
         console.log(chalk.yellow(`⏸️  Suspended session: ${id?.slice(0, 8)}`));
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to suspend session', error as Error);
         console.error('❌ Failed to suspend session:', (error as Error).message);
         process.exit(1);
@@ -159,7 +159,7 @@ export function createSessionCommands(): Command {
         if (session.branch) {
           console.log(`  Branch: ${session.branch}`);
         }
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to resume session', error as Error);
         console.error('❌ Failed to resume session:', (error as Error).message);
         process.exit(1);
@@ -177,7 +177,7 @@ export function createSessionCommands(): Command {
         console.log(chalk.green(`✅ Merged sessions successfully`));
         console.log(`  Target: ${merged.sessionId.slice(0, 8)}`);
         console.log(`  Source ${sourceId.slice(0, 8)} has been closed`);
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to merge sessions', error as Error);
         console.error('❌ Failed to merge sessions:', (error as Error).message);
         process.exit(1);
@@ -197,7 +197,7 @@ export function createSessionCommands(): Command {
         const cleaned = await sessionManager.cleanupStaleSessions(maxAge);
         
         console.log(chalk.green(`✅ Cleaned up ${cleaned} old session(s)`));
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to cleanup sessions', error as Error);
         console.error('❌ Failed to cleanup sessions:', (error as Error).message);
         process.exit(1);

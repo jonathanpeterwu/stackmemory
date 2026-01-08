@@ -114,7 +114,7 @@ export class ContextBridge {
           frameCount: discovery.suggestedFrames.length,
         });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to load shared context', error as Error);
     }
   }
@@ -156,7 +156,7 @@ export class ContextBridge {
         frameCount: importantFrames.length,
         sessionId: session.sessionId,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to sync to shared context', error as Error);
     }
   }
@@ -181,7 +181,7 @@ export class ContextBridge {
       });
 
       return results;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to query shared context', error as Error);
       return [];
     }
@@ -199,7 +199,7 @@ export class ContextBridge {
       });
 
       logger.info('Added decision to shared context', { decision });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to add decision', error as Error);
     }
   }

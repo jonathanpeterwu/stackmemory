@@ -220,7 +220,7 @@ export class ErrorHandler {
   ): Promise<T | undefined> {
     try {
       return await operation();
-    } catch (error) {
+    } catch (error: unknown) {
       if (fallback !== undefined) {
         logger.warn(`Operation '${operationName}' failed, using fallback`, {
           error: String(error),
@@ -245,7 +245,7 @@ export class ErrorHandler {
         // Clear retry count on success
         ErrorHandler.retryMap.delete(operationName);
         return result;
-      } catch (error) {
+      } catch (error: unknown) {
         lastError = error;
 
         if (error instanceof StackMemoryError && !error.recoverable) {
@@ -307,7 +307,7 @@ export class ErrorHandler {
         const result = await operation();
         failures = 0; // Reset on success
         return result;
-      } catch (error) {
+      } catch (error: unknown) {
         failures++;
         lastFailure = now;
         throw error;

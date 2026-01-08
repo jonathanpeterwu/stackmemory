@@ -4,6 +4,20 @@
 
 import chalk from 'chalk';
 import { Command } from 'commander';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export function registerLinearTestCommand(parent: Command) {
   parent
@@ -12,7 +26,7 @@ export function registerLinearTestCommand(parent: Command) {
     .option('--api-key <key>', 'Linear API key')
     .action(async (options) => {
       try {
-        const apiKey = options.apiKey || process.env.LINEAR_API_KEY;
+        const apiKey = options.apiKey || process.env['LINEAR_API_KEY'];
         
         if (!apiKey) {
           console.log(chalk.red('❌ No API key provided'));
@@ -131,7 +145,7 @@ export function registerLinearTestCommand(parent: Command) {
         
         console.log(chalk.green('\n✅ Linear integration test completed!'));
         
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(chalk.red('❌ Test failed:'), (error as Error).message);
         process.exit(1);
       }

@@ -13,6 +13,20 @@ import {
   traceStep,
 } from './index.js';
 import { logger } from '../monitoring/logger.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 // Example class with tracing
 // @TraceClass() - decorators not enabled in tsconfig
@@ -109,7 +123,7 @@ async function runDemo() {
   console.log('='.repeat(80) + '\n');
   
   // Enable verbose tracing for the demo
-  if (process.env.DEBUG_TRACE !== 'true') {
+  if (process.env['DEBUG_TRACE'] !== 'true') {
     console.log('📝 Enabling verbose tracing for this demo...\n');
     enableVerboseTracing();
   }
@@ -148,7 +162,7 @@ async function runDemo() {
       
       try {
         await service.fetchData('error');
-      } catch (error) {
+      } catch (error: unknown) {
         console.log('✅ Error properly traced and handled\n');
       }
     });
@@ -172,7 +186,7 @@ async function runDemo() {
       console.log('✅ Performance tracking completed\n');
     });
     
-  } catch (error) {
+  } catch (error: unknown) {
     console.error('❌ Demo failed:', error);
   }
   

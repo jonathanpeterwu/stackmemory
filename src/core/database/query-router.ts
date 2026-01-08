@@ -151,7 +151,7 @@ export class QueryRouter extends EventEmitter {
         const result = await this.executeOnTier(decision.primaryTier, executor);
         this.updateMetrics(decision.primaryTier.name, startTime, true);
         return result;
-      } catch (error) {
+      } catch (error: unknown) {
         logger.warn(
           `Query failed on primary tier ${decision.primaryTier.name}:`,
           error
@@ -165,7 +165,7 @@ export class QueryRouter extends EventEmitter {
             const result = await this.executeOnTier(fallbackTier, executor);
             this.updateMetrics(fallbackTier.name, startTime, true);
             return result;
-          } catch (fallbackError) {
+          } catch (fallbackError: unknown) {
             logger.warn(
               `Query failed on fallback tier ${fallbackTier.name}:`,
               fallbackError
@@ -177,7 +177,7 @@ export class QueryRouter extends EventEmitter {
         // If all tiers failed, throw the original error
         throw error;
       }
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Query routing failed:', error);
       this.emit('routingError', { operation, context, error });
       throw error;
@@ -411,7 +411,7 @@ export class QueryRouter extends EventEmitter {
       });
 
       return result;
-    } catch (error) {
+    } catch (error: unknown) {
       const duration = Date.now() - startTime;
 
       logger.error(
@@ -576,7 +576,7 @@ export class QueryRouter extends EventEmitter {
       }
 
       return true;
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn(`Failed to check capacity for tier ${tier.name}:`, error);
       return true; // Assume capacity is OK if we can't check
     }

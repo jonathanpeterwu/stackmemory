@@ -11,6 +11,20 @@ import { existsSync } from 'fs';
 import { FrameManager } from '../../core/context/frame-manager.js';
 import { workflowTemplates } from '../../core/frame/workflow-templates-stub.js';
 import { sessionManager } from '../../core/session/session-manager.js';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export function createWorkflowCommand(): Command {
   const cmd = new Command('workflow')
@@ -27,7 +41,7 @@ export function createWorkflowCommand(): Command {
         if (!existsSync(dbPath)) {
           console.error(chalk.red('✗ StackMemory not initialized'));
           console.log(chalk.yellow('Run: stackmemory init'));
-          if (process.env.NODE_ENV !== 'test') {
+          if (process.env['NODE_ENV'] !== 'test') {
             process.exit(1);
           }
           return;
@@ -43,9 +57,9 @@ export function createWorkflowCommand(): Command {
           // Default: list workflows
           await listWorkflows();
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error(chalk.red('Error: ' + (error as Error).message));
-        if (process.env.NODE_ENV !== 'test') {
+        if (process.env['NODE_ENV'] !== 'test') {
           process.exit(1);
         }
       }
@@ -81,7 +95,7 @@ async function startWorkflow(workflowName: string, dbPath: string): Promise<void
   if (!template) {
     console.error(chalk.red(`Unknown workflow: ${workflowName}`));
     console.log(chalk.yellow('Use --list to see available workflows'));
-    if (process.env.NODE_ENV !== 'test') {
+    if (process.env['NODE_ENV'] !== 'test') {
       process.exit(1);
     }
     return;
@@ -104,7 +118,7 @@ async function startWorkflow(workflowName: string, dbPath: string): Promise<void
       name: `${template.name} Workflow`,
       metadata: {
         workflow: workflowName,
-        phases: template.phases.map(p => p.name),
+        phases: template.phases.map((p: any) => p.name),
         currentPhase: 0,
         startTime: Date.now(),
       }

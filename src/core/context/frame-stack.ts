@@ -31,7 +31,7 @@ export class FrameStack {
         stackDepth: this.activeStack.length,
         projectId: this.projectId,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to initialize frame stack', {
         error: error instanceof Error ? error.message : String(error),
         projectId: this.projectId,
@@ -135,7 +135,7 @@ export class FrameStack {
    */
   getStackFrames(): Frame[] {
     return this.activeStack
-      .map(frameId => this.frameDb.getFrame(frameId))
+      .map((frameId: any) => this.frameDb.getFrame(frameId))
       .filter(Boolean) as Frame[];
   }
 
@@ -144,7 +144,7 @@ export class FrameStack {
    */
   getHotStackContext(maxEvents: number = 20): FrameContext[] {
     return this.activeStack
-      .map(frameId => this.buildFrameContext(frameId, maxEvents))
+      .map((frameId: any) => this.buildFrameContext(frameId, maxEvents))
       .filter(Boolean) as FrameContext[];
   }
 
@@ -249,7 +249,7 @@ export class FrameStack {
         recentEvents,
         activeArtifacts,
       };
-    } catch (error) {
+    } catch (error: unknown) {
       logger.warn('Failed to build frame context', { frameId, error });
       return null;
     }
@@ -304,7 +304,7 @@ export class FrameStack {
     }
 
     // Find root frames (no parent or parent not in active set)
-    const rootFrames = frames.filter(f => 
+    const rootFrames = frames.filter((f: any) => 
       !f.parent_frame_id || !frameMap.has(f.parent_frame_id)
     );
 
@@ -315,7 +315,7 @@ export class FrameStack {
 
     if (rootFrames.length > 1) {
       logger.warn('Multiple root frames found, using most recent', {
-        rootFrames: rootFrames.map(f => f.frame_id),
+        rootFrames: rootFrames.map((f: any) => f.frame_id),
       });
     }
 
@@ -327,7 +327,7 @@ export class FrameStack {
       stack.push(currentFrame.frame_id);
       
       // Find child frame
-      const childFrame = frames.find(f => f.parent_frame_id === currentFrame.frame_id);
+      const childFrame = frames.find((f: any) => f.parent_frame_id === currentFrame.frame_id);
       if (childFrame) {
         currentFrame = childFrame;
       } else {

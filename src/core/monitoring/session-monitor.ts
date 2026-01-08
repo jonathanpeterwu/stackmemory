@@ -147,7 +147,7 @@ export class SessionMonitor extends EventEmitter {
 
       // Check for other triggers
       await this.checkCustomTriggers();
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Monitor check failed:', error);
       this.emit('monitor:error', error);
     }
@@ -271,7 +271,7 @@ export class SessionMonitor extends EventEmitter {
       });
 
       console.log(`📋 Handoff generated (trigger: ${trigger})`);
-    } catch (error) {
+    } catch (error: unknown) {
       console.error('Failed to generate handoff:', error);
     }
   }
@@ -295,7 +295,7 @@ export class SessionMonitor extends EventEmitter {
           await this.generateHandoff('process_exit');
           console.log('✅ Handoff document generated');
         }
-      } catch (error) {
+      } catch (error: unknown) {
         console.error('Error during exit handling:', error);
       } finally {
         process.exit(0);
@@ -348,7 +348,7 @@ export class SessionMonitor extends EventEmitter {
                 });
               }
             }
-          } catch (error) {
+          } catch (error: unknown) {
             console.error(`Hook ${hook} failed:`, error);
           }
         }

@@ -60,7 +60,7 @@ export function registerOnboardingCommand(program: Command): void {
         
         console.log(chalk.green('\n✅ StackMemory setup completed successfully!\n'));
         showNextSteps(config);
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Onboarding failed', error as Error);
         console.error(chalk.red('\n❌ Setup failed:'), (error as Error).message);
         process.exit(1);
@@ -388,7 +388,7 @@ exec stackmemory "$@"
       execSync(`ln -s ${sourcePath} ${binPath}`);
       console.log(chalk.green('  ✓ Created claude-sm command'));
     }
-  } catch (error) {
+  } catch (error: unknown) {
     console.log(chalk.yellow('  ⚠ Could not create claude-sm symlink (may need sudo)'));
   }
 }

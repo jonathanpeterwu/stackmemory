@@ -76,7 +76,7 @@ export class LLMJudge extends BaseVerifier {
         );
         return this.createJudgementResult(judgement, llmContext);
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error(
         'LLM Judge failed',
         error instanceof Error ? error : undefined

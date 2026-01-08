@@ -112,7 +112,7 @@ export class ToolScoringMiddleware {
       `);
       
       const rows = stmt.all(cutoff) as any[];
-      this.metrics = rows.map(row => ({
+      this.metrics = rows.map((row: any) => ({
         profileName: row.profile_name,
         toolName: row.tool_name,
         score: row.score,
@@ -145,7 +145,7 @@ export class ToolScoringMiddleware {
         metricsCount: this.metrics.length,
         profilesCount: this.profileStats.size,
       });
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to load metrics', error);
     }
   }
@@ -327,7 +327,7 @@ export class ToolScoringMiddleware {
         metric.factors.referenceCount,
         metric.timestamp
       );
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to save metric', error);
     }
   }
@@ -354,7 +354,7 @@ export class ToolScoringMiddleware {
         JSON.stringify(stats.highScoreTools),
         stats.lastUsed
       );
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Failed to save profile stats', error);
     }
   }
@@ -385,7 +385,7 @@ export class ToolScoringMiddleware {
     return {
       profileCount: profiles.length,
       mostEffective: profiles[0]?.profileName || 'none',
-      profiles: profiles.map(p => ({
+      profiles: profiles.map((p: any) => ({
         name: p.profileName,
         usage: p.usageCount,
         avgScore: p.avgScore.toFixed(3),
@@ -398,15 +398,14 @@ export class ToolScoringMiddleware {
    */
   getToolTrends(toolName: string, hours: number = 24): any {
     const cutoff = Date.now() - hours * 60 * 60 * 1000;
-    const relevantMetrics = this.metrics.filter(
-      m => m.toolName === toolName && m.timestamp > cutoff
+    const relevantMetrics = this.metrics.filter((m: any) => m.toolName === toolName && m.timestamp > cutoff
     );
     
     if (relevantMetrics.length === 0) {
       return { tool: toolName, message: 'No recent data' };
     }
     
-    const scores = relevantMetrics.map(m => m.score);
+    const scores = relevantMetrics.map((m: any) => m.score);
     const avgScore = scores.reduce((a, b) => a + b, 0) / scores.length;
     const maxScore = Math.max(...scores);
     const minScore = Math.min(...scores);
@@ -448,7 +447,7 @@ export class ToolScoringMiddleware {
     const cutoff = Date.now() - daysToKeep * 24 * 60 * 60 * 1000;
     const oldCount = this.metrics.length;
     
-    this.metrics = this.metrics.filter(m => m.timestamp > cutoff);
+    this.metrics = this.metrics.filter((m: any) => m.timestamp > cutoff);
     
     if (this.db) {
       try {
@@ -456,7 +455,7 @@ export class ToolScoringMiddleware {
           DELETE FROM tool_scoring_metrics WHERE timestamp < ?
         `);
         stmt.run(cutoff);
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to clean old metrics', error);
       }
     }

@@ -7,6 +7,20 @@ import { logger } from '../../core/monitoring/logger.js';
 import { LinearSyncEngine } from './sync.js';
 import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
 import crypto from 'crypto';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface LinearWebhookPayload {
   action: 'create' | 'update' | 'remove';
@@ -53,7 +67,7 @@ export class LinearWebhookHandler {
   private webhookSecret?: string;
 
   constructor(webhookSecret?: string) {
-    this.webhookSecret = webhookSecret || process.env.LINEAR_WEBHOOK_SECRET;
+    this.webhookSecret = webhookSecret || process.env['LINEAR_WEBHOOK_SECRET'];
   }
 
   /**
@@ -193,7 +207,7 @@ export class LinearWebhookHandler {
           stackmemoryId: taskId,
           linearId: payload.data.id,
         });
-      } catch (error) {
+      } catch (error: unknown) {
         logger.error('Failed to create task from Linear issue', {
           error: error instanceof Error ? error.message : String(error),
         });

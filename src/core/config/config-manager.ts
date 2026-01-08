@@ -43,7 +43,7 @@ export class ConfigManager {
         const loaded = yaml.load(content) as Partial<StackMemoryConfig>;
         return this.mergeWithDefaults(loaded);
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.warn(`Failed to load config from ${this.configPath}:`, error);
     }
     // Deep clone to prevent mutation of DEFAULT_CONFIG

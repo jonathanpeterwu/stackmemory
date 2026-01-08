@@ -8,6 +8,20 @@ import { existsSync, readFileSync, writeFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { execSync } from 'child_process';
 import chalk from 'chalk';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 // Get the actual project ID from git remote
 function getProjectId(): string {
@@ -73,7 +87,7 @@ function fixDatabase(projectId: string): void {
 // Fix session files
 function fixSessions(projectId: string): void {
   const sessionsDir = join(
-    process.env.HOME || '',
+    process.env['HOME'] || '',
     '.stackmemory',
     'sessions',
     'projects'
@@ -111,7 +125,7 @@ function fixSessions(projectId: string): void {
 
   // Also check for individual session files
   const individualSessionsDir = join(
-    process.env.HOME || '',
+    process.env['HOME'] || '',
     '.stackmemory',
     'sessions'
   );

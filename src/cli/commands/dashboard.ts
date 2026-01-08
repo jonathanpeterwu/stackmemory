@@ -190,7 +190,7 @@ export const dashboardCommand = {
           process.exit(0);
         });
       }
-    } catch (error) {
+    } catch (error: unknown) {
       console.error(chalk.red('❌ Dashboard error:'), (error as Error).message);
       process.exit(1);
     }

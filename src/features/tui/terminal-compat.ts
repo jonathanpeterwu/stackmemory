@@ -5,6 +5,20 @@
 
 import os from 'os';
 import { execSync } from 'child_process';
+// Type-safe environment variable access
+function getEnv(key: string, defaultValue?: string): string {
+  const value = process.env[key];
+  if (value === undefined) {
+    if (defaultValue !== undefined) return defaultValue;
+    throw new Error(`Environment variable ${key} is required`);
+  }
+  return value;
+}
+
+function getOptionalEnv(key: string): string | undefined {
+  return process.env[key];
+}
+
 
 export interface TerminalInfo {
   type: 'ghostty' | 'tmux' | 'iterm2' | 'terminal' | 'xterm' | 'unknown';
@@ -45,9 +59,9 @@ export class TerminalCompatibility {
   }
 
   private detectTerminal(): TerminalInfo {
-    const termEnv = process.env.TERM || '';
-    const termProgram = process.env.TERM_PROGRAM || '';
-    const isInsideTmux = !!process.env.TMUX;
+    const termEnv = process.env['TERM'] || '';
+    const termProgram = process.env['TERM_PROGRAM'] || '';
+    const isInsideTmux = !!process.env['TMUX'];
     const isGhostty = termEnv.includes('ghostty') || termProgram === 'ghostty';
     const isIterm2 = termProgram === 'iTerm.app';
     const isTerminalApp = termProgram === 'Apple_Terminal';
@@ -84,13 +98,13 @@ export class TerminalCompatibility {
   }
 
   private checkTrueColorSupport(): boolean {
-    const colorterm = process.env.COLORTERM;
+    const colorterm = process.env['COLORTERM'];
     if (colorterm === 'truecolor' || colorterm === '24bit') {
       return true;
     }
     
     // Check terminal specific env vars
-    const termProgram = process.env.TERM_PROGRAM || '';
+    const termProgram = process.env['TERM_PROGRAM'] || '';
     if (['iTerm.app', 'Hyper', 'vscode'].includes(termProgram)) {
       return true;
     }
@@ -100,9 +114,9 @@ export class TerminalCompatibility {
 
   private checkUnicodeSupport(): boolean {
     // Most modern terminals support unicode
-    const lang = process.env.LANG || '';
-    const lcAll = process.env.LC_ALL || '';
-    const lcCtype = process.env.LC_CTYPE || '';
+    const lang = process.env['LANG'] || '';
+    const lcAll = process.env['LC_ALL'] || '';
+    const lcCtype = process.env['LC_CTYPE'] || '';
     
     const hasUtf8 = [lang, lcAll, lcCtype].some(v => 
       v.toLowerCase().includes('utf-8') || v.toLowerCase().includes('utf8')
@@ -193,17 +207,17 @@ export class TerminalCompatibility {
     
     if (type === 'ghostty') {
       // Ghostty works better with basic xterm
-      process.env.TERM = 'xterm';
+      process.env['TERM'] = 'xterm';
     } else if (isInsideTmux) {
       // Inside tmux, use screen-256color
-      process.env.TERM = 'screen-256color';
-    } else if (!process.env.TERM || process.env.TERM === 'dumb') {
+      process.env['TERM'] = 'screen-256color';
+    } else if (!process.env['TERM'] || process.env['TERM'] === 'dumb') {
       // Fallback to xterm-256color if not set
-      process.env.TERM = 'xterm-256color';
+      process.env['TERM'] = 'xterm-256color';
     }
 
     // Disable Node warnings that can interfere with TUI
-    process.env.NODE_NO_WARNINGS = '1';
+    process.env['NODE_NO_WARNINGS'] = '1';
   }
 
   /**
@@ -211,18 +225,18 @@ export class TerminalCompatibility {
    */
   isCompatible(): boolean {
     // Check if we're in a non-interactive environment
-    if (process.env.CI || process.env.CONTINUOUS_INTEGRATION) {
+    if (process.env['CI'] || process.env['CONTINUOUS_INTEGRATION']) {
       return false;
     }
 
     // Check if terminal is too basic
-    const term = process.env.TERM || '';
+    const term = process.env['TERM'] || '';
     if (term === 'dumb') {
       return false;
     }
 
     // Allow if FORCE_TUI is set
-    if (process.env.FORCE_TUI) {
+    if (process.env['FORCE_TUI']) {
       return true;
     }
 

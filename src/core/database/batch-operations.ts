@@ -156,7 +156,7 @@ export class BatchOperationsManager {
               update.frame_id
             );
             stats.successfulInserts += result.changes;
-          } catch (error) {
+          } catch (error: unknown) {
             stats.failedInserts++;
             logger.warn('Failed to update frame digest', {
               frameId: update.frame_id,
@@ -230,10 +230,10 @@ export class BatchOperationsManager {
       const insertFn = (batch: typeof processedRecords) => {
         for (const record of batch) {
           try {
-            const values = columns.map(col => record[col]);
+            const values = columns.map((col: any) => record[col]);
             const result = stmt.run(...values);
             stats.successfulInserts += result.changes;
-          } catch (error) {
+          } catch (error: unknown) {
             stats.failedInserts++;
             logger.warn(`Failed to insert ${table} record`, {
               record,
@@ -289,7 +289,7 @@ export class BatchOperationsManager {
           await new Promise(resolve => setImmediate(resolve));
         }
 
-      } catch (error) {
+      } catch (error: unknown) {
         stats.failedInserts += batch.length;
         logger.error('Batch processing failed', error as Error, {
           batchNumber: stats.batchesProcessed + 1,
@@ -334,7 +334,7 @@ export class BatchOperationsManager {
         tables: groupedOps.size,
       });
 
-    } catch (error) {
+    } catch (error: unknown) {
       logger.error('Batch queue processing failed', error as Error);
     } finally {
       this.isProcessing = false;
