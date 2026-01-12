@@ -18,4 +18,47 @@
 - Never assume or skip testing - always run lint, tests, and build after code changes
 - Always confirm code works by running it - don't just make a guess
 - Ask questions if you get stuck or are not 100% certain about something
-- Tests sohuld always pass beforeon fix tests first
+- Tests should always pass before proceeding - fix tests first
+
+# Security Best Practices (CRITICAL):
+
+## API Keys and Secrets Management
+1. **NEVER hardcode API keys or secrets in code files**
+   - Always use environment variables: `process.env.API_KEY`
+   - Add dotenv/config import: `import 'dotenv/config'`
+   - Check .env file first, then .zshrc/.bashrc
+   
+2. **When fixing hardcoded secrets:**
+   - Replace with: `process.env.KEY_NAME || process.env.FALLBACK_KEY`
+   - Add error handling:
+     ```javascript
+     if (!API_KEY) {
+       console.error('❌ API_KEY environment variable not set');
+       console.log('Please set API_KEY in your .env file or export it in your shell');
+       process.exit(1);
+     }
+     ```
+   - Always add `import 'dotenv/config'` at the top of scripts
+   
+3. **GitHub Push Protection Issues:**
+   - If push is blocked due to secrets in OLD commits:
+     - Option 1: Visit GitHub URLs to allow specific secrets (if they're being removed)
+     - Option 2: Use BFG Repo-Cleaner to remove from history
+     - Option 3: Interactive rebase to edit old commits
+   - Prevention: Always check for secrets BEFORE committing with:
+     - `git diff --staged | grep -E "(api_key|token|secret|password)"`
+     - Use pre-commit hooks to scan for secrets
+     
+4. **Environment Variable Sources (check in order):**
+   - .env file (for development)
+   - .env.local (for local overrides)
+   - ~/.zshrc or ~/.bashrc (for user-specific)
+   - Process environment (for CI/CD)
+
+## Common Secret Patterns to Watch For:
+- `lin_api_*` - Linear API keys
+- `lin_oauth_*` - Linear OAuth tokens  
+- `sk-*` - OpenAI/Stripe keys
+- `npm_*` - NPM tokens
+- Any base64 encoded strings that look like tokens
+- Hardcoded URLs with embedded credentials

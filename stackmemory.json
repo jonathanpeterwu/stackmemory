@@ -1,0 +1,84 @@
+{
+  "project": "stackmemory",
+  "version": "0.3.8",
+  "lastUpdated": "2026-01-12T10:15:00Z",
+  "context": {
+    "recentWork": [
+      {
+        "date": "2026-01-12",
+        "task": "Security fix for hardcoded API keys",
+        "outcome": "Fixed 15 scripts, npm published v0.3.8, GitHub push blocked by history",
+        "learnings": [
+          "Always use environment variables for secrets",
+          "Add dotenv/config to all Node scripts",
+          "GitHub scans entire git history for secrets",
+          "Pre-commit hooks prevent future issues"
+        ]
+      },
+      {
+        "date": "2026-01-12",
+        "task": "Code cleanup - removed 896 lines of duplicates",
+        "outcome": "Consolidated loggers, ChromaDB adapters, Linear sync code",
+        "files_removed": [
+          "chromadb-simple.ts",
+          "workflow-templates-stub.ts",
+          "clear-survival-stub.ts",
+          "sync-enhanced.ts",
+          "utils/logger.ts"
+        ]
+      }
+    ],
+    "knownIssues": [
+      {
+        "issue": "GitHub push blocked",
+        "cause": "Secrets in commit 4eb28ee history",
+        "solutions": [
+          "Visit GitHub URLs to allow specific secrets",
+          "Use BFG Repo-Cleaner to clean history",
+          "Interactive rebase to edit old commits"
+        ]
+      }
+    ],
+    "bestPractices": {
+      "security": {
+        "secrets": "Never hardcode, always use process.env",
+        "dotenv": "Add 'import dotenv/config' to all scripts",
+        "validation": "Check if env vars exist, exit gracefully if not",
+        "prevention": "Use pre-commit hooks to scan for secret patterns"
+      },
+      "testing": {
+        "always": "Run lint, test, build after changes",
+        "never": "Never assume, always verify",
+        "order": "Fix tests first, then proceed"
+      }
+    },
+    "environment": {
+      "required_vars": [
+        "LINEAR_API_KEY",
+        "LINEAR_OAUTH_TOKEN",
+        "NPM_TOKEN",
+        "REDIS_URL",
+        "CHROMADB_API_KEY",
+        "CHROMADB_TENANT",
+        "CHROMADB_DATABASE"
+      ],
+      "check_order": [
+        ".env file",
+        ".env.local",
+        "~/.zshrc or ~/.bashrc",
+        "process environment"
+      ]
+    },
+    "skills": {
+      "security-secrets-scanner": {
+        "path": "src/skills/security-secrets-scanner.ts",
+        "commands": [
+          "scan - Detect hardcoded secrets",
+          "fix - Auto-fix with env vars",
+          "history - Check git history",
+          "hook - Generate pre-commit hook"
+        ]
+      }
+    }
+  }
+}
