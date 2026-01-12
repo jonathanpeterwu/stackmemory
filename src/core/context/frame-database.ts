@@ -227,10 +227,10 @@ export class FrameDatabase {
    */
   getFramesByProject(projectId: string, state?: 'active' | 'closed'): Frame[] {
     try {
-      const query = state 
+      const query = state
         ? 'SELECT * FROM frames WHERE project_id = ? AND state = ? ORDER BY created_at'
         : 'SELECT * FROM frames WHERE project_id = ? ORDER BY created_at';
-      
+
       const params = state ? [projectId, state] : [projectId];
       const rows = this.db.prepare(query).all(...params) as any[];
 
@@ -286,7 +286,11 @@ export class FrameDatabase {
       throw new DatabaseError(
         `Failed to insert event: ${event.event_id}`,
         ErrorCode.DB_INSERT_FAILED,
-        { eventId: event.event_id, frameId: event.frame_id, operation: 'insertEvent' },
+        {
+          eventId: event.event_id,
+          frameId: event.frame_id,
+          operation: 'insertEvent',
+        },
         error instanceof Error ? error : undefined
       );
     }
@@ -374,7 +378,11 @@ export class FrameDatabase {
       throw new DatabaseError(
         `Failed to insert anchor: ${anchor.anchor_id}`,
         ErrorCode.DB_INSERT_FAILED,
-        { anchorId: anchor.anchor_id, frameId: anchor.frame_id, operation: 'insertAnchor' },
+        {
+          anchorId: anchor.anchor_id,
+          frameId: anchor.frame_id,
+          operation: 'insertAnchor',
+        },
         error instanceof Error ? error : undefined
       );
     }
@@ -386,7 +394,9 @@ export class FrameDatabase {
   getFrameAnchors(frameId: string): Anchor[] {
     try {
       const rows = this.db
-        .prepare('SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC')
+        .prepare(
+          'SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC'
+        )
         .all(frameId) as any[];
 
       return rows.map((row: any) => ({
@@ -429,10 +439,18 @@ export class FrameDatabase {
    */
   getStatistics(): Record<string, number> {
     try {
-      const frameCount = this.db.prepare('SELECT COUNT(*) as count FROM frames').get() as { count: number };
-      const eventCount = this.db.prepare('SELECT COUNT(*) as count FROM events').get() as { count: number };
-      const anchorCount = this.db.prepare('SELECT COUNT(*) as count FROM anchors').get() as { count: number };
-      const activeFrames = this.db.prepare("SELECT COUNT(*) as count FROM frames WHERE state = 'active'").get() as { count: number };
+      const frameCount = this.db
+        .prepare('SELECT COUNT(*) as count FROM frames')
+        .get() as { count: number };
+      const eventCount = this.db
+        .prepare('SELECT COUNT(*) as count FROM events')
+        .get() as { count: number };
+      const anchorCount = this.db
+        .prepare('SELECT COUNT(*) as count FROM anchors')
+        .get() as { count: number };
+      const activeFrames = this.db
+        .prepare("SELECT COUNT(*) as count FROM frames WHERE state = 'active'")
+        .get() as { count: number };
 
       return {
         totalFrames: frameCount.count,
@@ -442,7 +460,7 @@ export class FrameDatabase {
       };
     } catch (error: unknown) {
       logger.warn('Failed to get database statistics', {
-        error: error instanceof Error ? error.message : String(error)
+        error: error instanceof Error ? error.message : String(error),
       });
       return {};
     }

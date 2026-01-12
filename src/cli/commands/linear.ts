@@ -41,7 +41,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 /**
  * Display sync result in a formatted way
  */

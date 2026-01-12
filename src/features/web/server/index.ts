@@ -27,7 +27,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 const app = express();
 const httpServer = createServer(app);
 const io = new SocketServer(httpServer, {
@@ -50,15 +49,17 @@ let db: Database.Database | null = null;
 // Initialize services
 function initializeServices() {
   console.log('🚀 Initializing StackMemory Web Server...');
-  
+
   // Initialize task reader
   taskReader = new LinearTaskReader(process.cwd());
-  console.log(`📋 TaskReader initialized with ${taskReader.getTasks().length} tasks`);
-  
+  console.log(
+    `📋 TaskReader initialized with ${taskReader.getTasks().length} tasks`
+  );
+
   // Initialize session manager
   sessionManager = new SessionManager({ enableMonitoring: true });
   console.log('📊 SessionManager initialized');
-  
+
   // Initialize database and frame manager
   const dbPath = join(process.cwd(), '.stackmemory', 'context.db');
   if (existsSync(dbPath)) {
@@ -106,7 +107,9 @@ app.get('/api/tasks/by-state/:state', (req, res) => {
 
 app.get('/api/sessions', (req, res) => {
   try {
-    const sessions = sessionManager?.getActiveSessions ? sessionManager.getActiveSessions() : [];
+    const sessions = sessionManager?.getActiveSessions
+      ? sessionManager.getActiveSessions()
+      : [];
     res.json({ sessions, total: sessions.length });
   } catch (error: unknown) {
     res.status(500).json({ error: 'Failed to fetch sessions' });
@@ -129,9 +132,11 @@ app.get('/api/frames', (req, res) => {
 app.get('/api/analytics', (req, res) => {
   try {
     const tasks = taskReader.getTasks();
-    const sessions = sessionManager?.getActiveSessions ? sessionManager.getActiveSessions() : [];
+    const sessions = sessionManager?.getActiveSessions
+      ? sessionManager.getActiveSessions()
+      : [];
     const frames = frameManager?.getAllFrames() || [];
-    
+
     // Calculate analytics
     const analytics = {
       summary: {
@@ -141,15 +146,21 @@ app.get('/api/analytics', (req, res) => {
         totalSessions: sessions.length,
         totalFrames: frames.length,
       },
-      tasksByState: tasks.reduce((acc, task) => {
-        acc[task.state] = (acc[task.state] || 0) + 1;
-        return acc;
-      }, {} as Record<string, number>),
-      tasksByPriority: tasks.reduce((acc, task) => {
-        const priority = task.priority || 4;
-        acc[priority] = (acc[priority] || 0) + 1;
-        return acc;
-      }, {} as Record<number, number>),
+      tasksByState: tasks.reduce(
+        (acc, task) => {
+          acc[task.state] = (acc[task.state] || 0) + 1;
+          return acc;
+        },
+        {} as Record<string, number>
+      ),
+      tasksByPriority: tasks.reduce(
+        (acc, task) => {
+          const priority = task.priority || 4;
+          acc[priority] = (acc[priority] || 0) + 1;
+          return acc;
+        },
+        {} as Record<number, number>
+      ),
       recentActivity: {
         tasksUpdatedToday: tasks.filter((t: any) => {
           const updated = new Date(t.updatedAt);
@@ -163,7 +174,7 @@ app.get('/api/analytics', (req, res) => {
         }).length,
       },
     };
-    
+
     res.json(analytics);
   } catch (error: unknown) {
     res.status(500).json({ error: 'Failed to fetch analytics' });
@@ -173,28 +184,32 @@ app.get('/api/analytics', (req, res) => {
 // WebSocket handling
 io.on('connection', (socket) => {
   console.log('👤 Client connected:', socket.id);
-  
+
   // Send initial data
   socket.emit('initial-data', {
     tasks: taskReader.getTasks(),
-    sessions: sessionManager?.getActiveSessions ? sessionManager.getActiveSessions() : [],
+    sessions: sessionManager?.getActiveSessions
+      ? sessionManager.getActiveSessions()
+      : [],
     frames: frameManager?.getAllFrames() || [],
   });
-  
+
   // Handle client requests
   socket.on('refresh-tasks', () => {
     socket.emit('tasks:update', taskReader.getTasks());
   });
-  
+
   socket.on('refresh-sessions', () => {
-    const sessions = sessionManager?.getActiveSessions ? sessionManager.getActiveSessions() : [];
+    const sessions = sessionManager?.getActiveSessions
+      ? sessionManager.getActiveSessions()
+      : [];
     socket.emit('sessions:update', sessions);
   });
-  
+
   socket.on('refresh-frames', () => {
     socket.emit('frames:update', frameManager?.getAllFrames() || []);
   });
-  
+
   socket.on('disconnect', () => {
     console.log('👋 Client disconnected:', socket.id);
   });
@@ -205,7 +220,9 @@ setInterval(() => {
   try {
     io.emit('tasks:update', taskReader.getTasks());
     // SessionManager might not have getActiveSessions yet
-    const sessions = sessionManager?.getActiveSessions ? sessionManager.getActiveSessions() : [];
+    const sessions = sessionManager?.getActiveSessions
+      ? sessionManager.getActiveSessions()
+      : [];
     io.emit('sessions:update', sessions);
     io.emit('frames:update', frameManager?.getAllFrames() || []);
   } catch (error: unknown) {

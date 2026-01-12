@@ -22,7 +22,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export function createContextCommands(): Command {
   const context = new Command('context')
     .alias('ctx')
@@ -63,8 +62,8 @@ export function createContextCommands(): Command {
           // metadata table doesn't exist, use default
         }
 
-        const frameManager = new FrameManager(db, projectId, { 
-          skipContextBridge: true 
+        const frameManager = new FrameManager(db, projectId, {
+          skipContextBridge: true,
         });
 
         const depth = frameManager.getStackDepth();
@@ -145,8 +144,8 @@ export function createContextCommands(): Command {
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
-        const frameManager = new FrameManager(db, projectId, { 
-          skipContextBridge: true 
+        const frameManager = new FrameManager(db, projectId, {
+          skipContextBridge: true,
         });
 
         // Get current top frame as parent
@@ -211,8 +210,8 @@ export function createContextCommands(): Command {
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
-        const frameManager = new FrameManager(db, projectId, { 
-          skipContextBridge: true 
+        const frameManager = new FrameManager(db, projectId, {
+          skipContextBridge: true,
         });
 
         const activePath = frameManager.getActiveFramePath();
@@ -272,8 +271,8 @@ export function createContextCommands(): Command {
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
-        const frameManager = new FrameManager(db, projectId, { 
-          skipContextBridge: true 
+        const frameManager = new FrameManager(db, projectId, {
+          skipContextBridge: true,
         });
 
         const activePath = frameManager.getActiveFramePath();
@@ -346,8 +345,8 @@ export function createContextCommands(): Command {
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
-        const frameManager = new FrameManager(db, projectId, { 
-          skipContextBridge: true 
+        const frameManager = new FrameManager(db, projectId, {
+          skipContextBridge: true,
         });
 
         if (options.list || action === 'list') {
@@ -385,7 +384,8 @@ export function createContextCommands(): Command {
           }
         } else if (action === 'save') {
           // Save current worktree context
-          const instanceId = options.instance || process.env['CLAUDE_INSTANCE_ID'];
+          const instanceId =
+            options.instance || process.env['CLAUDE_INSTANCE_ID'];
           const branch = options.branch || 'unknown';
 
           if (!instanceId) {
@@ -409,7 +409,8 @@ export function createContextCommands(): Command {
           console.log(`   Frame ID: ${frameId.slice(0, 10)}`);
         } else if (action === 'load') {
           // Load worktree context
-          const instanceId = options.instance || process.env['CLAUDE_INSTANCE_ID'];
+          const instanceId =
+            options.instance || process.env['CLAUDE_INSTANCE_ID'];
 
           if (!instanceId) {
             console.log('⚠️ No instance ID provided.');

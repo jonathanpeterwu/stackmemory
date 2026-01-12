@@ -26,11 +26,13 @@ export function createGCCommand(): Command {
       try {
         const frameManager = new FrameManager();
         const collector = new IncrementalGarbageCollector(frameManager);
-        
+
         const stats = collector.getStats();
         spinner.stop();
 
-        console.log(chalk.cyan('\n🗑️  Incremental Garbage Collection Status\n'));
+        console.log(
+          chalk.cyan('\n🗑️  Incremental Garbage Collection Status\n')
+        );
 
         const table = new Table({
           head: ['Metric', 'Value'],
@@ -43,39 +45,54 @@ export function createGCCommand(): Command {
           ['Collection Cycles', stats.cycleCount.toString()],
           ['Avg Cycle Time', `${stats.avgCycleTime.toFixed(2)}ms`],
           ['Protected Frames', stats.protectedFrames.toString()],
-          ['Last Run', stats.lastRunTime ? new Date(stats.lastRunTime).toLocaleString() : 'Never']
+          [
+            'Last Run',
+            stats.lastRunTime
+              ? new Date(stats.lastRunTime).toLocaleString()
+              : 'Never',
+          ]
         );
 
         console.log(table.toString());
 
         // Show efficiency metrics
         if (stats.totalFrames > 0) {
-          const collectionRate = ((stats.collectedFrames / stats.totalFrames) * 100).toFixed(1);
-          const protectionRate = ((stats.protectedFrames / stats.totalFrames) * 100).toFixed(1);
-          
+          const collectionRate = (
+            (stats.collectedFrames / stats.totalFrames) *
+            100
+          ).toFixed(1);
+          const protectionRate = (
+            (stats.protectedFrames / stats.totalFrames) *
+            100
+          ).toFixed(1);
+
           console.log('\n📊 Collection Efficiency:');
           console.log(`  Collection Rate: ${collectionRate}%`);
           console.log(`  Protection Rate: ${protectionRate}%`);
         }
-
       } catch (error: unknown) {
         spinner.fail('Failed to get GC status');
         logger.error('GC status error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
-  // Manual collection command  
+  // Manual collection command
   gc.command('collect')
     .description('Run manual garbage collection cycle')
-    .option('--dry-run', 'Show what would be collected without actually collecting')
+    .option(
+      '--dry-run',
+      'Show what would be collected without actually collecting'
+    )
     .action(async (options) => {
       const spinner = ora('Running garbage collection...').start();
 
       try {
         const frameManager = new FrameManager();
         const collector = new IncrementalGarbageCollector(frameManager);
-        
+
         if (options.dryRun) {
           spinner.text = 'Analyzing collection candidates (dry run)...';
           // TODO: Implement dry run mode
@@ -83,19 +100,22 @@ export function createGCCommand(): Command {
         } else {
           await collector.forceCollection();
           const stats = collector.getStats();
-          
-          spinner.succeed(`Collection completed - collected ${stats.collectedFrames} frames`);
-          
+
+          spinner.succeed(
+            `Collection completed - collected ${stats.collectedFrames} frames`
+          );
+
           console.log(chalk.green('\n✅ Manual collection completed'));
           console.log(`   Processed: ${stats.totalFrames} frames`);
           console.log(`   Collected: ${stats.collectedFrames} frames`);
           console.log(`   Protected: ${stats.protectedFrames} frames`);
         }
-
       } catch (error: unknown) {
         spinner.fail('Collection failed');
         logger.error('GC collection error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -111,31 +131,32 @@ export function createGCCommand(): Command {
         const frameManager = new FrameManager();
         const collector = new IncrementalGarbageCollector(frameManager, {
           cycleInterval: parseInt(options.interval) * 1000,
-          framesPerCycle: parseInt(options.framesPerCycle)
+          framesPerCycle: parseInt(options.framesPerCycle),
         });
-        
+
         collector.start();
-        
+
         spinner.succeed('GC daemon started');
         console.log(chalk.green('\n🚀 Incremental GC daemon is running'));
         console.log(`   Interval: ${options.interval}s`);
         console.log(`   Frames per cycle: ${options.framesPerCycle}`);
         console.log('\nPress Ctrl+C to stop');
-        
+
         // Keep process alive
         process.on('SIGINT', () => {
           console.log('\n⏹️  Stopping GC daemon...');
           collector.stop();
           process.exit(0);
         });
-        
+
         // Keep the process running
         await new Promise(() => {}); // Run forever
-
       } catch (error: unknown) {
         spinner.fail('Failed to start GC daemon');
         logger.error('GC start error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -149,14 +170,22 @@ export function createGCCommand(): Command {
       try {
         const frameManager = new FrameManager();
         const collector = new IncrementalGarbageCollector(frameManager);
-        
-        if (options.setInterval || options.setFramesPerCycle || options.setMaxAge) {
+
+        if (
+          options.setInterval ||
+          options.setFramesPerCycle ||
+          options.setMaxAge
+        ) {
           // Update configuration
           const newConfig: any = {};
-          if (options.setInterval) newConfig.cycleInterval = parseInt(options.setInterval) * 1000;
-          if (options.setFramesPerCycle) newConfig.framesPerCycle = parseInt(options.setFramesPerCycle);
-          if (options.setMaxAge) newConfig.maxAge = parseInt(options.setMaxAge) * 24 * 60 * 60 * 1000;
-          
+          if (options.setInterval)
+            newConfig.cycleInterval = parseInt(options.setInterval) * 1000;
+          if (options.setFramesPerCycle)
+            newConfig.framesPerCycle = parseInt(options.setFramesPerCycle);
+          if (options.setMaxAge)
+            newConfig.maxAge =
+              parseInt(options.setMaxAge) * 24 * 60 * 60 * 1000;
+
           collector.updateConfig(newConfig);
           console.log(chalk.green('✅ Configuration updated'));
         }
@@ -170,10 +199,11 @@ export function createGCCommand(): Command {
         console.log('  Young: < 1 day');
         console.log('  Mature: 1-7 days');
         console.log('  Old: 7-30 days');
-
       } catch (error: unknown) {
         logger.error('GC config error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -186,7 +216,7 @@ export function createGCCommand(): Command {
       try {
         const frameManager = new FrameManager();
         const allFrames = await frameManager.getAllFrames();
-        
+
         if (allFrames.length === 0) {
           spinner.succeed('No frames to analyze');
           return;
@@ -204,31 +234,31 @@ export function createGCCommand(): Command {
           withOutputs: 0,
           withoutOutputs: 0,
           rootFrames: 0,
-          leafFrames: 0
+          leafFrames: 0,
         };
 
         for (const frame of allFrames) {
           const age = now - frame.created_at;
-          
+
           // State analysis
           if (frame.state === 'active') analysis.active++;
           else analysis.closed++;
-          
+
           // Age analysis
           if (age < 24 * 60 * 60 * 1000) analysis.young++;
           else if (age < 7 * 24 * 60 * 60 * 1000) analysis.mature++;
           else analysis.old++;
-          
+
           // Output analysis
           if (frame.outputs && Object.keys(frame.outputs).length > 0) {
             analysis.withOutputs++;
           } else {
             analysis.withoutOutputs++;
           }
-          
+
           // Hierarchy analysis
           if (frame.depth === 0) analysis.rootFrames++;
-          if (!allFrames.some(f => f.parent_frame_id === frame.frame_id)) {
+          if (!allFrames.some((f) => f.parent_frame_id === frame.frame_id)) {
             analysis.leafFrames++;
           }
         }
@@ -242,42 +272,71 @@ export function createGCCommand(): Command {
           colWidths: [20, 10, 15],
         });
 
-        const pct = (count: number) => `${((count / analysis.total) * 100).toFixed(1)}%`;
+        const pct = (count: number) =>
+          `${((count / analysis.total) * 100).toFixed(1)}%`;
 
         stateTable.push(
           ['Active Frames', analysis.active.toString(), pct(analysis.active)],
           ['Closed Frames', analysis.closed.toString(), pct(analysis.closed)],
           ['', '', ''],
           ['Young (< 1 day)', analysis.young.toString(), pct(analysis.young)],
-          ['Mature (1-7 days)', analysis.mature.toString(), pct(analysis.mature)],
+          [
+            'Mature (1-7 days)',
+            analysis.mature.toString(),
+            pct(analysis.mature),
+          ],
           ['Old (> 7 days)', analysis.old.toString(), pct(analysis.old)],
           ['', '', ''],
-          ['With Outputs', analysis.withOutputs.toString(), pct(analysis.withOutputs)],
-          ['Without Outputs', analysis.withoutOutputs.toString(), pct(analysis.withoutOutputs)],
+          [
+            'With Outputs',
+            analysis.withOutputs.toString(),
+            pct(analysis.withOutputs),
+          ],
+          [
+            'Without Outputs',
+            analysis.withoutOutputs.toString(),
+            pct(analysis.withoutOutputs),
+          ],
           ['', '', ''],
-          ['Root Frames', analysis.rootFrames.toString(), pct(analysis.rootFrames)],
-          ['Leaf Frames', analysis.leafFrames.toString(), pct(analysis.leafFrames)]
+          [
+            'Root Frames',
+            analysis.rootFrames.toString(),
+            pct(analysis.rootFrames),
+          ],
+          [
+            'Leaf Frames',
+            analysis.leafFrames.toString(),
+            pct(analysis.leafFrames),
+          ]
         );
 
         console.log(stateTable.toString());
 
         // Collection recommendations
         console.log(chalk.yellow('\n💡 Collection Recommendations:\n'));
-        const candidatesForCollection = analysis.closed + analysis.withoutOutputs;
-        console.log(`• Potential collection candidates: ${candidatesForCollection} frames`);
-        console.log(`• Estimated space savings: ${((candidatesForCollection / analysis.total) * 100).toFixed(1)}%`);
-        
+        const candidatesForCollection =
+          analysis.closed + analysis.withoutOutputs;
+        console.log(
+          `• Potential collection candidates: ${candidatesForCollection} frames`
+        );
+        console.log(
+          `• Estimated space savings: ${((candidatesForCollection / analysis.total) * 100).toFixed(1)}%`
+        );
+
         if (analysis.old > 0) {
           console.log(`• ${analysis.old} old frames ready for collection`);
         }
         if (analysis.withoutOutputs > 0) {
-          console.log(`• ${analysis.withoutOutputs} frames without outputs can be collected`);
+          console.log(
+            `• ${analysis.withoutOutputs} frames without outputs can be collected`
+          );
         }
-
       } catch (error: unknown) {
         spinner.fail('Analysis failed');
         logger.error('GC analysis error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 

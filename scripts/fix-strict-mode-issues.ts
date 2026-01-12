@@ -16,7 +16,11 @@ interface StrictModeIssue {
   file: string;
   line: number;
   column: number;
-  type: 'possibly_undefined' | 'index_signature' | 'implicit_any' | 'unknown_type';
+  type:
+    | 'possibly_undefined'
+    | 'index_signature'
+    | 'implicit_any'
+    | 'unknown_type';
   description: string;
 }
 
@@ -30,7 +34,7 @@ class StrictModeFixer {
     console.log('🔧 Fixing process.env access issues...');
 
     const files = await this.findFilesWithPattern(/process\.env\.\w+/);
-    
+
     for (const file of files) {
       const content = fs.readFileSync(file, 'utf-8');
       let updated = content;
@@ -40,7 +44,9 @@ class StrictModeFixer {
 
       if (updated !== content) {
         fs.writeFileSync(file, updated);
-        console.log(`✅ Fixed process.env access in ${path.relative(projectRoot, file)}`);
+        console.log(
+          `✅ Fixed process.env access in ${path.relative(projectRoot, file)}`
+        );
       }
     }
   }
@@ -60,12 +66,12 @@ class StrictModeFixer {
         condition: (match: string, file: string) => {
           // Only apply if it's an array access in test or known safe contexts
           return file.includes('test') || file.includes('spec');
-        }
-      }
+        },
+      },
     ];
 
     const files = await this.findTypescriptFiles();
-    
+
     for (const file of files) {
       const content = fs.readFileSync(file, 'utf-8');
       let updated = content;
@@ -81,7 +87,9 @@ class StrictModeFixer {
 
       if (hasChanges) {
         fs.writeFileSync(file, updated);
-        console.log(`✅ Fixed undefined issues in ${path.relative(projectRoot, file)}`);
+        console.log(
+          `✅ Fixed undefined issues in ${path.relative(projectRoot, file)}`
+        );
       }
     }
   }
@@ -93,26 +101,25 @@ class StrictModeFixer {
     console.log('🔧 Fixing unknown type issues...');
 
     const files = await this.findTypescriptFiles();
-    
+
     for (const file of files) {
       const content = fs.readFileSync(file, 'utf-8');
       let updated = content;
 
       // Fix catch blocks with unknown error
       updated = updated.replace(
-        /catch\s*\(\s*(\w+)\s*\)\s*{/g, 
+        /catch\s*\(\s*(\w+)\s*\)\s*{/g,
         'catch ($1: unknown) {'
       );
 
       // Fix error parameter in catch blocks
-      updated = updated.replace(
-        /(\w+) is of type 'unknown'/g, 
-        '$1 as Error'
-      );
+      updated = updated.replace(/(\w+) is of type 'unknown'/g, '$1 as Error');
 
       if (updated !== content) {
         fs.writeFileSync(file, updated);
-        console.log(`✅ Fixed unknown types in ${path.relative(projectRoot, file)}`);
+        console.log(
+          `✅ Fixed unknown types in ${path.relative(projectRoot, file)}`
+        );
       }
     }
   }
@@ -124,30 +131,26 @@ class StrictModeFixer {
     console.log('🔧 Fixing implicit any issues...');
 
     const files = await this.findTypescriptFiles();
-    
+
     for (const file of files) {
       const content = fs.readFileSync(file, 'utf-8');
       let updated = content;
 
       // Fix common implicit any patterns
-      updated = updated.replace(
-        /\.map\(\s*(\w+)\s*=>/g,
-        '.map(($1: any) =>'
-      );
+      updated = updated.replace(/\.map\(\s*(\w+)\s*=>/g, '.map(($1: any) =>');
 
       updated = updated.replace(
         /\.filter\(\s*(\w+)\s*=>/g,
         '.filter(($1: any) =>'
       );
 
-      updated = updated.replace(
-        /\.find\(\s*(\w+)\s*=>/g,
-        '.find(($1: any) =>'
-      );
+      updated = updated.replace(/\.find\(\s*(\w+)\s*=>/g, '.find(($1: any) =>');
 
       if (updated !== content) {
         fs.writeFileSync(file, updated);
-        console.log(`✅ Fixed implicit any in ${path.relative(projectRoot, file)}`);
+        console.log(
+          `✅ Fixed implicit any in ${path.relative(projectRoot, file)}`
+        );
       }
     }
   }
@@ -159,16 +162,21 @@ class StrictModeFixer {
     console.log('🔧 Adding environment variable type guards...');
 
     const files = await this.findFilesWithPattern(/process\.env\[/);
-    
+
     for (const file of files) {
       const content = fs.readFileSync(file, 'utf-8');
       let updated = content;
 
       // Add utility function for safe env access at the top of files that need it
-      if (content.includes("process.env['") && !content.includes('function getEnv(')) {
+      if (
+        content.includes("process.env['") &&
+        !content.includes('function getEnv(')
+      ) {
         const imports = content.match(/^import.*$/gm) || [];
-        const lastImportIndex = content.lastIndexOf(imports[imports.length - 1] || '');
-        
+        const lastImportIndex = content.lastIndexOf(
+          imports[imports.length - 1] || ''
+        );
+
         const envUtility = `
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
@@ -185,12 +193,20 @@ function getOptionalEnv(key: string): string | undefined {
 }
 `;
 
-        updated = content.slice(0, lastImportIndex + imports[imports.length - 1]?.length || 0) + 
-                 envUtility + 
-                 content.slice(lastImportIndex + imports[imports.length - 1]?.length || 0);
+        updated =
+          content.slice(
+            0,
+            lastImportIndex + imports[imports.length - 1]?.length || 0
+          ) +
+          envUtility +
+          content.slice(
+            lastImportIndex + imports[imports.length - 1]?.length || 0
+          );
 
         fs.writeFileSync(file, updated);
-        console.log(`✅ Added env utilities to ${path.relative(projectRoot, file)}`);
+        console.log(
+          `✅ Added env utilities to ${path.relative(projectRoot, file)}`
+        );
       }
     }
   }
@@ -200,17 +216,26 @@ function getOptionalEnv(key: string): string | undefined {
    */
   private async findTypescriptFiles(): Promise<string[]> {
     const files: string[] = [];
-    
+
     const walk = (dir: string): void => {
       const items = fs.readdirSync(dir);
-      
+
       for (const item of items) {
         const fullPath = path.join(dir, item);
         const stat = fs.statSync(fullPath);
-        
-        if (stat.isDirectory() && !item.startsWith('.') && item !== 'node_modules' && item !== 'dist') {
+
+        if (
+          stat.isDirectory() &&
+          !item.startsWith('.') &&
+          item !== 'node_modules' &&
+          item !== 'dist'
+        ) {
           walk(fullPath);
-        } else if (stat.isFile() && (item.endsWith('.ts') || item.endsWith('.tsx')) && !item.endsWith('.d.ts')) {
+        } else if (
+          stat.isFile() &&
+          (item.endsWith('.ts') || item.endsWith('.tsx')) &&
+          !item.endsWith('.d.ts')
+        ) {
           files.push(fullPath);
         }
       }
@@ -218,7 +243,7 @@ function getOptionalEnv(key: string): string | undefined {
 
     walk(path.join(projectRoot, 'src'));
     walk(path.join(projectRoot, 'scripts'));
-    
+
     return files;
   }
 
@@ -256,7 +281,7 @@ function getOptionalEnv(key: string): string | undefined {
     console.log('- Complex possibly undefined cases');
     console.log('- Interface property mismatches');
     console.log('- Context-specific type assertions');
-    
+
     console.log('\n🔧 Run `npx tsc --noEmit` to check remaining issues');
   }
 }

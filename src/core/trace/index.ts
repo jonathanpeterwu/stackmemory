@@ -18,7 +18,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export {
   trace,
   TraceContext,
@@ -57,30 +56,32 @@ export function initializeTracing(): void {
     // Main control
     DEBUG_TRACE: process.env['DEBUG_TRACE'] === 'true',
     STACKMEMORY_DEBUG: process.env['STACKMEMORY_DEBUG'] === 'true',
-    
+
     // Output control
     TRACE_OUTPUT: process.env['TRACE_OUTPUT'] || 'console', // console|file|both
     TRACE_VERBOSITY: process.env['TRACE_VERBOSITY'] || 'full', // full|errors|summary
-    
+
     // Content control
     TRACE_PARAMS: process.env['TRACE_PARAMS'] !== 'false', // Include parameters
     TRACE_RESULTS: process.env['TRACE_RESULTS'] !== 'false', // Include results
     TRACE_MASK_SENSITIVE: process.env['TRACE_MASK_SENSITIVE'] !== 'false', // Mask sensitive data
-    
+
     // Performance
-    TRACE_PERF_THRESHOLD: parseInt(process.env['TRACE_PERF_THRESHOLD'] || '100'), // ms
+    TRACE_PERF_THRESHOLD: parseInt(
+      process.env['TRACE_PERF_THRESHOLD'] || '100'
+    ), // ms
     TRACE_MEMORY: process.env['TRACE_MEMORY'] === 'true', // Track memory usage
     TRACE_MAX_DEPTH: parseInt(process.env['TRACE_MAX_DEPTH'] || '20'), // Max call depth
-    
+
     // Database specific
     TRACE_DB: process.env['TRACE_DB'] === 'true', // Enable database tracing
     TRACE_DB_SLOW: parseInt(process.env['TRACE_DB_SLOW'] || '100'), // Slow query threshold
-    
+
     // API specific
     TRACE_API: process.env['TRACE_API'] === 'true', // Enable API tracing
     TRACE_API_SLOW: parseInt(process.env['TRACE_API_SLOW'] || '1000'), // Slow API threshold
   };
-  
+
   // Log configuration if debugging is enabled
   if (config.DEBUG_TRACE || config.STACKMEMORY_DEBUG) {
     console.log('🔍 Trace Configuration:', {
@@ -108,16 +109,13 @@ export function initializeTracing(): void {
 /**
  * Helper to enable tracing for a specific scope
  */
-export function withTracing<T>(
-  fn: () => T,
-  options?: Partial<TraceConfig>
-): T {
+export function withTracing<T>(fn: () => T, options?: Partial<TraceConfig>): T {
   const originalEnv = process.env['DEBUG_TRACE'];
-  
+
   try {
     // Temporarily enable tracing
     process.env['DEBUG_TRACE'] = 'true';
-    
+
     // Apply custom options if provided
     if (options) {
       if (options.output) process.env['TRACE_OUTPUT'] = options.output;
@@ -129,10 +127,12 @@ export function withTracing<T>(
         process.env['TRACE_RESULTS'] = String(options.includeResults);
       }
       if (options.performanceThreshold !== undefined) {
-        process.env['TRACE_PERF_THRESHOLD'] = String(options.performanceThreshold);
+        process.env['TRACE_PERF_THRESHOLD'] = String(
+          options.performanceThreshold
+        );
       }
     }
-    
+
     return fn();
   } finally {
     // Restore original environment

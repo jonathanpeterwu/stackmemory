@@ -16,7 +16,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 interface MetricEntry {
   timestamp: Date;
   metric: string;

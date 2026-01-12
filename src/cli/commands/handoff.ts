@@ -24,7 +24,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export function createHandoffCommand(): Command {
   const cmd = new Command('handoff');
 

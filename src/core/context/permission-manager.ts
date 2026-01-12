@@ -19,7 +19,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export type Operation = 'read' | 'write' | 'handoff' | 'merge' | 'administer';
 
 export interface PermissionContext {

@@ -22,7 +22,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 // Get the actual project ID from git remote
 function getProjectId(): string {
   try {

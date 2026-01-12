@@ -27,7 +27,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 const projectRoot = process.cwd();
 
 console.log(chalk.blue.bold('\n🚀 Initializing StackMemory...\n'));

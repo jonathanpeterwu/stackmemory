@@ -8,11 +8,11 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { logger } from '../monitoring/logger.js';
-import { 
-  SystemError, 
-  ErrorCode, 
+import {
+  SystemError,
+  ErrorCode,
   getErrorMessage,
-  wrapError
+  wrapError,
 } from '../errors/index.js';
 import { withTimeout, gracefulDegrade } from '../errors/recovery.js';
 
@@ -81,9 +81,9 @@ export class UpdateChecker {
         ErrorCode.INTERNAL_ERROR,
         { currentVersion, silent }
       );
-      logger.debug('Update check failed:', { 
+      logger.debug('Update check failed:', {
         error: getErrorMessage(error),
-        context: wrappedError.context 
+        context: wrappedError.context,
       });
     }
   }
@@ -216,18 +216,18 @@ export class UpdateChecker {
   private static saveCache(cache: UpdateCache): void {
     try {
       const dir = join(homedir(), '.stackmemory');
-      
+
       // Create directory if it doesn't exist (safer than execSync)
       if (!existsSync(dir)) {
         mkdirSync(dir, { recursive: true, mode: 0o755 });
       }
-      
+
       // Write cache with atomic operation (write to temp, then rename)
       const tempFile = `${this.CACHE_FILE}.tmp`;
       writeFileSync(tempFile, JSON.stringify(cache, null, 2), {
         mode: 0o644,
       });
-      
+
       // Atomic rename
       if (existsSync(this.CACHE_FILE)) {
         writeFileSync(this.CACHE_FILE, JSON.stringify(cache, null, 2));

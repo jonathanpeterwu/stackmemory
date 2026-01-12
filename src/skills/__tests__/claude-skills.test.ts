@@ -485,7 +485,7 @@ describe('Claude Skills', () => {
       const manager = new ClaudeSkillsManager(context);
       const skills = manager.getAvailableSkills();
 
-      expect(skills).toEqual(['handoff', 'checkpoint', 'dig']);
+      expect(skills).toEqual(['handoff', 'checkpoint', 'dig', 'dashboard']);
     });
 
     it('should get skill help', () => {

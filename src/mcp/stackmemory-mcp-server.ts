@@ -23,19 +23,6 @@ import {
 import { FrameManager } from '../core/context/frame-manager.js';
 import { AgentTaskManager } from '../agents/core/agent-task-manager.js';
 import { logger } from '../core/monitoring/logger.js';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
-
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
 
 // Initialize project root (can be overridden by environment variable)
 const PROJECT_ROOT = process.env['STACKMEMORY_PROJECT'] || process.cwd();

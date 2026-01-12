@@ -3,7 +3,7 @@
  * Automatically launches the StackMemory web dashboard on new sessions
  */
 
-import { exec } from 'child_process';
+import { exec, type ChildProcess } from 'child_process';
 import { promisify } from 'util';
 import { existsSync } from 'fs';
 import { join } from 'path';
@@ -21,8 +21,8 @@ export interface DashboardLauncherConfig {
 
 export class DashboardLauncherSkill {
   private config: DashboardLauncherConfig;
-  private serverProcess: any = null;
-  private webProcess: any = null;
+  private serverProcess: ChildProcess | null = null;
+  private webProcess: ChildProcess | null = null;
 
   constructor(config?: Partial<DashboardLauncherConfig>) {
     this.config = {

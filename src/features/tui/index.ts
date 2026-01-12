@@ -32,7 +32,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 // Configure terminal environment before creating any blessed elements
 terminalCompat.configureEnvironment();
 
@@ -79,7 +78,8 @@ export class StackMemoryTUI extends EventEmitter {
       left: 0,
       width: '100%',
       height: 3,
-      content: '{center}🚀 StackMemory TUI Dashboard v1.0.0 | [u]pdate status | [c]laude task | [s]ync | [q]uit{/center}',
+      content:
+        '{center}🚀 StackMemory TUI Dashboard v1.0.0 | [u]pdate status | [c]laude task | [s]ync | [q]uit{/center}',
       tags: true,
       style: {
         fg: 'white',

@@ -55,12 +55,7 @@ export function createQualityCommand(): Command {
         const frameManager = new FrameManager(db);
 
         if (options.enable) {
-          await enableQualityGates(
-            projectRoot,
-            frameManager,
-            db,
-            spinner
-          );
+          await enableQualityGates(projectRoot, frameManager, db, spinner);
         } else if (options.disable) {
           await disableQualityGates(projectRoot, spinner);
         } else if (options.status) {
@@ -430,7 +425,7 @@ async function setupWizard(
   // Detect project type
   const packageJsonPath = path.join(projectRoot, 'package.json');
   let projectType = 'unknown';
-  let detectedFrameworks: string[] = [];
+  const detectedFrameworks: string[] = [];
 
   try {
     const packageJson = JSON.parse(await fs.readFile(packageJsonPath, 'utf-8'));

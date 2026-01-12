@@ -32,17 +32,17 @@ export class SessionMonitor extends EventEmitter {
         selected: {
           bg: 'blue',
           fg: 'white',
-          bold: true
+          bold: true,
         },
         item: {
-          fg: 'cyan'
-        }
+          fg: 'cyan',
+        },
       },
       mouse: true,
       keys: true,
       vi: true,
       scrollable: true,
-      tags: true
+      tags: true,
     });
 
     // Summary footer
@@ -56,8 +56,8 @@ export class SessionMonitor extends EventEmitter {
       tags: true,
       style: {
         fg: 'white',
-        bg: 'black'
-      }
+        bg: 'black',
+      },
     });
 
     this.sessionList.on('select', (item, index) => {
@@ -71,35 +71,41 @@ export class SessionMonitor extends EventEmitter {
    */
   private autoTagSession(session: SessionData): string {
     const tags: string[] = [];
-    
+
     // Analyze recent activities for context
     if (session.recentActivities) {
       // File-based tagging
       const files = session.recentActivities
         .filter((a: any) => a.type === 'file_edit')
         .map((a: any) => a.data?.path || '');
-      
-      if (files.some(f => f.includes('test'))) tags.push('testing');
-      if (files.some(f => f.includes('.tsx') || f.includes('.jsx'))) tags.push('frontend');
-      if (files.some(f => f.includes('api') || f.includes('server'))) tags.push('backend');
-      if (files.some(f => f.includes('db') || f.includes('migration'))) tags.push('database');
-      
+
+      if (files.some((f) => f.includes('test'))) tags.push('testing');
+      if (files.some((f) => f.includes('.tsx') || f.includes('.jsx')))
+        tags.push('frontend');
+      if (files.some((f) => f.includes('api') || f.includes('server')))
+        tags.push('backend');
+      if (files.some((f) => f.includes('db') || f.includes('migration')))
+        tags.push('database');
+
       // Command-based tagging
       const commands = session.recentActivities
         .filter((a: any) => a.type === 'command')
         .map((a: any) => a.data?.command || '');
-      
-      if (commands.some(c => c.includes('npm test') || c.includes('jest'))) tags.push('testing');
-      if (commands.some(c => c.includes('git'))) tags.push('git-ops');
-      if (commands.some(c => c.includes('deploy'))) tags.push('deployment');
-      if (commands.some(c => c.includes('debug'))) tags.push('debugging');
+
+      if (commands.some((c) => c.includes('npm test') || c.includes('jest')))
+        tags.push('testing');
+      if (commands.some((c) => c.includes('git'))) tags.push('git-ops');
+      if (commands.some((c) => c.includes('deploy'))) tags.push('deployment');
+      if (commands.some((c) => c.includes('debug'))) tags.push('debugging');
     }
 
     // Task-based tagging from Linear
     if (session.linearTask) {
       tags.push(`linear:${session.linearTask.identifier}`);
       if (session.linearTask.labels) {
-        tags.push(...session.linearTask.labels.map((l: any) => l.toLowerCase()));
+        tags.push(
+          ...session.linearTask.labels.map((l: any) => l.toLowerCase())
+        );
       }
     }
 
@@ -107,7 +113,8 @@ export class SessionMonitor extends EventEmitter {
     if (session.gitBranch) {
       const branch = session.gitBranch;
       if (branch.includes('feature/')) tags.push('feature');
-      if (branch.includes('fix/') || branch.includes('bugfix/')) tags.push('bugfix');
+      if (branch.includes('fix/') || branch.includes('bugfix/'))
+        tags.push('bugfix');
       if (branch.includes('refactor/')) tags.push('refactor');
       if (branch.includes('docs/')) tags.push('documentation');
     }
@@ -126,13 +133,18 @@ export class SessionMonitor extends EventEmitter {
   private generateSessionName(session: SessionData): string {
     const autoTags = this.autoTagSession(session);
     const timestamp = new Date(session.startTime).toLocaleTimeString();
-    
+
     // Create descriptive name based on primary activity
     let primaryActivity = 'Session';
-    
+
     if (session.linearTask) {
-      primaryActivity = session.linearTask.title || session.linearTask.identifier;
-    } else if (session.gitBranch && session.gitBranch !== 'main' && session.gitBranch !== 'master') {
+      primaryActivity =
+        session.linearTask.title || session.linearTask.identifier;
+    } else if (
+      session.gitBranch &&
+      session.gitBranch !== 'main' &&
+      session.gitBranch !== 'master'
+    ) {
       primaryActivity = session.gitBranch.split('/').pop() || session.gitBranch;
     } else if (session.primaryFile) {
       primaryActivity = session.primaryFile.split('/').pop() || 'Code';
@@ -149,74 +161,90 @@ export class SessionMonitor extends EventEmitter {
     const statusIcon = this.getStatusIcon(status);
     const name = this.generateSessionName(session);
     const metrics = this.getSessionMetrics(session);
-    
+
     const contextUsage = Math.round(session.contextUsage * 100);
-    const contextColor = contextUsage > 80 ? 'red' : contextUsage > 60 ? 'yellow' : 'green';
-    
-    return `${statusIcon} ${name}\n` +
-           `   {gray-fg}Tokens: ${metrics.tokens} | Context: {${contextColor}-fg}${contextUsage}%{/} | Duration: ${metrics.duration}{/}`;
+    const contextColor =
+      contextUsage > 80 ? 'red' : contextUsage > 60 ? 'yellow' : 'green';
+
+    return (
+      `${statusIcon} ${name}\n` +
+      `   {gray-fg}Tokens: ${metrics.tokens} | Context: {${contextColor}-fg}${contextUsage}%{/} | Duration: ${metrics.duration}{/}`
+    );
   }
 
-  private getSessionStatus(session: SessionData): 'active' | 'idle' | 'completed' | 'error' {
+  private getSessionStatus(
+    session: SessionData
+  ): 'active' | 'idle' | 'completed' | 'error' {
     if (session.error) return 'error';
     if (session.completed) return 'completed';
-    
+
     const now = Date.now();
     const lastActivity = session.lastActivity || session.startTime;
     const idleTime = now - lastActivity;
-    
+
     if (idleTime > 5 * 60 * 1000) return 'idle'; // 5 minutes
     return 'active';
   }
 
   private getStatusIcon(status: string): string {
     switch (status) {
-      case 'active': return '{green-fg}●{/}';
-      case 'idle': return '{yellow-fg}●{/}';
-      case 'completed': return '{gray-fg}●{/}';
-      case 'error': return '{red-fg}●{/}';
-      default: return '{white-fg}○{/}';
+      case 'active':
+        return '{green-fg}●{/}';
+      case 'idle':
+        return '{yellow-fg}●{/}';
+      case 'completed':
+        return '{gray-fg}●{/}';
+      case 'error':
+        return '{red-fg}●{/}';
+      default:
+        return '{white-fg}○{/}';
     }
   }
 
   private getSessionMetrics(session: SessionData): SessionMetrics {
     const now = Date.now();
     const duration = now - session.startTime;
-    
+
     const hours = Math.floor(duration / (1000 * 60 * 60));
     const minutes = Math.floor((duration % (1000 * 60 * 60)) / (1000 * 60));
-    
+
     return {
       tokens: session.totalTokens || 0,
       duration: hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`,
       filesEdited: session.filesEdited?.length || 0,
       commandsRun: session.commandsRun || 0,
-      errorsEncountered: session.errors?.length || 0
+      errorsEncountered: session.errors?.length || 0,
     };
   }
 
   public update(sessions: SessionData[]): void {
     // Update session map
     this.sessions.clear();
-    sessions.forEach(session => {
+    sessions.forEach((session) => {
       this.sessions.set(session.id, session);
     });
 
     // Update list display
-    const items = sessions.map((session: any) => this.formatSessionItem(session));
+    const items = sessions.map((session: any) =>
+      this.formatSessionItem(session)
+    );
     this.sessionList.setItems(items);
 
     // Update footer statistics
-    const active = sessions.filter((s: any) => this.getSessionStatus(s) === 'active').length;
-    const idle = sessions.filter((s: any) => this.getSessionStatus(s) === 'idle').length;
+    const active = sessions.filter(
+      (s: any) => this.getSessionStatus(s) === 'active'
+    ).length;
+    const idle = sessions.filter(
+      (s: any) => this.getSessionStatus(s) === 'idle'
+    ).length;
     const total = sessions.length;
-    
+
     const footer = this.container.children[1] as blessed.Widgets.BoxElement;
     if (footer) {
       footer.setContent(
         `{bold}Active:{/} {green-fg}${active}{/} | ` +
-        `{bold}Idle:{/} {yellow-fg}${idle}{/} | ` +
-        `{bold}Total:{/} ${total}`
+          `{bold}Idle:{/} {yellow-fg}${idle}{/} | ` +
+          `{bold}Total:{/} ${total}`
       );
     }
 
@@ -242,19 +270,19 @@ export class SessionMonitor extends EventEmitter {
       content: this.formatSessionDetails(session),
       tags: true,
       border: {
-        type: 'line'
+        type: 'line',
       },
       style: {
         border: {
-          fg: 'cyan'
-        }
+          fg: 'cyan',
+        },
       },
       scrollable: true,
       keys: true,
       vi: true,
       mouse: true,
       hidden: false,
-      label: ` Session: ${this.generateSessionName(session)} `
+      label: ` Session: ${this.generateSessionName(session)} `,
     });
 
     details.key(['escape', 'q'], () => {
@@ -270,16 +298,16 @@ export class SessionMonitor extends EventEmitter {
     const metrics = this.getSessionMetrics(session);
     const status = this.getSessionStatus(session);
     const tags = this.autoTagSession(session);
-    
+
     let details = `{bold}Session ID:{/} ${session.id}\n`;
     details += `{bold}Status:{/} ${status}\n`;
     details += `{bold}Tags:{/} ${tags}\n`;
     details += `{bold}Started:{/} ${new Date(session.startTime).toLocaleString()}\n`;
-    
+
     if (session.lastActivity) {
       details += `{bold}Last Activity:{/} ${new Date(session.lastActivity).toLocaleString()}\n`;
     }
-    
+
     details += `\n{bold}Metrics:{/}\n`;
     details += `  Tokens Used: ${metrics.tokens}\n`;
     details += `  Context Usage: ${Math.round(session.contextUsage * 100)}%\n`;
@@ -287,14 +315,14 @@ export class SessionMonitor extends EventEmitter {
     details += `  Files Edited: ${metrics.filesEdited}\n`;
     details += `  Commands Run: ${metrics.commandsRun}\n`;
     details += `  Errors: ${metrics.errorsEncountered}\n`;
-    
+
     if (session.linearTask) {
       details += `\n{bold}Linear Task:{/}\n`;
       details += `  ID: ${session.linearTask.identifier}\n`;
       details += `  Title: ${session.linearTask.title}\n`;
       details += `  State: ${session.linearTask.state}\n`;
     }
-    
+
     if (session.gitBranch) {
       details += `\n{bold}Git:{/}\n`;
       details += `  Branch: ${session.gitBranch}\n`;
@@ -302,14 +330,14 @@ export class SessionMonitor extends EventEmitter {
         details += `  Last Commit: ${session.lastCommit}\n`;
       }
     }
-    
+
     if (session.recentActivities && session.recentActivities.length > 0) {
       details += `\n{bold}Recent Activities:{/}\n`;
-      session.recentActivities.slice(-10).forEach(activity => {
+      session.recentActivities.slice(-10).forEach((activity) => {
         details += `  ${new Date(activity.timestamp).toLocaleTimeString()} - ${activity.type}: ${activity.description}\n`;
       });
     }
-    
+
     return details;
   }
 

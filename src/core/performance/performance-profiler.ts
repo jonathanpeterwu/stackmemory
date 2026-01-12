@@ -20,7 +20,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export interface PerformanceMetrics {
   operationName: string;
   callCount: number;
@@ -92,7 +91,7 @@ export class PerformanceProfiler {
     }
 
     const startTime = performance.now();
-    
+
     return (metadata?: Record<string, any>) => {
       this.endTiming(operationName, startTime, metadata);
     };
@@ -124,7 +123,11 @@ export class PerformanceProfiler {
   /**
    * Record timing manually
    */
-  recordTiming(operationName: string, durationMs: number, metadata?: Record<string, any>): void {
+  recordTiming(
+    operationName: string,
+    durationMs: number,
+    metadata?: Record<string, any>
+  ): void {
     if (!this.isEnabled) return;
 
     this.endTiming(operationName, performance.now() - durationMs, metadata);
@@ -149,7 +152,7 @@ export class PerformanceProfiler {
    */
   getHotPaths(limit = 10): HotPath[] {
     return Array.from(this.hotPaths.values())
-      .sort((a, b) => (b.frequency * b.avgDuration) - (a.frequency * a.avgDuration))
+      .sort((a, b) => b.frequency * b.avgDuration - a.frequency * a.avgDuration)
       .slice(0, limit);
   }
 
@@ -159,7 +162,7 @@ export class PerformanceProfiler {
   generateReport(db?: Database.Database): SystemPerformanceReport {
     const hotPaths = this.getHotPaths(20);
     const recommendations = this.generateRecommendations(hotPaths);
-    
+
     const report: SystemPerformanceReport = {
       timestamp: Date.now(),
       hotPaths,
@@ -217,7 +220,11 @@ export class PerformanceProfiler {
   /**
    * End timing for an operation
    */
-  private endTiming(operationName: string, startTime: number, metadata?: Record<string, any>): void {
+  private endTiming(
+    operationName: string,
+    startTime: number,
+    metadata?: Record<string, any>
+  ): void {
     const duration = performance.now() - startTime;
     const timestamp = Date.now();
 
@@ -236,9 +243,13 @@ export class PerformanceProfiler {
   /**
    * Update performance metrics for an operation
    */
-  private updateMetrics(operationName: string, duration: number, timestamp: number): void {
+  private updateMetrics(
+    operationName: string,
+    duration: number,
+    timestamp: number
+  ): void {
     const existing = this.metrics.get(operationName);
-    
+
     if (!existing) {
       this.metrics.set(operationName, {
         operationName,
@@ -273,7 +284,7 @@ export class PerformanceProfiler {
     metadata?: Record<string, any>
   ): void {
     const existing = this.hotPaths.get(operationName);
-    
+
     if (!existing) {
       this.hotPaths.set(operationName, {
         path: operationName,
@@ -288,7 +299,7 @@ export class PerformanceProfiler {
       existing.totalDuration += duration;
       existing.avgDuration = existing.totalDuration / existing.frequency;
       existing.lastSeen = timestamp;
-      
+
       // Keep limited samples
       existing.samples.push({ timestamp, duration, metadata });
       if (existing.samples.length > 100) {
@@ -339,28 +350,41 @@ export class PerformanceProfiler {
 
     for (const hotPath of hotPaths.slice(0, 5)) {
       const impact = hotPath.frequency * hotPath.avgDuration;
-      
-      if (hotPath.path.includes('getFrameContext') && hotPath.avgDuration > 10) {
-        recommendations.push(`Consider caching frame context for ${hotPath.path} (avg: ${hotPath.avgDuration.toFixed(1)}ms)`);
+
+      if (
+        hotPath.path.includes('getFrameContext') &&
+        hotPath.avgDuration > 10
+      ) {
+        recommendations.push(
+          `Consider caching frame context for ${hotPath.path} (avg: ${hotPath.avgDuration.toFixed(1)}ms)`
+        );
       }
-      
+
       if (hotPath.path.includes('getFrameEvents') && hotPath.frequency > 100) {
-        recommendations.push(`High frequency event queries detected in ${hotPath.path} (${hotPath.frequency} calls). Consider pagination or caching.`);
+        recommendations.push(
+          `High frequency event queries detected in ${hotPath.path} (${hotPath.frequency} calls). Consider pagination or caching.`
+        );
       }
-      
+
       if (hotPath.path.includes('bulkInsert') && hotPath.avgDuration > 50) {
-        recommendations.push(`Slow bulk insertion in ${hotPath.path}. Consider increasing batch size or using prepared statements.`);
+        recommendations.push(
+          `Slow bulk insertion in ${hotPath.path}. Consider increasing batch size or using prepared statements.`
+        );
       }
-      
+
       if (impact > 1000) {
-        recommendations.push(`High impact operation: ${hotPath.path} (${impact.toFixed(0)}ms total impact). Consider optimization.`);
+        recommendations.push(
+          `High impact operation: ${hotPath.path} (${impact.toFixed(0)}ms total impact). Consider optimization.`
+        );
       }
     }
 
     // Memory recommendations
     const memUsage = process.memoryUsage();
     if (memUsage.heapUsed / memUsage.heapTotal > 0.8) {
-      recommendations.push('High memory usage detected. Consider implementing cleanup routines or reducing cache sizes.');
+      recommendations.push(
+        'High memory usage detected. Consider implementing cleanup routines or reducing cache sizes.'
+      );
     }
 
     if (recommendations.length === 0) {
@@ -380,7 +404,9 @@ let globalProfiler: PerformanceProfiler | null = null;
 export function getProfiler(): PerformanceProfiler {
   if (!globalProfiler) {
     globalProfiler = new PerformanceProfiler({
-      enabled: process.env['NODE_ENV'] !== 'production' || process.env['STACKMEMORY_PROFILING'] === 'true',
+      enabled:
+        process.env['NODE_ENV'] !== 'production' ||
+        process.env['STACKMEMORY_PROFILING'] === 'true',
     });
   }
   return globalProfiler;
@@ -401,12 +427,19 @@ export async function timeOperation<T>(
  * Create a performance monitoring decorator
  */
 export function performanceMonitor(operationName?: string) {
-  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+  return function (
+    target: any,
+    propertyKey: string,
+    descriptor: PropertyDescriptor
+  ) {
     const originalMethod = descriptor.value;
-    const finalOperationName = operationName || `${target.constructor.name}.${propertyKey}`;
+    const finalOperationName =
+      operationName || `${target.constructor.name}.${propertyKey}`;
 
     descriptor.value = async function (...args: any[]) {
-      return getProfiler().timeFunction(finalOperationName, () => originalMethod.apply(this, args));
+      return getProfiler().timeFunction(finalOperationName, () =>
+        originalMethod.apply(this, args)
+      );
     };
 
     return descriptor;
@@ -418,23 +451,35 @@ export function performanceMonitor(operationName?: string) {
  */
 export class StackMemoryPerformanceMonitor {
   private profiler = getProfiler();
-  
+
   /**
    * Monitor frame operations
    */
   monitorFrameOperations(frameManager: any): void {
     this.wrapMethod(frameManager, 'getFrame', 'FrameManager.getFrame');
-    this.wrapMethod(frameManager, 'getFrameEvents', 'FrameManager.getFrameEvents');
-    this.wrapMethod(frameManager, 'getFrameAnchors', 'FrameManager.getFrameAnchors');
-    this.wrapMethod(frameManager, 'getHotStackContext', 'FrameManager.getHotStackContext');
+    this.wrapMethod(
+      frameManager,
+      'getFrameEvents',
+      'FrameManager.getFrameEvents'
+    );
+    this.wrapMethod(
+      frameManager,
+      'getFrameAnchors',
+      'FrameManager.getFrameAnchors'
+    );
+    this.wrapMethod(
+      frameManager,
+      'getHotStackContext',
+      'FrameManager.getHotStackContext'
+    );
   }
 
   /**
-   * Monitor database operations  
+   * Monitor database operations
    */
   monitorDatabaseOperations(db: Database.Database): void {
     const originalPrepare = db.prepare;
-    db.prepare = function<T = any>(sql: string): Database.Statement<T[], T> {
+    db.prepare = function <T = any>(sql: string): Database.Statement<T[], T> {
       const stmt = originalPrepare.call(this, sql);
       return wrapStatement(stmt, sql);
     };
@@ -443,12 +488,18 @@ export class StackMemoryPerformanceMonitor {
   /**
    * Wrap a method with performance monitoring
    */
-  private wrapMethod(obj: any, methodName: string, operationName: string): void {
+  private wrapMethod(
+    obj: any,
+    methodName: string,
+    operationName: string
+  ): void {
     const original = obj[methodName];
     if (typeof original !== 'function') return;
 
     obj[methodName] = async function (...args: any[]) {
-      return getProfiler().timeFunction(operationName, () => original.apply(this, args));
+      return getProfiler().timeFunction(operationName, () =>
+        original.apply(this, args)
+      );
     };
   }
 }
@@ -456,23 +507,32 @@ export class StackMemoryPerformanceMonitor {
 /**
  * Wrap a database statement with performance monitoring
  */
-function wrapStatement(stmt: Database.Statement, sql: string): Database.Statement {
+function wrapStatement(
+  stmt: Database.Statement,
+  sql: string
+): Database.Statement {
   const operationName = `SQL.${sql.trim().split(' ')[0].toUpperCase()}`;
-  
+
   const originalRun = stmt.run;
   const originalGet = stmt.get;
   const originalAll = stmt.all;
 
   stmt.run = function (this: Database.Statement, ...args: any[]) {
-    return getProfiler().timeFunction(`${operationName}.run`, () => originalRun.apply(this, args));
+    return getProfiler().timeFunction(`${operationName}.run`, () =>
+      originalRun.apply(this, args)
+    );
   } as any;
 
   stmt.get = function (this: Database.Statement, ...args: any[]) {
-    return getProfiler().timeFunction(`${operationName}.get`, () => originalGet.apply(this, args));
+    return getProfiler().timeFunction(`${operationName}.get`, () =>
+      originalGet.apply(this, args)
+    );
   } as any;
 
   stmt.all = function (this: Database.Statement, ...args: any[]) {
-    return getProfiler().timeFunction(`${operationName}.all`, () => originalAll.apply(this, args));
+    return getProfiler().timeFunction(`${operationName}.all`, () =>
+      originalAll.apply(this, args)
+    );
   } as any;
 
   return stmt;

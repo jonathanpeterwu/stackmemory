@@ -6,7 +6,12 @@
 import Database from 'better-sqlite3';
 import { getQueryCache, createCacheKey } from '../database/query-cache.js';
 import { logger } from '../monitoring/logger.js';
-import { Frame, FrameContext, Anchor, Event } from '../context/frame-manager.js';
+import {
+  Frame,
+  FrameContext,
+  Anchor,
+  Event,
+} from '../context/frame-manager.js';
 
 export interface ContextAssemblyOptions {
   maxEvents?: number;
@@ -61,7 +66,7 @@ export class OptimizedContextAssembler {
     try {
       // Batch process frames for better performance
       const contexts: OptimizedFrameContext[] = [];
-      
+
       for (let i = 0; i < activeStack.length; i += batchSize) {
         const batch = activeStack.slice(i, i + batchSize);
         const batchContexts = await this.processBatch(
@@ -84,7 +89,6 @@ export class OptimizedContextAssembler {
           ...stats,
         },
       }));
-
     } catch (error: unknown) {
       logger.error('Failed to assemble hot stack context', error as Error, {
         activeStack,
@@ -104,10 +108,7 @@ export class OptimizedContextAssembler {
     const startTime = performance.now();
     const stats = { cacheHits: 0, dbQueries: 0, totalRows: 0 };
 
-    const {
-      maxEvents = 50,
-      enableCaching = true,
-    } = options;
+    const { maxEvents = 50, enableCaching = true } = options;
 
     // Check cache first
     const cacheKey = createCacheKey('frame_context', [frameId, maxEvents]);
@@ -126,8 +127,12 @@ export class OptimizedContextAssembler {
     }
 
     try {
-      const context = await this.assembleFrameContext(frameId, maxEvents, stats);
-      
+      const context = await this.assembleFrameContext(
+        frameId,
+        maxEvents,
+        stats
+      );
+
       if (!context) return null;
 
       // Cache the result
@@ -144,7 +149,6 @@ export class OptimizedContextAssembler {
       };
 
       return result;
-
     } catch (error: unknown) {
       logger.error('Failed to get frame context', error as Error, { frameId });
       throw error;
@@ -162,7 +166,7 @@ export class OptimizedContextAssembler {
     stats: { cacheHits: number; dbQueries: number; totalRows: number }
   ): Promise<OptimizedFrameContext[]> {
     const contexts: OptimizedFrameContext[] = [];
-    
+
     // Get cached contexts first
     const uncachedIds = [];
     for (const frameId of frameIds) {
@@ -233,7 +237,7 @@ export class OptimizedContextAssembler {
 
     const placeholders = frameIds.map(() => '?').join(',');
     const query = `SELECT * FROM frames WHERE frame_id IN (${placeholders})`;
-    
+
     stats.dbQueries++;
     const rows = this.db.prepare(query).all(...frameIds) as any[];
     stats.totalRows += rows.length;
@@ -367,13 +371,21 @@ export class OptimizedContextAssembler {
     stats: { dbQueries: number; totalRows: number }
   ): Promise<FrameContext | null> {
     // Single frame operations - these could be further optimized with prepared statements
-    const frame = await this.batchGetFrames([frameId], stats).then(map => map.get(frameId));
+    const frame = await this.batchGetFrames([frameId], stats).then((map) =>
+      map.get(frameId)
+    );
     if (!frame) return null;
 
     const [events, anchors, artifacts] = await Promise.all([
-      this.batchGetEvents([frameId], maxEvents, stats).then(map => map.get(frameId) || []),
-      this.batchGetAnchors([frameId], stats).then(map => map.get(frameId) || []),
-      this.batchGetArtifacts([frameId], stats).then(map => map.get(frameId) || []),
+      this.batchGetEvents([frameId], maxEvents, stats).then(
+        (map) => map.get(frameId) || []
+      ),
+      this.batchGetAnchors([frameId], stats).then(
+        (map) => map.get(frameId) || []
+      ),
+      this.batchGetArtifacts([frameId], stats).then(
+        (map) => map.get(frameId) || []
+      ),
     ]);
 
     return {
@@ -394,15 +406,15 @@ export class OptimizedContextAssembler {
    */
   private extractConstraints(inputs: Record<string, any>): string[] {
     const constraints: string[] = [];
-    
+
     if (inputs.constraints && Array.isArray(inputs.constraints)) {
       constraints.push(...inputs.constraints);
     }
-    
+
     if (inputs.requirements && Array.isArray(inputs.requirements)) {
       constraints.push(...inputs.requirements);
     }
-    
+
     if (inputs.limitations && Array.isArray(inputs.limitations)) {
       constraints.push(...inputs.limitations);
     }
@@ -424,16 +436,22 @@ export class OptimizedContextAssembler {
       // Frame events with limit
       this.preparedStatements.set(
         'frame_events',
-        this.db.prepare('SELECT * FROM events WHERE frame_id = ? ORDER BY seq DESC LIMIT ?')
+        this.db.prepare(
+          'SELECT * FROM events WHERE frame_id = ? ORDER BY seq DESC LIMIT ?'
+        )
       );
 
       // Frame anchors
       this.preparedStatements.set(
         'frame_anchors',
-        this.db.prepare('SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC')
+        this.db.prepare(
+          'SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC'
+        )
       );
 
-      logger.info('Prepared statements initialized for optimized context assembly');
+      logger.info(
+        'Prepared statements initialized for optimized context assembly'
+      );
     } catch (error: unknown) {
       logger.error('Failed to initialize prepared statements', error as Error);
       throw error;

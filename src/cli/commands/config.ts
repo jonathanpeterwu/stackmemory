@@ -8,13 +8,13 @@ import * as path from 'path';
 import * as yaml from 'js-yaml';
 import chalk from 'chalk';
 import { ConfigManager } from '../../core/config/config-manager.js';
-import { 
-  DEFAULT_CONFIG, 
-  PRESET_PROFILES, 
-  ProfileConfig, 
+import {
+  DEFAULT_CONFIG,
+  PRESET_PROFILES,
+  ProfileConfig,
   ScoringWeights,
   DEFAULT_WEIGHTS,
-  DEFAULT_TOOL_SCORES
+  DEFAULT_TOOL_SCORES,
 } from '../../core/config/types.js';
 
 export function createConfigCommand(): Command {
@@ -275,20 +275,9 @@ export function createConfigCommand(): Command {
   config
     .command('create-profile <name>')
     .description('Create a custom configuration profile')
-    .option(
-      '-d, --description <text>',
-      'Profile description'
-    )
-    .option(
-      '-b, --base-weight <number>',
-      'Base weight (0-1)',
-      parseFloat
-    )
-    .option(
-      '-i, --impact-weight <number>',
-      'Impact weight (0-1)',
-      parseFloat
-    )
+    .option('-d, --description <text>', 'Profile description')
+    .option('-b, --base-weight <number>', 'Base weight (0-1)', parseFloat)
+    .option('-i, --impact-weight <number>', 'Impact weight (0-1)', parseFloat)
     .option(
       '-p, --persistence-weight <number>',
       'Persistence weight (0-1)',
@@ -299,10 +288,7 @@ export function createConfigCommand(): Command {
       'Reference weight (0-1)',
       parseFloat
     )
-    .option(
-      '--copy-from <profile>',
-      'Copy settings from existing profile'
-    )
+    .option('--copy-from <profile>', 'Copy settings from existing profile')
     .action(async (name, options) => {
       const manager = new ConfigManager();
       const config = manager.getConfig();
@@ -310,7 +296,9 @@ export function createConfigCommand(): Command {
       // Check if profile already exists
       if (config.profiles && config.profiles[name]) {
         console.log(
-          chalk.yellow(`⚠ Profile '${name}' already exists. Use 'edit-profile' to modify it.`)
+          chalk.yellow(
+            `⚠ Profile '${name}' already exists. Use 'edit-profile' to modify it.`
+          )
         );
         process.exit(1);
       }
@@ -321,10 +309,16 @@ export function createConfigCommand(): Command {
         // Copy from existing profile
         const sourceProfile = config.profiles?.[options.copyFrom];
         if (!sourceProfile) {
-          console.log(chalk.red(`❌ Source profile '${options.copyFrom}' not found`));
+          console.log(
+            chalk.red(`❌ Source profile '${options.copyFrom}' not found`)
+          );
           process.exit(1);
         }
-        newProfile = { ...sourceProfile, name, description: options.description };
+        newProfile = {
+          ...sourceProfile,
+          name,
+          description: options.description,
+        };
       } else {
         // Create new profile with custom weights
         const weights: ScoringWeights = {
@@ -335,11 +329,17 @@ export function createConfigCommand(): Command {
         };
 
         // Validate weights sum to 1.0
-        const sum = weights.base + weights.impact + weights.persistence + weights.reference;
+        const sum =
+          weights.base +
+          weights.impact +
+          weights.persistence +
+          weights.reference;
         if (Math.abs(sum - 1.0) > 0.001) {
-          console.log(chalk.red(`❌ Weights must sum to 1.0 (current: ${sum.toFixed(3)})`));
+          console.log(
+            chalk.red(`❌ Weights must sum to 1.0 (current: ${sum.toFixed(3)})`)
+          );
           console.log(chalk.yellow('\nNormalizing weights to sum to 1.0...'));
-          
+
           const factor = 1.0 / sum;
           weights.base *= factor;
           weights.impact *= factor;
@@ -349,7 +349,9 @@ export function createConfigCommand(): Command {
 
         newProfile = {
           name,
-          description: options.description || `Custom profile created ${new Date().toLocaleDateString()}`,
+          description:
+            options.description ||
+            `Custom profile created ${new Date().toLocaleDateString()}`,
           scoring: {
             weights,
             tool_scores: DEFAULT_TOOL_SCORES,
@@ -377,18 +379,28 @@ export function createConfigCommand(): Command {
   config
     .command('edit-profile <name>')
     .description('Edit an existing profile')
-    .option('-s, --set-tool <tool:score>', 'Set tool score (e.g., search:0.95)', (value, previous) => {
-      const result = previous || {};
-      const [tool, score] = value.split(':');
-      result[tool] = parseFloat(score);
-      return result;
-    }, {})
-    .option('-w, --set-weight <type:value>', 'Set weight (e.g., base:0.4)', (value, previous) => {
-      const result = previous || {};
-      const [type, weight] = value.split(':');
-      result[type] = parseFloat(weight);
-      return result;
-    }, {})
+    .option(
+      '-s, --set-tool <tool:score>',
+      'Set tool score (e.g., search:0.95)',
+      (value, previous) => {
+        const result = previous || {};
+        const [tool, score] = value.split(':');
+        result[tool] = parseFloat(score);
+        return result;
+      },
+      {}
+    )
+    .option(
+      '-w, --set-weight <type:value>',
+      'Set weight (e.g., base:0.4)',
+      (value, previous) => {
+        const result = previous || {};
+        const [type, weight] = value.split(':');
+        result[type] = parseFloat(weight);
+        return result;
+      },
+      {}
+    )
     .action(async (name, options) => {
       const manager = new ConfigManager();
       const config = manager.getConfig();
@@ -421,21 +433,26 @@ export function createConfigCommand(): Command {
           profile.scoring.weights = { ...DEFAULT_WEIGHTS };
         }
         Object.assign(profile.scoring.weights, options.setWeight);
-        
+
         // Validate weights
         const weights = profile.scoring.weights;
-        const sum = (weights.base || 0) + (weights.impact || 0) + 
-                   (weights.persistence || 0) + (weights.reference || 0);
-        
+        const sum =
+          (weights.base || 0) +
+          (weights.impact || 0) +
+          (weights.persistence || 0) +
+          (weights.reference || 0);
+
         if (Math.abs(sum - 1.0) > 0.001) {
-          console.log(chalk.yellow(`⚠ Weights sum to ${sum.toFixed(3)}, normalizing...`));
+          console.log(
+            chalk.yellow(`⚠ Weights sum to ${sum.toFixed(3)}, normalizing...`)
+          );
           const factor = 1.0 / sum;
           if (weights.base) weights.base *= factor;
           if (weights.impact) weights.impact *= factor;
           if (weights.persistence) weights.persistence *= factor;
           if (weights.reference) weights.reference *= factor;
         }
-        
+
         console.log(chalk.green('✓ Updated weights'));
       }
 
@@ -454,14 +471,16 @@ export function createConfigCommand(): Command {
       // This would integrate with the ToolScoringMiddleware
       // For now, show a placeholder
       console.log(chalk.blue('\n📊 Profile Effectiveness Report'));
-      
+
       if (profile) {
         console.log(chalk.cyan(`\nProfile: ${profile}`));
         console.log('Note: Run tools with this profile to generate metrics');
       } else {
-        console.log('\nNote: Tool scoring metrics will be available after running MCP tools');
+        console.log(
+          '\nNote: Tool scoring metrics will be available after running MCP tools'
+        );
       }
-      
+
       console.log(chalk.gray('\nMetrics tracked:'));
       console.log('  • Average score per tool');
       console.log('  • High-importance operations');

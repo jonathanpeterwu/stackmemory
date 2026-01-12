@@ -384,7 +384,7 @@ export class PebblesTaskStore extends EventEmitter {
 
     const updatedTask: PebblesTask = { ...existing, ...updates };
     this.appendTask(updatedTask);
-    
+
     if (newStatus === 'completed') {
       this.emit('task:completed', updatedTask);
     }

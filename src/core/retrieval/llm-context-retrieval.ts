@@ -280,7 +280,7 @@ export class LLMContextRetrieval {
     );
     this.queryParser = new QueryParser();
     this.heuristicAnalyzer = new HeuristicAnalyzer();
-    
+
     // Initialize performance optimizations
     this.lazyLoader = new LazyContextLoader(db, projectId);
     this.contextCache = new ContextCache<RetrievedContext>({
@@ -288,7 +288,7 @@ export class LLMContextRetrieval {
       maxItems: 100,
       defaultTTL: 600000, // 10 minutes
     });
-    
+
     // Start cache cleanup
     this.contextCache.startCleanup(60000);
   }
@@ -306,7 +306,7 @@ export class LLMContextRetrieval {
   ): Promise<RetrievedContext> {
     const startTime = Date.now();
     const tokenBudget = options.tokenBudget || this.config.defaultTokenBudget;
-    
+
     // Check cache first unless force refresh
     if (!options.forceRefresh) {
       const cacheKey = `${query}:${tokenBudget}:${JSON.stringify(options.hints || {})}`;
@@ -381,7 +381,7 @@ export class LLMContextRetrieval {
       },
       metadata,
     };
-    
+
     // Cache the result
     if (!options.forceRefresh) {
       const cacheKey = `${query}:${tokenBudget}:${JSON.stringify(options.hints || {})}`;
@@ -627,14 +627,18 @@ Respond with only the JSON object, no other text.`;
 
         // Include anchors if requested
         if (plan.includeAnchors) {
-          const frameAnchors = await this.lazyLoader.lazyAnchors(plan.frameId).get();
+          const frameAnchors = await this.lazyLoader
+            .lazyAnchors(plan.frameId)
+            .get();
           anchors.push(...frameAnchors);
           tokensUsed += frameAnchors.length * 40;
         }
 
         // Include events if requested
         if (plan.includeEvents) {
-          const frameEvents = await this.lazyLoader.lazyEvents(plan.frameId, 10).get();
+          const frameEvents = await this.lazyLoader
+            .lazyEvents(plan.frameId, 10)
+            .get();
           events.push(...frameEvents);
           tokensUsed += frameEvents.length * 30;
         }

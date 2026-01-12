@@ -29,7 +29,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export interface SharedContext {
   projectId: string;
   branch?: string;
@@ -223,7 +222,7 @@ export class SharedContextLayer {
     // Collect all frames from all sessions
     for (const session of context.sessions) {
       if (query.sessionId && session.sessionId !== query.sessionId) continue;
-      
+
       // Skip sessions without keyFrames
       if (!session.keyFrames || !Array.isArray(session.keyFrames)) continue;
 
@@ -265,15 +264,15 @@ export class SharedContextLayer {
     if (!index.recentlyAccessed) {
       index.recentlyAccessed = [];
     }
-    
+
     // Add frameIds to recently accessed, removing duplicates
     if (results.length > 0) {
       const frameIds = results.map((r) => r.frameId);
       index.recentlyAccessed = [
         ...frameIds,
-        ...index.recentlyAccessed.filter((id: any) => !frameIds.includes(id))
+        ...index.recentlyAccessed.filter((id: any) => !frameIds.includes(id)),
       ].slice(0, 100);
-      
+
       // Save the updated context with recently accessed frames
       await this.saveProjectContext(context);
     }
@@ -466,14 +465,18 @@ export class SharedContextLayer {
     if (frame.type === 'task' || frame.type === 'review') score += 0.2;
     if (frame.type === 'debug' || frame.type === 'write') score += 0.15;
     if (frame.type === 'error') score += 0.15; // Error frames are important for pattern extraction
-    
+
     // Check for data property (used in tests)
     const frameWithData = frame as any;
     if (frameWithData.data) score += 0.2;
 
     // Boost for having outputs (indicates completion/results)
     if (frame.outputs && Object.keys(frame.outputs).length > 0) score += 0.2;
-    if (frame.digest_text || (frame.digest_json && Object.keys(frame.digest_json).length > 0)) score += 0.1;
+    if (
+      frame.digest_text ||
+      (frame.digest_json && Object.keys(frame.digest_json).length > 0)
+    )
+      score += 0.1;
 
     // Time decay (reduce score for older frames) - but handle missing created_at
     if (frame.created_at) {
@@ -505,7 +508,8 @@ export class SharedContextLayer {
     if (frame.type) parts.push(`[${frame.type}]`);
     if (frame.name) parts.push(frame.name);
     if (frameWithData.title) parts.push(frameWithData.title);
-    if (frameWithData.data?.error) parts.push(`Error: ${frameWithData.data.error}`);
+    if (frameWithData.data?.error)
+      parts.push(`Error: ${frameWithData.data.error}`);
     if (frameWithData.data?.resolution)
       parts.push(`Resolution: ${frameWithData.data.resolution}`);
 

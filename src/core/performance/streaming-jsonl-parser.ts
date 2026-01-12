@@ -26,7 +26,7 @@ export class StreamingJSONLParser {
   /**
    * Stream-parse a JSONL file with batching and backpressure handling
    */
-  async* parseStream<T = any>(
+  async *parseStream<T = any>(
     filePath: string,
     options: ParseOptions = {}
   ): AsyncGenerator<T[], void, unknown> {
@@ -152,10 +152,12 @@ export class StreamingJSONLParser {
   /**
    * Create a transform stream for JSONL parsing
    */
-  createTransformStream<T = any>(
-    options: ParseOptions = {}
-  ): Transform {
-    const { filter, transform, maxLineLength = this.DEFAULT_MAX_LINE_LENGTH } = options;
+  createTransformStream<T = any>(options: ParseOptions = {}): Transform {
+    const {
+      filter,
+      transform,
+      maxLineLength = this.DEFAULT_MAX_LINE_LENGTH,
+    } = options;
     let buffer = '';
     let lineCount = 0;
 
@@ -164,13 +166,13 @@ export class StreamingJSONLParser {
       transform(chunk: Buffer | string, encoding, callback) {
         buffer += chunk.toString();
         const lines = buffer.split('\n');
-        
+
         // Keep incomplete line in buffer
         buffer = lines.pop() || '';
 
         for (const line of lines) {
           lineCount++;
-          
+
           if (!line.trim()) continue;
           if (line.length > maxLineLength) {
             logger.warn('Skipping oversized line in transform', { lineCount });
@@ -179,10 +181,10 @@ export class StreamingJSONLParser {
 
           try {
             let obj = JSON.parse(line);
-            
+
             if (filter && !filter(obj)) continue;
             if (transform) obj = transform(obj);
-            
+
             this.push(obj);
           } catch (error: unknown) {
             logger.debug('Transform parse error', { lineCount, error });
@@ -206,7 +208,7 @@ export class StreamingJSONLParser {
           }
         }
         callback();
-      }
+      },
     });
   }
 
@@ -216,19 +218,19 @@ export class StreamingJSONLParser {
   async countLines(filePath: string): Promise<number> {
     const stream = createReadStream(filePath, { encoding: 'utf8' });
     const rl = createInterface({ input: stream, historySize: 0 });
-    
+
     let count = 0;
     for await (const _ of rl) {
       count++;
     }
-    
+
     return count;
   }
 
   /**
    * Sample random lines from JSONL file
    */
-  async* sampleLines<T = any>(
+  async *sampleLines<T = any>(
     filePath: string,
     sampleRate: number,
     options: Omit<ParseOptions, 'batchSize'> = {}

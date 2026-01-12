@@ -210,8 +210,8 @@ export abstract class BaseVerifier {
       message,
       severity,
       timestamp: new Date(),
-      details,
-      autoFix,
+      details: details || undefined,
+      autoFix: autoFix || undefined,
     };
   }
 

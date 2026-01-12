@@ -458,7 +458,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     if (!this.db) throw new Error('Database not connected');
 
     // SQLite doesn't support HAVING on non-aggregate queries, so we filter in application
-    let sql = `
+    const sql = `
       SELECT *, 
         CASE 
           WHEN name LIKE ? THEN 1.0

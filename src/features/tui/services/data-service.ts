@@ -64,14 +64,18 @@ export class DataService extends EventEmitter {
 
       // Initialize task reader for Linear-synced tasks
       try {
-        this.taskReader = new LinearTaskReader(process.env['PROJECT_ROOT'] || process.cwd());
-        
+        this.taskReader = new LinearTaskReader(
+          process.env['PROJECT_ROOT'] || process.cwd()
+        );
+
         // Load Linear mappings
         this.linearMappings = this.taskReader.getMappings();
-        
+
         if (process.env['DEBUG']) {
           const tasks = this.taskReader.getTasks();
-          console.log(`LinearTaskReader initialized with ${tasks.length} tasks`);
+          console.log(
+            `LinearTaskReader initialized with ${tasks.length} tasks`
+          );
         }
       } catch (tsError: unknown) {
         if (process.env['DEBUG']) {

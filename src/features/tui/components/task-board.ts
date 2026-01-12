@@ -205,13 +205,16 @@ export class TaskBoard extends EventEmitter {
 
     // Show task identifier (STA-100) prominently with description preview
     let taskStr = `${priority} {bold}${task.identifier}{/}: ${task.title}\n`;
-    
+
     // Add description preview if available (first line or 60 chars)
     if (task.description && task.description.trim()) {
-      const descPreview = task.description.split('\n')[0].substring(0, 60).trim();
+      const descPreview = task.description
+        .split('\n')[0]
+        .substring(0, 60)
+        .trim();
       taskStr += `  {gray-fg}${descPreview}${task.description.length > 60 ? '...' : ''}{/}\n`;
     }
-    
+
     taskStr += `  {gray-fg}${assignee} ${estimate} ${labels}{/}`;
 
     // Add progress indicators
@@ -608,7 +611,14 @@ export class TaskBoard extends EventEmitter {
     });
 
     dialog.on('select', (item: any, index: number) => {
-      const statusMap = ['backlog', 'todo', 'in_progress', 'review', 'completed', 'cancelled'];
+      const statusMap = [
+        'backlog',
+        'todo',
+        'in_progress',
+        'review',
+        'completed',
+        'cancelled',
+      ];
       if (index < statusMap.length) {
         this.updateTaskStatus(taskId, statusMap[index]);
       }
@@ -625,7 +635,10 @@ export class TaskBoard extends EventEmitter {
     this.container.screen.render();
   }
 
-  private async updateTaskStatus(taskId: string, newStatus: string): Promise<void> {
+  private async updateTaskStatus(
+    taskId: string,
+    newStatus: string
+  ): Promise<void> {
     const task = this.tasks.get(taskId);
     if (!task) return;
 
@@ -676,11 +689,18 @@ export class TaskBoard extends EventEmitter {
       const fs = await import('fs/promises');
       const os = await import('os');
       const path = await import('path');
-      
+
       // Create a context file with task details
-      const contextDir = path.join(os.homedir(), '.stackmemory', 'task-contexts');
+      const contextDir = path.join(
+        os.homedir(),
+        '.stackmemory',
+        'task-contexts'
+      );
       await fs.mkdir(contextDir, { recursive: true });
-      const contextFile = path.join(contextDir, `${task.identifier}-context.md`);
+      const contextFile = path.join(
+        contextDir,
+        `${task.identifier}-context.md`
+      );
       const contextContent = `# Task: ${task.identifier} - ${task.title}
 
 ## Description
@@ -702,12 +722,12 @@ ${task.identifier}
 This task has been loaded from Linear. The context above provides the task details.
 Start working on this task below:
 `;
-      
+
       await fs.writeFile(contextFile, contextContent);
-      
+
       // Build the claude-sm command
       const command = `claude-sm --task "${task.identifier}: ${task.title}" --context "${contextFile}"`;
-      
+
       // Show launching notification
       const notification = blessed.message({
         parent: this.container.screen,
@@ -725,9 +745,9 @@ Start working on this task below:
         },
         content: `Launching Claude for task:\n${task.identifier}: ${task.title}\n\nCommand: ${command}`,
       });
-      
+
       this.container.screen.render();
-      
+
       // Execute in background
       exec(command, (error, stdout, stderr) => {
         if (error) {
@@ -747,19 +767,19 @@ Start working on this task below:
             },
             content: `Failed to launch Claude: ${error.message}`,
           });
-          
+
           setTimeout(() => {
             errorMsg.destroy();
             this.container.screen.render();
           }, 3000);
         }
       });
-      
+
       setTimeout(() => {
         notification.destroy();
         this.container.screen.render();
       }, 2000);
-      
+
       // Emit event for tracking
       this.emit('task:launch:claude', {
         taskId,
@@ -767,7 +787,6 @@ Start working on this task below:
         task,
         contextFile,
       });
-      
     } catch (error: any) {
       const errorMsg = blessed.message({
         parent: this.container.screen,
@@ -785,12 +804,12 @@ Start working on this task below:
         },
         content: `Error: ${error.message}`,
       });
-      
+
       setTimeout(() => {
         errorMsg.destroy();
         this.container.screen.render();
       }, 3000);
-      
+
       this.container.screen.render();
     }
   }
@@ -823,8 +842,9 @@ Start working on this task below:
       left: 2,
       width: '100%-4',
       height: 5,
-      content: `{bold}${task.identifier}: ${task.title}{/}\n\n` +
-               `{gray-fg}${(task.description || 'No description').substring(0, 200)}{/}`,
+      content:
+        `{bold}${task.identifier}: ${task.title}{/}\n\n` +
+        `{gray-fg}${(task.description || 'No description').substring(0, 200)}{/}`,
       tags: true,
       wrap: true,
     });
@@ -890,14 +910,15 @@ Start working on this task below:
       parent: menuBox,
       bottom: 1,
       left: 2,
-      content: '{gray-fg}Use arrows/numbers to select • Enter to execute • ESC to close{/}',
+      content:
+        '{gray-fg}Use arrows/numbers to select • Enter to execute • ESC to close{/}',
       tags: true,
     });
 
     // Handle menu selection
     menu.on('select', (item, index) => {
       menuBox.destroy();
-      
+
       switch (index) {
         case 0: // Mark as Done
           this.updateTaskStatus(task.id, 'completed');
@@ -929,7 +950,7 @@ Start working on this task below:
           this.showNotification(`❌ Task ${task.identifier} canceled`);
           break;
       }
-      
+
       this.container.screen.render();
     });
 
@@ -965,26 +986,27 @@ Start working on this task below:
 
   private formatTaskMetadata(task: LinearTask): string {
     let meta = '';
-    
+
     if (task.assignee) {
-      const name = typeof task.assignee === 'string' ? task.assignee : task.assignee.name;
+      const name =
+        typeof task.assignee === 'string' ? task.assignee : task.assignee.name;
       meta += `{bold}Assignee:{/} ${name}  `;
     }
-    
+
     if (task.priority !== undefined) {
       meta += `{bold}Priority:{/} ${this.getPriorityLabel(task.priority)}  `;
     }
-    
+
     if (task.estimate) {
       meta += `{bold}Points:{/} ${task.estimate}  `;
     }
-    
+
     if (task.dueDate) {
       const daysUntil = this.getDaysUntilDue(task.dueDate);
       const color = daysUntil < 0 ? 'red' : daysUntil <= 1 ? 'yellow' : 'white';
       meta += `{bold}Due:{/} {${color}-fg}${new Date(task.dueDate).toLocaleDateString()}{/}`;
     }
-    
+
     return meta;
   }
 
@@ -1213,7 +1235,6 @@ Start working on this task below:
     }, 3000);
   }
 
-
   private async syncWithLinear(): Promise<void> {
     try {
       // Show syncing notification
@@ -1234,27 +1255,28 @@ Start working on this task below:
         content: '{center}Syncing with Linear...{/center}',
         tags: true,
       });
-      
+
       this.container.screen.render();
-      
+
       const { exec } = await import('child_process');
       const util = await import('util');
       const execAsync = util.promisify(exec);
-      
+
       // Run the sync command
       await execAsync('cd /Users/jwu/Dev/stackmemory && npm run linear:sync');
-      
+
       // Update notification
-      notification.setContent('{center}✓ Sync complete! Refreshing...{/center}');
+      notification.setContent(
+        '{center}✓ Sync complete! Refreshing...{/center}'
+      );
       notification.style.border.fg = 'green';
-      
+
       setTimeout(() => {
         notification.destroy();
         // Trigger refresh of tasks
         this.emit('tasks:refresh');
         this.container.screen.render();
       }, 1000);
-      
     } catch (error: any) {
       const errorMsg = blessed.message({
         parent: this.container.screen,
@@ -1272,26 +1294,25 @@ Start working on this task below:
         },
         content: `Sync failed: ${error.message}`,
       });
-      
+
       setTimeout(() => {
         errorMsg.destroy();
         this.container.screen.render();
       }, 3000);
-      
+
       this.container.screen.render();
     }
   }
 
   private mapStatusToLinearState(status: string): string {
     const mapping: Record<string, string> = {
-      'backlog': 'Backlog',
-      'todo': 'Todo', 
-      'in_progress': 'In Progress',
-      'review': 'In Review',
-      'completed': 'Done',
-      'cancelled': 'Canceled',
+      backlog: 'Backlog',
+      todo: 'Todo',
+      in_progress: 'In Progress',
+      review: 'In Review',
+      completed: 'Done',
+      cancelled: 'Canceled',
     };
     return mapping[status] || 'Backlog';
   }
-
 }

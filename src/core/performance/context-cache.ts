@@ -97,13 +97,19 @@ export class ContextCache<T = any> extends EventEmitter {
   /**
    * Set item in cache
    */
-  set(key: string, value: T, options: { ttl?: number; size?: number } = {}): void {
+  set(
+    key: string,
+    value: T,
+    options: { ttl?: number; size?: number } = {}
+  ): void {
     const size = options.size || this.estimateSize(value);
     const ttl = options.ttl ?? this.options.defaultTTL;
 
     // Check if we need to evict
-    if (this.cache.size >= this.options.maxItems || 
-        this.currentSize + size > this.options.maxSize) {
+    if (
+      this.cache.size >= this.options.maxItems ||
+      this.currentSize + size > this.options.maxSize
+    ) {
       this.evict(size);
     }
 
@@ -140,7 +146,7 @@ export class ContextCache<T = any> extends EventEmitter {
     this.cache.delete(key);
     this.currentSize -= entry.size;
     this.accessOrder = this.accessOrder.filter((k: any) => k !== key);
-    
+
     this.stats.size = this.currentSize;
     this.stats.itemCount = this.cache.size;
 
@@ -156,7 +162,7 @@ export class ContextCache<T = any> extends EventEmitter {
     this.cache.clear();
     this.accessOrder = [];
     this.currentSize = 0;
-    
+
     this.stats.size = 0;
     this.stats.itemCount = 0;
     this.stats.evictions += oldSize;
@@ -170,13 +176,13 @@ export class ContextCache<T = any> extends EventEmitter {
   has(key: string): boolean {
     const entry = this.cache.get(key);
     if (!entry) return false;
-    
+
     // Check TTL
     if (entry.ttl && Date.now() - entry.createdAt > entry.ttl) {
       this.delete(key);
       return false;
     }
-    
+
     return true;
   }
 
@@ -201,9 +207,11 @@ export class ContextCache<T = any> extends EventEmitter {
   /**
    * Preload multiple items
    */
-  preload(entries: Array<{ key: string; value: T; ttl?: number; size?: number }>): void {
+  preload(
+    entries: Array<{ key: string; value: T; ttl?: number; size?: number }>
+  ): void {
     const startTime = Date.now();
-    
+
     for (const entry of entries) {
       this.set(entry.key, entry.value, {
         ttl: entry.ttl,
@@ -223,14 +231,14 @@ export class ContextCache<T = any> extends EventEmitter {
    */
   getMany(keys: string[]): Map<string, T> {
     const results = new Map<string, T>();
-    
+
     for (const key of keys) {
       const value = this.get(key);
       if (value !== undefined) {
         results.set(key, value);
       }
     }
-    
+
     return results;
   }
 
@@ -243,9 +251,9 @@ export class ContextCache<T = any> extends EventEmitter {
     options: { ttl?: number; parallel?: boolean } = {}
   ): Promise<void> {
     const { parallel = true } = options;
-    
+
     if (parallel) {
-      const promises = keys.map(async key => {
+      const promises = keys.map(async (key) => {
         if (!this.has(key)) {
           const value = await compute(key);
           this.set(key, value, { ttl: options.ttl });
@@ -284,14 +292,16 @@ export class ContextCache<T = any> extends EventEmitter {
 
   private evict(requiredSize: number): void {
     const startEvictions = this.stats.evictions;
-    
+
     // LRU eviction
-    while ((this.cache.size >= this.options.maxItems || 
-            this.currentSize + requiredSize > this.options.maxSize) && 
-           this.accessOrder.length > 0) {
+    while (
+      (this.cache.size >= this.options.maxItems ||
+        this.currentSize + requiredSize > this.options.maxSize) &&
+      this.accessOrder.length > 0
+    ) {
       const keyToEvict = this.accessOrder.shift()!;
       const entry = this.cache.get(keyToEvict);
-      
+
       if (entry) {
         this.cache.delete(keyToEvict);
         this.currentSize -= entry.size;
@@ -336,7 +346,8 @@ export class ContextCache<T = any> extends EventEmitter {
 
   private updateAvgAccessTime(time: number): void {
     const alpha = 0.1; // Exponential moving average factor
-    this.stats.avgAccessTime = this.stats.avgAccessTime * (1 - alpha) + time * alpha;
+    this.stats.avgAccessTime =
+      this.stats.avgAccessTime * (1 - alpha) + time * alpha;
   }
 
   /**

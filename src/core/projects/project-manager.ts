@@ -101,19 +101,16 @@ export class ProjectManager {
       project.framework = this.detectFramework(path);
 
       // Store in database with retry logic
-      await retry(
-        () => Promise.resolve(this.saveProject(project)),
-        {
-          maxAttempts: 3,
-          initialDelay: 100,
-          onRetry: (attempt, error) => {
-            logger.warn(`Retrying project save (attempt ${attempt})`, {
-              projectId: project.id,
-              error: error instanceof Error ? error.message : String(error),
-            });
-          },
-        }
-      );
+      await retry(() => Promise.resolve(this.saveProject(project)), {
+        maxAttempts: 3,
+        initialDelay: 100,
+        onRetry: (attempt, error) => {
+          logger.warn(`Retrying project save (attempt ${attempt})`, {
+            projectId: project.id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        },
+      });
 
       this.projectCache.set(path, project);
       this.currentProject = project;
@@ -130,7 +127,7 @@ export class ProjectManager {
         projectPath: path,
         operation: 'detectProject',
       });
-      
+
       throw new ProjectError(
         `Failed to detect project at path: ${path}`,
         ErrorCode.PROJECT_INVALID_PATH,
@@ -483,7 +480,7 @@ export class ProjectManager {
         dbPath,
         operation: 'initializeDatabase',
       });
-      
+
       throw new DatabaseError(
         'Failed to initialize projects database',
         ErrorCode.DB_MIGRATION_FAILED,
@@ -593,7 +590,7 @@ export class ProjectManager {
       const wrappedError = errorHandler(error, {
         operation: 'autoDiscoverOrganizations',
       });
-      
+
       logger.error(
         'Failed to auto-discover organizations',
         error instanceof Error ? error : new Error(String(error)),
@@ -767,7 +764,7 @@ export class ProjectManager {
         orgName: org.name,
         operation: 'saveOrganization',
       });
-      
+
       throw new DatabaseError(
         `Failed to save organization: ${org.name}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -817,14 +814,11 @@ export class ProjectManager {
             await this.detectProject(projectPath);
             logger.info(`Discovered project: ${projectPath}`);
           } catch (error: unknown) {
-            logger.warn(
-              `Failed to analyze project: ${projectPath}`,
-              {
-                projectPath,
-                error: error instanceof Error ? error.message : String(error),
-                operation: 'scanAndCategorizeAllProjects',
-              }
-            );
+            logger.warn(`Failed to analyze project: ${projectPath}`, {
+              projectPath,
+              error: error instanceof Error ? error.message : String(error),
+              operation: 'scanAndCategorizeAllProjects',
+            });
           }
         }
       } catch (error: unknown) {

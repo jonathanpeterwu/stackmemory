@@ -35,7 +35,7 @@ export function registerOnboardingCommand(program: Command): void {
     .option('--reset', 'Reset all configurations and start fresh')
     .action(async (options) => {
       console.log(chalk.cyan('\n🚀 Welcome to StackMemory Setup!\n'));
-      
+
       // Check if already configured
       const configPath = join(homedir(), '.stackmemory');
       if (existsSync(configPath) && !options.reset) {
@@ -43,11 +43,12 @@ export function registerOnboardingCommand(program: Command): void {
           {
             type: 'confirm',
             name: 'proceed',
-            message: 'StackMemory is already configured. Do you want to reconfigure?',
+            message:
+              'StackMemory is already configured. Do you want to reconfigure?',
             default: false,
           },
         ]);
-        
+
         if (!proceed) {
           console.log(chalk.yellow('\nSetup cancelled.'));
           return;
@@ -57,12 +58,17 @@ export function registerOnboardingCommand(program: Command): void {
       try {
         const config = await runOnboarding();
         await applyConfiguration(config);
-        
-        console.log(chalk.green('\n✅ StackMemory setup completed successfully!\n'));
+
+        console.log(
+          chalk.green('\n✅ StackMemory setup completed successfully!\n')
+        );
         showNextSteps(config);
       } catch (error: unknown) {
         logger.error('Onboarding failed', error as Error);
-        console.error(chalk.red('\n❌ Setup failed:'), (error as Error).message);
+        console.error(
+          chalk.red('\n❌ Setup failed:'),
+          (error as Error).message
+        );
         process.exit(1);
       }
     });
@@ -100,7 +106,8 @@ async function runOnboarding(): Promise<OnboardingConfig> {
       {
         type: 'confirm',
         name: 'enableWorktrees',
-        message: 'Enable Git worktree support? (Recommended for multi-branch workflows)',
+        message:
+          'Enable Git worktree support? (Recommended for multi-branch workflows)',
         default: false,
       },
       {
@@ -125,7 +132,8 @@ async function runOnboarding(): Promise<OnboardingConfig> {
           type: 'password',
           name: 'linearApiKey',
           message: 'Enter your Linear API key:',
-          validate: (input: string) => input.length > 0 || 'API key is required',
+          validate: (input: string) =>
+            input.length > 0 || 'API key is required',
         },
       ]);
       config.linearApiKey = linearApiKey;
@@ -197,11 +205,23 @@ async function runOnboarding(): Promise<OnboardingConfig> {
           choices: [
             { name: '~/Dev', value: join(homedir(), 'Dev'), checked: true },
             { name: '~/dev', value: join(homedir(), 'dev'), checked: true },
-            { name: '~/Projects', value: join(homedir(), 'Projects'), checked: true },
-            { name: '~/projects', value: join(homedir(), 'projects'), checked: true },
+            {
+              name: '~/Projects',
+              value: join(homedir(), 'Projects'),
+              checked: true,
+            },
+            {
+              name: '~/projects',
+              value: join(homedir(), 'projects'),
+              checked: true,
+            },
             { name: '~/Work', value: join(homedir(), 'Work'), checked: false },
             { name: '~/code', value: join(homedir(), 'code'), checked: true },
-            { name: '~/Documents/GitHub', value: join(homedir(), 'Documents/GitHub'), checked: false },
+            {
+              name: '~/Documents/GitHub',
+              value: join(homedir(), 'Documents/GitHub'),
+              checked: false,
+            },
           ],
           when: (): boolean => projectDetailAnswers.scanProjects,
         },
@@ -247,7 +267,7 @@ async function runOnboarding(): Promise<OnboardingConfig> {
 
 async function applyConfiguration(config: OnboardingConfig): Promise<void> {
   const configPath = join(homedir(), '.stackmemory');
-  
+
   // Create base directory structure
   console.log(chalk.gray('\nCreating directory structure...'));
   const dirs = [
@@ -282,7 +302,7 @@ async function applyConfiguration(config: OnboardingConfig): Promise<void> {
     const worktrees = worktreeManager.detectWorktrees();
     if (worktrees.length > 0) {
       console.log(chalk.green(`  ✓ Found ${worktrees.length} worktree(s)`));
-      worktrees.forEach(wt => {
+      worktrees.forEach((wt) => {
         console.log(chalk.gray(`    - ${wt.branch} at ${wt.path}`));
       });
     }
@@ -292,7 +312,7 @@ async function applyConfiguration(config: OnboardingConfig): Promise<void> {
   if (config.enableProjects && config.scanProjects) {
     console.log(chalk.gray('Scanning for projects...'));
     const projectManager = ProjectManager.getInstance();
-    
+
     const scanPaths = (config as any).scanPaths || [
       join(homedir(), 'Dev'),
       join(homedir(), 'dev'),
@@ -300,20 +320,20 @@ async function applyConfiguration(config: OnboardingConfig): Promise<void> {
       join(homedir(), 'projects'),
       join(homedir(), 'code'),
     ];
-    
+
     await projectManager.scanAndCategorizeAllProjects(
       scanPaths.filter((p: string) => existsSync(p))
     );
-    
+
     const projects = projectManager.getAllProjects();
     console.log(chalk.green(`  ✓ Found ${projects.length} project(s)`));
-    
+
     // Show summary
     const byType: Record<string, number> = {};
-    projects.forEach(p => {
+    projects.forEach((p) => {
       byType[p.accountType] = (byType[p.accountType] || 0) + 1;
     });
-    
+
     Object.entries(byType).forEach(([type, count]) => {
       console.log(chalk.gray(`    - ${type}: ${count} project(s)`));
     });
@@ -327,7 +347,7 @@ async function applyConfiguration(config: OnboardingConfig): Promise<void> {
       autoSync: true,
       syncInterval: 300000, // 5 minutes
     };
-    
+
     writeFileSync(
       join(configPath, 'linear-config.json'),
       JSON.stringify(linearConfig, null, 2)
@@ -358,7 +378,7 @@ async function applyConfiguration(config: OnboardingConfig): Promise<void> {
   // Create claude-sm symlink for easy access
   const binPath = '/usr/local/bin/claude-sm';
   const sourcePath = join(configPath, 'bin', 'stackmemory');
-  
+
   try {
     // Create wrapper script
     const wrapperScript = `#!/bin/bash
@@ -389,7 +409,9 @@ exec stackmemory "$@"
       console.log(chalk.green('  ✓ Created claude-sm command'));
     }
   } catch (error: unknown) {
-    console.log(chalk.yellow('  ⚠ Could not create claude-sm symlink (may need sudo)'));
+    console.log(
+      chalk.yellow('  ⚠ Could not create claude-sm symlink (may need sudo)')
+    );
   }
 }
 
@@ -402,9 +424,17 @@ function showNextSteps(config: OnboardingConfig): void {
 
   if (config.enableWorktrees) {
     console.log('2. Create a new worktree:');
-    console.log(chalk.gray('   git worktree add -b feature/new-feature ../project-feature'));
+    console.log(
+      chalk.gray(
+        '   git worktree add -b feature/new-feature ../project-feature'
+      )
+    );
     console.log(chalk.gray('   cd ../project-feature'));
-    console.log(chalk.gray('   stackmemory status  # Isolated context for this worktree\n'));
+    console.log(
+      chalk.gray(
+        '   stackmemory status  # Isolated context for this worktree\n'
+      )
+    );
   }
 
   console.log('3. Use with Claude:');

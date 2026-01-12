@@ -22,17 +22,19 @@ export class LinearTaskReader {
    */
   getTasks(): LinearTask[] {
     if (!existsSync(this.tasksFile)) {
-      console.log('No tasks file found. Run "npm run linear:sync" to sync tasks.');
+      console.log(
+        'No tasks file found. Run "npm run linear:sync" to sync tasks.'
+      );
       return [];
     }
 
     try {
       const content = readFileSync(this.tasksFile, 'utf8');
       const lines = content.split('\n').filter(Boolean);
-      
+
       const tasks: LinearTask[] = lines.map((line: any) => {
         const task = JSON.parse(line);
-        
+
         // Convert from synced format to TUI LinearTask format
         return {
           id: task.id || task.linearId,
@@ -80,10 +82,11 @@ export class LinearTaskReader {
    */
   getActiveTasks(): LinearTask[] {
     const allTasks = this.getTasks();
-    return allTasks.filter((task: any) => 
-      task.state !== 'Done' && 
-      task.state !== 'Canceled' &&
-      task.state !== 'Duplicate'
+    return allTasks.filter(
+      (task: any) =>
+        task.state !== 'Done' &&
+        task.state !== 'Canceled' &&
+        task.state !== 'Duplicate'
     );
   }
 
@@ -100,12 +103,18 @@ export class LinearTaskReader {
    */
   private mapStatusToState(status: string): string {
     switch (status) {
-      case 'completed': return 'Done';
-      case 'in_progress': return 'In Progress';
-      case 'cancelled': return 'Canceled';
-      case 'backlog': return 'Backlog';
-      case 'todo': return 'Todo';
-      default: return 'Backlog';
+      case 'completed':
+        return 'Done';
+      case 'in_progress':
+        return 'In Progress';
+      case 'cancelled':
+        return 'Canceled';
+      case 'backlog':
+        return 'Backlog';
+      case 'todo':
+        return 'Todo';
+      default:
+        return 'Backlog';
     }
   }
 }

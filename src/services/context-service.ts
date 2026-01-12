@@ -1,7 +1,7 @@
 import { Task } from '../types/task.js';
 // TaskStatus and TaskPriority will be used in future implementations
 // import { TaskStatus, TaskPriority } from '../types/task.js';
-import { Logger } from '../utils/logger.js';
+import { logger } from '../core/monitoring/logger.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -22,12 +22,12 @@ interface TaskRow {
 }
 
 export class ContextService {
-  private logger: Logger;
+  // Using singleton logger from monitoring
   private db: Database.Database | null = null;
   private tasks: Map<string, Task> = new Map();
 
   constructor() {
-    this.logger = new Logger('ContextService');
+    // Use singleton logger
     this.initializeDatabase();
   }
 
@@ -39,7 +39,7 @@ export class ContextService {
         this.loadTasksFromDatabase();
       }
     } catch (error: unknown) {
-      this.logger.warn(
+      logger.warn(
         'Could not connect to database, using in-memory storage',
         error
       );
@@ -90,9 +90,9 @@ export class ContextService {
         this.tasks.set(task.id, task);
       }
 
-      this.logger.info(`Loaded ${rows.length} tasks from database`);
+      logger.info(`Loaded ${rows.length} tasks from database`);
     } catch (error: unknown) {
-      this.logger.error('Failed to load tasks from database', error);
+      logger.error('Failed to load tasks from database', error);
     }
   }
 
@@ -155,11 +155,11 @@ export class ContextService {
           task.updatedAt.getTime()
         );
       } catch (error: unknown) {
-        this.logger.error('Failed to persist task to database', error);
+        logger.error('Failed to persist task to database', error);
       }
     }
 
-    this.logger.debug(`Created task: ${task.id} - ${task.title}`);
+    logger.debug(`Created task: ${task.id} - ${task.title}`);
     return task;
   }
 
@@ -204,11 +204,11 @@ export class ContextService {
           id
         );
       } catch (error: unknown) {
-        this.logger.error('Failed to update task in database', error);
+        logger.error('Failed to update task in database', error);
       }
     }
 
-    this.logger.debug(`Updated task: ${id} - ${updatedTask.title}`);
+    logger.debug(`Updated task: ${id} - ${updatedTask.title}`);
     return updatedTask;
   }
 
@@ -222,10 +222,10 @@ export class ContextService {
           const stmt = this.db.prepare('DELETE FROM tasks WHERE id = ?');
           stmt.run(id);
         } catch (error: unknown) {
-          this.logger.error('Failed to delete task from database', error);
+          logger.error('Failed to delete task from database', error);
         }
       }
-      this.logger.debug(`Deleted task: ${id}`);
+      logger.debug(`Deleted task: ${id}`);
     }
     return deleted;
   }
