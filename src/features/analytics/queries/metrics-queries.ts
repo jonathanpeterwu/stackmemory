@@ -64,7 +64,7 @@ export class MetricsQueries {
         operation: 'initializeTables',
         schema: 'task_analytics',
       });
-      
+
       throw new DatabaseError(
         'Failed to initialize analytics tables',
         ErrorCode.DB_MIGRATION_FAILED,
@@ -81,7 +81,7 @@ export class MetricsQueries {
     try {
       const { timeRange, userIds, states, priorities } = query;
 
-      let whereConditions: string[] = ['1=1'];
+      const whereConditions: string[] = ['1=1'];
       const params: any = {};
 
       if (timeRange) {
@@ -155,7 +155,9 @@ export class MetricsQueries {
       `);
 
       const velocityData = velocityQuery.all(params) as any[];
-      const velocityTrend = velocityData.map((v) => v.completed_count).reverse();
+      const velocityTrend = velocityData
+        .map((v) => v.completed_count)
+        .reverse();
 
       return {
         totalTasks: result.total_tasks || 0,

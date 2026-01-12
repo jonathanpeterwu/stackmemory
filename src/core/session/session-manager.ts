@@ -23,7 +23,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export interface Session {
   sessionId: string;
   runId: string;

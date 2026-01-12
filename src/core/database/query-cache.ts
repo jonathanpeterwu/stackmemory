@@ -33,7 +33,7 @@ export class LRUQueryCache<T = any> {
   private maxSize: number;
   private ttlMs: number;
   private enableMetrics: boolean;
-  
+
   // Metrics
   private metrics: Omit<CacheMetrics, 'hitRate' | 'size' | 'maxSize'> = {
     hits: 0,
@@ -63,7 +63,7 @@ export class LRUQueryCache<T = any> {
     }
 
     const entry = this.cache.get(key);
-    
+
     if (!entry) {
       if (this.enableMetrics) {
         this.metrics.misses++;
@@ -102,12 +102,12 @@ export class LRUQueryCache<T = any> {
    */
   set(key: string, value: T): void {
     const now = Date.now();
-    
+
     // Remove existing entry if present
     if (this.cache.has(key)) {
       this.cache.delete(key);
     }
-    
+
     // Evict least recently used entries if at capacity
     while (this.cache.size >= this.maxSize) {
       const firstKey = this.cache.keys().next().value;
@@ -165,7 +165,10 @@ export class LRUQueryCache<T = any> {
         count++;
       }
     }
-    logger.info('Pattern invalidation', { pattern: pattern.source, invalidated: count });
+    logger.info('Pattern invalidation', {
+      pattern: pattern.source,
+      invalidated: count,
+    });
     return count;
   }
 
@@ -175,9 +178,10 @@ export class LRUQueryCache<T = any> {
   getMetrics(): CacheMetrics {
     return {
       ...this.metrics,
-      hitRate: this.metrics.totalQueries > 0 
-        ? this.metrics.hits / this.metrics.totalQueries 
-        : 0,
+      hitRate:
+        this.metrics.totalQueries > 0
+          ? this.metrics.hits / this.metrics.totalQueries
+          : 0,
       size: this.cache.size,
       maxSize: this.maxSize,
     };
@@ -187,7 +191,10 @@ export class LRUQueryCache<T = any> {
    * Get cache contents for debugging
    */
   debug(): Array<{ key: string; entry: CacheEntry<T> }> {
-    return Array.from(this.cache.entries()).map(([key, entry]) => ({ key, entry }));
+    return Array.from(this.cache.entries()).map(([key, entry]) => ({
+      key,
+      entry,
+    }));
   }
 
   /**
@@ -208,7 +215,10 @@ export class LRUQueryCache<T = any> {
     }
 
     if (removed > 0) {
-      logger.info('Cache cleanup completed', { removed, remaining: this.cache.size });
+      logger.info('Cache cleanup completed', {
+        removed,
+        remaining: this.cache.size,
+      });
     }
 
     return removed;
@@ -220,7 +230,7 @@ export class LRUQueryCache<T = any> {
  */
 export class StackMemoryQueryCache {
   private frameCache = new LRUQueryCache<any>({ maxSize: 500, ttlMs: 300000 }); // 5 min
-  private eventCache = new LRUQueryCache<any>({ maxSize: 1000, ttlMs: 180000 }); // 3 min  
+  private eventCache = new LRUQueryCache<any>({ maxSize: 1000, ttlMs: 180000 }); // 3 min
   private anchorCache = new LRUQueryCache<any>({ maxSize: 200, ttlMs: 600000 }); // 10 min
   private digestCache = new LRUQueryCache<any>({ maxSize: 100, ttlMs: 900000 }); // 15 min
 
@@ -288,23 +298,26 @@ export class StackMemoryQueryCache {
     this.eventCache.delete(`events:${frameId}`);
     this.anchorCache.delete(`anchors:${frameId}`);
     this.digestCache.delete(`digest:${frameId}`);
-    
+
     logger.info('Invalidated frame caches', { frameId });
   }
 
   /**
-   * Invalidate all caches for a project  
+   * Invalidate all caches for a project
    */
   invalidateProject(projectId: string): void {
     const pattern = new RegExp(`^(frame|context|events|anchors|digest):.+`);
-    
+
     let total = 0;
     total += this.frameCache.invalidatePattern(pattern);
     total += this.eventCache.invalidatePattern(pattern);
     total += this.anchorCache.invalidatePattern(pattern);
     total += this.digestCache.invalidatePattern(pattern);
-    
-    logger.info('Invalidated project caches', { projectId, totalInvalidated: total });
+
+    logger.info('Invalidated project caches', {
+      projectId,
+      totalInvalidated: total,
+    });
   }
 
   /**
@@ -337,7 +350,7 @@ export class StackMemoryQueryCache {
     this.eventCache.clear();
     this.anchorCache.clear();
     this.digestCache.clear();
-    
+
     logger.info('All StackMemory caches cleared');
   }
 }
@@ -359,9 +372,9 @@ export function getQueryCache(): StackMemoryQueryCache {
  * Create a cache key from query parameters
  */
 export function createCacheKey(queryName: string, params: any[]): string {
-  const paramsStr = params.map((p: any) => 
-    typeof p === 'object' ? JSON.stringify(p) : String(p)
-  ).join(':');
-  
+  const paramsStr = params
+    .map((p: any) => (typeof p === 'object' ? JSON.stringify(p) : String(p)))
+    .join(':');
+
   return `${queryName}:${paramsStr}`;
 }

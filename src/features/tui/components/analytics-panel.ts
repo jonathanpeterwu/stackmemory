@@ -9,7 +9,8 @@ import type { AnalyticsData } from '../types.js';
 
 export class AnalyticsPanel extends EventEmitter {
   private line: any; // contrib.line type
-  private currentMetric: 'tokens' | 'velocity' | 'quality' | 'performance' = 'tokens';
+  private currentMetric: 'tokens' | 'velocity' | 'quality' | 'performance' =
+    'tokens';
   private data: AnalyticsData | null = null;
 
   constructor(line: any) {
@@ -29,10 +30,15 @@ export class AnalyticsPanel extends EventEmitter {
   }
 
   private cycleMetric(): void {
-    const metrics: Array<typeof this.currentMetric> = ['tokens', 'velocity', 'quality', 'performance'];
+    const metrics: Array<typeof this.currentMetric> = [
+      'tokens',
+      'velocity',
+      'quality',
+      'performance',
+    ];
     const currentIndex = metrics.indexOf(this.currentMetric);
     this.currentMetric = metrics[(currentIndex + 1) % metrics.length];
-    
+
     switch (this.currentMetric) {
       case 'tokens':
         this.showTokenUsage();
@@ -51,14 +57,16 @@ export class AnalyticsPanel extends EventEmitter {
 
   private showTokenUsage(): void {
     if (!this.data) return;
-    
-    const data = [{
-      title: 'Token Usage',
-      x: this.data.tokens.labels.map((_, i) => i.toString()),
-      y: this.data.tokens.values,
-      style: { line: 'yellow' }
-    }];
-    
+
+    const data = [
+      {
+        title: 'Token Usage',
+        x: this.data.tokens.labels.map((_, i) => i.toString()),
+        y: this.data.tokens.values,
+        style: { line: 'yellow' },
+      },
+    ];
+
     this.line.setData(data);
     if (typeof this.line.setLabel === 'function') {
       this.line.setLabel(' 📈 Analytics - Token Usage [m] cycle ');
@@ -68,14 +76,16 @@ export class AnalyticsPanel extends EventEmitter {
 
   private showVelocity(): void {
     if (!this.data) return;
-    
-    const data = [{
-      title: 'Task Velocity',
-      x: this.data.tasks.velocity.map((_, i) => `Sprint ${i + 1}`),
-      y: this.data.tasks.velocity,
-      style: { line: 'green' }
-    }];
-    
+
+    const data = [
+      {
+        title: 'Task Velocity',
+        x: this.data.tasks.velocity.map((_, i) => `Sprint ${i + 1}`),
+        y: this.data.tasks.velocity,
+        style: { line: 'green' },
+      },
+    ];
+
     this.line.setData(data);
     if (typeof this.line.setLabel === 'function') {
       this.line.setLabel(' 📈 Analytics - Task Velocity [m] cycle ');
@@ -85,22 +95,34 @@ export class AnalyticsPanel extends EventEmitter {
 
   private showQuality(): void {
     if (!this.data) return;
-    
+
     const data = [
       {
         title: 'Tests Passed',
         x: ['1', '2', '3', '4', '5'],
-        y: [this.data.quality.testsPassed, this.data.quality.testsPassed, this.data.quality.testsPassed, this.data.quality.testsPassed, this.data.quality.testsPassed],
-        style: { line: 'green' }
+        y: [
+          this.data.quality.testsPassed,
+          this.data.quality.testsPassed,
+          this.data.quality.testsPassed,
+          this.data.quality.testsPassed,
+          this.data.quality.testsPassed,
+        ],
+        style: { line: 'green' },
       },
       {
         title: 'Coverage %',
         x: ['1', '2', '3', '4', '5'],
-        y: [this.data.quality.coverage, this.data.quality.coverage, this.data.quality.coverage, this.data.quality.coverage, this.data.quality.coverage],
-        style: { line: 'blue' }
-      }
+        y: [
+          this.data.quality.coverage,
+          this.data.quality.coverage,
+          this.data.quality.coverage,
+          this.data.quality.coverage,
+          this.data.quality.coverage,
+        ],
+        style: { line: 'blue' },
+      },
     ];
-    
+
     this.line.setData(data);
     if (typeof this.line.setLabel === 'function') {
       this.line.setLabel(' 📈 Analytics - Code Quality [m] cycle ');
@@ -110,22 +132,22 @@ export class AnalyticsPanel extends EventEmitter {
 
   private showPerformance(): void {
     if (!this.data) return;
-    
+
     const data = [
       {
         title: 'Response Time (ms)',
         x: this.data.performance.avgResponseTime.map((_, i) => i.toString()),
         y: this.data.performance.avgResponseTime,
-        style: { line: 'cyan' }
+        style: { line: 'cyan' },
       },
       {
         title: 'Error Rate (%)',
         x: this.data.performance.errorRate.map((_, i) => i.toString()),
         y: this.data.performance.errorRate.map((r: any) => r * 100),
-        style: { line: 'red' }
-      }
+        style: { line: 'red' },
+      },
     ];
-    
+
     this.line.setData(data);
     if (typeof this.line.setLabel === 'function') {
       this.line.setLabel(' 📈 Analytics - Performance [m] cycle ');
@@ -135,7 +157,7 @@ export class AnalyticsPanel extends EventEmitter {
 
   public update(data: AnalyticsData): void {
     this.data = data;
-    
+
     // Refresh current view
     switch (this.currentMetric) {
       case 'tokens':

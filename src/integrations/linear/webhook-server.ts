@@ -11,7 +11,7 @@ import {
 } from './types.js';
 import { LinearSyncService } from './sync-service.js';
 import { LinearIssue as ClientLinearIssue } from './client.js';
-import { Logger } from '../../utils/logger.js';
+import { logger } from '../../core/monitoring/logger.js';
 import chalk from 'chalk';
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
@@ -42,7 +42,7 @@ export interface WebhookServerConfig {
 export class LinearWebhookServer {
   private app: express.Application;
   private server: http.Server | null = null;
-  private logger: Logger;
+  // Using singleton logger from monitoring
   private syncService: LinearSyncService;
   private config: WebhookServerConfig;
   private eventQueue: LinearWebhookPayload[] = [];
@@ -50,7 +50,7 @@ export class LinearWebhookServer {
 
   constructor(config?: WebhookServerConfig) {
     this.app = express();
-    this.logger = new Logger('LinearWebhook');
+    // Use singleton logger
     this.syncService = new LinearSyncService();
 
     this.config = {
@@ -96,13 +96,13 @@ export class LinearWebhookServer {
     this.app.post('/webhook/linear', async (req, res) => {
       try {
         if (!this.verifyWebhookSignature(req)) {
-          this.logger.warn('Invalid webhook signature');
+          logger.warn('Invalid webhook signature');
           return res.status(401).json({ error: 'Unauthorized' });
         }
 
         const payload = JSON.parse(req.body.toString()) as LinearWebhookPayload;
 
-        this.logger.info(
+        logger.info(
           `Received webhook: ${payload.type} - ${payload.action}`
         );
 
@@ -114,7 +114,7 @@ export class LinearWebhookServer {
           queued: true,
         });
       } catch (error: unknown) {
-        this.logger.error('Webhook processing error:', error);
+        logger.error('Webhook processing error:', error);
         return res.status(500).json({ error: 'Internal server error' });
       }
     });
@@ -126,7 +126,7 @@ export class LinearWebhookServer {
 
   private verifyWebhookSignature(req: express.Request): boolean {
     if (!this.config.webhookSecret) {
-      this.logger.warn('No webhook secret configured, accepting all webhooks');
+      logger.warn('No webhook secret configured, accepting all webhooks');
       return true;
     }
 
@@ -156,7 +156,7 @@ export class LinearWebhookServer {
       try {
         await this.handleWebhookEvent(event);
       } catch (error: unknown) {
-        this.logger.error(`Failed to process event: ${event.type}`, error);
+        logger.error(`Failed to process event: ${event.type}`, error);
       }
     }
 
@@ -179,7 +179,7 @@ export class LinearWebhookServer {
         await this.handleProjectEvent(action, data as LinearProject);
         break;
       default:
-        this.logger.debug(`Unhandled event type: ${type}`);
+        logger.debug(`Unhandled event type: ${type}`);
     }
   }
 
@@ -191,21 +191,21 @@ export class LinearWebhookServer {
 
     switch (action) {
       case 'create':
-        this.logger.info(
+        logger.info(
           `New issue created: ${issue.identifier} - ${issue.title}`
         );
         await this.syncService.syncIssueToLocal(issue);
         break;
       case 'update':
-        this.logger.info(`Issue updated: ${issue.identifier} - ${issue.title}`);
+        logger.info(`Issue updated: ${issue.identifier} - ${issue.title}`);
         await this.syncService.syncIssueToLocal(issue);
         break;
       case 'remove':
-        this.logger.info(`Issue removed: ${issue.identifier}`);
+        logger.info(`Issue removed: ${issue.identifier}`);
         await this.syncService.removeLocalIssue(issue.identifier);
         break;
       default:
-        this.logger.debug(`Unhandled issue action: ${action}`);
+        logger.debug(`Unhandled issue action: ${action}`);
     }
   }
 
@@ -213,14 +213,14 @@ export class LinearWebhookServer {
     action: string,
     data: LinearComment
   ): Promise<void> {
-    this.logger.debug(`Comment event: ${action}`, { issueId: data.issue?.id });
+    logger.debug(`Comment event: ${action}`, { issueId: data.issue?.id });
   }
 
   private async handleProjectEvent(
     action: string,
     data: LinearProject
   ): Promise<void> {
-    this.logger.debug(`Project event: ${action}`, { projectId: data.id });
+    logger.debug(`Project event: ${action}`, { projectId: data.id });
   }
 
   public async start(): Promise<void> {
@@ -259,7 +259,7 @@ export class LinearWebhookServer {
     return new Promise((resolve) => {
       if (this.server) {
         this.server.close(() => {
-          this.logger.info('Webhook server stopped');
+          logger.info('Webhook server stopped');
           resolve();
         });
       } else {

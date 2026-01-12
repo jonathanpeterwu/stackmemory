@@ -19,7 +19,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export class WebSocketClient extends EventEmitter {
   private ws: WebSocket | null = null;
   private url: string;
@@ -83,7 +82,7 @@ export class WebSocketClient extends EventEmitter {
             }
             this.emit('error', error);
           });
-          
+
           console.log('✅ WebSocket connected');
           this.reconnectAttempts = 0;
           this.emit('connected');
@@ -104,7 +103,6 @@ export class WebSocketClient extends EventEmitter {
           // If this is the first close, just resolve
           resolve();
         });
-
       } catch (error: unknown) {
         // If anything fails, continue in offline mode
         console.log('⚠️  Running in offline mode');
@@ -117,36 +115,36 @@ export class WebSocketClient extends EventEmitter {
   private handleMessage(data: WebSocket.Data): void {
     try {
       const message = JSON.parse(data.toString());
-      
+
       switch (message.type) {
         case 'session:update':
           this.emit('session:update', message.data);
           break;
-        
+
         case 'task:update':
           this.emit('task:update', message.data);
           break;
-        
+
         case 'frame:update':
           this.emit('frame:update', message.data);
           break;
-        
+
         case 'agent:status':
           this.emit('agent:status', message.data);
           break;
-        
+
         case 'pr:update':
           this.emit('pr:update', message.data);
           break;
-        
+
         case 'analytics:update':
           this.emit('analytics:update', message.data);
           break;
-        
+
         case 'notification':
           this.emit('notification', message.data);
           break;
-        
+
         default:
           this.emit('message', message);
       }
@@ -164,10 +162,12 @@ export class WebSocketClient extends EventEmitter {
     this.reconnectAttempts++;
     const delay = this.reconnectDelay * Math.pow(2, this.reconnectAttempts - 1);
 
-    console.log(`Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`);
+    console.log(
+      `Attempting to reconnect in ${delay}ms (attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts})`
+    );
 
     this.reconnectTimer = setTimeout(() => {
-      this.connect().catch(error => {
+      this.connect().catch((error) => {
         console.error('Reconnection failed:', error);
       });
     }, delay);

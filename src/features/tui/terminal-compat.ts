@@ -19,7 +19,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export interface TerminalInfo {
   type: 'ghostty' | 'tmux' | 'iterm2' | 'terminal' | 'xterm' | 'unknown';
   isInsideTmux: boolean;
@@ -65,9 +64,9 @@ export class TerminalCompatibility {
     const isGhostty = termEnv.includes('ghostty') || termProgram === 'ghostty';
     const isIterm2 = termProgram === 'iTerm.app';
     const isTerminalApp = termProgram === 'Apple_Terminal';
-    
+
     let type: TerminalInfo['type'] = 'unknown';
-    
+
     if (isGhostty) {
       type = 'ghostty';
     } else if (isInsideTmux) {
@@ -93,7 +92,7 @@ export class TerminalCompatibility {
       supportsTrueColor,
       supportsUnicode,
       termEnv,
-      recommendedConfig
+      recommendedConfig,
     };
   }
 
@@ -102,13 +101,13 @@ export class TerminalCompatibility {
     if (colorterm === 'truecolor' || colorterm === '24bit') {
       return true;
     }
-    
+
     // Check terminal specific env vars
     const termProgram = process.env['TERM_PROGRAM'] || '';
     if (['iTerm.app', 'Hyper', 'vscode'].includes(termProgram)) {
       return true;
     }
-    
+
     return false;
   }
 
@@ -117,11 +116,12 @@ export class TerminalCompatibility {
     const lang = process.env['LANG'] || '';
     const lcAll = process.env['LC_ALL'] || '';
     const lcCtype = process.env['LC_CTYPE'] || '';
-    
-    const hasUtf8 = [lang, lcAll, lcCtype].some(v => 
-      v.toLowerCase().includes('utf-8') || v.toLowerCase().includes('utf8')
+
+    const hasUtf8 = [lang, lcAll, lcCtype].some(
+      (v) =>
+        v.toLowerCase().includes('utf-8') || v.toLowerCase().includes('utf8')
     );
-    
+
     return hasUtf8;
   }
 
@@ -136,7 +136,7 @@ export class TerminalCompatibility {
       dockBorders: true,
       terminal: 'xterm-256color',
       title: 'StackMemory TUI Dashboard',
-      warnings: false
+      warnings: false,
     };
 
     // Terminal-specific adjustments
@@ -150,35 +150,35 @@ export class TerminalCompatibility {
           dockBorders: false, // Can cause rendering issues
           artificalCursor: true, // Use artificial cursor
           grabKeys: false, // Don't grab all keys
-          sendFocus: false // Don't send focus events
+          sendFocus: false, // Don't send focus events
         };
-      
+
       case 'tmux':
         // Inside tmux, we need to be more conservative
         return {
           ...baseConfig,
           terminal: isInsideTmux ? 'screen-256color' : 'xterm-256color',
           smartCSR: !isInsideTmux, // Disable inside tmux
-          sendFocus: false
+          sendFocus: false,
         };
-      
+
       case 'iterm2':
         // iTerm2 has excellent terminal support
         return {
           ...baseConfig,
           terminal: 'xterm-256color',
           fullUnicode: true,
-          forceUnicode: true
+          forceUnicode: true,
         };
-      
+
       case 'terminal':
         // macOS Terminal.app
         return {
           ...baseConfig,
           terminal: 'xterm-256color',
-          fullUnicode: true
+          fullUnicode: true,
         };
-      
+
       case 'xterm':
       default:
         // Conservative defaults for unknown terminals
@@ -186,7 +186,7 @@ export class TerminalCompatibility {
           ...baseConfig,
           smartCSR: false,
           fullUnicode: false,
-          forceUnicode: false
+          forceUnicode: false,
         };
     }
   }
@@ -204,7 +204,7 @@ export class TerminalCompatibility {
    */
   configureEnvironment(): void {
     const { type, isInsideTmux } = this.terminalInfo;
-    
+
     if (type === 'ghostty') {
       // Ghostty works better with basic xterm
       process.env['TERM'] = 'xterm';
@@ -241,14 +241,19 @@ export class TerminalCompatibility {
     }
 
     // Check if any TTY is available (stdout, stdin, or stderr)
-    const hasAnyTTY = process.stdout.isTTY || process.stdin.isTTY || process.stderr.isTTY;
-    
+    const hasAnyTTY =
+      process.stdout.isTTY || process.stdin.isTTY || process.stderr.isTTY;
+
     // When running through npm/node, TTY detection might fail
     // but we still want to allow TUI if terminal is capable
     if (!hasAnyTTY) {
       const { type } = this.terminalInfo;
       // Allow known terminal types even without TTY detection
-      if (type !== 'unknown' || term.includes('xterm') || term.includes('screen')) {
+      if (
+        type !== 'unknown' ||
+        term.includes('xterm') ||
+        term.includes('screen')
+      ) {
         return true;
       }
       return false;
@@ -265,11 +270,15 @@ export class TerminalCompatibility {
     const { type, supportsUnicode, supportsTrueColor } = this.terminalInfo;
 
     if (type === 'ghostty') {
-      warnings.push('Ghostty terminal detected: Using compatibility mode with reduced features');
+      warnings.push(
+        'Ghostty terminal detected: Using compatibility mode with reduced features'
+      );
     }
 
     if (!supportsUnicode) {
-      warnings.push('Unicode support not detected: Some icons may not display correctly');
+      warnings.push(
+        'Unicode support not detected: Some icons may not display correctly'
+      );
     }
 
     if (!supportsTrueColor) {
@@ -287,14 +296,15 @@ export class TerminalCompatibility {
    * Get terminal capabilities as a string for debugging
    */
   getCapabilitiesString(): string {
-    const { type, isInsideTmux, supportsTrueColor, supportsUnicode, termEnv } = this.terminalInfo;
-    
+    const { type, isInsideTmux, supportsTrueColor, supportsUnicode, termEnv } =
+      this.terminalInfo;
+
     return [
       `Terminal Type: ${type}`,
       `TERM: ${termEnv}`,
       `Inside tmux: ${isInsideTmux}`,
       `True Color: ${supportsTrueColor}`,
-      `Unicode: ${supportsUnicode}`
+      `Unicode: ${supportsUnicode}`,
     ].join(' | ');
   }
 }

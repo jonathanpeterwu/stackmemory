@@ -11,9 +11,14 @@ import { fileURLToPath } from 'url';
 import { ChromaDBAdapter } from '../../dist/core/storage/chromadb-simple.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import dotenv from 'dotenv';
 
 const execAsync = promisify(exec);
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// Load environment variables from .env file
+const projectRoot = path.resolve(__dirname, '../..');
+dotenv.config({ path: path.join(projectRoot, '.env') });
 
 // Hook trigger events
 const TRIGGER_EVENTS = {
@@ -92,9 +97,9 @@ class ChromaDBContextSaver {
       case TRIGGER_EVENTS.TASK_COMPLETE:
         context.content = `Task completed: ${data.task || 'Unknown task'}`;
         context.metadata = {
-          task_id: data.taskId,
-          duration: data.duration,
-          files_changed: data.filesChanged || [],
+          task_id: data.taskId || '',
+          duration: data.duration || 0,
+          files_changed: JSON.stringify(data.filesChanged || []),
         };
         break;
 
@@ -103,9 +108,9 @@ class ChromaDBContextSaver {
         const { stdout: diff } = await execAsync('git diff --cached --stat', { cwd: this.projectRoot });
         context.content = `Code changes:\n${diff}`;
         context.metadata = {
-          files: data.files || [],
-          lines_added: data.linesAdded,
-          lines_removed: data.linesRemoved,
+          files: JSON.stringify(data.files || []),
+          lines_added: data.linesAdded || 0,
+          lines_removed: data.linesRemoved || 0,
         };
         break;
 
@@ -113,46 +118,46 @@ class ChromaDBContextSaver {
         const { stdout: lastCommit } = await execAsync('git log -1 --oneline', { cwd: this.projectRoot });
         context.content = `Git commit: ${lastCommit}`;
         context.metadata = {
-          commit_hash: data.commitHash,
-          branch: data.branch,
-          message: data.message,
+          commit_hash: data.commitHash || '',
+          branch: data.branch || '',
+          message: data.message || '',
         };
         break;
 
       case TRIGGER_EVENTS.TEST_RUN:
         context.content = `Test run: ${data.passed ? 'PASSED' : 'FAILED'}`;
         context.metadata = {
-          total_tests: data.total,
-          passed: data.passed,
-          failed: data.failed,
-          coverage: data.coverage,
+          total_tests: data.total || 0,
+          passed: data.passed || 0,
+          failed: data.failed || 0,
+          coverage: data.coverage || 0,
         };
         break;
 
       case TRIGGER_EVENTS.BUILD_COMPLETE:
         context.content = `Build ${data.success ? 'succeeded' : 'failed'}`;
         context.metadata = {
-          build_time: data.duration,
-          warnings: data.warnings,
-          errors: data.errors,
+          build_time: data.duration || 0,
+          warnings: data.warnings || 0,
+          errors: data.errors || 0,
         };
         break;
 
       case TRIGGER_EVENTS.ERROR_RESOLVED:
         context.content = `Resolved error: ${data.error}`;
         context.metadata = {
-          error_type: data.errorType,
-          solution: data.solution,
-          files_fixed: data.files || [],
+          error_type: data.errorType || '',
+          solution: data.solution || '',
+          files_fixed: JSON.stringify(data.files || []),
         };
         break;
 
       case TRIGGER_EVENTS.DECISION_MADE:
         context.content = `Decision: ${data.decision}`;
         context.metadata = {
-          category: data.category,
-          alternatives: data.alternatives,
-          reasoning: data.reasoning,
+          category: data.category || '',
+          alternatives: JSON.stringify(data.alternatives || []),
+          reasoning: data.reasoning || '',
         };
         break;
 
@@ -162,16 +167,16 @@ class ChromaDBContextSaver {
         context.content = `Periodic checkpoint:\n${status || 'No changes'}`;
         context.metadata = {
           interval: data.interval || '15m',
-          active_files: data.activeFiles || [],
+          active_files: JSON.stringify(data.activeFiles || []),
         };
         break;
 
       case TRIGGER_EVENTS.SESSION_END:
         context.content = `Session ended: ${data.summary || 'No summary'}`;
         context.metadata = {
-          duration: data.duration,
-          tasks_completed: data.tasksCompleted,
-          next_steps: data.nextSteps,
+          duration: data.duration || 0,
+          tasks_completed: data.tasksCompleted || 0,
+          next_steps: data.nextSteps || '',
         };
         break;
 

@@ -59,7 +59,7 @@ export class WorktreeManager {
   private constructor() {
     this.configPath = join(homedir(), '.stackmemory', 'worktree-config.json');
     this.config = this.loadConfig();
-    
+
     try {
       if (this.config.enabled) {
         this.initialize();
@@ -171,19 +171,19 @@ export class WorktreeManager {
    */
   saveConfig(config: Partial<WorktreeConfig>): void {
     this.config = { ...this.config, ...config };
-    
+
     const configDir = dirname(this.configPath);
     if (!existsSync(configDir)) {
       mkdirSync(configDir, { recursive: true });
     }
-    
+
     writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
-    
+
     // Reinitialize if just enabled
     if (config.enabled && !this.db) {
       this.initialize();
     }
-    
+
     logger.info('Worktree configuration updated', { config: this.config });
   }
 
@@ -192,7 +192,7 @@ export class WorktreeManager {
    */
   detectWorktrees(repoPath?: string): WorktreeInfo[] {
     const path = repoPath || process.cwd();
-    
+
     try {
       // Get worktree list
       const output = execSync('git worktree list --porcelain', {
@@ -229,7 +229,7 @@ export class WorktreeManager {
       // Determine main worktree
       if (worktrees.length > 0) {
         const mainPath = this.getMainWorktreePath(path);
-        worktrees.forEach(wt => {
+        worktrees.forEach((wt) => {
           wt.isMainWorktree = wt.path === mainPath;
           if (!wt.isMainWorktree) {
             wt.linkedPath = mainPath;
@@ -238,16 +238,16 @@ export class WorktreeManager {
       }
 
       // Cache results
-      worktrees.forEach(wt => {
+      worktrees.forEach((wt) => {
         this.worktreeCache.set(wt.path, wt);
         if (this.config.enabled) {
           this.saveWorktree(wt);
         }
       });
 
-      logger.info(`Detected ${worktrees.length} worktrees`, { 
+      logger.info(`Detected ${worktrees.length} worktrees`, {
         count: worktrees.length,
-        branches: worktrees.map((w: any) => w.branch).filter(Boolean)
+        branches: worktrees.map((w: any) => w.branch).filter(Boolean),
       });
 
       return worktrees;
@@ -292,7 +292,10 @@ export class WorktreeManager {
       isBare: partial.isBare || false,
       isDetached: partial.isDetached || false,
       linkedPath: partial.linkedPath,
-      contextId: this.generateContextId(partial.path || '', partial.branch || ''),
+      contextId: this.generateContextId(
+        partial.path || '',
+        partial.branch || ''
+      ),
     };
   }
 
@@ -344,8 +347,11 @@ export class WorktreeManager {
       return cached;
     }
 
-    const worktree = this.worktreeCache.get(worktreePath) || 
-                     this.detectWorktrees(worktreePath).find((w: any) => w.path === worktreePath);
+    const worktree =
+      this.worktreeCache.get(worktreePath) ||
+      this.detectWorktrees(worktreePath).find(
+        (w: any) => w.path === worktreePath
+      );
 
     if (!worktree) {
       throw new Error(`No worktree found at path: ${worktreePath}`);
@@ -417,7 +423,11 @@ export class WorktreeManager {
   /**
    * Sync contexts between worktrees
    */
-  async syncContexts(sourceWorktree: string, targetWorktree: string, syncType: 'push' | 'pull' | 'merge' = 'merge'): Promise<void> {
+  async syncContexts(
+    sourceWorktree: string,
+    targetWorktree: string,
+    syncType: 'push' | 'pull' | 'merge' = 'merge'
+  ): Promise<void> {
     const source = this.getWorktreeContext(sourceWorktree);
     const target = this.getWorktreeContext(targetWorktree);
 
@@ -433,11 +443,15 @@ export class WorktreeManager {
 
     try {
       // Get contexts from source
-      const contexts = sourceDb.prepare(`
+      const contexts = sourceDb
+        .prepare(
+          `
         SELECT * FROM contexts 
         WHERE created_at > datetime('now', '-7 days')
         ORDER BY created_at DESC
-      `).all();
+      `
+        )
+        .all();
 
       // Sync based on type
       if (syncType === 'push' || syncType === 'merge') {
@@ -445,12 +459,16 @@ export class WorktreeManager {
       }
 
       if (syncType === 'pull') {
-        const targetContexts = targetDb.prepare(`
+        const targetContexts = targetDb
+          .prepare(
+            `
           SELECT * FROM contexts 
           WHERE created_at > datetime('now', '-7 days')
           ORDER BY created_at DESC
-        `).all();
-        
+        `
+          )
+          .all();
+
         this.mergeContexts(targetContexts, sourceDb, false);
       }
 
@@ -482,7 +500,11 @@ export class WorktreeManager {
   /**
    * Merge contexts into target database
    */
-  private mergeContexts(contexts: any[], targetDb: Database.Database, bidirectional: boolean): void {
+  private mergeContexts(
+    contexts: any[],
+    targetDb: Database.Database,
+    bidirectional: boolean
+  ): void {
     const stmt = targetDb.prepare(`
       INSERT OR REPLACE INTO contexts (id, type, content, metadata, created_at)
       VALUES (?, ?, ?, ?, ?)
@@ -511,7 +533,7 @@ export class WorktreeManager {
     `);
 
     const rows = stmt.all() as any[];
-    
+
     return rows.map((row: any) => ({
       path: row.path,
       branch: row.branch,
@@ -539,13 +561,15 @@ export class WorktreeManager {
 
     // Remove stale entries
     const deleteStmt = this.db.prepare('DELETE FROM worktrees WHERE id = ?');
-    const deleteContextStmt = this.db.prepare('DELETE FROM worktree_contexts WHERE worktree_id = ?');
+    const deleteContextStmt = this.db.prepare(
+      'DELETE FROM worktree_contexts WHERE worktree_id = ?'
+    );
 
     for (const worktree of stored) {
       if (!activePaths.has(worktree.path)) {
         deleteStmt.run(worktree.id);
         deleteContextStmt.run(worktree.id);
-        
+
         logger.info('Cleaned up stale worktree context', {
           path: worktree.path,
           branch: worktree.branch,

@@ -91,7 +91,12 @@ export async function retry<T>(
         throw error;
       }
 
-      const delay = calculateBackoff(attempt, initialDelay, maxDelay, backoffFactor);
+      const delay = calculateBackoff(
+        attempt,
+        initialDelay,
+        maxDelay,
+        backoffFactor
+      );
 
       logger.warn(`Retry attempt ${attempt}/${maxAttempts} after ${delay}ms`, {
         error: getErrorMessage(error),
@@ -305,7 +310,9 @@ export async function withTimeout<T>(
       setTimeout(
         () =>
           reject(
-            new Error(timeoutMessage ?? `Operation timed out after ${timeoutMs}ms`)
+            new Error(
+              timeoutMessage ?? `Operation timed out after ${timeoutMs}ms`
+            )
           ),
         timeoutMs
       )

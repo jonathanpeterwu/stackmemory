@@ -117,7 +117,10 @@ export class EnhancedHybridDigestGenerator extends HybridDigestGenerator {
       });
 
       this.processQueue().catch((error) => {
-        logger.error('Error processing digest queue during idle', error instanceof Error ? error : new Error(String(error)));
+        logger.error(
+          'Error processing digest queue during idle',
+          error instanceof Error ? error : new Error(String(error))
+        );
       });
     }
   }
@@ -150,7 +153,10 @@ export class EnhancedHybridDigestGenerator extends HybridDigestGenerator {
       // Process this specific frame with high priority
       this.prioritizeFrame(frameId);
       this.processQueue().catch((error) => {
-        logger.error('Error processing digest on frame close', error instanceof Error ? error : new Error(String(error)));
+        logger.error(
+          'Error processing digest on frame close',
+          error instanceof Error ? error : new Error(String(error))
+        );
       });
     }
   }

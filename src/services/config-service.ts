@@ -1,4 +1,4 @@
-import { Logger } from '../utils/logger.js';
+import { logger } from '../core/monitoring/logger.js';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 
@@ -28,12 +28,12 @@ export interface StackMemoryConfig {
 }
 
 export class ConfigService {
-  private logger: Logger;
+  // Using singleton logger from monitoring
   private config: StackMemoryConfig = {};
   private configPath: string;
 
   constructor() {
-    this.logger = new Logger('ConfigService');
+    // Use singleton logger
     this.configPath = join(process.cwd(), '.stackmemory', 'config.json');
     this.loadConfig();
   }
@@ -43,19 +43,19 @@ export class ConfigService {
       if (existsSync(this.configPath)) {
         const content = readFileSync(this.configPath, 'utf-8');
         this.config = JSON.parse(content);
-        this.logger.debug('Loaded configuration', this.config);
+        logger.debug('Loaded configuration', this.config);
       }
     } catch (error: unknown) {
-      this.logger.warn('Failed to load configuration, using defaults', error);
+      logger.warn('Failed to load configuration, using defaults', error);
     }
   }
 
   private saveConfig(): void {
     try {
       writeFileSync(this.configPath, JSON.stringify(this.config, null, 2));
-      this.logger.debug('Saved configuration');
+      logger.debug('Saved configuration');
     } catch (error: unknown) {
-      this.logger.error('Failed to save configuration', error);
+      logger.error('Failed to save configuration', error);
     }
   }
 

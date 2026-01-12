@@ -44,7 +44,7 @@ export class LazyProxy<T> {
     }
 
     if (!this._promise) {
-      this._promise = this._loader().then(value => {
+      this._promise = this._loader().then((value) => {
         this._value = value;
         this._loaded = true;
         return value;
@@ -72,12 +72,12 @@ export class LazyProxy<T> {
 export class LazyContextLoader {
   private db: Database.Database;
   private projectId: string;
-  
+
   // Lazy loading registries
   private frameLoaders = new Map<string, LazyProxy<Frame>>();
   private anchorLoaders = new Map<string, LazyProxy<Anchor[]>>();
   private eventLoaders = new Map<string, LazyProxy<Event[]>>();
-  
+
   constructor(db: Database.Database, projectId: string) {
     this.db = db;
     this.projectId = projectId;
@@ -88,13 +88,16 @@ export class LazyContextLoader {
    */
   lazyFrame(frameId: string): LazyProxy<Frame> {
     if (!this.frameLoaders.has(frameId)) {
-      this.frameLoaders.set(frameId, new LazyProxy(async () => {
-        const frame = this.loadFrame(frameId);
-        if (!frame) {
-          throw new Error(`Frame not found: ${frameId}`);
-        }
-        return frame;
-      }));
+      this.frameLoaders.set(
+        frameId,
+        new LazyProxy(async () => {
+          const frame = this.loadFrame(frameId);
+          if (!frame) {
+            throw new Error(`Frame not found: ${frameId}`);
+          }
+          return frame;
+        })
+      );
     }
     return this.frameLoaders.get(frameId)!;
   }
@@ -104,9 +107,12 @@ export class LazyContextLoader {
    */
   lazyAnchors(frameId: string): LazyProxy<Anchor[]> {
     if (!this.anchorLoaders.has(frameId)) {
-      this.anchorLoaders.set(frameId, new LazyProxy(async () => {
-        return this.loadAnchors(frameId);
-      }));
+      this.anchorLoaders.set(
+        frameId,
+        new LazyProxy(async () => {
+          return this.loadAnchors(frameId);
+        })
+      );
     }
     return this.anchorLoaders.get(frameId)!;
   }
@@ -117,9 +123,12 @@ export class LazyContextLoader {
   lazyEvents(frameId: string, limit = 100): LazyProxy<Event[]> {
     const key = `${frameId}:${limit}`;
     if (!this.eventLoaders.has(key)) {
-      this.eventLoaders.set(key, new LazyProxy(async () => {
-        return this.loadEvents(frameId, limit);
-      }));
+      this.eventLoaders.set(
+        key,
+        new LazyProxy(async () => {
+          return this.loadEvents(frameId, limit);
+        })
+      );
     }
     return this.eventLoaders.get(key)!;
   }
@@ -127,14 +136,11 @@ export class LazyContextLoader {
   /**
    * Progressive context loading with chunking
    */
-  async* loadContextProgressive(
+  async *loadContextProgressive(
     frameIds: string[],
     options: LazyLoadOptions = {}
   ): AsyncGenerator<ContextChunk, void, unknown> {
-    const {
-      chunkSize = 10,
-      priority = 'recency',
-    } = options;
+    const { chunkSize = 10, priority = 'recency' } = options;
 
     // Sort frame IDs by priority
     const sortedIds = this.sortByPriority(frameIds, priority);
@@ -169,9 +175,10 @@ export class LazyContextLoader {
           chunkId: chunkNumber,
           totalChunks,
           hasMore: i + chunkSize < sortedIds.length,
-          nextCursor: i + chunkSize < sortedIds.length 
-            ? sortedIds[i + chunkSize] 
-            : undefined,
+          nextCursor:
+            i + chunkSize < sortedIds.length
+              ? sortedIds[i + chunkSize]
+              : undefined,
         },
       };
     }
@@ -189,28 +196,28 @@ export class LazyContextLoader {
 
     if (parallel) {
       const promises: Promise<any>[] = [];
-      
+
       for (const frameId of frameIds) {
         promises.push(this.lazyFrame(frameId).get());
-        
+
         if (depth > 0) {
           promises.push(this.lazyAnchors(frameId).get());
         }
-        
+
         if (depth > 1) {
           promises.push(this.lazyEvents(frameId).get());
         }
       }
-      
+
       await Promise.all(promises);
     } else {
       for (const frameId of frameIds) {
         await this.lazyFrame(frameId).get();
-        
+
         if (depth > 0) {
           await this.lazyAnchors(frameId).get();
         }
-        
+
         if (depth > 1) {
           await this.lazyEvents(frameId).get();
         }
@@ -256,7 +263,7 @@ export class LazyContextLoader {
   /**
    * Stream context data for memory efficiency
    */
-  async* streamContext(
+  async *streamContext(
     query: string,
     params: any[] = []
   ): AsyncGenerator<Frame | Anchor | Event, void, unknown> {
@@ -287,15 +294,15 @@ export class LazyContextLoader {
     loaded: number;
   } {
     let loaded = 0;
-    
+
     for (const loader of this.frameLoaders.values()) {
       if (loader.isLoaded()) loaded++;
     }
-    
+
     for (const loader of this.anchorLoaders.values()) {
       if (loader.isLoaded()) loaded++;
     }
-    
+
     for (const loader of this.eventLoaders.values()) {
       if (loader.isLoaded()) loaded++;
     }
@@ -312,9 +319,9 @@ export class LazyContextLoader {
 
   private loadFrame(frameId: string): Frame | null {
     try {
-      const row = this.db.prepare(
-        'SELECT * FROM frames WHERE id = ?'
-      ).get(frameId) as any;
+      const row = this.db
+        .prepare('SELECT * FROM frames WHERE id = ?')
+        .get(frameId) as any;
 
       if (!row) return null;
 
@@ -342,9 +349,11 @@ export class LazyContextLoader {
 
   private loadAnchors(frameId: string): Anchor[] {
     try {
-      const rows = this.db.prepare(
-        'SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at DESC'
-      ).all(frameId) as any[];
+      const rows = this.db
+        .prepare(
+          'SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at DESC'
+        )
+        .all(frameId) as any[];
 
       return rows.map((row: any) => ({
         ...row,
@@ -357,9 +366,11 @@ export class LazyContextLoader {
 
   private loadEvents(frameId: string, limit: number): Event[] {
     try {
-      const rows = this.db.prepare(
-        'SELECT * FROM events WHERE frame_id = ? ORDER BY timestamp DESC LIMIT ?'
-      ).all(frameId, limit) as any[];
+      const rows = this.db
+        .prepare(
+          'SELECT * FROM events WHERE frame_id = ? ORDER BY timestamp DESC LIMIT ?'
+        )
+        .all(frameId, limit) as any[];
 
       return rows.map((row: any) => ({
         ...row,
@@ -387,7 +398,7 @@ export class LazyContextLoader {
           const rows = this.db.prepare(query).all(...frameIds) as any[];
           return rows.map((r: any) => r.id);
         }
-        
+
         case 'relevance': {
           // Get scores and sort
           const query = `
@@ -398,7 +409,7 @@ export class LazyContextLoader {
           const rows = this.db.prepare(query).all(...frameIds) as any[];
           return rows.map((r: any) => r.id);
         }
-        
+
         case 'frequency': {
           // Get event counts and sort
           const query = `
@@ -412,7 +423,7 @@ export class LazyContextLoader {
           const rows = this.db.prepare(query).all(...frameIds) as any[];
           return rows.map((r: any) => r.id);
         }
-        
+
         default:
           return frameIds;
       }

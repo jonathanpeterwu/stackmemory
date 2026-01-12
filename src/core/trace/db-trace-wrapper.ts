@@ -20,11 +20,11 @@ export function createTracedDatabase(
   options?: TracedDatabaseOptions
 ): Database.Database {
   const db = new Database(filename, options);
-  
+
   if (options?.traceEnabled !== false) {
     return wrapDatabase(db, options?.slowQueryThreshold);
   }
-  
+
   return db;
 }
 
@@ -37,43 +37,53 @@ export function wrapDatabase(
 ): Database.Database {
   // Wrap prepare method to trace all queries
   const originalPrepare = db.prepare.bind(db);
-  
-  db.prepare = function(source: string) {
+
+  db.prepare = function (source: string) {
     const statement = originalPrepare(source);
     return wrapStatement(statement, source, slowQueryThreshold);
   } as typeof db.prepare;
-  
+
   // Wrap exec for direct SQL execution
   const originalExec = db.exec.bind(db);
-  
-  db.exec = function(source: string): Database.Database {
-    return trace.traceSync('query', `EXEC: ${source.substring(0, 50)}...`, {}, () => {
-      const startTime = performance.now();
-      const result = originalExec(source);
-      const duration = performance.now() - startTime;
-      
-      if (duration > slowQueryThreshold) {
-        logger.warn(`Slow query detected: ${duration.toFixed(0)}ms`, {
-          query: source.substring(0, 200),
-          duration,
-        });
+
+  db.exec = function (source: string): Database.Database {
+    return trace.traceSync(
+      'query',
+      `EXEC: ${source.substring(0, 50)}...`,
+      {},
+      () => {
+        const startTime = performance.now();
+        const result = originalExec(source);
+        const duration = performance.now() - startTime;
+
+        if (duration > slowQueryThreshold) {
+          logger.warn(`Slow query detected: ${duration.toFixed(0)}ms`, {
+            query: source.substring(0, 200),
+            duration,
+          });
+        }
+
+        return result;
       }
-      
-      return result;
-    });
+    );
   };
-  
+
   // Wrap transaction for transaction tracking
   const originalTransaction = db.transaction.bind(db);
-  
-  db.transaction = function(fn: any) {
-    return originalTransaction(function(this: any, ...args: any[]) {
-      return trace.traceSync('query', 'TRANSACTION', { args: args.length }, () => {
-        return fn.apply(this, args);
-      });
+
+  db.transaction = function (fn: any) {
+    return originalTransaction(function (this: any, ...args: any[]) {
+      return trace.traceSync(
+        'query',
+        'TRANSACTION',
+        { args: args.length },
+        () => {
+          return fn.apply(this, args);
+        }
+      );
     });
   } as typeof db.transaction;
-  
+
   // Add query statistics tracking
   (db as any).__queryStats = {
     totalQueries: 0,
@@ -81,7 +91,7 @@ export function wrapDatabase(
     totalDuration: 0,
     queryTypes: {} as Record<string, number>,
   };
-  
+
   return db;
 }
 
@@ -95,92 +105,107 @@ function wrapStatement<T extends any[] = any[]>(
 ): Database.Statement<T> {
   const queryType = source.trim().split(/\s+/)[0].toUpperCase();
   const shortQuery = source.substring(0, 100).replace(/\s+/g, ' ');
-  
+
   // Wrap run method
   const originalRun = statement.run.bind(statement);
-  statement.run = function(...params: T): Database.RunResult {
-    return trace.traceSync('query', `${queryType}: ${shortQuery}`, params, () => {
-      const startTime = performance.now();
-      const result = originalRun(...params);
-      const duration = performance.now() - startTime;
-      
-      // Track statistics
-      updateQueryStats(statement, queryType, duration, slowQueryThreshold);
-      
-      // Log slow queries
-      if (duration > slowQueryThreshold) {
-        logger.warn(`Slow ${queryType} query: ${duration.toFixed(0)}ms`, {
-          query: shortQuery,
-          params,
-          duration,
-          changes: result.changes,
-        });
+  statement.run = function (...params: T): Database.RunResult {
+    return trace.traceSync(
+      'query',
+      `${queryType}: ${shortQuery}`,
+      params,
+      () => {
+        const startTime = performance.now();
+        const result = originalRun(...params);
+        const duration = performance.now() - startTime;
+
+        // Track statistics
+        updateQueryStats(statement, queryType, duration, slowQueryThreshold);
+
+        // Log slow queries
+        if (duration > slowQueryThreshold) {
+          logger.warn(`Slow ${queryType} query: ${duration.toFixed(0)}ms`, {
+            query: shortQuery,
+            params,
+            duration,
+            changes: result.changes,
+          });
+        }
+
+        return result;
       }
-      
-      return result;
-    });
+    );
   };
-  
+
   // Wrap get method
   const originalGet = statement.get.bind(statement);
-  statement.get = function(...params: T): any {
-    return trace.traceSync('query', `${queryType} (get): ${shortQuery}`, params, () => {
-      const startTime = performance.now();
-      const result = originalGet(...params);
-      const duration = performance.now() - startTime;
-      
-      updateQueryStats(statement, queryType, duration, slowQueryThreshold);
-      
-      if (duration > slowQueryThreshold) {
-        logger.warn(`Slow ${queryType} query: ${duration.toFixed(0)}ms`, {
-          query: shortQuery,
-          params,
-          duration,
-          found: result != null,
-        });
+  statement.get = function (...params: T): any {
+    return trace.traceSync(
+      'query',
+      `${queryType} (get): ${shortQuery}`,
+      params,
+      () => {
+        const startTime = performance.now();
+        const result = originalGet(...params);
+        const duration = performance.now() - startTime;
+
+        updateQueryStats(statement, queryType, duration, slowQueryThreshold);
+
+        if (duration > slowQueryThreshold) {
+          logger.warn(`Slow ${queryType} query: ${duration.toFixed(0)}ms`, {
+            query: shortQuery,
+            params,
+            duration,
+            found: result != null,
+          });
+        }
+
+        return result;
       }
-      
-      return result;
-    });
+    );
   };
-  
+
   // Wrap all method
   const originalAll = statement.all.bind(statement);
-  statement.all = function(...params: T): any[] {
-    return trace.traceSync('query', `${queryType} (all): ${shortQuery}`, params, () => {
-      const startTime = performance.now();
-      const result = originalAll(...params);
-      const duration = performance.now() - startTime;
-      
-      updateQueryStats(statement, queryType, duration, slowQueryThreshold);
-      
-      if (duration > slowQueryThreshold) {
-        logger.warn(`Slow ${queryType} query: ${duration.toFixed(0)}ms`, {
-          query: shortQuery,
-          params,
-          duration,
-          rows: result.length,
-        });
+  statement.all = function (...params: T): any[] {
+    return trace.traceSync(
+      'query',
+      `${queryType} (all): ${shortQuery}`,
+      params,
+      () => {
+        const startTime = performance.now();
+        const result = originalAll(...params);
+        const duration = performance.now() - startTime;
+
+        updateQueryStats(statement, queryType, duration, slowQueryThreshold);
+
+        if (duration > slowQueryThreshold) {
+          logger.warn(`Slow ${queryType} query: ${duration.toFixed(0)}ms`, {
+            query: shortQuery,
+            params,
+            duration,
+            rows: result.length,
+          });
+        }
+
+        // Warn about potential N+1 queries
+        if (result.length > 100 && queryType === 'SELECT') {
+          logger.warn(`Large result set: ${result.length} rows`, {
+            query: shortQuery,
+            suggestion: 'Consider pagination or more specific queries',
+          });
+        }
+
+        return result;
       }
-      
-      // Warn about potential N+1 queries
-      if (result.length > 100 && queryType === 'SELECT') {
-        logger.warn(`Large result set: ${result.length} rows`, {
-          query: shortQuery,
-          suggestion: 'Consider pagination or more specific queries',
-        });
-      }
-      
-      return result;
-    });
+    );
   };
-  
+
   // Wrap iterate method for cursor operations
   const originalIterate = statement.iterate.bind(statement);
-  statement.iterate = function(...params: T): IterableIterator<any> {
+  statement.iterate = function (...params: T): IterableIterator<any> {
     const startTime = performance.now();
     let rowCount = 0;
-    
+
     const iterator = originalIterate(...params);
     const wrappedIterator: IterableIterator<any> = {
       [Symbol.iterator]() {
@@ -193,23 +218,26 @@ function wrapStatement<T extends any[] = any[]>(
         } else {
           const duration = performance.now() - startTime;
           updateQueryStats(statement, queryType, duration, slowQueryThreshold);
-          
+
           if (duration > slowQueryThreshold) {
-            logger.warn(`Slow ${queryType} iteration: ${duration.toFixed(0)}ms`, {
-              query: shortQuery,
-              params,
-              duration,
-              rows: rowCount,
-            });
+            logger.warn(
+              `Slow ${queryType} iteration: ${duration.toFixed(0)}ms`,
+              {
+                query: shortQuery,
+                params,
+                duration,
+                rows: rowCount,
+              }
+            );
           }
         }
         return result;
       },
     };
-    
+
     return wrappedIterator;
   };
-  
+
   return statement;
 }
 
@@ -226,11 +254,11 @@ function updateQueryStats(
   if (db.__queryStats) {
     db.__queryStats.totalQueries++;
     db.__queryStats.totalDuration += duration;
-    
+
     if (duration > slowQueryThreshold) {
       db.__queryStats.slowQueries++;
     }
-    
+
     if (!db.__queryStats.queryTypes[queryType]) {
       db.__queryStats.queryTypes[queryType] = 0;
     }
@@ -250,12 +278,11 @@ export function getQueryStatistics(db: Database.Database): {
 } | null {
   const stats = (db as any).__queryStats;
   if (!stats) return null;
-  
+
   return {
     ...stats,
-    averageDuration: stats.totalQueries > 0 
-      ? stats.totalDuration / stats.totalQueries 
-      : 0,
+    averageDuration:
+      stats.totalQueries > 0 ? stats.totalDuration / stats.totalQueries : 0,
   };
 }
 
@@ -272,7 +299,7 @@ export async function traceQuery<T>(
   return trace.traceAsync('query', queryName, { query, params }, async () => {
     try {
       const result = fn();
-      
+
       // Log successful complex queries for debugging
       if (query.includes('JOIN') || query.includes('GROUP BY')) {
         logger.debug(`Complex query executed: ${queryName}`, {
@@ -280,7 +307,7 @@ export async function traceQuery<T>(
           params,
         });
       }
-      
+
       return result;
     } catch (error: unknown) {
       // Enhanced error logging for database errors
@@ -304,17 +331,17 @@ export function createTracedTransaction<T>(
 ): T {
   return trace.traceSync('query', `TRANSACTION: ${name}`, {}, () => {
     const startTime = performance.now();
-    
+
     try {
       const tx = db.transaction(fn);
       const result = (tx as any).deferred();
-      
+
       const duration = performance.now() - startTime;
       logger.info(`Transaction completed: ${name}`, {
         duration,
         success: true,
       });
-      
+
       return result;
     } catch (error: unknown) {
       const duration = performance.now() - startTime;

@@ -28,7 +28,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 // Configuration
 const config = {
   port: parseInt(process.env['PORT'] || '3000'),

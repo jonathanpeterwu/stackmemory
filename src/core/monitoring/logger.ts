@@ -18,7 +18,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export enum LogLevel {
   ERROR = 0,
   WARN = 1,
@@ -58,10 +57,18 @@ export class Logger {
     }
 
     // Set up log file if in debug mode or if specified
-    if (this.logLevel === LogLevel.DEBUG || process.env['STACKMEMORY_LOG_FILE']) {
+    if (
+      this.logLevel === LogLevel.DEBUG ||
+      process.env['STACKMEMORY_LOG_FILE']
+    ) {
       this.logFile =
         process.env['STACKMEMORY_LOG_FILE'] ||
-        path.join(process.env['HOME'] || '.', '.stackmemory', 'logs', 'cli.log');
+        path.join(
+          process.env['HOME'] || '.',
+          '.stackmemory',
+          'logs',
+          'cli.log'
+        );
       this.ensureLogDirectory();
     }
   }
@@ -89,7 +96,7 @@ export class Logger {
         const msg =
           '[Logger] File logging disabled (failed to create log directory). Falling back to console only.';
         // Use console directly to avoid recursion
-        // eslint-disable-next-line no-console
+
         console.warn(msg);
       }
     }
@@ -109,7 +116,7 @@ export class Logger {
           this.fileLoggingDisabledNotified = true;
           const msg =
             '[Logger] File logging disabled (write failed). Falling back to console only.';
-          // eslint-disable-next-line no-console
+
           console.warn(msg);
         }
       }

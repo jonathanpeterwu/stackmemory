@@ -6,7 +6,13 @@
  */
 
 import { createClient, RedisClientType } from 'redis';
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  DeleteObjectCommand,
+  HeadObjectCommand,
+} from '@aws-sdk/client-s3';
 import { Storage } from '@google-cloud/storage';
 import Database from 'better-sqlite3';
 import { logger } from '../monitoring/logger.js';
@@ -28,14 +34,13 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 const gzipAsync = promisify(zlib.gzip);
 const gunzipAsync = promisify(zlib.gunzip);
 
 export enum StorageTier {
-  HOT = 'hot',       // Redis: < 24 hours
-  WARM = 'warm',     // Railway Buckets: 1-30 days  
-  COLD = 'cold'      // GCS: 30+ days
+  HOT = 'hot', // Redis: < 24 hours
+  WARM = 'warm', // Railway Buckets: 1-30 days
+  COLD = 'cold', // GCS: 30+ days
 }
 
 export interface RailwayStorageConfig {
@@ -57,8 +62,8 @@ export interface RailwayStorageConfig {
     keyFilename?: string;
   };
   tiers: {
-    hotHours: number;        // Hours to keep in Redis
-    warmDays: number;        // Days to keep in Railway Buckets
+    hotHours: number; // Hours to keep in Redis
+    warmDays: number; // Days to keep in Railway Buckets
     compressionScore: number; // Score threshold for early compression
   };
 }
@@ -66,11 +71,12 @@ export interface RailwayStorageConfig {
 export const DEFAULT_RAILWAY_CONFIG: RailwayStorageConfig = {
   redis: {
     url: process.env['REDIS_URL'] || 'redis://localhost:6379',
-    ttlSeconds: 86400,  // 24 hours
-    maxMemoryMb: 100,    // 100MB Redis limit
+    ttlSeconds: 86400, // 24 hours
+    maxMemoryMb: 100, // 100MB Redis limit
   },
   railwayBuckets: {
-    endpoint: process.env['RAILWAY_BUCKET_ENDPOINT'] || 'https://buckets.railway.app',
+    endpoint:
+      process.env['RAILWAY_BUCKET_ENDPOINT'] || 'https://buckets.railway.app',
     bucket: process.env['RAILWAY_BUCKET_NAME'] || 'stackmemory-warm',
     accessKeyId: process.env['RAILWAY_BUCKET_ACCESS_KEY'] || '',
     secretAccessKey: process.env['RAILWAY_BUCKET_SECRET_KEY'] || '',
@@ -85,7 +91,7 @@ export const DEFAULT_RAILWAY_CONFIG: RailwayStorageConfig = {
     hotHours: 24,
     warmDays: 30,
     compressionScore: 0.4,
-  }
+  },
 };
 
 interface StorageMetrics {
@@ -109,9 +115,9 @@ export class RailwayOptimizedStorage {
   private config: RailwayStorageConfig;
   private configManager: ConfigManager;
   private metricsCache: Map<string, StorageMetrics> = new Map();
-  
+
   private initialized: Promise<void>;
-  
+
   constructor(
     localDb: Database.Database,
     configManager: ConfigManager,
@@ -120,11 +126,11 @@ export class RailwayOptimizedStorage {
     this.localDb = localDb;
     this.configManager = configManager;
     this.config = { ...DEFAULT_RAILWAY_CONFIG, ...config };
-    
+
     this.initializeSchema();
     this.initialized = this.initializeClients();
   }
-  
+
   /**
    * Initialize storage clients
    */
@@ -133,22 +139,25 @@ export class RailwayOptimizedStorage {
     if (this.config.redis.url) {
       try {
         this.redisClient = createClient({ url: this.config.redis.url });
-        
+
         this.redisClient.on('error', (err) => {
           logger.error('Redis client error', err);
         });
-        
+
         await this.redisClient.connect();
-        
+
         // Configure Redis memory policy
         await this.redisClient.configSet('maxmemory-policy', 'allkeys-lru');
-        
+
         logger.info('Redis connected for hot tier storage');
       } catch (error: unknown) {
-        logger.warn('Redis connection failed, falling back to SQLite only', error);
+        logger.warn(
+          'Redis connection failed, falling back to SQLite only',
+          error
+        );
       }
     }
-    
+
     // Initialize Railway S3-compatible buckets
     if (this.config.railwayBuckets.accessKeyId) {
       this.railwayS3 = new S3Client({
@@ -160,10 +169,10 @@ export class RailwayOptimizedStorage {
         },
         forcePathStyle: true, // Required for Railway buckets
       });
-      
+
       logger.info('Railway Buckets configured for warm tier');
     }
-    
+
     // Initialize GCS for cold storage
     if (this.config.gcs.projectId) {
       try {
@@ -171,14 +180,14 @@ export class RailwayOptimizedStorage {
           projectId: this.config.gcs.projectId,
           keyFilename: this.config.gcs.keyFilename,
         });
-        
+
         logger.info('GCS configured for cold tier storage');
       } catch (error: unknown) {
         logger.warn('GCS setup failed, will use Railway buckets only', error);
       }
     }
   }
-  
+
   /**
    * Initialize database schema for tracking
    */
@@ -199,35 +208,38 @@ export class RailwayOptimizedStorage {
         FOREIGN KEY (trace_id) REFERENCES traces(id) ON DELETE CASCADE
       )
     `);
-    
+
     this.localDb.exec(`
       CREATE INDEX IF NOT EXISTS idx_storage_tier ON storage_tiers(tier);
       CREATE INDEX IF NOT EXISTS idx_storage_created ON storage_tiers(created_at);
       CREATE INDEX IF NOT EXISTS idx_storage_accessed ON storage_tiers(last_accessed);
     `);
   }
-  
+
   /**
    * Store a trace in the appropriate tier
    */
   async storeTrace(trace: Trace): Promise<StorageTier> {
     // Ensure clients are initialized
     await this.initialized;
-    
+
     const score = trace.score;
     const age = Date.now() - trace.metadata.startTime;
     const ageHours = age / (1000 * 60 * 60);
-    
+
     // Determine tier based on age and score
     let tier: StorageTier;
-    if (ageHours < this.config.tiers.hotHours && score > this.config.tiers.compressionScore) {
+    if (
+      ageHours < this.config.tiers.hotHours &&
+      score > this.config.tiers.compressionScore
+    ) {
       tier = StorageTier.HOT;
     } else if (ageHours < this.config.tiers.warmDays * 24) {
       tier = StorageTier.WARM;
     } else {
       tier = StorageTier.COLD;
     }
-    
+
     // Store in appropriate tier
     switch (tier) {
       case StorageTier.HOT:
@@ -240,13 +252,13 @@ export class RailwayOptimizedStorage {
         await this.storeInGCS(trace);
         break;
     }
-    
+
     // Track in database
     this.trackStorage(trace.id, tier, trace);
-    
+
     return tier;
   }
-  
+
   /**
    * Store trace in Redis (hot tier)
    */
@@ -255,11 +267,11 @@ export class RailwayOptimizedStorage {
       // Fallback to local SQLite if Redis unavailable
       return;
     }
-    
+
     try {
       const key = `trace:${trace.id}`;
       const data = JSON.stringify(trace);
-      
+
       // Compress if large
       let storedData: string;
       if (data.length > 10000) {
@@ -282,33 +294,32 @@ export class RailwayOptimizedStorage {
           timestamp: trace.metadata.startTime.toString(),
         });
       }
-      
+
       // Set TTL
       await this.redisClient.expire(key, this.config.redis.ttlSeconds);
-      
+
       // Add to sorted set for efficient retrieval
       await this.redisClient.zAdd('traces:by_score', {
         score: trace.score,
         value: trace.id,
       });
-      
+
       await this.redisClient.zAdd('traces:by_time', {
         score: trace.metadata.startTime,
         value: trace.id,
       });
-      
-      logger.debug('Stored trace in Redis', { 
-        traceId: trace.id, 
+
+      logger.debug('Stored trace in Redis', {
+        traceId: trace.id,
         size: data.length,
         compressed: data.length > 10000,
       });
-      
     } catch (error: unknown) {
       logger.error('Failed to store in Redis', error);
       throw error;
     }
   }
-  
+
   /**
    * Store trace in Railway Buckets (warm tier)
    */
@@ -316,16 +327,16 @@ export class RailwayOptimizedStorage {
     if (!this.railwayS3) {
       throw new Error('Railway Buckets not configured');
     }
-    
+
     try {
       // Compress trace
       const data = JSON.stringify(trace);
       const compressed = await gzipAsync(data);
-      
+
       // Generate key with date partitioning
       const date = new Date(trace.metadata.startTime);
       const key = `traces/${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${trace.id}.json.gz`;
-      
+
       // Upload to Railway Bucket
       const command = new PutObjectCommand({
         Bucket: this.config.railwayBuckets.bucket,
@@ -340,14 +351,14 @@ export class RailwayOptimizedStorage {
           'compressed-size': compressed.length.toString(),
         },
       });
-      
+
       await this.railwayS3.send(command);
-      
+
       // Remove from Redis if exists
       if (this.redisClient) {
         await this.redisClient.del(`trace:${trace.id}`);
       }
-      
+
       logger.info('Stored trace in Railway Buckets', {
         traceId: trace.id,
         key,
@@ -355,13 +366,12 @@ export class RailwayOptimizedStorage {
         compressedSize: compressed.length,
         compressionRatio: (1 - compressed.length / data.length).toFixed(2),
       });
-      
     } catch (error: unknown) {
       logger.error('Failed to store in Railway Buckets', error);
       throw error;
     }
   }
-  
+
   /**
    * Store trace in GCS (cold tier)
    */
@@ -370,21 +380,21 @@ export class RailwayOptimizedStorage {
       // Fallback to Railway Buckets if GCS not available
       return this.storeInRailwayBuckets(trace);
     }
-    
+
     try {
       // Heavy compression for cold storage
       const minimal = this.createMinimalTrace(trace);
       const data = JSON.stringify(minimal);
       const compressed = await gzipAsync(data);
-      
+
       // Generate key with year/month partitioning
       const date = new Date(trace.metadata.startTime);
       const key = `archive/${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${trace.id}.json.gz`;
-      
+
       // Upload to GCS with Coldline storage class
       const bucket = this.gcsStorage.bucket(this.config.gcs.bucketName);
       const file = bucket.file(key);
-      
+
       await file.save(compressed, {
         metadata: {
           contentType: 'application/gzip',
@@ -397,33 +407,34 @@ export class RailwayOptimizedStorage {
         },
         storageClass: 'COLDLINE', // Use Coldline for cost optimization
       });
-      
+
       // Remove from warm tier if exists
       if (this.railwayS3) {
         try {
           const warmKey = this.getWarmTierKey(trace);
-          await this.railwayS3.send(new DeleteObjectCommand({
-            Bucket: this.config.railwayBuckets.bucket,
-            Key: warmKey,
-          }));
+          await this.railwayS3.send(
+            new DeleteObjectCommand({
+              Bucket: this.config.railwayBuckets.bucket,
+              Key: warmKey,
+            })
+          );
         } catch (error: unknown) {
           // Ignore deletion errors
         }
       }
-      
+
       logger.info('Archived trace to GCS', {
         traceId: trace.id,
         key,
         originalSize: JSON.stringify(trace).length,
         compressedSize: compressed.length,
       });
-      
     } catch (error: unknown) {
       logger.error('Failed to store in GCS', error);
       throw error;
     }
   }
-  
+
   /**
    * Create minimal trace for cold storage
    */
@@ -451,28 +462,30 @@ export class RailwayOptimizedStorage {
       compressed: trace.compressed,
     };
   }
-  
+
   /**
    * Retrieve a trace from any tier
    */
   async retrieveTrace(traceId: string): Promise<Trace | null> {
     // Ensure clients are initialized
     await this.initialized;
-    
+
     // Check tier location
-    const location = this.localDb.prepare(
-      'SELECT tier, location FROM storage_tiers WHERE trace_id = ?'
-    ).get(traceId) as any;
-    
+    const location = this.localDb
+      .prepare('SELECT tier, location FROM storage_tiers WHERE trace_id = ?')
+      .get(traceId) as any;
+
     if (!location) {
       return null;
     }
-    
+
     // Update access metrics
-    this.localDb.prepare(
-      'UPDATE storage_tiers SET access_count = access_count + 1, last_accessed = ? WHERE trace_id = ?'
-    ).run(Date.now(), traceId);
-    
+    this.localDb
+      .prepare(
+        'UPDATE storage_tiers SET access_count = access_count + 1, last_accessed = ? WHERE trace_id = ?'
+      )
+      .run(Date.now(), traceId);
+
     // Retrieve based on tier
     switch (location.tier) {
       case StorageTier.HOT:
@@ -485,19 +498,19 @@ export class RailwayOptimizedStorage {
         return null;
     }
   }
-  
+
   /**
    * Retrieve from Redis
    */
   private async retrieveFromRedis(traceId: string): Promise<Trace | null> {
     if (!this.redisClient) return null;
-    
+
     try {
       const key = `trace:${traceId}`;
       const data = await this.redisClient.hGetAll(key);
-      
+
       if (!data || !data.data) return null;
-      
+
       let traceData: string;
       if (data.compressed === 'true') {
         const compressed = Buffer.from(data.data, 'base64');
@@ -506,90 +519,97 @@ export class RailwayOptimizedStorage {
       } else {
         traceData = data.data;
       }
-      
+
       return JSON.parse(traceData);
-      
     } catch (error: unknown) {
       logger.error('Failed to retrieve from Redis', error);
       return null;
     }
   }
-  
+
   /**
    * Retrieve from Railway Buckets
    */
-  private async retrieveFromRailwayBuckets(traceId: string, key: string): Promise<Trace | null> {
+  private async retrieveFromRailwayBuckets(
+    traceId: string,
+    key: string
+  ): Promise<Trace | null> {
     if (!this.railwayS3) return null;
-    
+
     try {
       const command = new GetObjectCommand({
         Bucket: this.config.railwayBuckets.bucket,
         Key: key,
       });
-      
+
       const response = await this.railwayS3.send(command);
       const compressed = await response.Body?.transformToByteArray();
-      
+
       if (!compressed) return null;
-      
+
       const decompressed = await gunzipAsync(Buffer.from(compressed));
       return JSON.parse(decompressed.toString());
-      
     } catch (error: unknown) {
       logger.error('Failed to retrieve from Railway Buckets', error);
       return null;
     }
   }
-  
+
   /**
    * Retrieve from GCS
    */
-  private async retrieveFromGCS(traceId: string, key: string): Promise<Trace | null> {
+  private async retrieveFromGCS(
+    traceId: string,
+    key: string
+  ): Promise<Trace | null> {
     if (!this.gcsStorage) return null;
-    
+
     try {
       const bucket = this.gcsStorage.bucket(this.config.gcs.bucketName);
       const file = bucket.file(key);
-      
+
       const [compressed] = await file.download();
       const decompressed = await gunzipAsync(compressed);
-      
+
       // Note: Returns minimal trace from cold storage
       return JSON.parse(decompressed.toString());
-      
     } catch (error: unknown) {
       logger.error('Failed to retrieve from GCS', error);
       return null;
     }
   }
-  
+
   /**
    * Track storage in database
    */
   private trackStorage(traceId: string, tier: StorageTier, trace: Trace): void {
     const originalSize = JSON.stringify(trace).length;
     const compressedSize = Math.floor(originalSize * 0.3); // Estimate
-    
-    this.localDb.prepare(`
+
+    this.localDb
+      .prepare(
+        `
       INSERT OR REPLACE INTO storage_tiers (
         trace_id, tier, location, original_size, compressed_size,
         compression_ratio, access_count, last_accessed, created_at,
         migrated_at, score
       ) VALUES (?, ?, ?, ?, ?, ?, 0, ?, ?, ?, ?)
-    `).run(
-      traceId,
-      tier,
-      this.getStorageLocation(trace, tier),
-      originalSize,
-      compressedSize,
-      1 - compressedSize / originalSize,
-      Date.now(),
-      trace.metadata.startTime,
-      Date.now(),
-      trace.score
-    );
+    `
+      )
+      .run(
+        traceId,
+        tier,
+        this.getStorageLocation(trace, tier),
+        originalSize,
+        compressedSize,
+        1 - compressedSize / originalSize,
+        Date.now(),
+        trace.metadata.startTime,
+        Date.now(),
+        trace.score
+      );
   }
-  
+
   /**
    * Get storage location key
    */
@@ -598,7 +618,7 @@ export class RailwayOptimizedStorage {
     const year = date.getFullYear();
     const month = String(date.getMonth() + 1).padStart(2, '0');
     const day = String(date.getDate()).padStart(2, '0');
-    
+
     switch (tier) {
       case StorageTier.HOT:
         return `redis:trace:${trace.id}`;
@@ -608,7 +628,7 @@ export class RailwayOptimizedStorage {
         return `archive/${year}/${month}/${trace.id}.json.gz`;
     }
   }
-  
+
   /**
    * Get warm tier key for a trace
    */
@@ -616,7 +636,7 @@ export class RailwayOptimizedStorage {
     const date = new Date(trace.metadata.startTime);
     return `traces/${date.getFullYear()}/${String(date.getMonth() + 1).padStart(2, '0')}/${String(date.getDate()).padStart(2, '0')}/${trace.id}.json.gz`;
   }
-  
+
   /**
    * Migrate traces between tiers based on age
    */
@@ -630,22 +650,29 @@ export class RailwayOptimizedStorage {
       warmToCold: 0,
       errors: [] as string[],
     };
-    
+
     const now = Date.now();
-    
+
     // Find traces to migrate
-    const candidates = this.localDb.prepare(`
+    const candidates = this.localDb
+      .prepare(
+        `
       SELECT trace_id, tier, created_at, score
       FROM storage_tiers
       WHERE tier != 'cold'
       ORDER BY created_at ASC
-    `).all() as any[];
-    
+    `
+      )
+      .all() as any[];
+
     for (const candidate of candidates) {
       const ageHours = (now - candidate.created_at) / (1000 * 60 * 60);
-      
+
       try {
-        if (candidate.tier === StorageTier.HOT && ageHours > this.config.tiers.hotHours) {
+        if (
+          candidate.tier === StorageTier.HOT &&
+          ageHours > this.config.tiers.hotHours
+        ) {
           // Migrate hot → warm
           const trace = await this.retrieveTrace(candidate.trace_id);
           if (trace) {
@@ -653,7 +680,10 @@ export class RailwayOptimizedStorage {
             this.trackStorage(candidate.trace_id, StorageTier.WARM, trace);
             results.hotToWarm++;
           }
-        } else if (candidate.tier === StorageTier.WARM && ageHours > this.config.tiers.warmDays * 24) {
+        } else if (
+          candidate.tier === StorageTier.WARM &&
+          ageHours > this.config.tiers.warmDays * 24
+        ) {
           // Migrate warm → cold
           const trace = await this.retrieveTrace(candidate.trace_id);
           if (trace) {
@@ -663,19 +693,23 @@ export class RailwayOptimizedStorage {
           }
         }
       } catch (error: unknown) {
-        results.errors.push(`Failed to migrate ${candidate.trace_id}: ${error}`);
+        results.errors.push(
+          `Failed to migrate ${candidate.trace_id}: ${error}`
+        );
       }
     }
-    
+
     logger.info('Tier migration completed', results);
     return results;
   }
-  
+
   /**
    * Get storage statistics
    */
   getStorageStats(): any {
-    const tierStats = this.localDb.prepare(`
+    const tierStats = this.localDb
+      .prepare(
+        `
       SELECT 
         tier,
         COUNT(*) as count,
@@ -685,9 +719,13 @@ export class RailwayOptimizedStorage {
         AVG(access_count) as avg_access
       FROM storage_tiers
       GROUP BY tier
-    `).all();
-    
-    const ageDistribution = this.localDb.prepare(`
+    `
+      )
+      .all();
+
+    const ageDistribution = this.localDb
+      .prepare(
+        `
       SELECT 
         CASE 
           WHEN (? - created_at) / 3600000 < 24 THEN '< 24h'
@@ -698,33 +736,45 @@ export class RailwayOptimizedStorage {
         COUNT(*) as count
       FROM storage_tiers
       GROUP BY age_group
-    `).all(Date.now(), Date.now(), Date.now());
-    
+    `
+      )
+      .all(Date.now(), Date.now(), Date.now());
+
     return {
       byTier: tierStats,
       byAge: ageDistribution,
       totalTraces: tierStats.reduce((sum: number, t: any) => sum + t.count, 0),
-      totalSize: tierStats.reduce((sum: number, t: any) => sum + t.total_original, 0),
-      compressedSize: tierStats.reduce((sum: number, t: any) => sum + t.total_compressed, 0),
+      totalSize: tierStats.reduce(
+        (sum: number, t: any) => sum + t.total_original,
+        0
+      ),
+      compressedSize: tierStats.reduce(
+        (sum: number, t: any) => sum + t.total_compressed,
+        0
+      ),
     };
   }
-  
+
   /**
    * Clean up expired data
    */
   async cleanup(): Promise<number> {
     let cleaned = 0;
-    
+
     // Remove old entries from storage_tiers table
-    const cutoff = Date.now() - (90 * 24 * 60 * 60 * 1000); // 90 days
-    
-    const result = this.localDb.prepare(`
+    const cutoff = Date.now() - 90 * 24 * 60 * 60 * 1000; // 90 days
+
+    const result = this.localDb
+      .prepare(
+        `
       DELETE FROM storage_tiers
       WHERE tier = 'cold' AND created_at < ? AND access_count = 0
-    `).run(cutoff);
-    
+    `
+      )
+      .run(cutoff);
+
     cleaned = result.changes;
-    
+
     logger.info('Cleanup completed', { removed: cleaned });
     return cleaned;
   }

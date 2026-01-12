@@ -1,7 +1,7 @@
 import { LinearClient, LinearIssue, LinearCreateIssueInput } from './client.js';
 import { ContextService } from '../../services/context-service.js';
 import { ConfigService } from '../../services/config-service.js';
-import { Logger } from '../../utils/logger.js';
+import { logger } from '../../core/monitoring/logger.js';
 import { Task, TaskStatus, TaskPriority } from '../../types/task.js';
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
@@ -44,10 +44,10 @@ export class LinearSyncService {
   private linearClient: LinearClient;
   private contextService: ContextService;
   private configService: ConfigService;
-  private logger: Logger;
+  // Using singleton logger from monitoring
 
   constructor() {
-    this.logger = new Logger('LinearSync');
+    // Use singleton logger
     this.configService = new ConfigService();
     this.contextService = new ContextService();
 
@@ -90,11 +90,11 @@ export class LinearSyncService {
         }
       }
 
-      this.logger.info(
+      logger.info(
         `Sync complete: ${result.created} created, ${result.updated} updated`
       );
     } catch (error: unknown) {
-      this.logger.error('Sync failed:', error);
+      logger.error('Sync failed:', error);
       const message = error instanceof Error ? error.message : String(error);
       result.errors.push(message);
     }
@@ -114,17 +114,17 @@ export class LinearSyncService {
       if (existingTask) {
         if (this.hasChanges(existingTask, task)) {
           await this.contextService.updateTask(existingTask.id, task);
-          this.logger.debug(`Updated task: ${issue.identifier}`);
+          logger.debug(`Updated task: ${issue.identifier}`);
           return 'updated';
         }
         return 'skipped';
       } else {
         await this.contextService.createTask(task);
-        this.logger.debug(`Created task: ${issue.identifier}`);
+        logger.debug(`Created task: ${issue.identifier}`);
         return 'created';
       }
     } catch (error: unknown) {
-      this.logger.error(`Failed to sync issue ${issue.identifier}:`, error);
+      logger.error(`Failed to sync issue ${issue.identifier}:`, error);
       throw error;
     }
   }
@@ -142,7 +142,7 @@ export class LinearSyncService {
           task.externalId,
           updateData
         );
-        this.logger.debug(`Updated Linear issue: ${updated.identifier}`);
+        logger.debug(`Updated Linear issue: ${updated.identifier}`);
         return updated;
       } else {
         const config = await this.configService.getConfig();
@@ -160,11 +160,11 @@ export class LinearSyncService {
         await this.contextService.updateTask(taskId, {
           externalId: created.id,
         });
-        this.logger.debug(`Created Linear issue: ${created.identifier}`);
+        logger.debug(`Created Linear issue: ${created.identifier}`);
         return created;
       }
     } catch (error: unknown) {
-      this.logger.error(`Failed to sync task ${taskId} to Linear:`, error);
+      logger.error(`Failed to sync task ${taskId} to Linear:`, error);
       throw error;
     }
   }
@@ -176,10 +176,10 @@ export class LinearSyncService {
 
       if (task) {
         await this.contextService.deleteTask(task.id);
-        this.logger.debug(`Removed local task: ${identifier}`);
+        logger.debug(`Removed local task: ${identifier}`);
       }
     } catch (error: unknown) {
-      this.logger.error(`Failed to remove task ${identifier}:`, error);
+      logger.error(`Failed to remove task ${identifier}:`, error);
       throw error;
     }
   }

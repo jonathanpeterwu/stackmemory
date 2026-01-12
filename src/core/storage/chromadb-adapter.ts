@@ -1,6 +1,6 @@
 /**
  * ChromaDB Storage Adapter for StackMemory
- * 
+ *
  * Provides vector storage and semantic search capabilities for context data
  * using ChromaDB cloud service with user and team segmentation.
  */
@@ -57,8 +57,9 @@ export class ChromaDBAdapter {
 
   async initialize(): Promise<void> {
     try {
-      const collectionName = this.config.collectionName || 'stackmemory_contexts';
-      
+      const collectionName =
+        this.config.collectionName || 'stackmemory_contexts';
+
       // Get or create collection with metadata for filtering
       this.collection = await this.client.getOrCreateCollection({
         name: collectionName,
@@ -115,7 +116,9 @@ export class ChromaDBAdapter {
         metadatas: [document.metadata],
       });
 
-      this.logger.debug(`Stored frame ${frame.frameId} for user ${this.userId}`);
+      this.logger.debug(
+        `Stored frame ${frame.frameId} for user ${this.userId}`
+      );
     } catch (error: unknown) {
       this.logger.error(`Failed to store frame ${frame.frameId}`, error);
       throw error;
@@ -136,7 +139,7 @@ export class ChromaDBAdapter {
 
     try {
       const contextId = `${type}_${uuidv4()}_${this.userId}`;
-      
+
       const documentMetadata: any = {
         user_id: this.userId,
         frame_id: metadata?.frame_id || 'none',
@@ -235,8 +238,12 @@ export class ChromaDBAdapter {
       });
 
       // Format results
-      const contexts: Array<{ content: string; metadata: any; distance: number }> = [];
-      
+      const contexts: Array<{
+        content: string;
+        metadata: any;
+        distance: number;
+      }> = [];
+
       if (results.documents && results.documents[0]) {
         for (let i = 0; i < results.documents[0].length; i++) {
           contexts.push({
@@ -283,7 +290,7 @@ export class ChromaDBAdapter {
 
       // Sort by timestamp and limit
       const contexts: Array<{ content: string; metadata: any }> = [];
-      
+
       if (results.documents) {
         const indexed = results.documents.map((doc, i) => ({
           content: doc || '',
@@ -291,7 +298,9 @@ export class ChromaDBAdapter {
         }));
 
         // Sort by timestamp descending
-        indexed.sort((a, b) => (b.metadata.timestamp || 0) - (a.metadata.timestamp || 0));
+        indexed.sort(
+          (a, b) => (b.metadata.timestamp || 0) - (a.metadata.timestamp || 0)
+        );
 
         // Take limit
         contexts.push(...indexed.slice(0, limit));
@@ -313,7 +322,7 @@ export class ChromaDBAdapter {
     }
 
     try {
-      const cutoffTime = Date.now() - (olderThanDays * 24 * 60 * 60 * 1000);
+      const cutoffTime = Date.now() - olderThanDays * 24 * 60 * 60 * 1000;
 
       // Get old documents
       const results = await this.collection.get({
@@ -361,7 +370,7 @@ export class ChromaDBAdapter {
       });
 
       const contexts: Array<{ content: string; metadata: any }> = [];
-      
+
       if (results.documents) {
         for (let i = 0; i < results.documents.length; i++) {
           contexts.push({

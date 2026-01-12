@@ -25,14 +25,14 @@ export class FrameDigestGenerator {
 
       // Generate text summary
       const text = this.generateTextDigest(frame, events, anchors);
-      
+
       // Generate structured data
       const structured = this.generateStructuredDigest(frame, events, anchors);
 
       return { text, structured };
     } catch (error: unknown) {
       logger.error('Failed to generate frame digest', { frameId, error });
-      
+
       return {
         text: `Error generating digest for frame ${frameId}`,
         structured: { error: (error as Error).message },
@@ -43,12 +43,18 @@ export class FrameDigestGenerator {
   /**
    * Generate text summary of frame
    */
-  private generateTextDigest(frame: Frame, events: Event[], anchors: Anchor[]): string {
+  private generateTextDigest(
+    frame: Frame,
+    events: Event[],
+    anchors: Anchor[]
+  ): string {
     const lines: string[] = [];
 
     // Frame header
     lines.push(`Frame: ${frame.name} (${frame.type})`);
-    lines.push(`Duration: ${this.formatDuration(frame.created_at, frame.closed_at)}`);
+    lines.push(
+      `Duration: ${this.formatDuration(frame.created_at, frame.closed_at)}`
+    );
     lines.push('');
 
     // Goals and constraints
@@ -68,7 +74,7 @@ export class FrameDigestGenerator {
     if (importantAnchors.length > 0) {
       lines.push('');
       lines.push('Key Decisions & Facts:');
-      importantAnchors.forEach(anchor => {
+      importantAnchors.forEach((anchor) => {
         lines.push(`- ${anchor.type}: ${anchor.text}`);
       });
     }
@@ -78,7 +84,7 @@ export class FrameDigestGenerator {
     if (eventSummary.length > 0) {
       lines.push('');
       lines.push('Activity Summary:');
-      eventSummary.forEach(summary => {
+      eventSummary.forEach((summary) => {
         lines.push(`- ${summary}`);
       });
     }
@@ -98,7 +104,11 @@ export class FrameDigestGenerator {
   /**
    * Generate structured digest data
    */
-  private generateStructuredDigest(frame: Frame, events: Event[], anchors: Anchor[]): Record<string, any> {
+  private generateStructuredDigest(
+    frame: Frame,
+    events: Event[],
+    anchors: Anchor[]
+  ): Record<string, any> {
     const eventsByType = this.groupEventsByType(events);
     const anchorsByType = this.groupAnchorsByType(anchors);
 
@@ -109,7 +119,9 @@ export class FrameDigestGenerator {
       duration: {
         startTime: frame.created_at,
         endTime: frame.closed_at,
-        durationMs: frame.closed_at ? (frame.closed_at - frame.created_at) * 1000 : null,
+        durationMs: frame.closed_at
+          ? (frame.closed_at - frame.created_at) * 1000
+          : null,
       },
       activity: {
         totalEvents: events.length,
@@ -170,12 +182,14 @@ export class FrameDigestGenerator {
 
     // Observations summary
     if (eventsByType.observation && eventsByType.observation.length > 0) {
-      summaries.push(`Recorded ${eventsByType.observation.length} observations`);
+      summaries.push(
+        `Recorded ${eventsByType.observation.length} observations`
+      );
     }
 
     // Error summary
-    const errorEvents = events.filter((e: any) => 
-      e.payload.error || e.payload.status === 'error'
+    const errorEvents = events.filter(
+      (e: any) => e.payload.error || e.payload.status === 'error'
     );
     if (errorEvents.length > 0) {
       summaries.push(`Encountered ${errorEvents.length} errors`);
@@ -189,14 +203,14 @@ export class FrameDigestGenerator {
    */
   private groupEventsByType(events: Event[]): Record<string, Event[]> {
     const groups: Record<string, Event[]> = {};
-    
+
     for (const event of events) {
       if (!groups[event.event_type]) {
         groups[event.event_type] = [];
       }
       groups[event.event_type].push(event);
     }
-    
+
     return groups;
   }
 
@@ -205,11 +219,11 @@ export class FrameDigestGenerator {
    */
   private groupAnchorsByType(anchors: Anchor[]): Record<string, number> {
     const groups: Record<string, number> = {};
-    
+
     for (const anchor of anchors) {
       groups[anchor.type] = (groups[anchor.type] || 0) + 1;
     }
-    
+
     return groups;
   }
 
@@ -218,12 +232,12 @@ export class FrameDigestGenerator {
    */
   private countTools(toolEvents: Event[]): Record<string, number> {
     const counts: Record<string, number> = {};
-    
+
     for (const event of toolEvents) {
       const toolName = event.payload.tool_name || 'unknown';
       counts[toolName] = (counts[toolName] || 0) + 1;
     }
-    
+
     return counts;
   }
 
@@ -231,10 +245,7 @@ export class FrameDigestGenerator {
    * Check if events contain errors
    */
   private hasErrorEvents(events: Event[]): boolean {
-    return events.some(e => 
-      e.payload.error || 
-      e.payload.status === 'error'
-    );
+    return events.some((e) => e.payload.error || e.payload.status === 'error');
   }
 
   /**
@@ -242,13 +253,13 @@ export class FrameDigestGenerator {
    */
   private extractArtifacts(events: Event[]): string[] {
     const artifacts: string[] = [];
-    
+
     for (const event of events) {
       if (event.event_type === 'artifact' && event.payload.path) {
         artifacts.push(event.payload.path);
       }
     }
-    
+
     return [...new Set(artifacts)];
   }
 
@@ -277,9 +288,9 @@ export class FrameDigestGenerator {
     if (!endTime) {
       return 'ongoing';
     }
-    
+
     const durationMs = (endTime - startTime) * 1000;
-    
+
     if (durationMs < 1000) {
       return `${durationMs.toFixed(0)}ms`;
     } else if (durationMs < 60000) {

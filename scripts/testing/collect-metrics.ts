@@ -163,7 +163,7 @@ export class MetricsCollector {
   async scoreContextRelevance(
     sessionId: string,
     _query: string,
-    _retrievedContext: any
+    _retrievedContext: unknown
   ): Promise<number> {
     // In real implementation, this would use LLM to score relevance
     const score = Math.random() * 0.3 + 0.7; // Mock: 0.7-1.0 range
@@ -211,14 +211,14 @@ export class MetricsCollector {
 
       metrics.framesCreated = frames.length;
       metrics.framesClosedProperly = frames.filter(
-        (f: any) => f.state === 'closed'
+        (f: { state: string }) => f.state === 'closed'
       ).length;
       metrics.decisionsAnchored = anchors.length;
       metrics.toolCalls = events.filter(
-        (e: any) => e.type === 'tool_call'
+        (e: { type: string }) => e.type === 'tool_call'
       ).length;
       metrics.errorsEncountered = events.filter(
-        (e: any) => e.type === 'error'
+        (e: { type: string }) => e.type === 'error'
       ).length;
     }
 
@@ -279,7 +279,9 @@ export class MetricsCollector {
     };
   }
 
-  private calculateAverages(metrics: SessionMetrics[]): any {
+  private calculateAverages(
+    metrics: SessionMetrics[]
+  ): Partial<SessionMetrics> {
     const sum = metrics.reduce(
       (acc, m) => ({
         contextReestablishmentTime:

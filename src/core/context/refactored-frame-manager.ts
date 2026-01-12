@@ -37,14 +37,18 @@ export class RefactoredFrameManager {
   private frameDb: FrameDatabase;
   private frameStack: FrameStack;
   private digestGenerator: FrameDigestGenerator;
-  
+
   private currentRunId: string;
   private sessionId: string;
   private projectId: string;
   private queryMode: FrameQueryMode = FrameQueryMode.PROJECT_ACTIVE;
   private config: FrameManagerConfig;
 
-  constructor(db: Database.Database, projectId: string, config?: Partial<FrameManagerConfig>) {
+  constructor(
+    db: Database.Database,
+    projectId: string,
+    config?: Partial<FrameManagerConfig>
+  ) {
     this.projectId = projectId;
     this.config = {
       projectId,
@@ -58,7 +62,11 @@ export class RefactoredFrameManager {
 
     // Initialize modules
     this.frameDb = new FrameDatabase(db);
-    this.frameStack = new FrameStack(this.frameDb, projectId, this.currentRunId);
+    this.frameStack = new FrameStack(
+      this.frameDb,
+      projectId,
+      this.currentRunId
+    );
     this.digestGenerator = new FrameDigestGenerator(this.frameDb);
 
     // Initialize database schema
@@ -77,7 +85,7 @@ export class RefactoredFrameManager {
   async initialize(): Promise<void> {
     try {
       await this.frameStack.initialize();
-      
+
       logger.info('Frame manager initialization completed', {
         stackDepth: this.frameStack.getDepth(),
       });
@@ -107,8 +115,11 @@ export class RefactoredFrameManager {
     inputs?: Record<string, any>,
     parentFrameId?: string
   ): string {
-    return trace.traceSync('function', 'FrameManager.createFrame', { typeOrOptions, name }, () =>
-      this._createFrame(typeOrOptions, name, inputs, parentFrameId)
+    return trace.traceSync(
+      'function',
+      'FrameManager.createFrame',
+      { typeOrOptions, name },
+      () => this._createFrame(typeOrOptions, name, inputs, parentFrameId)
     );
   }
 
@@ -151,9 +162,10 @@ export class RefactoredFrameManager {
     }
 
     // Determine parent frame
-    const resolvedParentId = frameOptions.parentFrameId || this.frameStack.getCurrentFrameId();
-    const depth = resolvedParentId 
-      ? this.frameStack.getFrameStackDepth(resolvedParentId) + 1 
+    const resolvedParentId =
+      frameOptions.parentFrameId || this.frameStack.getCurrentFrameId();
+    const depth = resolvedParentId
+      ? this.frameStack.getFrameStackDepth(resolvedParentId) + 1
       : 0;
 
     // Create frame data
@@ -193,8 +205,11 @@ export class RefactoredFrameManager {
    * Close a frame and generate digest
    */
   closeFrame(frameId?: string, outputs?: Record<string, any>): void {
-    trace.traceSync('function', 'FrameManager.closeFrame', { frameId, outputs }, () =>
-      this._closeFrame(frameId, outputs)
+    trace.traceSync(
+      'function',
+      'FrameManager.closeFrame',
+      { frameId, outputs },
+      () => this._closeFrame(frameId, outputs)
     );
   }
 
@@ -268,8 +283,11 @@ export class RefactoredFrameManager {
     payload: Record<string, any>,
     frameId?: string
   ): string {
-    return trace.traceSync('function', 'FrameManager.addEvent', { eventType, frameId }, () =>
-      this._addEvent(eventType, payload, frameId)
+    return trace.traceSync(
+      'function',
+      'FrameManager.addEvent',
+      { eventType, frameId },
+      () => this._addEvent(eventType, payload, frameId)
     );
   }
 
@@ -324,8 +342,11 @@ export class RefactoredFrameManager {
     metadata: Record<string, any> = {},
     frameId?: string
   ): string {
-    return trace.traceSync('function', 'FrameManager.addAnchor', { type, frameId }, () =>
-      this._addAnchor(type, text, priority, metadata, frameId)
+    return trace.traceSync(
+      'function',
+      'FrameManager.addAnchor',
+      { type, frameId },
+      () => this._addAnchor(type, text, priority, metadata, frameId)
     );
   }
 
@@ -445,8 +466,13 @@ export class RefactoredFrameManager {
    */
   private closeChildFrames(parentFrameId: string): void {
     try {
-      const activeFrames = this.frameDb.getFramesByProject(this.projectId, 'active');
-      const childFrames = activeFrames.filter((f: any) => f.parent_frame_id === parentFrameId);
+      const activeFrames = this.frameDb.getFramesByProject(
+        this.projectId,
+        'active'
+      );
+      const childFrames = activeFrames.filter(
+        (f: any) => f.parent_frame_id === parentFrameId
+      );
 
       for (const childFrame of childFrames) {
         if (this.frameStack.isFrameActive(childFrame.frame_id)) {
@@ -479,15 +505,15 @@ export class RefactoredFrameManager {
    */
   extractConstraints(inputs: Record<string, any>): string[] {
     const constraints: string[] = [];
-    
+
     if (inputs.constraints && Array.isArray(inputs.constraints)) {
       constraints.push(...inputs.constraints);
     }
-    
+
     if (inputs.requirements && Array.isArray(inputs.requirements)) {
       constraints.push(...inputs.requirements);
     }
-    
+
     if (inputs.limitations && Array.isArray(inputs.limitations)) {
       constraints.push(...inputs.limitations);
     }

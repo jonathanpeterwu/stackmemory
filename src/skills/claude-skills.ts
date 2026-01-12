@@ -15,9 +15,30 @@ import {
   RepoIngestionSkill,
   type RepoIngestionOptions,
 } from './repo-ingestion-skill.js';
+import { DashboardLauncherSkill } from './dashboard-launcher.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import type { Frame } from '../core/context/frame-manager.js';
+
+// Type definitions for Dig skill
+interface Pattern {
+  type: string;
+  frequency: number;
+  examples: string[];
+}
+
+interface Decision {
+  timestamp: string;
+  decision: string;
+  context: string;
+}
+
+interface TimelineEntry {
+  timestamp: string;
+  event: string;
+  description: string;
+}
 
 export interface SkillContext {
   projectId: string;
@@ -31,7 +52,7 @@ export interface SkillContext {
 export interface SkillResult {
   success: boolean;
   message: string;
-  data?: any;
+  data?: unknown;
   action?: string;
 }
 
@@ -154,7 +175,7 @@ export class HandoffSkill {
     }
   }
 
-  private generateHandoffSummary(frames: any[], message: string): string {
+  private generateHandoffSummary(frames: Frame[], message: string): string {
     const completed = frames.filter((f) => f?.state === 'completed').length;
     const blocked = frames.filter((f) =>
       f?.outputs?.some((o) => o.type === 'error')
@@ -190,7 +211,7 @@ ${frames
     `.trim();
   }
 
-  private extractDependencies(frames: any[]): string[] {
+  private extractDependencies(frames: Frame[]): string[] {
     const deps = new Set<string>();
     frames.forEach((frame) => {
       if (frame?.inputs?.dependencies) {
@@ -210,7 +231,7 @@ ${frames
     return Array.from(deps);
   }
 
-  private generateActionItems(frames: any[]): string[] {
+  private generateActionItems(frames: Frame[]): string[] {
     const items: string[] = [];
 
     frames.forEach((frame) => {
@@ -264,7 +285,7 @@ export class CheckpointSkill {
     options?: {
       autoDetectRisky?: boolean;
       includeFiles?: string[];
-      metadata?: Record<string, any>;
+      metadata?: Record<string, unknown>;
     }
   ): Promise<SkillResult> {
     try {
@@ -534,7 +555,7 @@ export class CheckpointSkill {
     }
   }
 
-  private async loadCheckpoint(checkpointId: string): Promise<any> {
+  private async loadCheckpoint(checkpointId: string): Promise<unknown> {
     const checkpointPath = path.join(
       this.checkpointDir,
       `${checkpointId}.json`
@@ -590,19 +611,19 @@ export class ArchaeologistSkill {
       );
 
       // Extract patterns if requested
-      let patterns: any[] = [];
+      let patterns: Pattern[] = [];
       if (options?.patterns) {
         patterns = this.extractPatterns(filtered);
       }
 
       // Extract decisions if requested
-      let decisions: any[] = [];
+      let decisions: Decision[] = [];
       if (options?.decisions) {
         decisions = this.extractDecisions(filtered);
       }
 
       // Generate timeline if requested
-      let timeline: any[] = [];
+      let timeline: TimelineEntry[] = [];
       if (options?.timeline) {
         timeline = this.generateTimeline(filtered);
       }
@@ -676,7 +697,7 @@ export class ArchaeologistSkill {
     }
   }
 
-  private extractPatterns(results: any[]): any[] {
+  private extractPatterns(results: Frame[]): Pattern[] {
     const patterns: Map<string, number> = new Map();
 
     // Common patterns to look for
@@ -703,8 +724,8 @@ export class ArchaeologistSkill {
       .sort((a, b) => b.count - a.count);
   }
 
-  private extractDecisions(results: any[]): any[] {
-    const decisions: any[] = [];
+  private extractDecisions(results: Frame[]): Decision[] {
+    const decisions: Decision[] = [];
 
     // Keywords that indicate decisions
     const decisionKeywords = [
@@ -741,16 +762,19 @@ export class ArchaeologistSkill {
     return decisions.slice(0, 10); // Top 10 decisions
   }
 
-  private generateTimeline(results: any[]): any[] {
+  private generateTimeline(results: Frame[]): TimelineEntry[] {
     // Group by day
-    const timeline: Map<string, any[]> = new Map();
+    const timeline: Map<string, Frame[]> = new Map();
 
     results.forEach((result) => {
       const date = new Date(result.timestamp).toDateString();
       if (!timeline.has(date)) {
         timeline.set(date, []);
       }
-      timeline.get(date)!.push(result);
+      const dateItems = timeline.get(date);
+      if (dateItems) {
+        dateItems.push(result);
+      }
     });
 
     return Array.from(timeline.entries())
@@ -766,10 +790,10 @@ export class ArchaeologistSkill {
   }
 
   private generateArchaeologySummary(
-    results: any[],
-    patterns: any[],
-    decisions: any[],
-    timeline: any[]
+    results: Frame[],
+    patterns: Pattern[],
+    decisions: Decision[],
+    timeline: TimelineEntry[]
   ): string {
     let summary = '## Context Archaeology Report\n\n';
 
@@ -815,7 +839,7 @@ export class ClaudeSkillsManager {
   private handoffSkill: HandoffSkill;
   private checkpointSkill: CheckpointSkill;
   private archaeologistSkill: ArchaeologistSkill;
-  private dashboardLauncher: any; // DashboardLauncherSkill
+  private dashboardLauncher: DashboardLauncherSkill;
   private repoIngestionSkill: RepoIngestionSkill | null = null;
 
   constructor(private context: SkillContext) {
@@ -827,7 +851,7 @@ export class ClaudeSkillsManager {
     import('./dashboard-launcher.js').then((module) => {
       this.dashboardLauncher = new module.DashboardLauncherSkill();
       // Auto-launch on session start
-      this.dashboardLauncher.launch().catch((error: any) => {
+      this.dashboardLauncher.launch().catch((error: unknown) => {
         logger.warn('Dashboard auto-launch failed:', error);
       });
     });
@@ -846,7 +870,7 @@ export class ClaudeSkillsManager {
         context.userId,
         process.env['CHROMADB_TEAM_ID']
       );
-      this.repoIngestionSkill.initialize().catch((error: any) => {
+      this.repoIngestionSkill.initialize().catch((error: unknown) => {
         logger.warn('Repo ingestion skill initialization failed:', error);
       });
     }
@@ -855,7 +879,7 @@ export class ClaudeSkillsManager {
   async executeSkill(
     skillName: string,
     args: string[],
-    options?: Record<string, any>
+    options?: Record<string, unknown>
   ): Promise<SkillResult> {
     switch (skillName) {
       case 'handoff':

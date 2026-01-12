@@ -123,7 +123,7 @@ export class ContextRetriever {
 
   async retrieveContext(query: ContextQuery): Promise<ContextRetrievalResult> {
     const startTime = Date.now();
-    
+
     // Handle empty query gracefully
     if (!query.text || query.text.trim().length === 0) {
       logger.debug('Empty query provided, returning empty result');
@@ -139,7 +139,7 @@ export class ContextRetriever {
         },
       };
     }
-    
+
     const cacheKey = this.generateCacheKey(query);
 
     // Check cache first

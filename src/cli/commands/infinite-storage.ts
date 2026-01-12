@@ -6,7 +6,10 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import Table from 'cli-table3';
-import { InfiniteStorageSystem, StorageConfig } from '../../core/storage/infinite-storage.js';
+import {
+  InfiniteStorageSystem,
+  StorageConfig,
+} from '../../core/storage/infinite-storage.js';
 import { FrameManager } from '../../core/context/frame-manager.js';
 import { Logger } from '../../core/monitoring/logger.js';
 import dotenv from 'dotenv';
@@ -26,14 +29,13 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load environment variables
-dotenv.config({ 
+dotenv.config({
   path: path.join(__dirname, '../../../.env'),
   override: true,
-  silent: true
+  silent: true,
 });
 
 const logger = new Logger('InfiniteStorage-CLI');
@@ -57,17 +59,22 @@ export function createInfiniteStorageCommand(): Command {
       try {
         const config: StorageConfig = {
           redis: {
-            url: options.redisUrl || process.env['REDIS_URL'] || 'redis://localhost:6379',
+            url:
+              options.redisUrl ||
+              process.env['REDIS_URL'] ||
+              'redis://localhost:6379',
             ttlSeconds: 3600,
             maxMemoryMB: parseInt(process.env['REDIS_MAX_MEMORY_MB'] || '512'),
           },
           timeseries: {
-            connectionString: options.timeseriesUrl || process.env['TIMESERIES_URL'] || '',
+            connectionString:
+              options.timeseriesUrl || process.env['TIMESERIES_URL'] || '',
             retentionDays: 30,
           },
           s3: {
             bucket: options.s3Bucket || process.env['S3_BUCKET'] || '',
-            region: options.s3Region || process.env['AWS_REGION'] || 'us-east-1',
+            region:
+              options.s3Region || process.env['AWS_REGION'] || 'us-east-1',
             accessKeyId: process.env['AWS_ACCESS_KEY_ID'],
             secretAccessKey: process.env['AWS_SECRET_ACCESS_KEY'],
           },
@@ -78,17 +85,17 @@ export function createInfiniteStorageCommand(): Command {
         await storage.initialize();
 
         spinner.succeed('Infinite storage initialized');
-        
+
         console.log(chalk.green('\n✅ Storage Tiers Configured:'));
         console.log('  Hot (Redis): < 1 hour, 5ms latency');
         console.log('  Warm (TimeSeries): 1h - 7 days, 50ms latency');
         console.log('  Cold (S3): 7 - 30 days, 100ms latency');
         console.log('  Archive (Glacier): > 30 days, 1h latency');
-        
+
         // Save config to env
         const envPath = path.join(__dirname, '../../../.env');
         const updates: string[] = [];
-        
+
         if (!process.env['REDIS_URL'] && options.redisUrl) {
           updates.push(`REDIS_URL=${options.redisUrl}`);
         }
@@ -98,15 +105,20 @@ export function createInfiniteStorageCommand(): Command {
         if (!process.env['S3_BUCKET'] && options.s3Bucket) {
           updates.push(`S3_BUCKET=${options.s3Bucket}`);
         }
-        
+
         if (updates.length > 0) {
           const fs = await import('fs');
-          fs.appendFileSync(envPath, '\n# Infinite Storage Configuration\n' + updates.join('\n') + '\n');
+          fs.appendFileSync(
+            envPath,
+            '\n# Infinite Storage Configuration\n' + updates.join('\n') + '\n'
+          );
         }
       } catch (error: unknown) {
         spinner.fail('Failed to initialize storage');
         logger.error('Initialization error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -136,7 +148,9 @@ export function createInfiniteStorageCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Failed to store frames');
         logger.error('Store error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -167,7 +181,9 @@ export function createInfiniteStorageCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Failed to retrieve frame');
         logger.error('Retrieve error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -188,7 +204,7 @@ export function createInfiniteStorageCommand(): Command {
         spinner.stop();
 
         console.log(chalk.cyan('\n📊 Infinite Storage Metrics\n'));
-        
+
         const table = new Table({
           head: ['Metric', 'Value'],
           colWidths: [30, 40],
@@ -199,15 +215,19 @@ export function createInfiniteStorageCommand(): Command {
           ['Storage Size', formatBytes(metrics.storageBytes)],
           ['Avg Latency', `${metrics.avgLatencyMs.toFixed(2)}ms`],
           ['P50 Latency', `${metrics.p50LatencyMs}ms`],
-          ['P99 Latency', `${metrics.p99LatencyMs}ms`],
+          ['P99 Latency', `${metrics.p99LatencyMs}ms`]
         );
 
         console.log(table.toString());
 
         if (Object.keys(metrics.tierDistribution).length > 0) {
           console.log('\nTier Distribution:');
-          for (const [tier, count] of Object.entries(metrics.tierDistribution)) {
-            const percentage = ((count / metrics.totalObjects) * 100).toFixed(1);
+          for (const [tier, count] of Object.entries(
+            metrics.tierDistribution
+          )) {
+            const percentage = ((count / metrics.totalObjects) * 100).toFixed(
+              1
+            );
             console.log(`  ${tier}: ${count} objects (${percentage}%)`);
           }
         }
@@ -216,13 +236,19 @@ export function createInfiniteStorageCommand(): Command {
         console.log(chalk.cyan('\n🎯 STA-287 Performance Targets:'));
         const p50Target = metrics.p50LatencyMs <= 50;
         const p99Target = metrics.p99LatencyMs <= 500;
-        
-        console.log(`  P50 ≤ 50ms: ${p50Target ? chalk.green('✅ PASS') : chalk.red('❌ FAIL')} (${metrics.p50LatencyMs}ms)`);
-        console.log(`  P99 ≤ 500ms: ${p99Target ? chalk.green('✅ PASS') : chalk.red('❌ FAIL')} (${metrics.p99LatencyMs}ms)`);
+
+        console.log(
+          `  P50 ≤ 50ms: ${p50Target ? chalk.green('✅ PASS') : chalk.red('❌ FAIL')} (${metrics.p50LatencyMs}ms)`
+        );
+        console.log(
+          `  P99 ≤ 500ms: ${p99Target ? chalk.green('✅ PASS') : chalk.red('❌ FAIL')} (${metrics.p99LatencyMs}ms)`
+        );
       } catch (error: unknown) {
         spinner.fail('Failed to get metrics');
         logger.error('Metrics error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -246,7 +272,9 @@ export function createInfiniteStorageCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Migration failed');
         logger.error('Migration error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -259,11 +287,11 @@ export function createInfiniteStorageCommand(): Command {
 
       try {
         const config = getStorageConfig();
-        
+
         spinner.stop();
-        
+
         console.log(chalk.cyan('\n📦 Storage System Status\n'));
-        
+
         // Check Redis
         if (config.redis?.url) {
           try {
@@ -284,29 +312,48 @@ export function createInfiniteStorageCommand(): Command {
         if (config.timeseries?.connectionString) {
           try {
             const { Pool } = await import('pg');
-            const pool = new Pool({ connectionString: config.timeseries.connectionString });
+            const pool = new Pool({
+              connectionString: config.timeseries.connectionString,
+            });
             await pool.query('SELECT 1');
             await pool.end();
-            console.log('TimeSeries DB (Warm Tier): ' + chalk.green('✅ Connected'));
+            console.log(
+              'TimeSeries DB (Warm Tier): ' + chalk.green('✅ Connected')
+            );
           } catch {
-            console.log('TimeSeries DB (Warm Tier): ' + chalk.red('❌ Not connected'));
+            console.log(
+              'TimeSeries DB (Warm Tier): ' + chalk.red('❌ Not connected')
+            );
           }
         } else {
-          console.log('TimeSeries DB (Warm Tier): ' + chalk.yellow('⚠️ Not configured'));
+          console.log(
+            'TimeSeries DB (Warm Tier): ' + chalk.yellow('⚠️ Not configured')
+          );
         }
 
         // Check S3
         if (config.s3?.bucket) {
-          console.log(`S3 (Cold/Archive Tier): ${chalk.green('✅')} Bucket: ${config.s3.bucket}`);
+          console.log(
+            `S3 (Cold/Archive Tier): ${chalk.green('✅')} Bucket: ${config.s3.bucket}`
+          );
         } else {
-          console.log('S3 (Cold/Archive Tier): ' + chalk.yellow('⚠️ Not configured'));
+          console.log(
+            'S3 (Cold/Archive Tier): ' + chalk.yellow('⚠️ Not configured')
+          );
         }
 
-        console.log('\n' + chalk.gray('Configure missing tiers with: stackmemory infinite-storage init'));
+        console.log(
+          '\n' +
+            chalk.gray(
+              'Configure missing tiers with: stackmemory infinite-storage init'
+            )
+        );
       } catch (error: unknown) {
         spinner.fail('Failed to check status');
         logger.error('Status error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 

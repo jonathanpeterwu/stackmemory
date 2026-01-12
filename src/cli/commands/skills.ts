@@ -7,7 +7,10 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { ClaudeSkillsManager, type SkillContext } from '../../skills/claude-skills.js';
+import {
+  ClaudeSkillsManager,
+  type SkillContext,
+} from '../../skills/claude-skills.js';
 import { DualStackManager } from '../../core/context/dual-stack-manager.js';
 import { FrameHandoffManager } from '../../core/context/frame-handoff-manager.js';
 import { ContextRetriever } from '../../core/retrieval/context-retriever.js';
@@ -29,12 +32,11 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 async function initializeSkillContext(): Promise<SkillContext> {
   const config = ConfigManager.getInstance();
   const projectId = config.get('project.id');
   const userId = config.get('user.id') || process.env['USER'] || 'default';
-  
+
   const dbPath = path.join(
     os.homedir(),
     '.stackmemory',
@@ -61,28 +63,37 @@ async function initializeSkillContext(): Promise<SkillContext> {
 }
 
 export function createSkillsCommand(): Command {
-  const skillsCmd = new Command('skills')
-    .description('Execute Claude skills for enhanced workflow');
+  const skillsCmd = new Command('skills').description(
+    'Execute Claude skills for enhanced workflow'
+  );
 
   // Handoff skill command
   skillsCmd
     .command('handoff <targetUser> <message>')
     .description('Streamline frame handoffs between team members')
-    .option('-p, --priority <level>', 'Set priority (low, medium, high, critical)', 'medium')
+    .option(
+      '-p, --priority <level>',
+      'Set priority (low, medium, high, critical)',
+      'medium'
+    )
     .option('-f, --frames <frames...>', 'Specific frames to handoff')
     .option('--no-auto-detect', 'Disable auto-detection of frames')
     .action(async (targetUser, message, options) => {
       const spinner = ora('Initiating handoff...').start();
-      
+
       try {
         const context = await initializeSkillContext();
         const skillsManager = new ClaudeSkillsManager(context);
-        
-        const result = await skillsManager.executeSkill('handoff', [targetUser, message], {
-          priority: options.priority,
-          frames: options.frames,
-          autoDetect: options.autoDetect !== false,
-        });
+
+        const result = await skillsManager.executeSkill(
+          'handoff',
+          [targetUser, message],
+          {
+            priority: options.priority,
+            frames: options.frames,
+            autoDetect: options.autoDetect !== false,
+          }
+        );
 
         spinner.stop();
 
@@ -95,7 +106,7 @@ export function createSkillsCommand(): Command {
             console.log(`  Priority: ${result.data.priority}`);
             if (result.data.actionItems?.length > 0) {
               console.log(chalk.yellow('\n  Action Items:'));
-              result.data.actionItems.forEach(item => {
+              result.data.actionItems.forEach((item) => {
                 console.log(`    • ${item}`);
               });
             }
@@ -113,7 +124,8 @@ export function createSkillsCommand(): Command {
     });
 
   // Checkpoint skill commands
-  const checkpointCmd = skillsCmd.command('checkpoint')
+  const checkpointCmd = skillsCmd
+    .command('checkpoint')
     .description('Create and manage recovery points');
 
   checkpointCmd
@@ -123,15 +135,19 @@ export function createSkillsCommand(): Command {
     .option('--auto-detect-risky', 'Auto-detect risky operations')
     .action(async (description, options) => {
       const spinner = ora('Creating checkpoint...').start();
-      
+
       try {
         const context = await initializeSkillContext();
         const skillsManager = new ClaudeSkillsManager(context);
-        
-        const result = await skillsManager.executeSkill('checkpoint', ['create', description], {
-          includeFiles: options.files,
-          autoDetectRisky: options.autoDetectRisky,
-        });
+
+        const result = await skillsManager.executeSkill(
+          'checkpoint',
+          ['create', description],
+          {
+            includeFiles: options.files,
+            autoDetectRisky: options.autoDetectRisky,
+          }
+        );
 
         spinner.stop();
 
@@ -160,12 +176,15 @@ export function createSkillsCommand(): Command {
     .description('Restore from a checkpoint')
     .action(async (checkpointId) => {
       const spinner = ora('Restoring checkpoint...').start();
-      
+
       try {
         const context = await initializeSkillContext();
         const skillsManager = new ClaudeSkillsManager(context);
-        
-        const result = await skillsManager.executeSkill('checkpoint', ['restore', checkpointId]);
+
+        const result = await skillsManager.executeSkill('checkpoint', [
+          'restore',
+          checkpointId,
+        ]);
 
         spinner.stop();
 
@@ -195,15 +214,19 @@ export function createSkillsCommand(): Command {
     .option('-s, --since <date>', 'Show checkpoints since date')
     .action(async (options) => {
       const spinner = ora('Loading checkpoints...').start();
-      
+
       try {
         const context = await initializeSkillContext();
         const skillsManager = new ClaudeSkillsManager(context);
-        
-        const result = await skillsManager.executeSkill('checkpoint', ['list'], {
-          limit: parseInt(options.limit),
-          since: options.since ? new Date(options.since) : undefined,
-        });
+
+        const result = await skillsManager.executeSkill(
+          'checkpoint',
+          ['list'],
+          {
+            limit: parseInt(options.limit),
+            since: options.since ? new Date(options.since) : undefined,
+          }
+        );
 
         spinner.stop();
 
@@ -214,7 +237,9 @@ export function createSkillsCommand(): Command {
               const riskIndicator = cp.risky ? chalk.yellow(' [RISKY]') : '';
               console.log(`${chalk.bold(cp.id)}${riskIndicator}`);
               console.log(`  ${cp.description}`);
-              console.log(chalk.gray(`  ${cp.timestamp} (${cp.frameCount} frames)\n`));
+              console.log(
+                chalk.gray(`  ${cp.timestamp} (${cp.frameCount} frames)\n`)
+              );
             });
           } else {
             console.log(chalk.gray('No checkpoints found'));
@@ -236,12 +261,16 @@ export function createSkillsCommand(): Command {
     .description('Show differences between two checkpoints')
     .action(async (checkpoint1, checkpoint2) => {
       const spinner = ora('Comparing checkpoints...').start();
-      
+
       try {
         const context = await initializeSkillContext();
         const skillsManager = new ClaudeSkillsManager(context);
-        
-        const result = await skillsManager.executeSkill('checkpoint', ['diff', checkpoint1, checkpoint2]);
+
+        const result = await skillsManager.executeSkill('checkpoint', [
+          'diff',
+          checkpoint1,
+          checkpoint2,
+        ]);
 
         spinner.stop();
 
@@ -270,17 +299,21 @@ export function createSkillsCommand(): Command {
   skillsCmd
     .command('dig <query>')
     .description('Deep historical context retrieval')
-    .option('-d, --depth <depth>', 'Search depth (e.g., 30days, 6months, all)', '30days')
+    .option(
+      '-d, --depth <depth>',
+      'Search depth (e.g., 30days, 6months, all)',
+      '30days'
+    )
     .option('--patterns', 'Extract patterns from results')
     .option('--decisions', 'Extract key decisions')
     .option('--timeline', 'Generate activity timeline')
     .action(async (query, options) => {
       const spinner = ora('Digging through context...').start();
-      
+
       try {
         const context = await initializeSkillContext();
         const skillsManager = new ClaudeSkillsManager(context);
-        
+
         const result = await skillsManager.executeSkill('dig', [query], {
           depth: options.depth,
           patterns: options.patterns,
@@ -292,10 +325,14 @@ export function createSkillsCommand(): Command {
 
         if (result.success) {
           console.log(chalk.green('✓'), result.message);
-          
+
           if (result.data) {
-            console.log(chalk.cyan(`\nSearched ${result.data.timeRange.from} to ${result.data.timeRange.to}`));
-            
+            console.log(
+              chalk.cyan(
+                `\nSearched ${result.data.timeRange.from} to ${result.data.timeRange.to}`
+              )
+            );
+
             if (result.data.summary) {
               console.log('\n' + result.data.summary);
             } else {
@@ -303,7 +340,9 @@ export function createSkillsCommand(): Command {
               if (result.data.topResults?.length > 0) {
                 console.log(chalk.cyan('\nTop Results:'));
                 result.data.topResults.forEach((r: any) => {
-                  console.log(`  ${chalk.yellow(`[${r.score.toFixed(2)}]`)} ${r.summary}`);
+                  console.log(
+                    `  ${chalk.yellow(`[${r.score.toFixed(2)}]`)} ${r.summary}`
+                  );
                 });
               }
 
@@ -319,7 +358,9 @@ export function createSkillsCommand(): Command {
               if (result.data.decisions?.length > 0) {
                 console.log(chalk.cyan('\nKey Decisions:'));
                 result.data.decisions.slice(0, 5).forEach((d: any) => {
-                  console.log(`  ${chalk.gray(new Date(d.timestamp).toLocaleDateString())}: ${d.decision}`);
+                  console.log(
+                    `  ${chalk.gray(new Date(d.timestamp).toLocaleDateString())}: ${d.decision}`
+                  );
                 });
               }
 
@@ -351,17 +392,21 @@ export function createSkillsCommand(): Command {
     .action(async (skill) => {
       const context = await initializeSkillContext();
       const skillsManager = new ClaudeSkillsManager(context);
-      
+
       if (skill) {
         console.log(skillsManager.getSkillHelp(skill));
       } else {
         console.log(chalk.cyan('Available Claude Skills:\n'));
-        console.log('  handoff    - Streamline frame handoffs between team members');
+        console.log(
+          '  handoff    - Streamline frame handoffs between team members'
+        );
         console.log('  checkpoint - Create and manage recovery points');
         console.log('  dig        - Deep historical context retrieval\n');
-        console.log('Use "stackmemory skills help <skill>" for detailed help on each skill');
+        console.log(
+          'Use "stackmemory skills help <skill>" for detailed help on each skill'
+        );
       }
-      
+
       await context.database.disconnect();
     });
 

@@ -21,7 +21,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 interface TasksByStatus {
   [status: string]: Array<{
     identifier: string;

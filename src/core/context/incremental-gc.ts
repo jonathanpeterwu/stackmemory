@@ -1,6 +1,6 @@
 /**
  * Incremental Garbage Collection System (STA-288)
- * 
+ *
  * Implements incremental GC strategy to avoid stop-the-world pauses
  * with generational aging and priority-based collection.
  */
@@ -9,13 +9,13 @@ import { Frame, FrameManager } from './frame-manager.js';
 import { Logger } from '../monitoring/logger.js';
 
 interface GCConfig {
-  framesPerCycle: number;      // Process in chunks (default: 100)
-  cycleInterval: number;       // Every minute (default: 60s)
-  maxAge: number;              // Max age before eligible for collection (30 days)
+  framesPerCycle: number; // Process in chunks (default: 100)
+  cycleInterval: number; // Every minute (default: 60s)
+  maxAge: number; // Max age before eligible for collection (30 days)
   generations: {
-    young: number;             // < 1 day
-    mature: number;            // 1-7 days  
-    old: number;               // 7-30 days
+    young: number; // < 1 day
+    mature: number; // 1-7 days
+    old: number; // 7-30 days
   };
 }
 
@@ -39,7 +39,7 @@ export class IncrementalGarbageCollector {
   constructor(frameManager: FrameManager, config: Partial<GCConfig> = {}) {
     this.frameManager = frameManager;
     this.logger = new Logger('IncrementalGC');
-    
+
     this.config = {
       framesPerCycle: config.framesPerCycle || 100,
       cycleInterval: config.cycleInterval || 60000, // 60 seconds
@@ -48,7 +48,7 @@ export class IncrementalGarbageCollector {
         young: config.generations?.young || 24 * 60 * 60 * 1000, // 1 day
         mature: config.generations?.mature || 7 * 24 * 60 * 60 * 1000, // 7 days
         old: config.generations?.old || 30 * 24 * 60 * 60 * 1000, // 30 days
-      }
+      },
     };
 
     this.stats = {
@@ -57,7 +57,7 @@ export class IncrementalGarbageCollector {
       lastRunTime: 0,
       cycleCount: 0,
       avgCycleTime: 0,
-      protectedFrames: 0
+      protectedFrames: 0,
     };
 
     this.logger.info('Incremental GC initialized', this.config);
@@ -73,10 +73,12 @@ export class IncrementalGarbageCollector {
     }
 
     this.isRunning = true;
-    this.logger.info(`Starting incremental GC with ${this.config.cycleInterval}ms intervals`);
-    
+    this.logger.info(
+      `Starting incremental GC with ${this.config.cycleInterval}ms intervals`
+    );
+
     this.cycleTimer = setInterval(() => {
-      this.runCycle().catch(error => {
+      this.runCycle().catch((error) => {
         this.logger.error('GC cycle failed', error);
       });
     }, this.config.cycleInterval);
@@ -99,7 +101,9 @@ export class IncrementalGarbageCollector {
    */
   async runCycle(): Promise<void> {
     const startTime = Date.now();
-    this.logger.debug('Starting GC cycle', { cycle: this.stats.cycleCount + 1 });
+    this.logger.debug('Starting GC cycle', {
+      cycle: this.stats.cycleCount + 1,
+    });
 
     try {
       // Get all frames for analysis
@@ -113,23 +117,22 @@ export class IncrementalGarbageCollector {
 
       // Categorize frames by generation and protection status
       const categorized = this.categorizeFrames(allFrames);
-      
+
       // Select candidates for collection (prioritized)
       const candidates = this.selectCollectionCandidates(categorized);
-      
+
       // Process in chunks to avoid blocking
       const collected = await this.collectFramesIncremental(candidates);
-      
+
       // Update statistics
       this.updateStats(startTime, collected.length);
-      
+
       this.logger.info('GC cycle completed', {
         cycle: this.stats.cycleCount,
         collected: collected.length,
         protected: this.stats.protectedFrames,
-        duration: Date.now() - startTime
+        duration: Date.now() - startTime,
       });
-
     } catch (error: unknown) {
       this.logger.error('GC cycle error', error);
     }
@@ -149,7 +152,7 @@ export class IncrementalGarbageCollector {
 
     for (const frame of frames) {
       const age = now - frame.created_at;
-      
+
       // Check if frame is protected
       if (this.isProtected(frame)) {
         categories.protected.push(frame);
@@ -167,12 +170,12 @@ export class IncrementalGarbageCollector {
     }
 
     this.stats.protectedFrames = categories.protected.length;
-    
+
     this.logger.debug('Frame categorization', {
       young: categories.young.length,
       mature: categories.mature.length,
       old: categories.old.length,
-      protected: categories.protected.length
+      protected: categories.protected.length,
     });
 
     return categories;
@@ -194,7 +197,7 @@ export class IncrementalGarbageCollector {
     }
 
     // Protect recent frames (< 1 hour old)
-    const recentThreshold = Date.now() - (60 * 60 * 1000); // 1 hour
+    const recentThreshold = Date.now() - 60 * 60 * 1000; // 1 hour
     if (frame.created_at > recentThreshold) {
       return true;
     }
@@ -205,7 +208,8 @@ export class IncrementalGarbageCollector {
     }
 
     // Protect parent frames (have children)
-    if (frame.depth === 0) { // Root frames
+    if (frame.depth === 0) {
+      // Root frames
       return true;
     }
 
@@ -217,20 +221,25 @@ export class IncrementalGarbageCollector {
    */
   private selectCollectionCandidates(categorized: any): Frame[] {
     const candidates: Frame[] = [];
-    
+
     // Priority 1: Closed frames without outputs
-    const emptyClosedFrames = categorized.old.filter((f: Frame) => 
-      f.state === 'closed' && (!f.outputs || Object.keys(f.outputs).length === 0)
+    const emptyClosedFrames = categorized.old.filter(
+      (f: Frame) =>
+        f.state === 'closed' &&
+        (!f.outputs || Object.keys(f.outputs).length === 0)
     );
-    
-    // Priority 2: Orphaned frames (no dependencies)  
-    const orphaned = [...categorized.mature, ...categorized.old].filter((f: Frame) =>
-      this.isOrphaned(f)
+
+    // Priority 2: Orphaned frames (no dependencies)
+    const orphaned = [...categorized.mature, ...categorized.old].filter(
+      (f: Frame) => this.isOrphaned(f)
     );
-    
+
     // Priority 3: Duplicate traces
-    const duplicates = this.findDuplicateTraces([...categorized.mature, ...categorized.old]);
-    
+    const duplicates = this.findDuplicateTraces([
+      ...categorized.mature,
+      ...categorized.old,
+    ]);
+
     // Priority 4: Old mature frames
     const oldMature = categorized.mature.filter((f: Frame) => {
       const age = Date.now() - f.created_at;
@@ -252,9 +261,11 @@ export class IncrementalGarbageCollector {
    * Check if frame is orphaned (no dependencies)
    */
   private isOrphaned(frame: Frame): boolean {
-    // Check if frame has any references from other frames  
+    // Check if frame has any references from other frames
     // This is a simplified check - in practice, would analyze actual dependencies
-    return !frame.parent_frame_id && frame.depth > 0 && frame.state === 'closed';
+    return (
+      !frame.parent_frame_id && frame.depth > 0 && frame.state === 'closed'
+    );
   }
 
   /**
@@ -262,7 +273,7 @@ export class IncrementalGarbageCollector {
    */
   private findDuplicateTraces(frames: Frame[]): Frame[] {
     const signatureMap = new Map<string, Frame[]>();
-    
+
     for (const frame of frames) {
       // Create a signature from trace content
       const signature = this.createTraceSignature(frame);
@@ -300,31 +311,32 @@ export class IncrementalGarbageCollector {
   /**
    * Collect frames incrementally to avoid blocking
    */
-  private async collectFramesIncremental(candidates: Frame[]): Promise<Frame[]> {
+  private async collectFramesIncremental(
+    candidates: Frame[]
+  ): Promise<Frame[]> {
     const collected: Frame[] = [];
     const chunkSize = Math.min(10, Math.ceil(candidates.length / 10)); // Process in small chunks
 
     for (let i = 0; i < candidates.length; i += chunkSize) {
       const chunk = candidates.slice(i, i + chunkSize);
-      
+
       for (const frame of chunk) {
         try {
           await this.frameManager.deleteFrame(frame.frame_id);
           collected.push(frame);
-          
+
           this.logger.debug(`Collected frame ${frame.frame_id}`, {
             age: Date.now() - frame.created_at,
             type: frame.type,
-            reason: this.getCollectionReason(frame)
+            reason: this.getCollectionReason(frame),
           });
-          
         } catch (error: unknown) {
           this.logger.warn(`Failed to collect frame ${frame.frame_id}`, error);
         }
       }
 
       // Yield control to avoid blocking
-      await new Promise(resolve => setImmediate(resolve));
+      await new Promise((resolve) => setImmediate(resolve));
     }
 
     return collected;
@@ -336,11 +348,14 @@ export class IncrementalGarbageCollector {
   private getCollectionReason(frame: Frame): string {
     const age = Date.now() - frame.created_at;
     const ageHours = Math.floor(age / (60 * 60 * 1000));
-    
-    if (frame.state === 'closed' && (!frame.outputs || Object.keys(frame.outputs).length === 0)) {
+
+    if (
+      frame.state === 'closed' &&
+      (!frame.outputs || Object.keys(frame.outputs).length === 0)
+    ) {
       return 'empty-closed';
     }
-    if (this.isOrphaned(frame)) return 'orphaned';  
+    if (this.isOrphaned(frame)) return 'orphaned';
     if (ageHours > 24 * 30) return `old (${ageHours}h)`;
     return 'duplicate';
   }
@@ -350,12 +365,13 @@ export class IncrementalGarbageCollector {
    */
   private updateStats(startTime: number, collectedCount: number): void {
     const cycleTime = Date.now() - startTime;
-    
+
     this.stats.cycleCount++;
     this.stats.collectedFrames += collectedCount;
     this.stats.lastRunTime = startTime;
-    this.stats.avgCycleTime = 
-      (this.stats.avgCycleTime * (this.stats.cycleCount - 1) + cycleTime) / this.stats.cycleCount;
+    this.stats.avgCycleTime =
+      (this.stats.avgCycleTime * (this.stats.cycleCount - 1) + cycleTime) /
+      this.stats.cycleCount;
   }
 
   /**
@@ -379,7 +395,7 @@ export class IncrementalGarbageCollector {
   updateConfig(newConfig: Partial<GCConfig>): void {
     this.config = { ...this.config, ...newConfig };
     this.logger.info('GC configuration updated', this.config);
-    
+
     // Restart with new interval if running
     if (this.isRunning && newConfig.cycleInterval) {
       this.stop();

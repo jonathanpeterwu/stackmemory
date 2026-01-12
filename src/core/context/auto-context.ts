@@ -8,11 +8,11 @@ import { logger } from '../monitoring/logger.js';
 
 export class AutoContext {
   private frameManager: FrameManager;
-  
+
   constructor(frameManager: FrameManager) {
     this.frameManager = frameManager;
   }
-  
+
   /**
    * Initialize a session context
    */
@@ -26,18 +26,18 @@ export class AutoContext {
           command,
           timestamp: new Date().toISOString(),
           cwd: process.cwd(),
-        }
+        },
       });
-      
-      logger.info('Session context initialized', { 
+
+      logger.info('Session context initialized', {
         frameId: sessionFrame,
-        depth: this.frameManager.getStackDepth() 
+        depth: this.frameManager.getStackDepth(),
       });
     } catch (error: unknown) {
       logger.error('Failed to initialize session context', error as Error);
     }
   }
-  
+
   /**
    * Create a command context
    */
@@ -46,22 +46,22 @@ export class AutoContext {
       const frameId = this.frameManager.createFrame({
         type: 'tool_scope',
         name: command,
-        inputs: args
+        inputs: args,
       });
-      
-      logger.info('Command context created', { 
+
+      logger.info('Command context created', {
         frameId,
         command,
-        depth: this.frameManager.getStackDepth() 
+        depth: this.frameManager.getStackDepth(),
       });
-      
+
       return frameId;
     } catch (error: unknown) {
       logger.error('Failed to create command context', error as Error);
       return null;
     }
   }
-  
+
   /**
    * Auto-save important context
    */
@@ -69,12 +69,16 @@ export class AutoContext {
     try {
       const currentFrame = this.frameManager.getCurrentFrameId();
       if (currentFrame) {
-        this.frameManager.addEvent('observation', {
-          type: 'context_save',
-          data,
-          importance,
-          timestamp: new Date().toISOString()
-        }, currentFrame);
+        this.frameManager.addEvent(
+          'observation',
+          {
+            type: 'context_save',
+            data,
+            importance,
+            timestamp: new Date().toISOString(),
+          },
+          currentFrame
+        );
       }
     } catch (error: unknown) {
       logger.error('Failed to auto-save context', error as Error);

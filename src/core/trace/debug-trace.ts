@@ -1,6 +1,6 @@
 /**
  * Debug Trace Module - Comprehensive execution tracing for LLM debugging
- * 
+ *
  * This module provides detailed execution tracing to help LLMs understand
  * exactly what happened during code execution, making debugging much easier.
  */
@@ -23,7 +23,6 @@ function getEnv(key: string, defaultValue?: string): string {
 function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
-
 
 export interface TraceConfig {
   enabled: boolean;
@@ -96,20 +95,28 @@ export class TraceContext {
 
   private loadConfig(): TraceConfig {
     return {
-      enabled: process.env['DEBUG_TRACE'] === 'true' || process.env['STACKMEMORY_DEBUG'] === 'true',
+      enabled:
+        process.env['DEBUG_TRACE'] === 'true' ||
+        process.env['STACKMEMORY_DEBUG'] === 'true',
       verbosity: (process.env['TRACE_VERBOSITY'] as any) || 'full',
       output: (process.env['TRACE_OUTPUT'] as any) || 'console',
       includeParams: process.env['TRACE_PARAMS'] !== 'false',
       includeResults: process.env['TRACE_RESULTS'] !== 'false',
       maskSensitive: process.env['TRACE_MASK_SENSITIVE'] !== 'false',
-      performanceThreshold: parseInt(process.env['TRACE_PERF_THRESHOLD'] || '100'),
+      performanceThreshold: parseInt(
+        process.env['TRACE_PERF_THRESHOLD'] || '100'
+      ),
       maxDepth: parseInt(process.env['TRACE_MAX_DEPTH'] || '20'),
       captureMemory: process.env['TRACE_MEMORY'] === 'true',
     };
   }
 
   private initializeOutputFile(): void {
-    const traceDir = path.join(process.env['HOME'] || '.', '.stackmemory', 'traces');
+    const traceDir = path.join(
+      process.env['HOME'] || '.',
+      '.stackmemory',
+      'traces'
+    );
     if (!fs.existsSync(traceDir)) {
       fs.mkdirSync(traceDir, { recursive: true });
     }
@@ -122,11 +129,13 @@ export class TraceContext {
     if (typeof obj !== 'object' || obj === null) return obj;
 
     const masked = Array.isArray(obj) ? [...obj] : { ...obj };
-    
+
     for (const key in masked) {
       if (typeof key === 'string') {
         // Check if key matches sensitive patterns
-        const isSensitive = this.sensitivePatterns.some(pattern => pattern.test(key));
+        const isSensitive = this.sensitivePatterns.some((pattern) =>
+          pattern.test(key)
+        );
         if (isSensitive) {
           masked[key] = '[MASKED]';
         } else if (typeof masked[key] === 'object') {
@@ -139,7 +148,7 @@ export class TraceContext {
         }
       }
     }
-    
+
     return masked;
   }
 
@@ -165,26 +174,36 @@ export class TraceContext {
 
   private formatTraceEntry(entry: TraceEntry, includeChildren = true): string {
     const indent = this.getIndent(entry.depth);
-    const duration = entry.duration ? ` [${this.formatDuration(entry.duration)}]` : '';
-    const memory = entry.memory?.delta 
+    const duration = entry.duration
+      ? ` [${this.formatDuration(entry.duration)}]`
+      : '';
+    const memory = entry.memory?.delta
       ? ` (Δmem: ${this.formatMemory(entry.memory.delta.heapUsed)})`
       : '';
-    
+
     let output = `${indent}→ [${entry.type.toUpperCase()}:${entry.id.substring(0, 8)}] ${entry.name}${duration}${memory}`;
-    
+
     if (entry.error) {
       output += `\n${indent}  ✗ ERROR: ${entry.error.message || entry.error}`;
       if (entry.error.stack && this.config.verbosity === 'full') {
         output += `\n${indent}    Stack: ${entry.error.stack.split('\n')[1]?.trim()}`;
       }
     }
-    
-    if (this.config.includeParams && entry.params && Object.keys(entry.params).length > 0) {
+
+    if (
+      this.config.includeParams &&
+      entry.params &&
+      Object.keys(entry.params).length > 0
+    ) {
       const maskedParams = this.maskSensitiveData(entry.params);
       output += `\n${indent}  ▸ Params: ${JSON.stringify(maskedParams, null, 2).replace(/\n/g, '\n' + indent + '    ')}`;
     }
-    
-    if (this.config.includeResults && entry.result !== undefined && !entry.error) {
+
+    if (
+      this.config.includeResults &&
+      entry.result !== undefined &&
+      !entry.error
+    ) {
       const maskedResult = this.maskSensitiveData(entry.result);
       const resultStr = JSON.stringify(maskedResult, null, 2);
       if (resultStr.length < 200) {
@@ -193,21 +212,21 @@ export class TraceContext {
         output += `\n${indent}  ◂ Result: [${typeof maskedResult}] ${resultStr.substring(0, 100)}...`;
       }
     }
-    
+
     if (entry.duration && entry.duration > this.config.performanceThreshold) {
       output += `\n${indent}  ⚠ SLOW: Exceeded ${this.config.performanceThreshold}ms threshold`;
     }
-    
+
     if (includeChildren && entry.children.length > 0) {
       for (const child of entry.children) {
         output += '\n' + this.formatTraceEntry(child, true);
       }
     }
-    
+
     if (entry.endTime && entry.depth > 0) {
       output += `\n${indent}← [${entry.type.toUpperCase()}:${entry.id.substring(0, 8)}] completed`;
     }
-    
+
     return output;
   }
 
@@ -215,22 +234,31 @@ export class TraceContext {
     if (!this.config.enabled) return;
 
     const formatted = this.formatTraceEntry(entry, false);
-    
+
     if (this.config.output === 'console' || this.config.output === 'both') {
       console.log(formatted);
     }
-    
-    if ((this.config.output === 'file' || this.config.output === 'both') && this.outputFile) {
-      const jsonLine = JSON.stringify({
-        ...entry,
-        formatted,
-        timestamp: new Date().toISOString(),
-      }) + '\n';
+
+    if (
+      (this.config.output === 'file' || this.config.output === 'both') &&
+      this.outputFile
+    ) {
+      const jsonLine =
+        JSON.stringify({
+          ...entry,
+          formatted,
+          timestamp: new Date().toISOString(),
+        }) + '\n';
       fs.appendFileSync(this.outputFile, jsonLine);
     }
   }
 
-  startTrace(type: TraceEntry['type'], name: string, params?: any, metadata?: Record<string, any>): string {
+  startTrace(
+    type: TraceEntry['type'],
+    name: string,
+    params?: any,
+    metadata?: Record<string, any>
+  ): string {
     if (!this.config.enabled) return '';
 
     const id = uuidv4();
@@ -251,7 +279,9 @@ export class TraceContext {
       params: this.config.includeParams ? params : undefined,
       metadata,
       children: [],
-      memory: this.captureMemory() ? { before: this.captureMemory()! } : undefined,
+      memory: this.captureMemory()
+        ? { before: this.captureMemory()! }
+        : undefined,
     };
 
     if (this.currentTrace) {
@@ -271,7 +301,7 @@ export class TraceContext {
   endTrace(id: string, result?: any, error?: any): void {
     if (!this.config.enabled) return;
 
-    const index = this.traceStack.findIndex(t => t.id === id);
+    const index = this.traceStack.findIndex((t) => t.id === id);
     if (index === -1) return;
 
     const entry = this.traceStack[index];
@@ -331,7 +361,11 @@ export class TraceContext {
     }
   }
 
-  async command<T>(name: string, options: any, fn: () => Promise<T>): Promise<T> {
+  async command<T>(
+    name: string,
+    options: any,
+    fn: () => Promise<T>
+  ): Promise<T> {
     return this.traceAsync('command', name, options, fn);
   }
 
@@ -343,7 +377,12 @@ export class TraceContext {
     return this.traceAsync('query', sql.substring(0, 50), params, fn);
   }
 
-  async api<T>(method: string, url: string, body: any, fn: () => Promise<T>): Promise<T> {
+  async api<T>(
+    method: string,
+    url: string,
+    body: any,
+    fn: () => Promise<T>
+  ): Promise<T> {
     return this.traceAsync('api', `${method} ${url}`, { body }, fn);
   }
 
@@ -396,7 +435,8 @@ export class TraceContext {
   private countSlowOperations(traces: TraceEntry[]): number {
     let count = 0;
     for (const trace of traces) {
-      if (trace.duration && trace.duration > this.config.performanceThreshold) count++;
+      if (trace.duration && trace.duration > this.config.performanceThreshold)
+        count++;
       count += this.countSlowOperations(trace.children);
     }
     return count;
@@ -464,14 +504,17 @@ export function Trace(type: TraceEntry['type'] = 'function') {
 
 // Decorator for tracing entire classes
 export function TraceClass(type: TraceEntry['type'] = 'function') {
-  return function <T extends { new(...args: any[]): {} }>(constructor: T) {
+  return function <T extends { new (...args: any[]): {} }>(constructor: T) {
     const prototype = constructor.prototype;
     const propertyNames = Object.getOwnPropertyNames(prototype);
 
     for (const propertyName of propertyNames) {
       if (propertyName === 'constructor') continue;
 
-      const descriptor = Object.getOwnPropertyDescriptor(prototype, propertyName);
+      const descriptor = Object.getOwnPropertyDescriptor(
+        prototype,
+        propertyName
+      );
       if (!descriptor || typeof descriptor.value !== 'function') continue;
 
       Trace(type)(prototype, propertyName, descriptor);
@@ -483,24 +526,33 @@ export function TraceClass(type: TraceEntry['type'] = 'function') {
 }
 
 // Helper for critical operations
-export function TraceCritical(target: any, propertyKey: string, descriptor: PropertyDescriptor) {
+export function TraceCritical(
+  target: any,
+  propertyKey: string,
+  descriptor: PropertyDescriptor
+) {
   const originalMethod = descriptor.value;
-  
+
   descriptor.value = async function (...args: any[]) {
     const className = target.constructor.name;
     const methodName = `${className}.${propertyKey} [CRITICAL]`;
-    
+
     // Store context before execution
     const contextBefore = {
       memory: process.memoryUsage(),
       timestamp: new Date().toISOString(),
       args: trace['maskSensitiveData'](args),
     };
-    
+
     try {
-      return await trace.traceAsync('function', methodName, contextBefore, async () => {
-        return originalMethod.apply(this, args);
-      });
+      return await trace.traceAsync(
+        'function',
+        methodName,
+        contextBefore,
+        async () => {
+          return originalMethod.apply(this, args);
+        }
+      );
     } catch (error: any) {
       // Enhanced error logging for critical operations
       logger.error(`Critical operation failed: ${methodName}`, error, {
@@ -510,6 +562,6 @@ export function TraceCritical(target: any, propertyKey: string, descriptor: Prop
       throw error;
     }
   };
-  
+
   return descriptor;
 }

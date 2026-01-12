@@ -1,7 +1,7 @@
 /**
  * Infinite Storage System for StackMemory
  * Implements STA-287: Remote storage with TimeSeries DB + S3 + Redis
- * 
+ *
  * Storage Tiers:
  * - Hot: Redis (< 1 hour, frequently accessed)
  * - Warm: TimeSeries DB (1 hour - 7 days)
@@ -9,7 +9,12 @@
  * - Archive: S3 Glacier (> 30 days)
  */
 
-import { S3Client, PutObjectCommand, GetObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
+import {
+  S3Client,
+  PutObjectCommand,
+  GetObjectCommand,
+  ListObjectsV2Command,
+} from '@aws-sdk/client-s3';
 import { createClient as createRedisClient } from 'redis';
 import { Pool } from 'pg';
 import { Logger } from '../monitoring/logger.js';
@@ -64,14 +69,34 @@ export class InfiniteStorageSystem {
   constructor(config: StorageConfig) {
     this.config = config;
     this.logger = new Logger('InfiniteStorage');
-    
+
     // Default storage tiers
     if (!config.tiers || config.tiers.length === 0) {
       this.config.tiers = [
-        { name: 'hot', ageThresholdHours: 1, storageClass: 'MEMORY', accessLatencyMs: 5 },
-        { name: 'warm', ageThresholdHours: 168, storageClass: 'TIMESERIES', accessLatencyMs: 50 },
-        { name: 'cold', ageThresholdHours: 720, storageClass: 'S3_STANDARD', accessLatencyMs: 100 },
-        { name: 'archive', ageThresholdHours: Infinity, storageClass: 'S3_GLACIER', accessLatencyMs: 3600000 },
+        {
+          name: 'hot',
+          ageThresholdHours: 1,
+          storageClass: 'MEMORY',
+          accessLatencyMs: 5,
+        },
+        {
+          name: 'warm',
+          ageThresholdHours: 168,
+          storageClass: 'TIMESERIES',
+          accessLatencyMs: 50,
+        },
+        {
+          name: 'cold',
+          ageThresholdHours: 720,
+          storageClass: 'S3_STANDARD',
+          accessLatencyMs: 100,
+        },
+        {
+          name: 'archive',
+          ageThresholdHours: Infinity,
+          storageClass: 'S3_GLACIER',
+          accessLatencyMs: 3600000,
+        },
       ];
     }
   }
@@ -83,15 +108,18 @@ export class InfiniteStorageSystem {
         this.redisClient = createRedisClient({
           url: this.config.redis.url,
         });
-        
+
         await this.redisClient.connect();
-        
+
         // Configure Redis memory policy
         await this.redisClient.configSet('maxmemory-policy', 'allkeys-lru');
         if (this.config.redis.maxMemoryMB) {
-          await this.redisClient.configSet('maxmemory', `${this.config.redis.maxMemoryMB}mb`);
+          await this.redisClient.configSet(
+            'maxmemory',
+            `${this.config.redis.maxMemoryMB}mb`
+          );
         }
-        
+
         this.logger.info('Redis client initialized for hot tier');
       }
 
@@ -112,18 +140,20 @@ export class InfiniteStorageSystem {
       if (this.config.s3?.bucket) {
         this.s3Client = new S3Client({
           region: this.config.s3.region || 'us-east-1',
-          credentials: this.config.s3.accessKeyId ? {
-            accessKeyId: this.config.s3.accessKeyId,
-            secretAccessKey: this.config.s3.secretAccessKey!,
-          } : undefined,
+          credentials: this.config.s3.accessKeyId
+            ? {
+                accessKeyId: this.config.s3.accessKeyId,
+                secretAccessKey: this.config.s3.secretAccessKey!,
+              }
+            : undefined,
         });
-        
+
         this.logger.info('S3 client initialized for cold/archive tiers');
       }
 
       // Start background migration worker
       this.startMigrationWorker();
-      
+
       this.logger.info('Infinite Storage System initialized');
     } catch (error: unknown) {
       this.logger.error('Failed to initialize storage system', error);
@@ -136,7 +166,7 @@ export class InfiniteStorageSystem {
    */
   private async createTimeSeriesTables(): Promise<void> {
     const client = await this.timeseriesPool.connect();
-    
+
     try {
       // Create hypertable for time-series data
       await client.query(`
@@ -156,14 +186,18 @@ export class InfiniteStorageSystem {
       `);
 
       // Create hypertable if using TimescaleDB
-      await client.query(`
+      await client
+        .query(
+          `
         SELECT create_hypertable('frame_timeseries', 'time', 
           chunk_time_interval => INTERVAL '1 day',
           if_not_exists => TRUE)
-      `).catch(() => {
-        // Fallback to regular partitioning if not TimescaleDB
-        this.logger.info('Using standard PostgreSQL partitioning');
-      });
+      `
+        )
+        .catch(() => {
+          // Fallback to regular partitioning if not TimescaleDB
+          this.logger.info('Using standard PostgreSQL partitioning');
+        });
 
       // Create indexes
       await client.query(`
@@ -173,12 +207,15 @@ export class InfiniteStorageSystem {
       `);
 
       // Create compression policy (TimescaleDB specific)
-      await client.query(`
+      await client
+        .query(
+          `
         SELECT add_compression_policy('frame_timeseries', INTERVAL '7 days', if_not_exists => TRUE)
-      `).catch(() => {
-        this.logger.info('Compression policy not available');
-      });
-
+      `
+        )
+        .catch(() => {
+          this.logger.info('Compression policy not available');
+        });
     } finally {
       client.release();
     }
@@ -189,7 +226,7 @@ export class InfiniteStorageSystem {
    */
   async storeFrame(frame: Frame, userId: string): Promise<void> {
     const startTime = Date.now();
-    
+
     try {
       const frameData = JSON.stringify(frame);
       const compressedData = await compress(frameData);
@@ -202,7 +239,7 @@ export class InfiniteStorageSystem {
           this.config.redis.ttlSeconds || 3600,
           compressedData
         );
-        
+
         // Store metadata for quick lookups
         await this.redisClient.hSet(`meta:${frameKey}`, {
           userId,
@@ -216,9 +253,10 @@ export class InfiniteStorageSystem {
       // Also store in warm tier for durability
       if (this.timeseriesPool) {
         const client = await this.timeseriesPool.connect();
-        
+
         try {
-          await client.query(`
+          await client.query(
+            `
             INSERT INTO frame_timeseries (time, frame_id, user_id, project_name, type, data, compressed_data, storage_tier)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
             ON CONFLICT (time, frame_id) DO UPDATE
@@ -226,16 +264,18 @@ export class InfiniteStorageSystem {
                 compressed_data = EXCLUDED.compressed_data,
                 last_accessed = NOW(),
                 access_count = frame_timeseries.access_count + 1
-          `, [
-            new Date(frame.timestamp),
-            frame.frameId,
-            userId,
-            frame.projectName || 'default',
-            frame.type,
-            frame,
-            compressedData,
-            'warm',
-          ]);
+          `,
+            [
+              new Date(frame.timestamp),
+              frame.frameId,
+              userId,
+              frame.projectName || 'default',
+              frame.type,
+              frame,
+              compressedData,
+              'warm',
+            ]
+          );
         } finally {
           client.release();
         }
@@ -244,7 +284,7 @@ export class InfiniteStorageSystem {
       // Track latency
       const latency = Date.now() - startTime;
       this.trackLatency(latency);
-      
+
       this.logger.debug(`Stored frame ${frame.frameId} in ${latency}ms`);
     } catch (error: unknown) {
       this.logger.error(`Failed to store frame ${frame.frameId}`, error);
@@ -266,14 +306,19 @@ export class InfiniteStorageSystem {
         if (cached) {
           const decompressed = await decompress(cached);
           const frame = JSON.parse(decompressed);
-          
+
           // Refresh TTL on access
-          await this.redisClient.expire(frameKey, this.config.redis.ttlSeconds || 3600);
-          
+          await this.redisClient.expire(
+            frameKey,
+            this.config.redis.ttlSeconds || 3600
+          );
+
           const latency = Date.now() - startTime;
           this.trackLatency(latency);
-          this.logger.debug(`Retrieved frame ${frameId} from hot tier in ${latency}ms`);
-          
+          this.logger.debug(
+            `Retrieved frame ${frameId} from hot tier in ${latency}ms`
+          );
+
           return frame;
         }
       }
@@ -281,20 +326,23 @@ export class InfiniteStorageSystem {
       // Try warm tier (TimeSeries DB)
       if (this.timeseriesPool) {
         const client = await this.timeseriesPool.connect();
-        
+
         try {
-          const result = await client.query(`
+          const result = await client.query(
+            `
             SELECT data, compressed_data, storage_tier 
             FROM frame_timeseries 
             WHERE frame_id = $1 AND user_id = $2
             ORDER BY time DESC
             LIMIT 1
-          `, [frameId, userId]);
+          `,
+            [frameId, userId]
+          );
 
           if (result.rows.length > 0) {
             const row = result.rows[0];
             let frame: Frame;
-            
+
             if (row.compressed_data) {
               const decompressed = await decompress(row.compressed_data);
               frame = JSON.parse(decompressed);
@@ -303,11 +351,14 @@ export class InfiniteStorageSystem {
             }
 
             // Update access stats
-            await client.query(`
+            await client.query(
+              `
               UPDATE frame_timeseries 
               SET last_accessed = NOW(), access_count = access_count + 1
               WHERE frame_id = $1 AND user_id = $2
-            `, [frameId, userId]);
+            `,
+              [frameId, userId]
+            );
 
             // Promote to hot tier if frequently accessed
             if (this.redisClient) {
@@ -316,8 +367,10 @@ export class InfiniteStorageSystem {
 
             const latency = Date.now() - startTime;
             this.trackLatency(latency);
-            this.logger.debug(`Retrieved frame ${frameId} from warm tier in ${latency}ms`);
-            
+            this.logger.debug(
+              `Retrieved frame ${frameId} from warm tier in ${latency}ms`
+            );
+
             return frame;
           }
         } finally {
@@ -328,13 +381,13 @@ export class InfiniteStorageSystem {
       // Try cold/archive tiers (S3)
       if (this.s3Client && this.config.s3.bucket) {
         const key = `frames/${userId}/${frameId}.json.gz`;
-        
+
         try {
           const command = new GetObjectCommand({
             Bucket: this.config.s3.bucket,
             Key: key,
           });
-          
+
           const response = await this.s3Client.send(command);
           const compressedData = await response.Body!.transformToByteArray();
           const decompressed = await decompress(Buffer.from(compressedData));
@@ -345,8 +398,10 @@ export class InfiniteStorageSystem {
 
           const latency = Date.now() - startTime;
           this.trackLatency(latency);
-          this.logger.debug(`Retrieved frame ${frameId} from cold tier in ${latency}ms`);
-          
+          this.logger.debug(
+            `Retrieved frame ${frameId} from cold tier in ${latency}ms`
+          );
+
           return frame;
         } catch (error: any) {
           if (error.Code !== 'NoSuchKey') {
@@ -368,18 +423,18 @@ export class InfiniteStorageSystem {
    */
   private async promoteToHotTier(frame: Frame, userId: string): Promise<void> {
     if (!this.redisClient) return;
-    
+
     try {
       const frameKey = `frame:${userId}:${frame.frameId}`;
       const frameData = JSON.stringify(frame);
       const compressedData = await compress(frameData);
-      
+
       await this.redisClient.setEx(
         frameKey,
         this.config.redis.ttlSeconds || 3600,
         compressedData
       );
-      
+
       this.logger.debug(`Promoted frame ${frame.frameId} to hot tier`);
     } catch (error: unknown) {
       this.logger.error(`Failed to promote frame ${frame.frameId}`, error);
@@ -393,25 +448,28 @@ export class InfiniteStorageSystem {
     // Promote to warm tier
     if (this.timeseriesPool) {
       const client = await this.timeseriesPool.connect();
-      
+
       try {
         const compressedData = await compress(JSON.stringify(frame));
-        
-        await client.query(`
+
+        await client.query(
+          `
           INSERT INTO frame_timeseries (time, frame_id, user_id, data, compressed_data, storage_tier)
           VALUES ($1, $2, $3, $4, $5, $6)
           ON CONFLICT (time, frame_id) DO UPDATE
           SET storage_tier = 'warm',
               last_accessed = NOW(),
               access_count = frame_timeseries.access_count + 1
-        `, [
-          new Date(frame.timestamp),
-          frame.frameId,
-          userId,
-          frame,
-          compressedData,
-          'warm',
-        ]);
+        `,
+          [
+            new Date(frame.timestamp),
+            frame.frameId,
+            userId,
+            frame,
+            compressedData,
+            'warm',
+          ]
+        );
       } finally {
         client.release();
       }
@@ -426,10 +484,13 @@ export class InfiniteStorageSystem {
    */
   private startMigrationWorker(): void {
     // Run migration every hour
-    this.migrationWorker = setInterval(async () => {
-      await this.migrateAgedData();
-    }, 60 * 60 * 1000);
-    
+    this.migrationWorker = setInterval(
+      async () => {
+        await this.migrateAgedData();
+      },
+      60 * 60 * 1000
+    );
+
     this.logger.info('Migration worker started');
   }
 
@@ -438,11 +499,11 @@ export class InfiniteStorageSystem {
    */
   private async migrateAgedData(): Promise<void> {
     this.logger.info('Starting tier migration...');
-    
+
     if (!this.timeseriesPool) return;
-    
+
     const client = await this.timeseriesPool.connect();
-    
+
     try {
       // Find data eligible for cold storage (> 7 days old)
       const coldEligible = await client.query(`
@@ -457,13 +518,16 @@ export class InfiniteStorageSystem {
       // Migrate to S3 cold storage
       for (const row of coldEligible.rows) {
         await this.migrateToS3(row, 'STANDARD');
-        
+
         // Update tier in database
-        await client.query(`
+        await client.query(
+          `
           UPDATE frame_timeseries
           SET storage_tier = 'cold'
           WHERE frame_id = $1 AND user_id = $2
-        `, [row.frame_id, row.user_id]);
+        `,
+          [row.frame_id, row.user_id]
+        );
       }
 
       // Find data eligible for archive (> 30 days old)
@@ -479,16 +543,21 @@ export class InfiniteStorageSystem {
       // Migrate to S3 Glacier
       for (const row of archiveEligible.rows) {
         await this.migrateToS3(row, 'GLACIER');
-        
+
         // Update tier in database
-        await client.query(`
+        await client.query(
+          `
           UPDATE frame_timeseries
           SET storage_tier = 'archive'
           WHERE frame_id = $1 AND user_id = $2
-        `, [row.frame_id, row.user_id]);
+        `,
+          [row.frame_id, row.user_id]
+        );
       }
 
-      this.logger.info(`Migration completed: ${coldEligible.rows.length} to cold, ${archiveEligible.rows.length} to archive`);
+      this.logger.info(
+        `Migration completed: ${coldEligible.rows.length} to cold, ${archiveEligible.rows.length} to archive`
+      );
     } finally {
       client.release();
     }
@@ -499,11 +568,12 @@ export class InfiniteStorageSystem {
    */
   private async migrateToS3(row: any, storageClass: string): Promise<void> {
     if (!this.s3Client || !this.config.s3.bucket) return;
-    
+
     try {
       const key = `frames/${row.user_id}/${row.frame_id}.json.gz`;
-      const data = row.compressed_data || await compress(JSON.stringify(row.data));
-      
+      const data =
+        row.compressed_data || (await compress(JSON.stringify(row.data)));
+
       const command = new PutObjectCommand({
         Bucket: this.config.s3.bucket,
         Key: key,
@@ -515,9 +585,9 @@ export class InfiniteStorageSystem {
           migratedAt: new Date().toISOString(),
         },
       });
-      
+
       await this.s3Client.send(command);
-      
+
       this.logger.debug(`Migrated frame ${row.frame_id} to S3 ${storageClass}`);
     } catch (error: unknown) {
       this.logger.error(`Failed to migrate frame ${row.frame_id} to S3`, error);
@@ -530,7 +600,7 @@ export class InfiniteStorageSystem {
    */
   private trackLatency(latencyMs: number): void {
     this.latencies.push(latencyMs);
-    
+
     // Keep only last 1000 measurements
     if (this.latencies.length > 1000) {
       this.latencies.shift();
@@ -561,7 +631,7 @@ export class InfiniteStorageSystem {
     // Get tier distribution from TimeSeries DB
     if (this.timeseriesPool) {
       const client = await this.timeseriesPool.connect();
-      
+
       try {
         const result = await client.query(`
           SELECT 

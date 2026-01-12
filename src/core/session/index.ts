@@ -1,7 +1,7 @@
-export { 
-  SessionManager, 
+export {
+  SessionManager,
   sessionManager,
   type Session,
   type SessionOptions,
-  FrameQueryMode 
+  FrameQueryMode,
 } from './session-manager.js';

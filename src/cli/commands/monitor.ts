@@ -82,11 +82,7 @@ export function createMonitorCommand(): Command {
 /**
  * Start monitoring daemon
  */
-async function startMonitor(
-  projectRoot: string,
-  options: any,
-  spinner: any
-) {
+async function startMonitor(projectRoot: string, options: any, spinner: any) {
   spinner.start('Starting monitor daemon...');
 
   const pidFile = path.join(projectRoot, '.stackmemory', 'monitor.pid');

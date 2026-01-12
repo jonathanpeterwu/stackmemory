@@ -34,7 +34,7 @@ export interface TestRun {
   variant: 'with_stackmemory' | 'without_stackmemory';
   startTime: Date;
   endTime?: Date;
-  metrics: any;
+  metrics: Record<string, unknown>;
   recordings: ToolCallRecording[];
   success: boolean;
   errors: string[];
@@ -43,8 +43,8 @@ export interface TestRun {
 export interface ToolCallRecording {
   timestamp: Date;
   tool: string;
-  parameters: any;
-  result: any;
+  parameters: Record<string, unknown>;
+  result: unknown;
   duration: number;
 }
 
@@ -268,9 +268,11 @@ export class ABTestRunner {
       }
 
       run.success = true;
-    } catch (error: any) {
-      console.error(`Scenario failed: ${error.message}`);
-      run.errors.push(error.message);
+    } catch (error: unknown) {
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      console.error(`Scenario failed: ${errorMessage}`);
+      run.errors.push(errorMessage);
       this.collector.trackError(sessionId, error);
     }
 
@@ -315,8 +317,8 @@ export class ABTestRunner {
           result: output,
           duration: Date.now() - startTime,
         });
-      } catch (error: any) {
-        this.collector.trackError(sessionId, error);
+      } catch (error: unknown) {
+        this.collector.trackError(sessionId, error as Error);
         throw error;
       }
     } else {

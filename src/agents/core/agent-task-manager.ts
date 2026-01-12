@@ -191,7 +191,8 @@ export class AgentTaskManager {
       action,
       result: feedback,
       verificationPassed: success,
-      contextAdjustment: this.suggestContextAdjustment(verificationResults),
+      contextAdjustment:
+        this.suggestContextAdjustment(verificationResults) || undefined,
     });
 
     // Determine if should continue
@@ -247,16 +248,16 @@ export class AgentTaskManager {
     const verifiers: string[] = [];
 
     // Add verifiers based on context (Spotify's context-aware approach)
-    if (context.codeChange) {
+    if (context['codeChange']) {
       verifiers.push('formatter', 'linter', 'type-checker');
     }
-    if (context.testsPresent) {
+    if (context['testsPresent']) {
       verifiers.push('test-runner');
     }
-    if (context.hasDocumentation) {
+    if (context['hasDocumentation']) {
       verifiers.push('doc-validator');
     }
-    if (context.performanceCritical) {
+    if (context['performanceCritical']) {
       verifiers.push('performance-analyzer');
     }
 
@@ -379,8 +380,8 @@ export class AgentTaskManager {
       parentTaskId: task.id,
       subtasks,
       dependencies: new Map([
-        [subtasks[1].title, [subtasks[0].title]],
-        [subtasks[2].title, [subtasks[1].title]],
+        [subtasks[1]!.title, [subtasks[0]!.title]],
+        [subtasks[2]!.title, [subtasks[1]!.title]],
       ]),
       estimatedTurns: subtasks.reduce((sum, st) => sum + st.estimatedTurns, 0),
     };
@@ -426,7 +427,7 @@ export class AgentTaskManager {
     }
 
     // Start session for first subtask
-    return this.startTaskSession(subtaskIds[0], frameId);
+    return this.startTaskSession(subtaskIds[0]!, frameId);
   }
 
   /**

@@ -331,7 +331,7 @@ export class RepoIngestionSkill {
     }>
   > {
     try {
-      const filters: any = {
+      const filters: Record<string, unknown> = {
         type: ['code_chunk'],
       };
 

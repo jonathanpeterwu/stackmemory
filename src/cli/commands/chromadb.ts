@@ -1,6 +1,6 @@
 /**
  * ChromaDB CLI Commands for StackMemory
- * 
+ *
  * Provides commands to interact with ChromaDB vector storage
  */
 
@@ -9,38 +9,23 @@ import chalk from 'chalk';
 import ora from 'ora';
 import { ChromaDBAdapter } from '../../core/storage/chromadb-adapter.js';
 import { FrameManager } from '../../core/context/frame-manager.js';
-import { Logger } from '../../core/monitoring/logger.js';
+import { logger } from '../../core/monitoring/logger.js';
 import { RepoIngestionSkill } from '../../skills/repo-ingestion-skill.js';
 import Table from 'cli-table3';
 import dotenv from 'dotenv';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import fs from 'fs';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
-
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
-
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load environment variables
-dotenv.config({ 
+dotenv.config({
   path: path.join(__dirname, '../../../.env'),
   override: true,
-  silent: true
 });
 
-const logger = new Logger('ChromaDB-CLI');
+
 
 export function createChromaDBCommand(): Command {
   const chromadb = new Command('chromadb')
@@ -64,7 +49,10 @@ export function createChromaDBCommand(): Command {
         const config = {
           apiKey: options.apiKey || process.env['CHROMADB_API_KEY'] || '',
           tenant: options.tenant || process.env['CHROMADB_TENANT'] || '',
-          database: options.database || process.env['CHROMADB_DATABASE'] || 'stackmemory',
+          database:
+            options.database ||
+            process.env['CHROMADB_DATABASE'] ||
+            'stackmemory',
         };
 
         const userId = options.userId || process.env['USER'] || 'default';
@@ -88,7 +76,7 @@ export function createChromaDBCommand(): Command {
         // Save config to .env if not present
         const envPath = path.join(__dirname, '../../../.env');
         let envContent = '';
-        
+
         if (fs.existsSync(envPath)) {
           envContent = fs.readFileSync(envPath, 'utf8');
         }
@@ -105,11 +93,14 @@ export function createChromaDBCommand(): Command {
         }
 
         if (updates.length > 0) {
-          fs.appendFileSync(envPath, '\n# ChromaDB Configuration\n' + updates.join('\n') + '\n');
+          fs.appendFileSync(
+            envPath,
+            '\n# ChromaDB Configuration\n' + updates.join('\n') + '\n'
+          );
         }
 
         spinner.succeed('ChromaDB initialized successfully');
-        
+
         console.log(chalk.green('\n✅ Configuration:'));
         console.log(`  Tenant: ${config.tenant}`);
         console.log(`  Database: ${config.database}`);
@@ -120,7 +111,9 @@ export function createChromaDBCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Failed to initialize ChromaDB');
         logger.error('Initialization error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -128,7 +121,11 @@ export function createChromaDBCommand(): Command {
   chromadb
     .command('store')
     .description('Store current context in ChromaDB')
-    .option('--type <type>', 'Context type (frame/decision/observation)', 'frame')
+    .option(
+      '--type <type>',
+      'Context type (frame/decision/observation)',
+      'frame'
+    )
     .option('--content <content>', 'Content to store')
     .option('--project <name>', 'Project name')
     .action(async (options) => {
@@ -151,36 +148,39 @@ export function createChromaDBCommand(): Command {
           // Store current frames
           const frameManager = new FrameManager();
           const frames = frameManager.getAllFrames();
-          
+
           for (const frame of frames) {
             await adapter.storeFrame(frame);
           }
-          
+
           spinner.succeed(`Stored ${frames.length} frames`);
         } else {
           // Store decision or observation
-          const content = options.content || `${options.type} at ${new Date().toISOString()}`;
+          const content =
+            options.content || `${options.type} at ${new Date().toISOString()}`;
           const metadata: any = {
             project_name: options.project || path.basename(process.cwd()),
           };
-          
+
           // Only add session_id if it exists
           if (process.env['STACKMEMORY_SESSION_ID']) {
             metadata.session_id = process.env['STACKMEMORY_SESSION_ID'];
           }
-          
+
           await adapter.storeContext(
             options.type as 'decision' | 'observation',
             content,
             metadata
           );
-          
+
           spinner.succeed(`Stored ${options.type}`);
         }
       } catch (error: unknown) {
         spinner.fail('Failed to store context');
         logger.error('Store error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -236,9 +236,10 @@ export function createChromaDBCommand(): Command {
         });
 
         for (const result of results) {
-          const content = result.content.substring(0, 100) + 
-                          (result.content.length > 100 ? '...' : '');
-          
+          const content =
+            result.content.substring(0, 100) +
+            (result.content.length > 100 ? '...' : '');
+
           table.push([
             result.metadata.type || 'unknown',
             result.metadata.project_name || 'default',
@@ -252,7 +253,9 @@ export function createChromaDBCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Failed to query contexts');
         logger.error('Query error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -299,9 +302,10 @@ export function createChromaDBCommand(): Command {
 
         for (const result of results) {
           const time = new Date(result.metadata.timestamp).toLocaleString();
-          const content = result.content.substring(0, 100) + 
-                          (result.content.length > 100 ? '...' : '');
-          
+          const content =
+            result.content.substring(0, 100) +
+            (result.content.length > 100 ? '...' : '');
+
           table.push([
             time,
             result.metadata.type || 'unknown',
@@ -311,11 +315,15 @@ export function createChromaDBCommand(): Command {
         }
 
         console.log(table.toString());
-        console.log(chalk.green(`\n✅ Found ${results.length} recent contexts`));
+        console.log(
+          chalk.green(`\n✅ Found ${results.length} recent contexts`)
+        );
       } catch (error: unknown) {
         spinner.fail('Failed to get recent contexts');
         logger.error('Recent error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -346,7 +354,7 @@ export function createChromaDBCommand(): Command {
         console.log(chalk.cyan('\n📊 ChromaDB Statistics\n'));
         console.log(`Total Documents: ${chalk.bold(stats.totalDocuments)}`);
         console.log(`User Documents: ${chalk.bold(stats.userDocuments)}`);
-        
+
         if (stats.teamDocuments !== undefined) {
           console.log(`Team Documents: ${chalk.bold(stats.teamDocuments)}`);
         }
@@ -358,7 +366,9 @@ export function createChromaDBCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Failed to get statistics');
         logger.error('Stats error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -389,7 +399,9 @@ export function createChromaDBCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Failed to clean contexts');
         logger.error('Clean error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -433,8 +445,12 @@ export function createChromaDBCommand(): Command {
           forceUpdate: options.forceUpdate,
           includeTests: options.includeTests,
           includeDocs: options.includeDocs,
-          maxFileSize: options.maxFileSize ? parseInt(options.maxFileSize) : undefined,
-          chunkSize: options.chunkSize ? parseInt(options.chunkSize) : undefined,
+          maxFileSize: options.maxFileSize
+            ? parseInt(options.maxFileSize)
+            : undefined,
+          chunkSize: options.chunkSize
+            ? parseInt(options.chunkSize)
+            : undefined,
         });
 
         if (result.success) {
@@ -443,8 +459,12 @@ export function createChromaDBCommand(): Command {
             console.log(chalk.green('\n📊 Ingestion Statistics:'));
             console.log(`  Files processed: ${result.stats.filesProcessed}`);
             console.log(`  Chunks created: ${result.stats.chunksCreated}`);
-            console.log(`  Total size: ${(result.stats.totalSize / 1024 / 1024).toFixed(2)} MB`);
-            console.log(`  Time elapsed: ${(result.stats.timeElapsed / 1000).toFixed(2)} seconds`);
+            console.log(
+              `  Total size: ${(result.stats.totalSize / 1024 / 1024).toFixed(2)} MB`
+            );
+            console.log(
+              `  Time elapsed: ${(result.stats.timeElapsed / 1000).toFixed(2)} seconds`
+            );
           }
         } else {
           spinner.fail(result.message);
@@ -452,7 +472,9 @@ export function createChromaDBCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Failed to ingest repository');
         logger.error('Ingestion error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -497,7 +519,9 @@ export function createChromaDBCommand(): Command {
             console.log(`  Files updated: ${result.stats.filesUpdated}`);
             console.log(`  Files added: ${result.stats.filesAdded}`);
             console.log(`  Files removed: ${result.stats.filesRemoved}`);
-            console.log(`  Time elapsed: ${(result.stats.timeElapsed / 1000).toFixed(2)} seconds`);
+            console.log(
+              `  Time elapsed: ${(result.stats.timeElapsed / 1000).toFixed(2)} seconds`
+            );
           }
         } else {
           spinner.fail(result.message);
@@ -505,7 +529,9 @@ export function createChromaDBCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Failed to update repository');
         logger.error('Update error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -556,19 +582,29 @@ export function createChromaDBCommand(): Command {
 
         for (const result of results) {
           console.log(chalk.green(`📁 ${result.repoName}/${result.filePath}`));
-          console.log(chalk.gray(`   Lines ${result.startLine}-${result.endLine} | Score: ${result.score.toFixed(3)}`));
-          
+          console.log(
+            chalk.gray(
+              `   Lines ${result.startLine}-${result.endLine} | Score: ${result.score.toFixed(3)}`
+            )
+          );
+
           // Show snippet
           const lines = result.content.split('\n').slice(0, 3);
-          lines.forEach(line => {
-            console.log(chalk.dim(`   ${line.slice(0, 80)}${line.length > 80 ? '...' : ''}`));
+          lines.forEach((line) => {
+            console.log(
+              chalk.dim(
+                `   ${line.slice(0, 80)}${line.length > 80 ? '...' : ''}`
+              )
+            );
           });
           console.log();
         }
       } catch (error: unknown) {
         spinner.fail('Failed to search code');
         logger.error('Search error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 
@@ -607,14 +643,14 @@ export function createChromaDBCommand(): Command {
         console.log(`Total repositories: ${chalk.bold(stats.totalRepos)}`);
         console.log(`Total files: ${chalk.bold(stats.totalFiles)}`);
         console.log(`Total chunks: ${chalk.bold(stats.totalChunks)}`);
-        
+
         if (Object.keys(stats.languages).length > 0) {
           console.log('\nLanguages:');
           for (const [lang, count] of Object.entries(stats.languages)) {
             console.log(`  ${lang}: ${count}`);
           }
         }
-        
+
         if (Object.keys(stats.frameworks).length > 0) {
           console.log('\nFrameworks:');
           for (const [framework, count] of Object.entries(stats.frameworks)) {
@@ -624,7 +660,9 @@ export function createChromaDBCommand(): Command {
       } catch (error: unknown) {
         spinner.fail('Failed to get repository statistics');
         logger.error('Stats error', error);
-        console.error(chalk.red(error instanceof Error ? error.message : 'Unknown error'));
+        console.error(
+          chalk.red(error instanceof Error ? error.message : 'Unknown error')
+        );
       }
     });
 

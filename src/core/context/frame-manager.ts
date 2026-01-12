@@ -32,7 +32,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 // Frame types based on architecture
 export type FrameType =
   | 'task'
@@ -119,8 +118,8 @@ export class FrameManager {
   private queryMode: FrameQueryMode = FrameQueryMode.PROJECT_ACTIVE;
 
   constructor(
-    db: Database.Database, 
-    projectId: string, 
+    db: Database.Database,
+    projectId: string,
     runIdOrOptions?: string | FrameManagerOptions
   ) {
     this.db = db;
@@ -129,7 +128,7 @@ export class FrameManager {
     // Handle both legacy string runId and new options object
     let runId: string | undefined;
     let skipContextBridge = false;
-    
+
     if (typeof runIdOrOptions === 'string') {
       runId = runIdOrOptions;
     } else if (runIdOrOptions) {
@@ -152,12 +151,12 @@ export class FrameManager {
 
     // Initialize context bridge for automatic shared context
     // Skip in test environment, when explicitly requested, or for CLI usage
-    const shouldInitializeBridge = 
-      !skipContextBridge && 
-      process.env['NODE_ENV'] !== 'test' && 
+    const shouldInitializeBridge =
+      !skipContextBridge &&
+      process.env['NODE_ENV'] !== 'test' &&
       !process.env['VITEST'] &&
       !process.env['STACKMEMORY_CLI'];
-      
+
     if (shouldInitializeBridge) {
       contextBridge
         .initialize(this, {

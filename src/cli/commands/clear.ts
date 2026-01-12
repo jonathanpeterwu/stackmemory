@@ -11,24 +11,11 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import Database from 'better-sqlite3';
 import { existsSync } from 'fs';
-import { ClearSurvival } from '../../core/session/clear-survival-stub.js';
+import { ClearSurvival } from '../../core/session/clear-survival.js';
 import { FrameManager } from '../../core/context/frame-manager.js';
 import { HandoffGenerator } from '../../core/session/handoff-generator.js';
 import { sessionManager } from '../../core/session/session-manager.js';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
-
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
-
+import { getEnv, getOptionalEnv } from '../../utils/env.js';
 
 const clearCommand = new Command('clear')
   .description('Manage context clearing with ledger preservation')
@@ -56,7 +43,7 @@ const clearCommand = new Command('clear')
       }
 
       const db = new Database(dbPath);
-      
+
       // Initialize session manager
       await sessionManager.initialize();
       const session = await sessionManager.getOrCreateSession({
@@ -67,11 +54,17 @@ const clearCommand = new Command('clear')
       // For testing - use a mock handoff generator
       const handoffGenerator = {
         generateHandoff: () => Promise.resolve('Mock handoff'),
-        getHandoffPath: () => 'mock.md'
+        getHandoffPath: () => 'mock.md',
       };
+      // Create a mock DatabaseManager for ClearSurvival
+      const dbManager = {
+        getCurrentSessionId: () => Promise.resolve(session.id),
+        getSession: () => Promise.resolve(session),
+      } as any;
       const clearSurvival = new ClearSurvival(
         frameManager,
-        handoffGenerator,
+        dbManager,
+        handoffGenerator as any,
         projectRoot
       );
 
@@ -113,16 +106,16 @@ async function showContextStatus(clearSurvival: ClearSurvival): Promise<void> {
 
   console.log(chalk.bold('\n📊 Context Usage Status'));
   console.log('─'.repeat(40));
-  
+
   const percentage = Math.round(usage.percentageUsed);
   const statusColor = getStatusColor(status);
-  
+
   console.log(`Usage: ${percentage}% ${getProgressBar(percentage)}`);
   console.log(`Status: ${statusColor}`);
   console.log(`Active Frames: ${usage.activeFrames}`);
   console.log(`Total Frames: ${usage.totalFrames}`);
   console.log(`Sessions: ${usage.sessionCount}`);
-  
+
   if (status === 'critical' || status === 'saved') {
     console.log(
       chalk.yellow('\n⚠️  Consider clearing context to improve performance')
@@ -131,10 +124,12 @@ async function showContextStatus(clearSurvival: ClearSurvival): Promise<void> {
   }
 }
 
-async function checkIfClearRecommended(clearSurvival: ClearSurvival): Promise<void> {
+async function checkIfClearRecommended(
+  clearSurvival: ClearSurvival
+): Promise<void> {
   const usage = await clearSurvival.getContextUsage();
   const status = clearSurvival.assessContextStatus(usage);
-  
+
   if (status === 'critical' || status === 'saved') {
     console.log(chalk.yellow('✓ Clear recommended'));
     console.log(`Context usage: ${Math.round(usage.percentageUsed)}%`);
@@ -146,27 +141,35 @@ async function checkIfClearRecommended(clearSurvival: ClearSurvival): Promise<vo
   }
 }
 
-async function saveLedger(clearSurvival: ClearSurvival, spinner: ora.Ora): Promise<void> {
+async function saveLedger(
+  clearSurvival: ClearSurvival,
+  spinner: ora.Ora
+): Promise<void> {
   spinner.start('Saving continuity ledger...');
-  
+
   const ledgerPath = await clearSurvival.saveContinuityLedger();
-  
+
   spinner.succeed(chalk.green('Continuity ledger saved'));
   console.log(chalk.cyan(`Location: ${ledgerPath}`));
-  
+
   // Show what was saved
   const ledger = JSON.parse(await fs.readFile(ledgerPath, 'utf-8'));
   console.log('\nSaved:');
   console.log(`  • ${ledger.activeFrames.length} active frames`);
   console.log(`  • ${ledger.decisions.length} key decisions`);
-  console.log(`  • ${ledger.context.importantTasks?.length || 0} important tasks`);
+  console.log(
+    `  • ${ledger.context.importantTasks?.length || 0} important tasks`
+  );
 }
 
-async function restoreFromLedger(clearSurvival: ClearSurvival, spinner: ora.Ora): Promise<void> {
+async function restoreFromLedger(
+  clearSurvival: ClearSurvival,
+  spinner: ora.Ora
+): Promise<void> {
   spinner.start('Restoring from continuity ledger...');
-  
+
   const result = await clearSurvival.restoreFromLedger();
-  
+
   if (result.success) {
     spinner.succeed(chalk.green('Context restored from ledger'));
     console.log('\nRestored:');
@@ -180,27 +183,27 @@ async function restoreFromLedger(clearSurvival: ClearSurvival, spinner: ora.Ora)
 
 async function showLedger(projectRoot: string): Promise<void> {
   const ledgerPath = path.join(projectRoot, '.stackmemory', 'continuity.json');
-  
+
   if (!existsSync(ledgerPath)) {
     console.log(chalk.yellow('No continuity ledger found'));
     return;
   }
-  
+
   const ledger = JSON.parse(await fs.readFile(ledgerPath, 'utf-8'));
-  
+
   console.log(chalk.bold('\n📖 Continuity Ledger'));
   console.log('─'.repeat(40));
   console.log(`Created: ${new Date(ledger.timestamp).toLocaleString()}`);
   console.log(`Active Frames: ${ledger.activeFrames.length}`);
   console.log(`Key Decisions: ${ledger.decisions.length}`);
-  
+
   if (ledger.activeFrames.length > 0) {
     console.log('\nActive Work:');
     ledger.activeFrames.slice(0, 5).forEach((frame: any) => {
       console.log(`  • ${frame.name} (${frame.type})`);
     });
   }
-  
+
   if (ledger.decisions.length > 0) {
     console.log('\nKey Decisions:');
     ledger.decisions.slice(0, 3).forEach((decision: any) => {
@@ -209,19 +212,22 @@ async function showLedger(projectRoot: string): Promise<void> {
   }
 }
 
-async function autoClear(clearSurvival: ClearSurvival, spinner: ora.Ora): Promise<void> {
+async function autoClear(
+  clearSurvival: ClearSurvival,
+  spinner: ora.Ora
+): Promise<void> {
   const usage = await clearSurvival.getContextUsage();
   const status = clearSurvival.assessContextStatus(usage);
-  
+
   if (status === 'critical' || status === 'saved') {
     spinner.start('Auto-saving ledger before clear...');
     await clearSurvival.saveContinuityLedger();
     spinner.succeed('Ledger saved');
-    
+
     spinner.start('Clearing context...');
     // Note: Actual clear implementation would go here
     // For now, just simulate
-    await new Promise(resolve => setTimeout(resolve, 1000));
+    await new Promise((resolve) => setTimeout(resolve, 1000));
     spinner.succeed('Context cleared successfully');
   } else {
     console.log(chalk.green('Context usage is healthy, no clear needed'));
@@ -231,14 +237,14 @@ async function autoClear(clearSurvival: ClearSurvival, spinner: ora.Ora): Promis
 function getProgressBar(percentage: number): string {
   const filled = Math.round(percentage / 5);
   const empty = 20 - filled;
-  
+
   let bar = '[';
   bar += chalk.green('■').repeat(Math.min(filled, 10));
   bar += chalk.yellow('■').repeat(Math.max(0, Math.min(filled - 10, 5)));
   bar += chalk.red('■').repeat(Math.max(0, filled - 15));
   bar += chalk.gray('□').repeat(empty);
   bar += ']';
-  
+
   return bar;
 }
 

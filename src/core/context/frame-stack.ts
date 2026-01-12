@@ -22,12 +22,15 @@ export class FrameStack {
    */
   async initialize(): Promise<void> {
     try {
-      const activeFrames = this.frameDb.getFramesByProject(this.projectId, 'active');
-      
+      const activeFrames = this.frameDb.getFramesByProject(
+        this.projectId,
+        'active'
+      );
+
       // Rebuild stack from database
       this.activeStack = this.buildStackFromFrames(activeFrames);
-      
-      logger.info('Frame stack initialized', { 
+
+      logger.info('Frame stack initialized', {
         stackDepth: this.activeStack.length,
         projectId: this.projectId,
       });
@@ -40,10 +43,10 @@ export class FrameStack {
       throw new FrameError(
         'Failed to initialize frame stack',
         ErrorCode.FRAME_INIT_FAILED,
-        { 
-          projectId: this.projectId, 
+        {
+          projectId: this.projectId,
           runId: this.runId,
-          originalError: error instanceof Error ? error.message : String(error)
+          originalError: error instanceof Error ? error.message : String(error),
         }
       );
     }
@@ -59,10 +62,10 @@ export class FrameStack {
     }
 
     this.activeStack.push(frameId);
-    
-    logger.debug('Pushed frame to stack', { 
-      frameId, 
-      stackDepth: this.activeStack.length 
+
+    logger.debug('Pushed frame to stack', {
+      frameId,
+      stackDepth: this.activeStack.length,
     });
   }
 
@@ -100,9 +103,9 @@ export class FrameStack {
     }
 
     if (poppedFrameId) {
-      logger.debug('Popped frame from stack', { 
-        frameId: poppedFrameId, 
-        stackDepth: this.activeStack.length 
+      logger.debug('Popped frame from stack', {
+        frameId: poppedFrameId,
+        stackDepth: this.activeStack.length,
       });
     }
 
@@ -178,7 +181,7 @@ export class FrameStack {
   clear(): void {
     const previousDepth = this.activeStack.length;
     this.activeStack = [];
-    
+
     logger.info('Cleared frame stack', { previousDepth });
   }
 
@@ -191,14 +194,16 @@ export class FrameStack {
     // Check if all frames in stack exist and are active
     for (const frameId of this.activeStack) {
       const frame = this.frameDb.getFrame(frameId);
-      
+
       if (!frame) {
         errors.push(`Frame not found in database: ${frameId}`);
         continue;
       }
 
       if (frame.state !== 'active') {
-        errors.push(`Frame on stack is not active: ${frameId} (state: ${frame.state})`);
+        errors.push(
+          `Frame on stack is not active: ${frameId} (state: ${frame.state})`
+        );
       }
 
       if (frame.project_id !== this.projectId) {
@@ -213,7 +218,9 @@ export class FrameStack {
       const currentFrame = this.frameDb.getFrame(currentFrameId);
 
       if (currentFrame?.parent_frame_id !== expectedParentId) {
-        errors.push(`Frame parent mismatch: ${currentFrameId} parent should be ${expectedParentId} but is ${currentFrame?.parent_frame_id}`);
+        errors.push(
+          `Frame parent mismatch: ${currentFrameId} parent should be ${expectedParentId} but is ${currentFrame?.parent_frame_id}`
+        );
       }
     }
 
@@ -226,7 +233,10 @@ export class FrameStack {
   /**
    * Build frame context for a specific frame
    */
-  private buildFrameContext(frameId: string, maxEvents: number): FrameContext | null {
+  private buildFrameContext(
+    frameId: string,
+    maxEvents: number
+  ): FrameContext | null {
     try {
       const frame = this.frameDb.getFrame(frameId);
       if (!frame) {
@@ -260,11 +270,11 @@ export class FrameStack {
    */
   private extractConstraints(inputs: Record<string, any>): string[] {
     const constraints: string[] = [];
-    
+
     if (inputs.constraints && Array.isArray(inputs.constraints)) {
       constraints.push(...inputs.constraints);
     }
-    
+
     return constraints;
   }
 
@@ -273,13 +283,13 @@ export class FrameStack {
    */
   private extractActiveArtifacts(events: any[]): string[] {
     const artifacts: string[] = [];
-    
+
     for (const event of events) {
       if (event.event_type === 'artifact' && event.payload?.path) {
         artifacts.push(event.payload.path);
       }
     }
-    
+
     // Return unique artifacts
     return [...new Set(artifacts)];
   }
@@ -295,7 +305,7 @@ export class FrameStack {
     // Create parent-child map
     const parentMap = new Map<string, string>();
     const frameMap = new Map<string, Frame>();
-    
+
     for (const frame of frames) {
       frameMap.set(frame.frame_id, frame);
       if (frame.parent_frame_id) {
@@ -304,8 +314,8 @@ export class FrameStack {
     }
 
     // Find root frames (no parent or parent not in active set)
-    const rootFrames = frames.filter((f: any) => 
-      !f.parent_frame_id || !frameMap.has(f.parent_frame_id)
+    const rootFrames = frames.filter(
+      (f: any) => !f.parent_frame_id || !frameMap.has(f.parent_frame_id)
     );
 
     if (rootFrames.length === 0) {
@@ -321,13 +331,17 @@ export class FrameStack {
 
     // Build stack from root to leaves
     const stack: string[] = [];
-    let currentFrame = rootFrames.sort((a, b) => a.created_at - b.created_at)[0];
+    let currentFrame = rootFrames.sort(
+      (a, b) => a.created_at - b.created_at
+    )[0];
 
     while (currentFrame) {
       stack.push(currentFrame.frame_id);
-      
+
       // Find child frame
-      const childFrame = frames.find((f: any) => f.parent_frame_id === currentFrame.frame_id);
+      const childFrame = frames.find(
+        (f: any) => f.parent_frame_id === currentFrame.frame_id
+      );
       if (childFrame) {
         currentFrame = childFrame;
       } else {

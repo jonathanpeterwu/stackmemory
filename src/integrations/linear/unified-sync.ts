@@ -5,7 +5,7 @@
  */
 
 import { LinearClient, LinearIssue, LinearCreateIssueInput } from './client.js';
-import { LinearDuplicateDetector, DuplicateCheckResult } from './sync-enhanced.js';
+import { LinearDuplicateDetector, DuplicateCheckResult } from './sync.js';
 import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
 import { LinearAuthManager } from './auth.js';
 import { logger } from '../../core/monitoring/logger.js';

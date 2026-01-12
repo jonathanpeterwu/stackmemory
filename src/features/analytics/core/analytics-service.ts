@@ -27,7 +27,6 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-
 export class AnalyticsService {
   private metricsQueries: MetricsQueries;
   private linearClient?: LinearClient;
