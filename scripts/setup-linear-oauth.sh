@@ -14,11 +14,13 @@ else
     echo "Creating template .env.linear file..."
     cat > .env.linear << 'EOF'
 # Linear OAuth Configuration
-LINEAR_CLIENT_ID=36d173b6bc6439758239d86c6437e917
-LINEAR_CLIENT_SECRET=***REMOVED***
+# LINEAR_CLIENT_ID=your_client_id_here
+# LINEAR_CLIENT_SECRET=your_client_secret_here
+# LINEAR_OAUTH_TOKEN=your_oauth_token_here
 LINEAR_REDIRECT_URI=http://localhost:3456/auth/linear/callback
 EOF
-    export $(cat .env.linear | grep -v '^#' | xargs)
+    echo "⚠️  Please edit .env.linear and add your Linear OAuth credentials"
+    exit 1
 fi
 
 # Verify environment variables are set

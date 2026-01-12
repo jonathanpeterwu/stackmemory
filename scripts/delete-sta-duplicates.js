@@ -4,11 +4,17 @@
  * Delete duplicate STA tasks from Linear to free up capacity
  */
 
+import 'dotenv/config';
 import fs from 'fs';
 import readline from 'readline';
 
-// Use env var or fallback
-const API_KEY = process.env.LINEAR_API_KEY || 'REMOVED_LINEAR_API_KEY';
+// Load API key from environment
+const API_KEY = process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 const BATCH_SIZE = 10; // Delete in batches to avoid rate limits
 const DELAY_BETWEEN_BATCHES = 3000; // 3 seconds between batches
 

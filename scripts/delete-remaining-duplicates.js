@@ -4,10 +4,16 @@
  * Delete remaining duplicate tasks
  */
 
+import 'dotenv/config';
 import fs from 'fs';
 import readline from 'readline';
 
-const API_KEY = '***REMOVED***';
+const API_KEY = process.env.LINEAR_OAUTH_TOKEN || process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_OAUTH_TOKEN or LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_OAUTH_TOKEN or LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
 

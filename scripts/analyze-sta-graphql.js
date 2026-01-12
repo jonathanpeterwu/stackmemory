@@ -4,10 +4,16 @@
  * Analyze Linear workspace for STA duplicates using GraphQL API directly
  */
 
+import 'dotenv/config';
 import fs from 'fs';
 
-// Use env var or fallback
-const API_KEY = process.env.LINEAR_API_KEY || 'REMOVED_LINEAR_API_KEY';
+// Load API key from environment
+const API_KEY = process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 
 async function fetchAllIssues() {
   const query = `

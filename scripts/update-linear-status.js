@@ -4,7 +4,14 @@
  * Update Linear task status based on actual implementation status
  */
 
-const API_KEY = '***REMOVED***';
+import 'dotenv/config';
+
+const API_KEY = process.env.LINEAR_OAUTH_TOKEN || process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_OAUTH_TOKEN or LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_OAUTH_TOKEN or LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 
 // Tasks that should be marked as DONE based on commits and documentation
 const COMPLETED_TASKS = {

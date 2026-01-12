@@ -4,7 +4,14 @@
  * Debug why Linear updates are failing
  */
 
-const API_KEY = '***REMOVED***';
+import 'dotenv/config';
+
+const API_KEY = process.env.LINEAR_OAUTH_TOKEN || process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_OAUTH_TOKEN or LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_OAUTH_TOKEN or LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 
 async function debugLinearUpdate() {
   console.log('🔍 Debugging Linear update issues...\n');

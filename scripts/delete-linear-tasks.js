@@ -4,10 +4,16 @@
  * Delete duplicate and low-value tasks from Linear to free up capacity
  */
 
+import 'dotenv/config';
 import fs from 'fs';
 import readline from 'readline';
 
-const API_KEY = '***REMOVED***';
+const API_KEY = process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 const DELAY_BETWEEN_DELETES = 2000; // 2 seconds to avoid rate limits
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));
