@@ -7,7 +7,6 @@
 
 import { execSync } from 'child_process';
 import fs from 'fs';
-import path from 'path';
 import { glob } from 'glob';
 
 interface SecretPattern {
@@ -17,14 +16,42 @@ interface SecretPattern {
 }
 
 const SECRET_PATTERNS: SecretPattern[] = [
-  { pattern: /lin_api_[a-zA-Z0-9]{40}/, name: 'Linear API Key', envVar: 'LINEAR_API_KEY' },
-  { pattern: /lin_oauth_[a-zA-Z0-9]{64}/, name: 'Linear OAuth Token', envVar: 'LINEAR_OAUTH_TOKEN' },
-  { pattern: /sk-[a-zA-Z0-9]{48}/, name: 'OpenAI API Key', envVar: 'OPENAI_API_KEY' },
+  {
+    pattern: /lin_api_[a-zA-Z0-9]{40}/,
+    name: 'Linear API Key',
+    envVar: 'LINEAR_API_KEY',
+  },
+  {
+    pattern: /lin_oauth_[a-zA-Z0-9]{64}/,
+    name: 'Linear OAuth Token',
+    envVar: 'LINEAR_OAUTH_TOKEN',
+  },
+  {
+    pattern: /sk-[a-zA-Z0-9]{48}/,
+    name: 'OpenAI API Key',
+    envVar: 'OPENAI_API_KEY',
+  },
   { pattern: /npm_[a-zA-Z0-9]{36}/, name: 'NPM Token', envVar: 'NPM_TOKEN' },
-  { pattern: /ghp_[a-zA-Z0-9]{36}/, name: 'GitHub Token', envVar: 'GITHUB_TOKEN' },
-  { pattern: /ghs_[a-zA-Z0-9]{36}/, name: 'GitHub Secret', envVar: 'GITHUB_SECRET' },
-  { pattern: /pk_live_[a-zA-Z0-9]{24,}/, name: 'Stripe Live Key', envVar: 'STRIPE_LIVE_KEY' },
-  { pattern: /sk_live_[a-zA-Z0-9]{24,}/, name: 'Stripe Secret Key', envVar: 'STRIPE_SECRET_KEY' },
+  {
+    pattern: /ghp_[a-zA-Z0-9]{36}/,
+    name: 'GitHub Token',
+    envVar: 'GITHUB_TOKEN',
+  },
+  {
+    pattern: /ghs_[a-zA-Z0-9]{36}/,
+    name: 'GitHub Secret',
+    envVar: 'GITHUB_SECRET',
+  },
+  {
+    pattern: /pk_live_[a-zA-Z0-9]{24,}/,
+    name: 'Stripe Live Key',
+    envVar: 'STRIPE_LIVE_KEY',
+  },
+  {
+    pattern: /sk_live_[a-zA-Z0-9]{24,}/,
+    name: 'Stripe Secret Key',
+    envVar: 'STRIPE_SECRET_KEY',
+  },
 ];
 
 export class SecuritySecretsScanner {
@@ -33,12 +60,20 @@ export class SecuritySecretsScanner {
   /**
    * Scan files for hardcoded secrets
    */
-  async scanForSecrets(patterns: string[] = ['**/*.js', '**/*.ts', '**/*.jsx', '**/*.tsx', '**/*.sh']): Promise<void> {
+  async scanForSecrets(
+    patterns: string[] = [
+      '**/*.js',
+      '**/*.ts',
+      '**/*.jsx',
+      '**/*.tsx',
+      '**/*.sh',
+    ]
+  ): Promise<void> {
     console.log('🔍 Scanning for hardcoded secrets...\n');
 
     for (const pattern of patterns) {
-      const files = await glob(pattern, { 
-        ignore: ['node_modules/**', 'dist/**', 'build/**', '.git/**'] 
+      const files = await glob(pattern, {
+        ignore: ['node_modules/**', 'dist/**', 'build/**', '.git/**'],
       });
 
       for (const file of files) {
@@ -62,9 +97,12 @@ export class SecuritySecretsScanner {
           if (!this.detectedSecrets.has(filePath)) {
             this.detectedSecrets.set(filePath, new Set());
           }
-          this.detectedSecrets.get(filePath)!.add(
-            `Line ${index + 1}: ${secretPattern.name} detected (use ${secretPattern.envVar})`
-          );
+          const secrets = this.detectedSecrets.get(filePath);
+          if (secrets) {
+            secrets.add(
+              `Line ${index + 1}: ${secretPattern.name} detected (use ${secretPattern.envVar})`
+            );
+          }
         }
       }
     });
@@ -79,8 +117,10 @@ export class SecuritySecretsScanner {
       return;
     }
 
-    console.log(`⚠️  Found hardcoded secrets in ${this.detectedSecrets.size} files:\n`);
-    
+    console.log(
+      `⚠️  Found hardcoded secrets in ${this.detectedSecrets.size} files:\n`
+    );
+
     for (const [file, secrets] of this.detectedSecrets) {
       console.log(`📄 ${file}:`);
       for (const secret of secrets) {
@@ -102,49 +142,60 @@ export class SecuritySecretsScanner {
   async autoFix(): Promise<void> {
     console.log('🔧 Auto-fixing hardcoded secrets...\n');
 
-    for (const [filePath, _] of this.detectedSecrets) {
+    for (const [filePath] of this.detectedSecrets) {
       let content = fs.readFileSync(filePath, 'utf-8');
       let modified = false;
 
       // Add dotenv import if it's a JS/TS file and doesn't have it
-      if ((filePath.endsWith('.js') || filePath.endsWith('.ts')) && 
-          !content.includes('dotenv/config') && 
-          !content.includes('require(\'dotenv\')')) {
-        
+      if (
+        (filePath.endsWith('.js') || filePath.endsWith('.ts')) &&
+        !content.includes('dotenv/config') &&
+        !content.includes("require('dotenv')")
+      ) {
         // Add after shebang if present, otherwise at the top
         if (content.startsWith('#!/')) {
           const firstNewline = content.indexOf('\n');
-          content = content.slice(0, firstNewline + 1) + 
-                   '\nimport \'dotenv/config\';\n' + 
-                   content.slice(firstNewline + 1);
+          content =
+            content.slice(0, firstNewline + 1) +
+            "\nimport 'dotenv/config';\n" +
+            content.slice(firstNewline + 1);
         } else {
-          content = 'import \'dotenv/config\';\n\n' + content;
+          content = "import 'dotenv/config';\n\n" + content;
         }
         modified = true;
       }
 
       // Replace secrets with environment variables
       for (const pattern of SECRET_PATTERNS) {
-        const regex = new RegExp(`(['"\`])(${pattern.pattern.source})(['"\`])`, 'g');
+        const regex = new RegExp(
+          `(['"\`])(${pattern.pattern.source})(['"\`])`,
+          'g'
+        );
         const replacement = `process.env.${pattern.envVar}`;
-        
+
         if (regex.test(content)) {
           content = content.replace(regex, replacement);
           modified = true;
 
           // Add error checking after the variable definition
-          const varPattern = new RegExp(`const\\s+(\\w+)\\s*=\\s*process\\.env\\.${pattern.envVar}`);
+          const varPattern = new RegExp(
+            `const\\s+(\\w+)\\s*=\\s*process\\.env\\.${pattern.envVar}`
+          );
           const match = content.match(varPattern);
           if (match) {
             const varName = match[1];
-            const checkCode = `\nif (!${varName}) {\n` +
+            const checkCode =
+              `\nif (!${varName}) {\n` +
               `  console.error('❌ ${pattern.envVar} environment variable not set');\n` +
               `  console.log('Please set ${pattern.envVar} in your .env file or export it in your shell');\n` +
               `  process.exit(1);\n}\n`;
-            
+
             // Insert after the variable declaration
             const insertPos = content.indexOf(match[0]) + match[0].length;
-            content = content.slice(0, insertPos) + checkCode + content.slice(insertPos);
+            content =
+              content.slice(0, insertPos) +
+              checkCode +
+              content.slice(insertPos);
           }
         }
       }
@@ -171,8 +222,11 @@ export class SecuritySecretsScanner {
     try {
       for (const pattern of SECRET_PATTERNS) {
         const command = `git log -p --all -G"${pattern.pattern.source}" --format="%H %s" | head -20`;
-        const result = execSync(command, { encoding: 'utf-8', stdio: 'pipe' }).trim();
-        
+        const result = execSync(command, {
+          encoding: 'utf-8',
+          stdio: 'pipe',
+        }).trim();
+
         if (result) {
           console.log(`⚠️  Found ${pattern.name} in git history:`);
           console.log(result.split('\n').slice(0, 3).join('\n'));
@@ -184,7 +238,7 @@ export class SecuritySecretsScanner {
       console.log('1. Use BFG Repo-Cleaner: bfg --replace-text passwords.txt');
       console.log('2. Or interactive rebase: git rebase -i <commit>');
       console.log('3. Or allow via GitHub: Check push error for allow URLs\n');
-    } catch (error) {
+    } catch {
       console.log('Could not check git history');
     }
   }
@@ -225,18 +279,15 @@ exit 0
     const hookPath = '.git/hooks/pre-commit';
     fs.writeFileSync(hookPath, hookContent);
     fs.chmodSync(hookPath, '755');
-    
+
     console.log('✅ Generated pre-commit hook at .git/hooks/pre-commit');
-    console.log('This will prevent committing hardcoded secrets in the future.\n');
+    console.log(
+      'This will prevent committing hardcoded secrets in the future.\n'
+    );
   }
 }
 
 // CLI usage
-import { fileURLToPath } from 'url';
-import { dirname } from 'path';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
 
 if (import.meta.url === `file://${process.argv[1]}`) {
   const scanner = new SecuritySecretsScanner();

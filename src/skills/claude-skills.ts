@@ -16,6 +16,10 @@ import {
   type RepoIngestionOptions,
 } from './repo-ingestion-skill.js';
 import { DashboardLauncherSkill } from './dashboard-launcher.js';
+import {
+  RecursiveAgentOrchestrator,
+  type RLMOptions,
+} from './recursive-agent-orchestrator.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -841,6 +845,7 @@ export class ClaudeSkillsManager {
   private archaeologistSkill: ArchaeologistSkill;
   private dashboardLauncher: DashboardLauncherSkill;
   private repoIngestionSkill: RepoIngestionSkill | null = null;
+  private rlmOrchestrator: RecursiveAgentOrchestrator | null = null;
 
   constructor(private context: SkillContext) {
     this.handoffSkill = new HandoffSkill(context);
@@ -874,6 +879,29 @@ export class ClaudeSkillsManager {
         logger.warn('Repo ingestion skill initialization failed:', error);
       });
     }
+
+    // Initialize RLM Orchestrator
+    // Import dynamically to avoid circular dependencies
+    import('../features/tasks/pebbles-task-store.js')
+      .then((module) => {
+        const taskStore = new module.PebblesTaskStore();
+
+        import('../core/context/frame-manager.js').then((frameModule) => {
+          const frameManager = new frameModule.FrameManager();
+
+          this.rlmOrchestrator = new RecursiveAgentOrchestrator(
+            frameManager,
+            context.dualStackManager,
+            context.contextRetriever,
+            taskStore
+          );
+
+          logger.info('RLM Orchestrator initialized');
+        });
+      })
+      .catch((error: unknown) => {
+        logger.warn('RLM Orchestrator initialization failed:', error);
+      });
   }
 
   async executeSkill(
@@ -1002,6 +1030,53 @@ export class ClaudeSkillsManager {
             };
         }
 
+      case 'rlm':
+      case 'recursive':
+        if (!this.rlmOrchestrator) {
+          return {
+            success: false,
+            message:
+              'RLM Orchestrator not initialized. Please wait a moment and try again.',
+          };
+        }
+
+        const task = args.join(' ') || 'Analyze and improve the current code';
+        const rlmOptions = options as RLMOptions;
+
+        try {
+          logger.info('Starting RLM execution', { task });
+
+          const result = await this.rlmOrchestrator.execute(
+            task,
+            {
+              files: rlmOptions.files || [],
+              query: task,
+            },
+            rlmOptions
+          );
+
+          return {
+            success: result.success,
+            message: `RLM execution ${result.success ? 'completed' : 'failed'}`,
+            data: {
+              duration: `${result.duration}ms`,
+              totalTokens: result.totalTokens,
+              totalCost: `$${result.totalCost.toFixed(2)}`,
+              testsGenerated: result.testsGenerated,
+              improvements: result.improvements.length,
+              issuesFound: result.issuesFound,
+              issuesFixed: result.issuesFixed,
+              executionTree: result.rootNode,
+            },
+          };
+        } catch (error: any) {
+          logger.error('RLM execution error:', error);
+          return {
+            success: false,
+            message: `RLM execution failed: ${error.message}`,
+          };
+        }
+
       default:
         return {
           success: false,
@@ -1014,6 +1089,9 @@ export class ClaudeSkillsManager {
     const skills = ['handoff', 'checkpoint', 'dig', 'dashboard'];
     if (this.repoIngestionSkill) {
       skills.push('repo');
+    }
+    if (this.rlmOrchestrator) {
+      skills.push('rlm');
     }
     return skills;
   }
@@ -1070,6 +1148,41 @@ Options:
 - --force-update: Force re-indexing of all files
 - --language: Filter search by programming language
 - --limit: Maximum search results (default: 20)
+`;
+
+      case 'rlm':
+      case 'recursive':
+        return `
+/rlm "task description" [options]
+
+Recursive Language Model orchestration using Claude Code's Task tool:
+- Decomposes complex tasks into parallel/sequential subtasks
+- Spawns specialized Claude subagents for each task type
+- Automatic test generation and multi-stage review
+- Handles large codebases through intelligent chunking
+
+Subagent Types:
+- Planning: Task decomposition and strategy
+- Code: Implementation and refactoring
+- Testing: Comprehensive test generation (unit/integration/E2E)
+- Linting: Code quality and formatting
+- Review: Multi-stage code review and quality scoring
+- Improve: Implement review suggestions
+- Context: Information retrieval
+- Publish: NPM/GitHub releases
+
+Options:
+- --max-parallel N: Max concurrent subagents (default: 5)
+- --max-recursion N: Max recursion depth (default: 4)
+- --review-stages N: Number of review iterations (default: 3)
+- --quality-threshold N: Target quality score 0-1 (default: 0.85)
+- --test-mode [unit|integration|e2e|all]: Test generation mode (default: all)
+- --verbose: Show all recursive operations
+
+Examples:
+/rlm "Refactor the authentication system with full test coverage"
+/rlm "Generate comprehensive tests for the API endpoints" --test-mode integration
+/rlm "Review and improve code quality" --review-stages 5 --quality-threshold 0.95
 `;
 
       default:
