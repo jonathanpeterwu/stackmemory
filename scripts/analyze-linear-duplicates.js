@@ -4,10 +4,16 @@
  * Analyze Linear workspace for duplicate tasks to identify what to delete
  */
 
+import 'dotenv/config';
 import { LinearRestClient } from '../dist/integrations/linear/rest-client.js';
 import fs from 'fs';
 
-const API_KEY = 'lin_api_xDQngNqmO0R33JXyRMvyeNYGUG5R3YKexDO2DBzz';
+const API_KEY = process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 
 async function analyzeLinearDuplicates() {
   try {

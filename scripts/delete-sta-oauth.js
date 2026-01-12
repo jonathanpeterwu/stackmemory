@@ -4,11 +4,17 @@
  * Delete duplicate STA tasks from Linear using OAuth token
  */
 
+import 'dotenv/config';
 import fs from 'fs';
 import readline from 'readline';
 
-// Use OAuth developer token
-const API_KEY = 'lin_oauth_02b1b198dfb9ddd06626fad0921f4c786905f191ceaff1c863449fc5b4555b36';
+// Load OAuth token from environment
+const API_KEY = process.env.LINEAR_OAUTH_TOKEN || process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_OAUTH_TOKEN or LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_OAUTH_TOKEN or LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 const BATCH_SIZE = 10;
 const DELAY_BETWEEN_BATCHES = 3000;
 

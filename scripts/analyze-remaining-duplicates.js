@@ -4,9 +4,15 @@
  * Analyze remaining tasks after first deletion round
  */
 
+import 'dotenv/config';
 import fs from 'fs';
 
-const API_KEY = 'lin_oauth_02b1b198dfb9ddd06626fad0921f4c786905f191ceaff1c863449fc5b4555b36';
+const API_KEY = process.env.LINEAR_OAUTH_TOKEN || process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_OAUTH_TOKEN or LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_OAUTH_TOKEN or LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 
 async function fetchAllIssues() {
   const query = `

@@ -4,10 +4,16 @@
  * Add all StackMemory phase tasks to Linear via API
  */
 
+import 'dotenv/config';
 import fs from 'fs';
 import { LinearRestClient } from '../dist/integrations/linear/rest-client.js';
 
-const API_KEY = 'lin_api_xDQngNqmO0R33JXyRMvyeNYGUG5R3YKexDO2DBzz';
+const API_KEY = process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('❌ LINEAR_API_KEY environment variable not set');
+  console.log('Please set LINEAR_API_KEY in your .env file or export it in your shell');
+  process.exit(1);
+}
 const DELAY_BETWEEN_TASKS = 5000; // 5 seconds to avoid rate limits
 
 const delay = (ms) => new Promise(resolve => setTimeout(resolve, ms));

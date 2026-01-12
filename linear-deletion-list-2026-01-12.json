@@ -1,0 +1,16 @@
+{
+  "timestamp": "2026-01-12T10:02:41.722Z",
+  "summary": {
+    "total": 0,
+    "toDelete": 0,
+    "remaining": 0
+  },
+  "categories": {
+    "Engineering Meetings": [],
+    "Duplicate TODOs": [],
+    "Duplicate Dashboards": [],
+    "Completed Tasks": [],
+    "Canceled Tasks": []
+  },
+  "tasks": []
+}
