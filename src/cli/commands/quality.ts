@@ -549,8 +549,8 @@ async function getRecentlyModifiedFiles(
   projectRoot: string
 ): Promise<string[]> {
   try {
-    const { execSync } = await import('child_process');
-    const output = execSync('git diff --name-only HEAD~1', {
+    const { execFileSync } = await import('child_process');
+    const output = execFileSync('git', ['diff', '--name-only', 'HEAD~1'], {
       cwd: projectRoot,
       encoding: 'utf-8',
     });

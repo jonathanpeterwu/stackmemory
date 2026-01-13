@@ -5,7 +5,7 @@
  * Detects and fixes hardcoded secrets in code files
  */
 
-import { execSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import fs from 'fs';
 import { glob } from 'glob';
 
@@ -221,11 +221,30 @@ export class SecuritySecretsScanner {
 
     try {
       for (const pattern of SECRET_PATTERNS) {
-        const command = `git log -p --all -G"${pattern.pattern.source}" --format="%H %s" | head -20`;
-        const result = execSync(command, {
-          encoding: 'utf-8',
-          stdio: 'pipe',
-        }).trim();
+        // Use execFileSync to safely pass arguments
+        let result: string;
+        try {
+          const gitOutput = execFileSync(
+            'git',
+            [
+              'log',
+              '-p',
+              '--all',
+              `-G${pattern.pattern.source}`,
+              '--format=%H %s',
+            ],
+            {
+              encoding: 'utf-8',
+              stdio: 'pipe',
+            }
+          );
+
+          // Manually limit output to first 20 lines for safety
+          result = gitOutput.split('\n').slice(0, 20).join('\n').trim();
+        } catch {
+          // Git command failed, skip this pattern
+          continue;
+        }
 
         if (result) {
           console.log(`⚠️  Found ${pattern.name} in git history:`);

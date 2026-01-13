@@ -934,11 +934,59 @@ export class ClaudeSkillsManager {
       case 'dig':
         return this.archaeologistSkill.dig(args[0], options);
 
+      case 'lint':
+        // Linting task using RLM orchestrator with linting agent
+        if (!this.rlmOrchestrator) {
+          return {
+            success: false,
+            message:
+              'RLM Orchestrator not initialized. Please wait a moment and try again.',
+          };
+        }
+
+        const lintPath = args[0] || process.cwd();
+        const lintOptions = {
+          ...options,
+          // Force use of linting agent
+          agents: ['linting'],
+          maxParallel: 1,
+          reviewStages: 1,
+          verboseLogging: true,
+        } as RLMOptions;
+
+        const lintTask = `Perform comprehensive linting on ${lintPath}: Check for syntax errors, type issues, formatting violations, security vulnerabilities, performance anti-patterns, and unused code. Provide actionable fixes.`;
+
+        try {
+          const result = await this.rlmOrchestrator.execute(
+            lintTask,
+            { path: lintPath, ...options },
+            lintOptions
+          );
+
+          return {
+            success: result.success,
+            message: `Linting ${result.success ? 'completed' : 'failed'}`,
+            data: {
+              issuesFound: result.issuesFound,
+              issuesFixed: result.issuesFixed,
+              duration: `${result.duration}ms`,
+              totalTokens: result.totalTokens,
+              details: result.rootNode,
+            },
+          };
+        } catch (error: any) {
+          return {
+            success: false,
+            message: `Linting failed: ${error.message}`,
+          };
+        }
+
       case 'rlm':
         if (!this.rlmOrchestrator) {
           return {
             success: false,
-            message: 'RLM Orchestrator not initialized. Please wait a moment and try again.',
+            message:
+              'RLM Orchestrator not initialized. Please wait a moment and try again.',
           };
         }
         return this.rlmOrchestrator.execute(args[0], options as RLMOptions);
@@ -1099,7 +1147,7 @@ export class ClaudeSkillsManager {
       skills.push('repo');
     }
     if (this.rlmOrchestrator) {
-      skills.push('rlm');
+      skills.push('rlm', 'lint');
     }
     return skills;
   }
@@ -1125,6 +1173,36 @@ Create and manage recovery points
         return `
 /dig "query" [--depth 6months] [--patterns] [--decisions] [--timeline]
 Deep historical context retrieval across sessions
+`;
+
+      case 'lint':
+        return `
+/lint [path] [options]
+Perform comprehensive code linting and quality checks
+
+Automatically checks for:
+- Syntax errors and type issues
+- Code formatting and style violations  
+- Security vulnerabilities
+- Performance anti-patterns
+- Unused imports and dead code
+- Code smells and complexity issues
+
+Usage:
+  stackmemory skills lint                  # Lint current directory
+  stackmemory skills lint src/             # Lint specific directory
+  stackmemory skills lint src/file.ts     # Lint specific file
+
+Options:
+  --fix                 Automatically fix issues where possible
+  --format             Focus on formatting issues
+  --security           Focus on security vulnerabilities
+  --performance        Focus on performance issues
+  --verbose            Show detailed output
+
+Examples:
+  stackmemory skills lint --fix
+  stackmemory skills lint src/ --security --verbose
 `;
 
       case 'rlm':

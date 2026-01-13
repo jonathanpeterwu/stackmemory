@@ -62,3 +62,4 @@
 - `npm_*` - NPM tokens
 - Any base64 encoded strings that look like tokens
 - Hardcoded URLs with embedded credentials
+- # Never use emojis and speak in plain developer english for comments not AI comments

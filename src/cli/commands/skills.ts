@@ -11,10 +11,16 @@ import {
   ClaudeSkillsManager,
   type SkillContext,
 } from '../../skills/claude-skills.js';
+import { 
+  UnifiedRLMOrchestrator, 
+  initializeUnifiedOrchestrator 
+} from '../../skills/unified-rlm-orchestrator.js';
 import { DualStackManager } from '../../core/context/dual-stack-manager.js';
 import { FrameHandoffManager } from '../../core/context/frame-handoff-manager.js';
+import { FrameManager } from '../../core/context/frame-manager.js';
 import { ContextRetriever } from '../../core/retrieval/context-retriever.js';
 import { SQLiteAdapter } from '../../core/database/sqlite-adapter.js';
+import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
 import { ConfigManager } from '../../core/config/config-manager.js';
 import * as path from 'path';
 import * as os from 'os';
@@ -32,7 +38,10 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-async function initializeSkillContext(): Promise<SkillContext> {
+async function initializeSkillContext(): Promise<{ 
+  context: SkillContext;
+  unifiedOrchestrator: UnifiedRLMOrchestrator;
+}> {
   const config = ConfigManager.getInstance();
   const projectId = config.get('project.id') || 'default-project';
   const userId = config.get('user.id') || process.env['USER'] || 'default';
@@ -51,8 +60,10 @@ async function initializeSkillContext(): Promise<SkillContext> {
   const dualStackManager = new DualStackManager(database, projectId, userId);
   const handoffManager = new FrameHandoffManager(dualStackManager);
   const contextRetriever = new ContextRetriever(database);
+  const frameManager = new FrameManager(database);
+  const taskStore = new PebblesTaskStore();
 
-  return {
+  const context: SkillContext = {
     projectId,
     userId,
     dualStackManager,
@@ -60,6 +71,17 @@ async function initializeSkillContext(): Promise<SkillContext> {
     contextRetriever,
     database,
   };
+  
+  // Initialize unified RLM orchestrator
+  const unifiedOrchestrator = initializeUnifiedOrchestrator(
+    frameManager,
+    dualStackManager,
+    contextRetriever,
+    taskStore,
+    context
+  );
+
+  return { context, unifiedOrchestrator };
 }
 
 export function createSkillsCommand(): Command {
@@ -82,10 +104,10 @@ export function createSkillsCommand(): Command {
       const spinner = ora('Initiating handoff...').start();
 
       try {
-        const context = await initializeSkillContext();
-        const skillsManager = new ClaudeSkillsManager(context);
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
 
-        const result = await skillsManager.executeSkill(
+        // Use unified RLM orchestrator for RLM-first execution
+        const result = await unifiedOrchestrator.executeSkill(
           'handoff',
           [targetUser, message],
           {
@@ -137,10 +159,9 @@ export function createSkillsCommand(): Command {
       const spinner = ora('Creating checkpoint...').start();
 
       try {
-        const context = await initializeSkillContext();
-        const skillsManager = new ClaudeSkillsManager(context);
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
 
-        const result = await skillsManager.executeSkill(
+        const result = await unifiedOrchestrator.executeSkill(
           'checkpoint',
           ['create', description],
           {
@@ -178,10 +199,9 @@ export function createSkillsCommand(): Command {
       const spinner = ora('Restoring checkpoint...').start();
 
       try {
-        const context = await initializeSkillContext();
-        const skillsManager = new ClaudeSkillsManager(context);
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
 
-        const result = await skillsManager.executeSkill('checkpoint', [
+        const result = await unifiedOrchestrator.executeSkill('checkpoint', [
           'restore',
           checkpointId,
         ]);
@@ -216,10 +236,9 @@ export function createSkillsCommand(): Command {
       const spinner = ora('Loading checkpoints...').start();
 
       try {
-        const context = await initializeSkillContext();
-        const skillsManager = new ClaudeSkillsManager(context);
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
 
-        const result = await skillsManager.executeSkill(
+        const result = await unifiedOrchestrator.executeSkill(
           'checkpoint',
           ['list'],
           {
@@ -263,10 +282,9 @@ export function createSkillsCommand(): Command {
       const spinner = ora('Comparing checkpoints...').start();
 
       try {
-        const context = await initializeSkillContext();
-        const skillsManager = new ClaudeSkillsManager(context);
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
 
-        const result = await skillsManager.executeSkill('checkpoint', [
+        const result = await unifiedOrchestrator.executeSkill('checkpoint', [
           'diff',
           checkpoint1,
           checkpoint2,
@@ -311,10 +329,9 @@ export function createSkillsCommand(): Command {
       const spinner = ora('Digging through context...').start();
 
       try {
-        const context = await initializeSkillContext();
-        const skillsManager = new ClaudeSkillsManager(context);
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
 
-        const result = await skillsManager.executeSkill('dig', [query], {
+        const result = await unifiedOrchestrator.executeSkill('dig', [query], {
           depth: options.depth,
           patterns: options.patterns,
           decisions: options.decisions,
@@ -403,12 +420,11 @@ export function createSkillsCommand(): Command {
       const spinner = ora('Initializing RLM orchestrator...').start();
 
       try {
-        const context = await initializeSkillContext();
-        const skillsManager = new ClaudeSkillsManager(context);
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
 
         spinner.text = 'Decomposing task...';
         
-        const result = await skillsManager.executeSkill('rlm', [task], {
+        const result = await unifiedOrchestrator.executeSkill('rlm', [task], {
           maxParallel: parseInt(options.maxParallel),
           maxRecursionDepth: parseInt(options.maxRecursion),
           maxTokensPerAgent: parseInt(options.maxTokensPerAgent),
@@ -459,25 +475,57 @@ export function createSkillsCommand(): Command {
     .command('help [skill]')
     .description('Show help for a specific skill')
     .action(async (skill) => {
-      const context = await initializeSkillContext();
-      const skillsManager = new ClaudeSkillsManager(context);
-
       if (skill) {
-        console.log(skillsManager.getSkillHelp(skill));
+        // Show specific skill help
+        switch (skill) {
+          case 'lint':
+            console.log(`
+lint (RLM-Orchestrated)
+Primary Agent: linting
+Secondary Agents: improve
+
+Comprehensive linting of code: Check syntax, types, formatting, security, performance, and dead code. Provide fixes.
+
+This skill is executed through RLM orchestration for:
+- Automatic task decomposition
+- Parallel agent execution
+- Multi-stage quality review
+- Comprehensive result aggregation
+
+Usage:
+  stackmemory skills lint                  # Lint current directory
+  stackmemory skills lint src/             # Lint specific directory
+  stackmemory skills lint src/file.ts     # Lint specific file
+
+Options:
+  --fix                 Automatically fix issues where possible
+  --format             Focus on formatting issues
+  --security           Focus on security vulnerabilities
+  --performance        Focus on performance issues
+  --verbose            Show detailed output
+`);
+            break;
+          default:
+            console.log(`Unknown skill: ${skill}. Use "stackmemory skills help" to see all available skills.`);
+        }
       } else {
-        console.log(chalk.cyan('Available Claude Skills:\n'));
+        console.log(chalk.cyan('Available Claude Skills (RLM-Orchestrated):\n'));
         console.log(
           '  handoff    - Streamline frame handoffs between team members'
         );
         console.log('  checkpoint - Create and manage recovery points');
         console.log('  dig        - Deep historical context retrieval');
-        console.log('  rlm        - Recursive Language Model orchestration\n');
+        console.log('  lint       - Comprehensive code linting and quality checks');
+        console.log('  test       - Generate comprehensive test suites');
+        console.log('  review     - Multi-stage code review and improvements');
+        console.log('  refactor   - Refactor code for better architecture');
+        console.log('  publish    - Prepare and execute releases');
+        console.log('  rlm        - Direct recursive agent orchestration\n');
+        console.log(chalk.yellow('\nAll skills now use RLM orchestration for intelligent task decomposition'));
         console.log(
           'Use "stackmemory skills help <skill>" for detailed help on each skill'
         );
       }
-
-      await context.database.disconnect();
     });
 
   return skillsCmd;

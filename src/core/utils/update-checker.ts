@@ -3,7 +3,7 @@
  * Checks npm registry for newer versions
  */
 
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
@@ -95,7 +95,7 @@ export class UpdateChecker {
     try {
       // Use timeout to prevent hanging on slow network
       const fetchVersion = async () => {
-        const output = execSync(`npm view ${this.PACKAGE_NAME} version`, {
+        const output = execFileSync('npm', ['view', this.PACKAGE_NAME, 'version'], {
           encoding: 'utf-8',
           stdio: ['pipe', 'pipe', 'ignore'],
           timeout: 5000, // 5 second timeout

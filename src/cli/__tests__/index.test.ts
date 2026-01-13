@@ -40,6 +40,39 @@ vi.mock('better-sqlite3', () => ({
   })),
 }));
 
+vi.mock('child_process', () => ({
+  exec: vi.fn((cmd, callback) => {
+    if (callback) {
+      callback(null, '', '');
+    }
+  }),
+  execSync: vi.fn(() => ''),
+  spawn: vi.fn(() => ({
+    on: vi.fn(),
+    stdout: { on: vi.fn() },
+    stderr: { on: vi.fn() },
+  })),
+}));
+
+vi.mock('util', async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    promisify: vi.fn(() => vi.fn().mockResolvedValue({ stdout: '', stderr: '' })),
+  };
+});
+
+// Mock the subagent client
+vi.mock('../../integrations/claude-code/subagent-client', () => ({
+  ClaudeCodeSubagentClient: vi.fn().mockImplementation(() => ({
+    executeSubagent: vi.fn().mockResolvedValue({
+      success: true,
+      result: { message: 'Mocked subagent result' },
+      tokens: 100,
+    }),
+  })),
+}));
+
 vi.mock('../core/context/frame-manager', () => ({
   FrameManager: vi.fn().mockImplementation(() => ({
     createFrame: vi.fn(() => 'frame-123'),

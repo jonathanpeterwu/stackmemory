@@ -18,6 +18,11 @@ import {
 import { retry, withTimeout } from '../errors/recovery.js';
 import { sessionManager, FrameQueryMode } from '../session/index.js';
 import { contextBridge } from './context-bridge.js';
+
+// Constants for frame validation
+const MAX_FRAME_DEPTH = 100; // Maximum allowed frame depth
+const DEFAULT_MAX_DEPTH = 100; // Default if not configured
+
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
@@ -107,6 +112,7 @@ export interface Event {
 export interface FrameManagerOptions {
   skipContextBridge?: boolean;
   runId?: string;
+  maxFrameDepth?: number; // Maximum allowed frame depth (default: 100)
 }
 
 export class FrameManager {
@@ -116,6 +122,7 @@ export class FrameManager {
   private projectId: string;
   private activeStack: string[] = []; // Stack of active frame IDs
   private queryMode: FrameQueryMode = FrameQueryMode.PROJECT_ACTIVE;
+  private maxFrameDepth: number = DEFAULT_MAX_DEPTH;
 
   constructor(
     db: Database.Database,
@@ -134,6 +141,7 @@ export class FrameManager {
     } else if (runIdOrOptions) {
       runId = runIdOrOptions.runId;
       skipContextBridge = runIdOrOptions.skipContextBridge || false;
+      this.maxFrameDepth = runIdOrOptions.maxFrameDepth || DEFAULT_MAX_DEPTH;
     }
 
     // Use session manager for run ID if available
@@ -404,6 +412,38 @@ export class FrameManager {
     const frameId = uuidv4();
     const parentFrameId = options.parentFrameId || this.getCurrentFrameId();
     const depth = parentFrameId ? this.getFrameDepth(parentFrameId) + 1 : 0;
+
+    // Check for depth limit
+    if (depth > this.maxFrameDepth) {
+      throw new FrameError(
+        `Maximum frame depth exceeded: ${depth} > ${this.maxFrameDepth}`,
+        ErrorCode.FRAME_STACK_OVERFLOW,
+        {
+          currentDepth: depth,
+          maxDepth: this.maxFrameDepth,
+          frameId,
+          parentFrameId,
+          frameName: options.name,
+        }
+      );
+    }
+
+    // Check for circular reference before creating frame
+    if (parentFrameId) {
+      const cycle = this.detectCycle(frameId, parentFrameId);
+      if (cycle) {
+        throw new FrameError(
+          `Circular reference detected in frame hierarchy`,
+          ErrorCode.FRAME_CYCLE_DETECTED,
+          {
+            frameId,
+            parentFrameId,
+            cycle,
+            frameName: options.name,
+          }
+        );
+      }
+    }
 
     const frame: Omit<
       Frame,
@@ -1099,5 +1139,141 @@ export class FrameManager {
       .filter(Boolean);
 
     return artifacts;
+  }
+
+  /**
+   * Detect if setting a parent frame would create a cycle in the frame hierarchy.
+   * Returns the cycle path if detected, or null if no cycle.
+   * @param childFrameId - The frame that would be the child
+   * @param parentFrameId - The proposed parent frame
+   * @returns Array of frame IDs forming the cycle, or null if no cycle
+   */
+  private detectCycle(
+    childFrameId: string,
+    parentFrameId: string
+  ): string[] | null {
+    const visited = new Set<string>();
+    const path: string[] = [];
+
+    // Start from the proposed parent and traverse up the hierarchy
+    let currentId: string | undefined = parentFrameId;
+    
+    while (currentId) {
+      // If we've seen this frame before, we have a cycle
+      if (visited.has(currentId)) {
+        // Build the cycle path
+        const cycleStart = path.indexOf(currentId);
+        return path.slice(cycleStart).concat(currentId);
+      }
+
+      // If the current frame is the child we're trying to add, it's a cycle
+      if (currentId === childFrameId) {
+        return path.concat([currentId, childFrameId]);
+      }
+
+      visited.add(currentId);
+      path.push(currentId);
+
+      // Move to the parent of current frame
+      const frame = this.getFrame(currentId);
+      if (!frame) {
+        // Frame not found, no cycle possible through this path
+        break;
+      }
+      currentId = frame.parent_frame_id;
+
+      // Safety check: if we've traversed too many levels, something is wrong
+      if (path.length > this.maxFrameDepth) {
+        throw new FrameError(
+          `Frame hierarchy traversal exceeded maximum depth during cycle detection`,
+          ErrorCode.FRAME_STACK_OVERFLOW,
+          {
+            depth: path.length,
+            maxDepth: this.maxFrameDepth,
+            path,
+          }
+        );
+      }
+    }
+
+    return null; // No cycle detected
+  }
+
+  /**
+   * Update parent frame of an existing frame (with cycle detection)
+   * @param frameId - The frame to update
+   * @param newParentFrameId - The new parent frame ID
+   */
+  public updateParentFrame(frameId: string, newParentFrameId: string | null): void {
+    // Check if frame exists
+    const frame = this.getFrame(frameId);
+    if (!frame) {
+      throw new FrameError(
+        `Frame not found: ${frameId}`,
+        ErrorCode.FRAME_NOT_FOUND,
+        { frameId }
+      );
+    }
+
+    // If setting a parent, check for cycles
+    if (newParentFrameId) {
+      const cycle = this.detectCycle(frameId, newParentFrameId);
+      if (cycle) {
+        throw new FrameError(
+          `Cannot set parent: would create circular reference`,
+          ErrorCode.FRAME_CYCLE_DETECTED,
+          {
+            frameId,
+            newParentFrameId,
+            cycle,
+            currentParentId: frame.parent_frame_id,
+          }
+        );
+      }
+
+      // Check depth after parent change
+      const newParentFrame = this.getFrame(newParentFrameId);
+      if (newParentFrame) {
+        const newDepth = newParentFrame.depth + 1;
+        if (newDepth > this.maxFrameDepth) {
+          throw new FrameError(
+            `Cannot set parent: would exceed maximum frame depth`,
+            ErrorCode.FRAME_STACK_OVERFLOW,
+            {
+              frameId,
+              newParentFrameId,
+              newDepth,
+              maxDepth: this.maxFrameDepth,
+            }
+          );
+        }
+      }
+    }
+
+    try {
+      // Update the parent frame
+      this.db
+        .prepare(
+          `UPDATE frames SET parent_frame_id = ? WHERE frame_id = ?`
+        )
+        .run(newParentFrameId, frameId);
+
+      logger.info('Updated parent frame', {
+        frameId,
+        oldParentId: frame.parent_frame_id,
+        newParentId: newParentFrameId,
+      });
+    } catch (error: unknown) {
+      throw new DatabaseError(
+        `Failed to update parent frame`,
+        ErrorCode.DB_UPDATE_FAILED,
+        {
+          frameId,
+          newParentFrameId,
+          operation: 'updateParentFrame',
+        },
+        error instanceof Error ? error : undefined
+      );
+    }
   }
 }

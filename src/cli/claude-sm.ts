@@ -5,7 +5,7 @@
  * Automatically manages context persistence and instance isolation
  */
 
-import { spawn, execSync } from 'child_process';
+import { spawn, execSync, execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -72,7 +72,7 @@ class ClaudeSM {
 
     for (const smPath of possiblePaths) {
       try {
-        execSync(`which ${smPath}`, { stdio: 'ignore' });
+        execFileSync('which', [smPath], { stdio: 'ignore' });
         return smPath;
       } catch {
         // Continue searching
