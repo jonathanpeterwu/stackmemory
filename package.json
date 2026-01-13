@@ -40,6 +40,7 @@
     "persistence"
   ],
   "scripts": {
+    "start": "node dist/servers/railway/index.js",
     "setup": "npm install && npm run build && npm run init",
     "postinstall": "node scripts/install-claude-hooks-auto.js || true",
     "init": "node dist/scripts/initialize.js",
