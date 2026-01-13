@@ -22,6 +22,7 @@ export interface ValidationResult {
 }
 
 export class ConfigManager {
+  private static instance: ConfigManager | null = null;
   private config: StackMemoryConfig;
   private configPath: string;
   private fileWatcher?: fs.FSWatcher;
@@ -31,6 +32,16 @@ export class ConfigManager {
     this.configPath =
       configPath || path.join(process.cwd(), '.stackmemory', 'config.yaml');
     this.config = this.loadConfig();
+  }
+
+  /**
+   * Get singleton instance of ConfigManager
+   */
+  public static getInstance(configPath?: string): ConfigManager {
+    if (!ConfigManager.instance) {
+      ConfigManager.instance = new ConfigManager(configPath);
+    }
+    return ConfigManager.instance;
   }
 
   /**
@@ -313,6 +324,25 @@ export class ConfigManager {
    */
   getConfig(): StackMemoryConfig {
     return { ...this.config };
+  }
+
+  /**
+   * Get a specific configuration value by path
+   * Example: config.get('project.id') returns config.project.id
+   */
+  get(path: string): any {
+    const keys = path.split('.');
+    let value: any = this.config;
+    
+    for (const key of keys) {
+      if (value && typeof value === 'object' && key in value) {
+        value = value[key];
+      } else {
+        return undefined;
+      }
+    }
+    
+    return value;
   }
 
   /**

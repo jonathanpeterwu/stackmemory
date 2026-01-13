@@ -934,6 +934,15 @@ export class ClaudeSkillsManager {
       case 'dig':
         return this.archaeologistSkill.dig(args[0], options);
 
+      case 'rlm':
+        if (!this.rlmOrchestrator) {
+          return {
+            success: false,
+            message: 'RLM Orchestrator not initialized. Please wait a moment and try again.',
+          };
+        }
+        return this.rlmOrchestrator.execute(args[0], options as RLMOptions);
+
       case 'repo':
       case 'ingest':
         if (!this.repoIngestionSkill) {
@@ -1030,7 +1039,6 @@ export class ClaudeSkillsManager {
             };
         }
 
-      case 'rlm':
       case 'recursive':
         if (!this.rlmOrchestrator) {
           return {
@@ -1119,6 +1127,26 @@ Create and manage recovery points
 Deep historical context retrieval across sessions
 `;
 
+      case 'rlm':
+        return `
+/rlm "task description" [options]
+Execute complex tasks with recursive agent orchestration
+
+Options:
+  --max-parallel <n>          Max concurrent subagents (default: 5)
+  --max-recursion <n>         Max recursion depth (default: 4)
+  --max-tokens-per-agent <n>  Token budget per agent (default: 30000)
+  --review-stages <n>         Review iterations (default: 3)
+  --quality-threshold <n>     Target quality 0-1 (default: 0.85)
+  --test-mode <mode>          unit/integration/e2e/all (default: all)
+  --verbose                   Show all operations
+  --timeout-per-agent <s>     Timeout in seconds (default: 300)
+
+Examples:
+  stackmemory skills rlm "Generate tests for API endpoints"
+  stackmemory skills rlm "Refactor auth system" --quality-threshold 0.95
+`;
+
       case 'dashboard':
         return `
 /dashboard [launch|stop]
@@ -1150,7 +1178,6 @@ Options:
 - --limit: Maximum search results (default: 20)
 `;
 
-      case 'rlm':
       case 'recursive':
         return `
 /rlm "task description" [options]

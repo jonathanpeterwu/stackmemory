@@ -34,7 +34,7 @@ function getOptionalEnv(key: string): string | undefined {
 
 async function initializeSkillContext(): Promise<SkillContext> {
   const config = ConfigManager.getInstance();
-  const projectId = config.get('project.id');
+  const projectId = config.get('project.id') || 'default-project';
   const userId = config.get('user.id') || process.env['USER'] || 'default';
 
   const dbPath = path.join(
@@ -385,6 +385,75 @@ export function createSkillsCommand(): Command {
       }
     });
 
+  // RLM (Recursive Language Model) skill command
+  skillsCmd
+    .command('rlm <task>')
+    .description('Execute complex tasks with recursive agent orchestration')
+    .option('--max-parallel <number>', 'Maximum concurrent subagents', '5')
+    .option('--max-recursion <number>', 'Maximum recursion depth', '4')
+    .option('--max-tokens-per-agent <number>', 'Token budget per subagent', '30000')
+    .option('--review-stages <number>', 'Number of review iterations', '3')
+    .option('--quality-threshold <number>', 'Target quality score (0-1)', '0.85')
+    .option('--test-mode <mode>', 'Test generation mode (unit/integration/e2e/all)', 'all')
+    .option('--verbose', 'Show all recursive operations', false)
+    .option('--share-context-realtime', 'Share discoveries between agents', true)
+    .option('--retry-failed-agents', 'Retry on failure', true)
+    .option('--timeout-per-agent <number>', 'Timeout in seconds', '300')
+    .action(async (task, options) => {
+      const spinner = ora('Initializing RLM orchestrator...').start();
+
+      try {
+        const context = await initializeSkillContext();
+        const skillsManager = new ClaudeSkillsManager(context);
+
+        spinner.text = 'Decomposing task...';
+        
+        const result = await skillsManager.executeSkill('rlm', [task], {
+          maxParallel: parseInt(options.maxParallel),
+          maxRecursionDepth: parseInt(options.maxRecursion),
+          maxTokensPerAgent: parseInt(options.maxTokensPerAgent),
+          reviewStages: parseInt(options.reviewStages),
+          qualityThreshold: parseFloat(options.qualityThreshold),
+          testGenerationMode: options.testMode,
+          verboseLogging: options.verbose,
+          shareContextRealtime: options.shareContextRealtime,
+          retryFailedAgents: options.retryFailedAgents,
+          timeoutPerAgent: parseInt(options.timeoutPerAgent) * 1000,
+        });
+
+        spinner.stop();
+
+        if (result.success) {
+          console.log(chalk.green('✓'), 'RLM execution completed');
+          
+          if (result.data) {
+            console.log(chalk.cyan('\nExecution Summary:'));
+            console.log(`  Total tokens: ${result.data.totalTokens}`);
+            console.log(`  Estimated cost: $${result.data.totalCost.toFixed(2)}`);
+            console.log(`  Duration: ${result.data.duration}ms`);
+            console.log(`  Tests generated: ${result.data.testsGenerated}`);
+            console.log(`  Issues found: ${result.data.issuesFound}`);
+            console.log(`  Issues fixed: ${result.data.issuesFixed}`);
+            
+            if (result.data.improvements?.length > 0) {
+              console.log(chalk.cyan('\nImprovements:'));
+              result.data.improvements.forEach((imp: string) => {
+                console.log(`  • ${imp}`);
+              });
+            }
+          }
+        } else {
+          console.log(chalk.red('✗'), result.message);
+        }
+
+        await context.database.disconnect();
+      } catch (error: unknown) {
+        spinner.stop();
+        console.error(chalk.red('Error:'), error.message);
+        process.exit(1);
+      }
+    });
+
   // Help command for skills
   skillsCmd
     .command('help [skill]')
@@ -401,7 +470,8 @@ export function createSkillsCommand(): Command {
           '  handoff    - Streamline frame handoffs between team members'
         );
         console.log('  checkpoint - Create and manage recovery points');
-        console.log('  dig        - Deep historical context retrieval\n');
+        console.log('  dig        - Deep historical context retrieval');
+        console.log('  rlm        - Recursive Language Model orchestration\n');
         console.log(
           'Use "stackmemory skills help <skill>" for detailed help on each skill'
         );

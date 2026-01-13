@@ -300,6 +300,59 @@ claude [--auto-sync] [--sync-interval=10]
 
 **Features:** Auto-save on exit, Linear sync, runs only in StackMemory projects, configurable sync intervals.
 
+## RLM (Recursive Language Model) Orchestration
+
+StackMemory includes an advanced RLM system that enables handling arbitrarily complex tasks through recursive decomposition and parallel execution using Claude Code's Task tool.
+
+### Key Features
+
+- **Recursive Task Decomposition**: Breaks complex tasks into manageable subtasks
+- **Parallel Subagent Execution**: Run multiple specialized agents concurrently
+- **8 Specialized Agent Types**: Planning, Code, Testing, Linting, Review, Improve, Context, Publish
+- **Multi-Stage Review**: Iterative improvement cycles with quality scoring (0-1 scale)
+- **Automatic Test Generation**: Unit, integration, and E2E test creation
+- **Full Transparency**: Complete execution tree visualization
+
+### Usage
+
+```bash
+# Basic usage
+stackmemory skills rlm "Your complex task description"
+
+# With options
+stackmemory skills rlm "Refactor authentication system" \
+  --max-parallel 8 \
+  --review-stages 5 \
+  --quality-threshold 0.9 \
+  --test-mode all
+
+# Examples
+stackmemory skills rlm "Generate comprehensive tests for API endpoints"
+stackmemory skills rlm "Refactor the entire authentication system to use JWT"
+stackmemory skills rlm "Build, test, and publish version 2.0.0"
+```
+
+### Configuration Options
+
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--max-parallel` | Maximum concurrent subagents | 5 |
+| `--max-recursion` | Maximum recursion depth | 4 |
+| `--review-stages` | Number of review iterations | 3 |
+| `--quality-threshold` | Target quality score (0-1) | 0.85 |
+| `--test-mode` | Test generation mode (unit/integration/e2e/all) | all |
+| `--verbose` | Show all recursive operations | false |
+
+### How It Works
+
+1. **Task Decomposition**: Planning agent analyzes the task and creates a dependency graph
+2. **Parallel Execution**: Independent subtasks run concurrently up to the parallel limit
+3. **Review Cycle**: Review agents assess quality, improve agents implement fixes
+4. **Test Generation**: Testing agents create comprehensive test suites
+5. **Result Aggregation**: All outputs are combined into a final deliverable
+
+**Note**: RLM requires Claude Code Max plan for unlimited subagent execution. In development mode, it uses mock responses for testing.
+
 ## Guarantees & Non-goals
 
 **Guarantees:** Lossless storage, project isolation, survives session/model switches, inspectable local mirror.
