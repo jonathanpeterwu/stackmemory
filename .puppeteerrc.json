@@ -1,0 +1,4 @@
+{
+  "cacheDirectory": ".cache/puppeteer",
+  "skipDownload": true
+}
