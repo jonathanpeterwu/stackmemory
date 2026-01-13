@@ -10,9 +10,7 @@ import { existsSync } from 'fs';
 import {
   LinearTaskManager,
   TaskPriority,
-  TaskStatus,
 } from '../../features/tasks/linear-task-manager.js';
-import { logger } from '../../core/monitoring/logger.js';
 
 function getTaskStore(projectRoot: string): LinearTaskManager | null {
   const dbPath = join(projectRoot, '.stackmemory', 'context.db');
@@ -22,8 +20,14 @@ function getTaskStore(projectRoot: string): LinearTaskManager | null {
     );
     return null;
   }
-  const db = new Database(dbPath);
-  return new LinearTaskManager(projectRoot, db);
+  
+  // Use project isolation for proper task management
+  const config = {
+    linearApiKey: process.env.LINEAR_API_KEY,
+    autoSync: true,
+    syncInterval: 15,
+  };
+  return new LinearTaskManager(config, undefined, projectRoot);
 }
 
 export function createTaskCommands(): Command {
@@ -106,7 +110,7 @@ export function createTaskCommands(): Command {
           cancelled: '❌',
         };
 
-        rows.forEach((row, i) => {
+        rows.forEach((row) => {
           const pIcon = priorityIcon[row.priority] || '⚪';
           const sIcon = statusIcon[row.status] || '⚪';
           const id = row.id.slice(0, 10);

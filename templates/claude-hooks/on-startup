@@ -1,0 +1,16 @@
+#!/bin/bash
+# Auto-start StackMemory monitor on Claude Code startup
+
+# Start monitor if project has StackMemory
+if [ -d ".stackmemory" ]; then
+    stackmemory monitor --start 2>/dev/null || true
+    echo "🔍 StackMemory monitor started"
+fi
+
+# Load previous handoff if exists
+if [ -d ".stackmemory/handoffs" ]; then
+    stackmemory handoff --load 2>/dev/null || true
+fi
+
+# Check and restore from ledger if needed
+stackmemory clear --restore 2>/dev/null || true
