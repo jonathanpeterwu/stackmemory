@@ -76,6 +76,38 @@ writeFileSync(STACKMEMORY_HOOK, hookScript);
 execSync(`chmod +x "${STACKMEMORY_HOOK}"`);
 console.log(`✅ Created: ${STACKMEMORY_HOOK}`);
 
+// 4b. Create startup hook with Linear sync
+const STARTUP_HOOK = join(HOOKS_DIR, 'on-startup');
+console.log('🪝 Creating StackMemory startup hook with Linear sync...');
+const startupHookScript = `#!/bin/bash
+# Auto-start StackMemory monitor on Claude Code startup
+
+# Start monitor if project has StackMemory
+if [ -d ".stackmemory" ]; then
+    stackmemory monitor --start 2>/dev/null || true
+    echo "🔍 StackMemory monitor started"
+fi
+
+# Load previous handoff if exists
+if [ -d ".stackmemory/handoffs" ]; then
+    stackmemory handoff --load 2>/dev/null || true
+fi
+
+# Check and restore from ledger if needed
+stackmemory clear --restore 2>/dev/null || true
+
+# Trigger Linear sync on StackMemory instance loading
+if [ -d ".stackmemory" ] && [ -f "scripts/sync-linear-graphql.js" ]; then
+    echo "🔄 Triggering Linear sync..."
+    npm run linear:sync >/dev/null 2>&1 || node scripts/sync-linear-graphql.js >/dev/null 2>&1 || true
+    echo "✅ Linear sync triggered"
+fi
+`;
+
+writeFileSync(STARTUP_HOOK, startupHookScript);
+execSync(`chmod +x "${STARTUP_HOOK}"`);
+console.log(`✅ Created: ${STARTUP_HOOK}`);
+
 // 5. Update or create Claude config.json
 console.log('📝 Updating Claude Code configuration...');
 

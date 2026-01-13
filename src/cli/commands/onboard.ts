@@ -10,7 +10,7 @@ import chalk from 'chalk';
 import { homedir } from 'os';
 import { join } from 'path';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
 import { WorktreeManager } from '../../core/worktree/worktree-manager.js';
 import { ProjectManager } from '../../core/projects/project-manager.js';
 import { logger } from '../../core/monitoring/logger.js';
@@ -401,11 +401,11 @@ exec stackmemory "$@"
 `;
 
     writeFileSync(sourcePath, wrapperScript);
-    execSync(`chmod +x ${sourcePath}`);
+    execFileSync('chmod', ['+x', sourcePath]);
 
     // Create symlink if it doesn't exist
     if (!existsSync(binPath)) {
-      execSync(`ln -s ${sourcePath} ${binPath}`);
+      execFileSync('ln', ['-s', sourcePath, binPath]);
       console.log(chalk.green('  ✓ Created claude-sm command'));
     }
   } catch (error: unknown) {

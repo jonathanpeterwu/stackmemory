@@ -17,6 +17,10 @@ import {
 import { retry, withTimeout } from '../errors/recovery.js';
 import { sessionManager, FrameQueryMode } from '../session/index.js';
 
+// Constants for frame validation
+const MAX_FRAME_DEPTH = 100; // Maximum allowed frame depth
+const DEFAULT_MAX_DEPTH = 100; // Default if not configured
+
 // Import refactored modules
 import {
   Frame,
@@ -43,6 +47,7 @@ export class RefactoredFrameManager {
   private projectId: string;
   private queryMode: FrameQueryMode = FrameQueryMode.PROJECT_ACTIVE;
   private config: FrameManagerConfig;
+  private maxFrameDepth: number = DEFAULT_MAX_DEPTH;
 
   constructor(
     db: Database.Database,
@@ -56,6 +61,9 @@ export class RefactoredFrameManager {
       sessionId: config?.sessionId || uuidv4(),
       maxStackDepth: config?.maxStackDepth || 50,
     };
+    
+    // Set max frame depth from config if provided
+    this.maxFrameDepth = config?.maxStackDepth || DEFAULT_MAX_DEPTH;
 
     this.currentRunId = this.config.runId!;
     this.sessionId = this.config.sessionId!;
@@ -164,9 +172,43 @@ export class RefactoredFrameManager {
     // Determine parent frame
     const resolvedParentId =
       frameOptions.parentFrameId || this.frameStack.getCurrentFrameId();
-    const depth = resolvedParentId
-      ? this.frameStack.getFrameStackDepth(resolvedParentId) + 1
-      : 0;
+    
+    // Get depth from parent frame, not from stack position
+    let depth = 0;
+    if (resolvedParentId) {
+      const parentFrame = this.frameDb.getFrame(resolvedParentId);
+      depth = parentFrame ? parentFrame.depth + 1 : 0;
+    }
+
+    // Check for depth limit
+    if (depth > this.maxFrameDepth) {
+      throw new FrameError(
+        `Maximum frame depth exceeded: ${depth} > ${this.maxFrameDepth}`,
+        ErrorCode.FRAME_STACK_OVERFLOW,
+        {
+          currentDepth: depth,
+          maxDepth: this.maxFrameDepth,
+          frameName: frameOptions.name,
+          parentFrameId: resolvedParentId,
+        }
+      );
+    }
+
+    // Check for circular reference before creating frame
+    if (resolvedParentId) {
+      const cycle = this.detectCycle(uuidv4(), resolvedParentId);
+      if (cycle) {
+        throw new FrameError(
+          `Circular reference detected in frame hierarchy`,
+          ErrorCode.FRAME_CYCLE_DETECTED,
+          {
+            parentFrameId: resolvedParentId,
+            cycle,
+            frameName: frameOptions.name,
+          }
+        );
+      }
+    }
 
     // Create frame data
     const frameId = uuidv4();
@@ -519,6 +561,198 @@ export class RefactoredFrameManager {
     }
 
     return constraints;
+  }
+
+  /**
+   * Detect if setting a parent frame would create a cycle in the frame hierarchy.
+   * Returns the cycle path if detected, or null if no cycle.
+   * @param childFrameId - The frame that would be the child
+   * @param parentFrameId - The proposed parent frame
+   * @returns Array of frame IDs forming the cycle, or null if no cycle
+   */
+  private detectCycle(
+    childFrameId: string,
+    parentFrameId: string
+  ): string[] | null {
+    const visited = new Set<string>();
+    const path: string[] = [];
+
+    // Start from the proposed parent and traverse up the hierarchy
+    let currentId: string | undefined = parentFrameId;
+    
+    while (currentId) {
+      // If we've seen this frame before, we have a cycle
+      if (visited.has(currentId)) {
+        // Build the cycle path
+        const cycleStart = path.indexOf(currentId);
+        return path.slice(cycleStart).concat(currentId);
+      }
+
+      // If the current frame is the child we're trying to add, it's a cycle
+      if (currentId === childFrameId) {
+        return path.concat([currentId, childFrameId]);
+      }
+
+      visited.add(currentId);
+      path.push(currentId);
+
+      // Move to the parent of current frame
+      const frame = this.frameDb.getFrame(currentId);
+      if (!frame) {
+        // Frame not found, no cycle possible through this path
+        break;
+      }
+      currentId = frame.parent_frame_id;
+
+      // Safety check: if we've traversed too many levels, something is wrong
+      if (path.length > this.maxFrameDepth) {
+        throw new FrameError(
+          `Frame hierarchy traversal exceeded maximum depth during cycle detection`,
+          ErrorCode.FRAME_STACK_OVERFLOW,
+          {
+            depth: path.length,
+            maxDepth: this.maxFrameDepth,
+            path,
+          }
+        );
+      }
+    }
+
+    return null; // No cycle detected
+  }
+
+  /**
+   * Update parent frame of an existing frame (with cycle detection)
+   * @param frameId - The frame to update
+   * @param newParentFrameId - The new parent frame ID (null to make it a root frame)
+   */
+  public updateParentFrame(frameId: string, newParentFrameId: string | null): void {
+    // Check if frame exists
+    const frame = this.frameDb.getFrame(frameId);
+    if (!frame) {
+      throw new FrameError(
+        `Frame not found: ${frameId}`,
+        ErrorCode.FRAME_NOT_FOUND,
+        { frameId }
+      );
+    }
+
+    // If setting a parent, check for cycles
+    if (newParentFrameId) {
+      const cycle = this.detectCycle(frameId, newParentFrameId);
+      if (cycle) {
+        throw new FrameError(
+          `Cannot set parent: would create circular reference`,
+          ErrorCode.FRAME_CYCLE_DETECTED,
+          {
+            frameId,
+            newParentFrameId,
+            cycle,
+            currentParentId: frame.parent_frame_id,
+          }
+        );
+      }
+
+      // Check depth after parent change
+      const newParentFrame = this.frameDb.getFrame(newParentFrameId);
+      if (newParentFrame) {
+        const newDepth = newParentFrame.depth + 1;
+        if (newDepth > this.maxFrameDepth) {
+          throw new FrameError(
+            `Cannot set parent: would exceed maximum frame depth`,
+            ErrorCode.FRAME_STACK_OVERFLOW,
+            {
+              frameId,
+              newParentFrameId,
+              newDepth,
+              maxDepth: this.maxFrameDepth,
+            }
+          );
+        }
+      }
+    }
+
+    // Update the frame's parent (this would need to be implemented in FrameDatabase)
+    this.frameDb.updateFrame(frameId, {
+      parent_frame_id: newParentFrameId,
+    });
+
+    logger.info('Updated parent frame', {
+      frameId,
+      oldParentId: frame.parent_frame_id,
+      newParentId: newParentFrameId,
+    });
+  }
+
+  /**
+   * Validate the entire frame hierarchy for cycles and depth violations
+   * @returns Validation result with any detected issues
+   */
+  public validateFrameHierarchy(): {
+    isValid: boolean;
+    errors: string[];
+    warnings: string[];
+  } {
+    const errors: string[] = [];
+    const warnings: string[] = [];
+    const allFrames = this.frameDb.getFramesByProject(this.projectId);
+    
+    // Check each frame for depth violations
+    for (const frame of allFrames) {
+      if (frame.depth > this.maxFrameDepth) {
+        errors.push(
+          `Frame ${frame.frame_id} exceeds max depth: ${frame.depth} > ${this.maxFrameDepth}`
+        );
+      }
+      
+      // Warn about deep frames approaching the limit
+      if (frame.depth > this.maxFrameDepth * 0.8) {
+        warnings.push(
+          `Frame ${frame.frame_id} is deep in hierarchy: ${frame.depth}/${this.maxFrameDepth}`
+        );
+      }
+    }
+    
+    // Check for cycles by traversing from each root
+    const rootFrames = allFrames.filter(f => !f.parent_frame_id);
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+    
+    const checkForCycle = (frameId: string): boolean => {
+      if (visiting.has(frameId)) {
+        errors.push(`Cycle detected involving frame ${frameId}`);
+        return true;
+      }
+      
+      if (visited.has(frameId)) {
+        return false;
+      }
+      
+      visiting.add(frameId);
+      
+      // Check all children
+      const children = allFrames.filter(f => f.parent_frame_id === frameId);
+      for (const child of children) {
+        if (checkForCycle(child.frame_id)) {
+          return true;
+        }
+      }
+      
+      visiting.delete(frameId);
+      visited.add(frameId);
+      return false;
+    };
+    
+    // Check from each root
+    for (const root of rootFrames) {
+      checkForCycle(root.frame_id);
+    }
+    
+    return {
+      isValid: errors.length === 0,
+      errors,
+      warnings,
+    };
   }
 }
 

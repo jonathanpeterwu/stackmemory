@@ -13,7 +13,32 @@ import Table from 'cli-table3';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import Database from 'better-sqlite3';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
+import shellEscape from 'shell-escape';
+import { z } from 'zod';
+
+// Input validation schemas
+const BranchNameSchema = z.string()
+  .min(1, 'Branch name cannot be empty')
+  .max(100, 'Branch name too long')
+  .regex(/^[a-zA-Z0-9._/-]+$/, 'Branch name contains invalid characters')
+  .refine(name => !name.includes('..'), 'Branch name cannot contain ".."')
+  .refine(name => !name.includes(';'), 'Branch name cannot contain ";"')
+  .refine(name => !name.includes('&'), 'Branch name cannot contain "&"')
+  .refine(name => !name.includes('|'), 'Branch name cannot contain "|"')
+  .refine(name => !name.includes('$'), 'Branch name cannot contain "$"')
+  .refine(name => !name.includes('`'), 'Branch name cannot contain "`"');
+
+const PathSchema = z.string()
+  .min(1, 'Path cannot be empty')
+  .max(500, 'Path too long')
+  .regex(/^[a-zA-Z0-9._/-]+$/, 'Path contains invalid characters')
+  .refine(path => !path.includes('..'), 'Path cannot contain ".."');
+
+const CommitSchema = z.string()
+  .min(1, 'Commit reference cannot be empty')
+  .max(100, 'Commit reference too long')
+  .regex(/^[a-zA-Z0-9._/-]+$/, 'Commit reference contains invalid characters');
 
 export function registerWorktreeCommands(program: Command): void {
   const worktree = program
@@ -234,18 +259,31 @@ export function registerWorktreeCommands(program: Command): void {
       const projectManager = ProjectManager.getInstance();
 
       try {
+        // Validate and sanitize inputs
+        const validatedBranch = BranchNameSchema.parse(branch);
+        
         // Get current project info
         const project = await projectManager.detectProject();
-        const worktreePath = options.path || `../${project.name}-${branch}`;
-
-        // Create git worktree
-        let gitCommand = `git worktree add -b ${branch} ${worktreePath}`;
+        const worktreePath = options.path || `../${project.name}-${validatedBranch}`;
+        
+        // Validate path if provided
+        if (options.path) {
+          PathSchema.parse(options.path);
+        }
+        
+        // Validate commit reference if provided
         if (options.from) {
-          gitCommand += ` ${options.from}`;
+          CommitSchema.parse(options.from);
         }
 
-        console.log(chalk.gray(`Creating worktree: ${gitCommand}`));
-        execSync(gitCommand, { stdio: 'inherit' });
+        // Create git worktree using execFileSync for safety
+        const gitArgs = ['worktree', 'add', '-b', validatedBranch, worktreePath];
+        if (options.from) {
+          gitArgs.push(options.from);
+        }
+
+        console.log(chalk.gray(`Creating worktree: git ${gitArgs.join(' ')}`));
+        execFileSync('git', gitArgs, { stdio: 'inherit' });
 
         console.log(chalk.green(`✓ Created worktree at ${worktreePath}`));
 
@@ -273,10 +311,17 @@ export function registerWorktreeCommands(program: Command): void {
         }
         console.log(chalk.gray('  # Start working in isolated context'));
       } catch (error: unknown) {
-        console.error(
-          chalk.red('Failed to create worktree:'),
-          (error as Error).message
-        );
+        if (error instanceof z.ZodError) {
+          console.error(chalk.red('Invalid input:'));
+          error.errors.forEach(err => {
+            console.error(chalk.red(`  ${err.path.join('.')}: ${err.message}`));
+          });
+        } else {
+          console.error(
+            chalk.red('Failed to create worktree:'),
+            (error as Error).message
+          );
+        }
         process.exit(1);
       }
     });

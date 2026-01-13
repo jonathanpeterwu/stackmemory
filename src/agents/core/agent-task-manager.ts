@@ -65,6 +65,18 @@ export interface SubtaskDefinition {
 }
 
 /**
+ * Supported agent types
+ */
+export enum AgentType {
+  FORMATTER = 'formatter',
+  SECURITY = 'security',
+  TESTING = 'testing',
+  PERFORMANCE = 'performance',
+  DOCUMENTATION = 'documentation',
+  REFACTORING = 'refactoring'
+}
+
+/**
  * Spotify-inspired Agent Task Manager
  */
 export class AgentTaskManager {
@@ -72,6 +84,7 @@ export class AgentTaskManager {
   private frameManager: FrameManager;
   private activeSessions: Map<string, AgentTaskSession> = new Map();
   private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
+  private agentRegistry: Map<AgentType, any> = new Map();
 
   // Spotify strategy constants
   private readonly MAX_TURNS_PER_SESSION = 10;
