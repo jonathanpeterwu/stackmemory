@@ -113,7 +113,7 @@ class CodexSM {
       const cmd = `git worktree add -b "${branch}" "${worktreePath}"`;
       execSync(cmd, { stdio: 'inherit' });
 
-      console.log(chalk.green(`✅ Worktree created: ${worktreePath}`));
+      console.log(chalk.green(`Worktree created: ${worktreePath}`));
       console.log(chalk.gray(`   Branch: ${branch}`));
 
       const configPath = path.join(worktreePath, '.codex-instance.json');
@@ -136,7 +136,7 @@ class CodexSM {
 
       return worktreePath;
     } catch (err: unknown) {
-      console.error(chalk.red('❌ Failed to create worktree:'), err);
+      console.error(chalk.red('Failed to create worktree:'), err);
       return null;
     }
   }
@@ -187,7 +187,7 @@ class CodexSM {
 
   private suggestWorktreeMode(): void {
     if (this.hasUncommittedChanges()) {
-      console.log(chalk.yellow('⚠️  Uncommitted changes detected'));
+      console.log(chalk.yellow('WARNING: Uncommitted changes detected'));
       console.log(
         chalk.gray('   Consider using --worktree to work in isolation')
       );
