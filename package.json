@@ -52,6 +52,7 @@
     "test:ui": "vitest --ui",
     "test:run": "vitest run",
     "test:pre-publish": "./scripts/test-pre-publish-quick.sh",
+    "test:pre-commit": "vitest related --run --reporter=dot --silent --bail=1",
     "prepublishOnly": "npm run build && npm run test:pre-publish",
     "quality": "npm run lint && npm run test:run && npm run build",
     "dev": "tsx watch src/mcp/mcp-server.ts",
@@ -151,7 +152,7 @@
       "prettier --write"
     ],
     "*.ts": [
-      "vitest related --run"
+      "npm run test:pre-commit"
     ]
   },
   "optionalDependencies": {
