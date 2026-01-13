@@ -3,11 +3,11 @@
  * Handles task creation, updates, and queries
  */
 
-import { PebblesTaskStore, TaskPriority, TaskStatus } from '../../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager, TaskPriority, TaskStatus } from '../../../features/tasks/linear-task-manager.js';
 import { logger } from '../../../core/monitoring/logger.js';
 
 export interface TaskHandlerDependencies {
-  taskStore: PebblesTaskStore;
+  taskStore: LinearTaskManager;
   projectId: string;
 }
 

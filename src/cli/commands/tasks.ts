@@ -8,13 +8,13 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import {
-  PebblesTaskStore,
+  LinearTaskManager,
   TaskPriority,
   TaskStatus,
-} from '../../features/tasks/pebbles-task-store.js';
+} from '../../features/tasks/linear-task-manager.js';
 import { logger } from '../../core/monitoring/logger.js';
 
-function getTaskStore(projectRoot: string): PebblesTaskStore | null {
+function getTaskStore(projectRoot: string): LinearTaskManager | null {
   const dbPath = join(projectRoot, '.stackmemory', 'context.db');
   if (!existsSync(dbPath)) {
     console.log(
@@ -23,7 +23,7 @@ function getTaskStore(projectRoot: string): PebblesTaskStore | null {
     return null;
   }
   const db = new Database(dbPath);
-  return new PebblesTaskStore(projectRoot, db);
+  return new LinearTaskManager(projectRoot, db);
 }
 
 export function createTaskCommands(): Command {

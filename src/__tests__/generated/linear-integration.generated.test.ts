@@ -6,7 +6,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { LinearSyncService } from '../../integrations/linear/sync-service.js';
 import { LinearAuth } from '../../integrations/linear/auth.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { mkdtempSync, rmSync } from 'fs';
@@ -14,7 +14,7 @@ import { tmpdir } from 'os';
 
 describe('Linear Integration', () => {
   let syncService: LinearSyncService;
-  let taskStore: PebblesTaskStore;
+  let taskStore: LinearTaskManager;
   let db: Database.Database;
   let tempDir: string;
   const projectId = 'test-project';
@@ -71,7 +71,7 @@ describe('Linear Integration', () => {
     const dbPath = join(tempDir, 'test.db');
     db = new Database(dbPath);
     
-    taskStore = new PebblesTaskStore(db, projectId);
+    taskStore = new LinearTaskManager(db, projectId);
     
     // Mock Linear client
     vi.spyOn(LinearAuth, 'createClient').mockResolvedValue(mockLinearClient as any);

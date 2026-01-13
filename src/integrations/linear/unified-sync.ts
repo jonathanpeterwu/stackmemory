@@ -6,7 +6,7 @@
 
 import { LinearClient, LinearIssue, LinearCreateIssueInput } from './client.js';
 import { LinearDuplicateDetector, DuplicateCheckResult } from './sync.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { LinearAuthManager } from './auth.js';
 import { logger } from '../../core/monitoring/logger.js';
 import { Task, TaskStatus, TaskPriority } from '../../types/task.js';
@@ -109,7 +109,7 @@ interface TaskPlan {
 export class UnifiedLinearSync extends EventEmitter {
   private config: UnifiedSyncConfig;
   private linearClient: LinearClient;
-  private taskStore: PebblesTaskStore;
+  private taskStore: LinearTaskManager;
   private authManager: LinearAuthManager;
   private duplicateDetector: LinearDuplicateDetector;
   private projectRoot: string;
@@ -118,7 +118,7 @@ export class UnifiedLinearSync extends EventEmitter {
   private syncInProgress = false;
 
   constructor(
-    taskStore: PebblesTaskStore,
+    taskStore: LinearTaskManager,
     authManager: LinearAuthManager,
     projectRoot: string,
     config?: Partial<UnifiedSyncConfig>

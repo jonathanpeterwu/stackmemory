@@ -18,7 +18,7 @@ import {
   DEFAULT_SYNC_MANAGER_CONFIG,
 } from '../../integrations/linear/sync-manager.js';
 import { LinearConfigManager } from '../../integrations/linear/config.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { LinearClient } from '../../integrations/linear/client.js';
 import { LinearRestClient } from '../../integrations/linear/rest-client.js';
 import Database from 'better-sqlite3';
@@ -320,7 +320,7 @@ export function registerLinearCommands(parent: Command) {
         }
 
         const db = new Database(dbPath);
-        const taskStore = new PebblesTaskStore(projectRoot, db);
+        const taskStore = new LinearTaskManager(projectRoot, db);
         const authManager = new LinearAuthManager(projectRoot);
 
         const config = {

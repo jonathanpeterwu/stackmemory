@@ -16,7 +16,7 @@ import { logger } from '../core/monitoring/logger.js';
 import { FrameManager } from '../core/context/frame-manager.js';
 import { DualStackManager } from '../core/context/dual-stack-manager.js';
 import { ContextRetriever } from '../core/retrieval/context-retriever.js';
-import { PebblesTaskStore } from '../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../features/tasks/linear-task-manager.js';
 import { ParallelExecutor } from '../core/execution/parallel-executor.js';
 import { RecursiveContextManager } from '../core/context/recursive-context-manager.js';
 import { ClaudeCodeSubagentClient } from '../integrations/claude-code/subagent-client.js';
@@ -99,7 +99,7 @@ export interface RLMOptions {
 export class RecursiveAgentOrchestrator {
   private frameManager: FrameManager;
   private contextRetriever: ContextRetriever;
-  private taskStore: PebblesTaskStore;
+  private taskStore: LinearTaskManager;
   private parallelExecutor: ParallelExecutor;
   private contextManager: RecursiveContextManager;
   private subagentClient: ClaudeCodeSubagentClient;
@@ -130,7 +130,7 @@ export class RecursiveAgentOrchestrator {
     frameManager: FrameManager,
     dualStackManager: DualStackManager,
     contextRetriever: ContextRetriever,
-    taskStore: PebblesTaskStore
+    taskStore: LinearTaskManager
   ) {
     this.frameManager = frameManager;
     this.contextRetriever = contextRetriever;

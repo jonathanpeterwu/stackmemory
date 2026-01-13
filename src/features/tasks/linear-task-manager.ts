@@ -1,7 +1,7 @@
 /**
  * Linear Task Manager
  * In-memory task storage with Linear synchronization
- * Replaces PebblesTaskStore system
+ * Replaces LinearTaskManager system
  */
 
 import { EventEmitter } from 'events';

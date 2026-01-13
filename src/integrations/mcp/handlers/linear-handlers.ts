@@ -5,13 +5,13 @@
 
 import { LinearAuthManager } from '../../linear/auth.js';
 import { LinearSyncEngine, DEFAULT_SYNC_CONFIG } from '../../linear/sync.js';
-import { PebblesTaskStore } from '../../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../../features/tasks/linear-task-manager.js';
 import { logger } from '../../../core/monitoring/logger.js';
 
 export interface LinearHandlerDependencies {
   linearAuthManager: LinearAuthManager;
   linearSync: LinearSyncEngine;
-  taskStore: PebblesTaskStore;
+  taskStore: LinearTaskManager;
 }
 
 export class LinearHandlers {

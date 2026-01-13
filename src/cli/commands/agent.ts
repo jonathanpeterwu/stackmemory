@@ -11,7 +11,7 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import chalk from 'chalk';
 import ora from 'ora';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { FrameManager } from '../../core/context/frame-manager.js';
 import {
   AgentTaskManager,
@@ -156,7 +156,7 @@ export function createAgentCommand(): Command {
       try {
         const projectRoot = options.parent?.project || process.cwd();
         const db = await openDatabase(projectRoot);
-        const taskStore = new PebblesTaskStore(projectRoot, db);
+        const taskStore = new LinearTaskManager(projectRoot, db);
 
         const task = taskStore.getTask(taskId);
         if (!task) {
@@ -248,10 +248,10 @@ async function initializeAgent(
 async function initializeAgentManager(projectRoot: string): Promise<{
   taskManager: AgentTaskManager;
   frameManager: FrameManager;
-  taskStore: PebblesTaskStore;
+  taskStore: LinearTaskManager;
 }> {
   const db = await openDatabase(projectRoot);
-  const taskStore = new PebblesTaskStore(projectRoot, db);
+  const taskStore = new LinearTaskManager(projectRoot, db);
   const frameManager = new FrameManager(db, projectRoot, undefined);
   const taskManager = new AgentTaskManager(taskStore, frameManager);
 

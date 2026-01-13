@@ -9,11 +9,11 @@
  */
 
 import {
-  PebblesTaskStore,
+  LinearTaskManager,
   PebblesTask,
   TaskStatus,
   TaskPriority,
-} from '../../features/tasks/pebbles-task-store.js';
+} from '../../features/tasks/linear-task-manager.js';
 import { logger } from '../../core/monitoring/logger.js';
 import { FrameManager } from '../../core/context/frame-manager.js';
 import { TaskError, ErrorCode } from '../../core/errors/index.js';
@@ -80,7 +80,7 @@ export enum AgentType {
  * Spotify-inspired Agent Task Manager
  */
 export class AgentTaskManager {
-  private taskStore: PebblesTaskStore;
+  private taskStore: LinearTaskManager;
   private frameManager: FrameManager;
   private activeSessions: Map<string, AgentTaskSession> = new Map();
   private sessionTimeouts: Map<string, NodeJS.Timeout> = new Map();
@@ -92,7 +92,7 @@ export class AgentTaskManager {
   private readonly SESSION_TIMEOUT_MS = 30 * 60 * 1000; // 30 minutes
   private readonly CONTEXT_WINDOW_SIZE = 5; // Last 5 significant events
 
-  constructor(taskStore: PebblesTaskStore, frameManager: FrameManager) {
+  constructor(taskStore: LinearTaskManager, frameManager: FrameManager) {
     this.taskStore = taskStore;
     this.frameManager = frameManager;
   }

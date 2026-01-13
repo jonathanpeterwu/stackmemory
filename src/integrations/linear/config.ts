@@ -7,6 +7,7 @@ import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../core/monitoring/logger.js';
 import { AutoSyncConfig } from './auto-sync.js';
+import { ProjectIsolationManager } from '../../core/projects/project-isolation.js';
 
 export interface PersistedSyncConfig {
   enabled: boolean;
@@ -23,18 +24,27 @@ export interface PersistedSyncConfig {
     start: number;
     end: number;
   };
+  // Project isolation settings
+  teamId?: string;
+  organization?: string;
+  workspaceFilter?: string;
+  projectPrefix?: string;
   lastUpdated: number;
 }
 
 export class LinearConfigManager {
   private configPath: string;
+  private projectRoot: string;
+  private isolationManager: ProjectIsolationManager;
 
   constructor(projectRoot: string) {
+    this.projectRoot = projectRoot;
     this.configPath = join(
       projectRoot,
       '.stackmemory',
       'linear-auto-sync.json'
     );
+    this.isolationManager = ProjectIsolationManager.getInstance();
   }
 
   /**
@@ -82,9 +92,12 @@ export class LinearConfigManager {
   }
 
   /**
-   * Get default configuration
+   * Get default configuration with project isolation
    */
   getDefaultConfig(): PersistedSyncConfig {
+    // Get stable project identification
+    const projectId = this.isolationManager.getProjectIdentification(this.projectRoot);
+    
     return {
       enabled: true,
       interval: 5, // 5 minutes
@@ -96,6 +109,11 @@ export class LinearConfigManager {
         start: 22, // 10 PM
         end: 7, // 7 AM
       },
+      // Project isolation from stable identification
+      teamId: projectId.linearTeamId,
+      organization: projectId.linearOrganization,
+      workspaceFilter: projectId.workspaceFilter,
+      projectPrefix: projectId.projectPrefix,
       lastUpdated: Date.now(),
     };
   }

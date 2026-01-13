@@ -8,10 +8,10 @@ import { join } from 'path';
 import { logger } from '../../core/monitoring/logger.js';
 import {
   PebblesTask,
-  PebblesTaskStore,
+  LinearTaskManager,
   TaskStatus,
   TaskPriority,
-} from '../../features/tasks/pebbles-task-store.js';
+} from '../../features/tasks/linear-task-manager.js';
 import { LinearClient, LinearIssue, LinearCreateIssueInput } from './client.js';
 import { LinearAuthManager } from './auth.js';
 import { getEnv, getOptionalEnv } from '../../utils/env.js';
@@ -57,7 +57,7 @@ export interface TaskMapping {
 }
 
 export class LinearSyncEngine {
-  private taskStore: PebblesTaskStore;
+  private taskStore: LinearTaskManager;
   private linearClient: LinearClient;
   private authManager: LinearAuthManager;
   private config: SyncConfig;
@@ -66,7 +66,7 @@ export class LinearSyncEngine {
   private mappingsPath: string;
 
   constructor(
-    taskStore: PebblesTaskStore,
+    taskStore: LinearTaskManager,
     authManager: LinearAuthManager,
     config: SyncConfig,
     projectRoot?: string
@@ -544,7 +544,7 @@ export class LinearSyncEngine {
     const task = this.taskStore.getTask(taskId);
     if (!task) return;
 
-    // This would need a method in PebblesTaskStore to update external_refs
+    // This would need a method in LinearTaskManager to update external_refs
     // For now, we'll track this in our mappings
     logger.info(`Task ${taskId} mapped to Linear ${linearIssue.identifier}`);
   }

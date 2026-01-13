@@ -84,7 +84,7 @@ export function initializeTracing(): void {
 
   // Log configuration if debugging is enabled
   if (config.DEBUG_TRACE || config.STACKMEMORY_DEBUG) {
-    console.log('🔍 Trace Configuration:', {
+    console.log('Trace Configuration:', {
       enabled: true,
       output: config.TRACE_OUTPUT,
       verbosity: config.TRACE_VERBOSITY,
@@ -149,12 +149,12 @@ export function withTracing<T>(fn: () => T, options?: Partial<TraceConfig>): T {
  */
 export const enableTracing = () => {
   process.env['DEBUG_TRACE'] = 'true';
-  console.log('✅ Tracing enabled');
+  console.log('Tracing enabled');
 };
 
 export const disableTracing = () => {
   delete process.env['DEBUG_TRACE'];
-  console.log('❌ Tracing disabled');
+  console.log('Tracing disabled');
 };
 
 export const enableVerboseTracing = () => {
@@ -163,7 +163,7 @@ export const enableVerboseTracing = () => {
   process.env['TRACE_PARAMS'] = 'true';
   process.env['TRACE_RESULTS'] = 'true';
   process.env['TRACE_MEMORY'] = 'true';
-  console.log('✅ Verbose tracing enabled');
+  console.log('Verbose tracing enabled');
 };
 
 export const enableMinimalTracing = () => {

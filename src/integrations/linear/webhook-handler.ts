@@ -4,7 +4,7 @@
  */
 
 import { createHmac } from 'crypto';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { LinearSyncEngine } from './sync.js';
 import { LinearAuthManager } from './auth.js';
 import { LinearClient } from './client.js';
@@ -55,11 +55,11 @@ export interface LinearWebhookPayload {
 }
 
 export class LinearWebhookHandler {
-  private taskStore: PebblesTaskStore;
+  private taskStore: LinearTaskManager;
   private syncEngine: LinearSyncEngine | null = null;
   private webhookSecret: string;
 
-  constructor(taskStore: PebblesTaskStore, webhookSecret: string) {
+  constructor(taskStore: LinearTaskManager, webhookSecret: string) {
     this.taskStore = taskStore;
     this.webhookSecret = webhookSecret;
 
