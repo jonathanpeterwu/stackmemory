@@ -227,46 +227,109 @@ export class LinearTaskManager extends EventEmitter {
   }
 
   /**
-   * Sync with Linear workspace
+   * Sync with Linear workspace (incremental with rate limiting and exponential backoff)
    */
   async syncWithLinear(): Promise<{ synced: number; errors: string[] }> {
     if (!this.linearClient) {
       throw new Error('Linear client not initialized');
     }
 
+    if (this.syncInProgress) {
+      logger.warn('Sync already in progress, skipping');
+      return { synced: 0, errors: ['Sync already in progress'] };
+    }
+
+    this.syncInProgress = true;
     const errors: string[] = [];
     let synced = 0;
 
     try {
-      // Sync local tasks to Linear
-      for (const task of this.getActiveTasks()) {
-        if (!task.externalId) {
+      // Get tasks that need syncing (created/updated since last sync)
+      const tasksToSync = this.getTasksRequiringSync();
+      const batchSize = this.config.batchSize || 5;
+      const rateLimitDelay = this.config.rateLimitDelay || 1000;
+
+      logger.info(
+        `Starting incremental sync: ${tasksToSync.length} tasks to process`
+      );
+
+      // Process tasks in batches to respect rate limits
+      for (let i = 0; i < tasksToSync.length; i += batchSize) {
+        const batch = tasksToSync.slice(i, i + batchSize);
+
+        for (const task of batch) {
           try {
-            // Create in Linear if it doesn't exist
-            const linearIssue = await this.createLinearIssue(task);
-            task.externalId = linearIssue.id;
-            task.externalIdentifier = linearIssue.identifier;
-            task.externalUrl = linearIssue.url;
-            task.updatedAt = new Date();
+            await this.withExponentialBackoff(
+              async () => {
+                if (!task.externalId) {
+                  // Create new issue in Linear
+                  const linearIssue = await this.createLinearIssue(task);
+                  task.externalId = linearIssue.id;
+                  task.externalIdentifier = linearIssue.identifier;
+                  task.externalUrl = linearIssue.url;
+                  task.updatedAt = new Date();
+
+                  logger.debug(
+                    `Created Linear issue: ${linearIssue.identifier} for task ${task.id}`
+                  );
+                } else {
+                  // Update existing issue if needed
+                  await this.updateLinearIssue(task);
+
+                  logger.debug(
+                    `Updated Linear issue: ${task.externalIdentifier} for task ${task.id}`
+                  );
+                }
+              },
+              3,
+              rateLimitDelay
+            );
+
             synced++;
+
+            // Base rate limiting delay between API calls
+            if (rateLimitDelay > 0) {
+              await this.sleep(rateLimitDelay);
+            }
           } catch (error) {
             const errorMsg =
               error instanceof Error ? error.message : String(error);
             errors.push(`Failed to sync task ${task.id}: ${errorMsg}`);
-            logger.error('Failed to sync task to Linear', {
+            logger.error('Failed to sync task to Linear after retries', {
               taskId: task.id,
               error: errorMsg,
+              projectId: this.projectId,
             });
           }
         }
+
+        // Batch delay (longer between batches)
+        if (i + batchSize < tasksToSync.length && rateLimitDelay > 0) {
+          await this.sleep(rateLimitDelay * 2);
+        }
       }
 
-      this.emit('sync:completed', { synced, errors });
+      this.lastSyncTimestamp = Date.now();
+      this.emit('sync:completed', {
+        synced,
+        errors,
+        projectId: this.projectId,
+      });
+
+      logger.info(
+        `Linear sync completed: ${synced} tasks synced, ${errors.length} errors`
+      );
       return { synced, errors };
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       errors.push(`Sync failed: ${errorMsg}`);
+      logger.error('Linear sync failed', {
+        error: errorMsg,
+        projectId: this.projectId,
+      });
       throw new Error(`Linear sync failed: ${errorMsg}`);
+    } finally {
+      this.syncInProgress = false;
     }
   }
 
@@ -450,16 +513,115 @@ export class LinearTaskManager extends EventEmitter {
   /**
    * Cleanup resources
    */
+  /**
+   * Get tasks that require syncing (created or updated since last sync)
+   */
+  private getTasksRequiringSync(): Task[] {
+    return Array.from(this.tasks.values()).filter((task) => {
+      // Include tasks without external ID (new tasks)
+      if (!task.externalId) {
+        return true;
+      }
+
+      // Include tasks updated since last sync
+      if (this.lastSyncTimestamp > 0) {
+        return task.updatedAt.getTime() > this.lastSyncTimestamp;
+      }
+
+      return false;
+    });
+  }
+
+  /**
+   * Update an existing Linear issue
+   */
+  private async updateLinearIssue(task: Task): Promise<void> {
+    if (!this.linearClient || !task.externalId) {
+      return;
+    }
+
+    const priorityMap: Record<TaskPriority, number> = {
+      urgent: 1,
+      high: 2,
+      medium: 3,
+      low: 4,
+    };
+
+    // Only update if the task was modified after last sync
+    if (task.updatedAt.getTime() <= this.lastSyncTimestamp) {
+      return;
+    }
+
+    await this.linearClient.updateIssue(task.externalId, {
+      title: task.title,
+      description: task.description,
+      priority: task.priority ? priorityMap[task.priority] : 3,
+    });
+  }
+
+  /**
+   * Sleep for specified milliseconds
+   */
+  private sleep(ms: number): Promise<void> {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+  }
+
+  /**
+   * Exponential backoff retry wrapper
+   */
+  private async withExponentialBackoff<T>(
+    operation: () => Promise<T>,
+    maxRetries: number = 3,
+    baseDelay: number = 1000
+  ): Promise<T> {
+    let lastError: Error;
+
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return await operation();
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        // Don't retry on final attempt
+        if (attempt === maxRetries) {
+          break;
+        }
+
+        // Check if it's a rate limit error
+        const errorMsg = lastError.message.toLowerCase();
+        const isRateLimit =
+          errorMsg.includes('rate limit') ||
+          errorMsg.includes('429') ||
+          errorMsg.includes('too many requests');
+
+        if (isRateLimit) {
+          // Exponential backoff with jitter for rate limit errors
+          const delay = baseDelay * Math.pow(2, attempt) + Math.random() * 1000;
+          logger.warn(
+            `Rate limit hit, retrying in ${delay}ms (attempt ${attempt + 1}/${maxRetries + 1})`
+          );
+          await this.sleep(delay);
+        } else {
+          // For other errors, shorter delay
+          const delay = baseDelay * Math.pow(1.5, attempt);
+          logger.warn(
+            `API error, retrying in ${delay}ms: ${lastError.message}`
+          );
+          await this.sleep(delay);
+        }
+      }
+    }
+
+    throw lastError!;
+  }
+
+  /**
+   * Cleanup resources
+   */
   destroy(): void {
     if (this.syncTimer) {
       clearInterval(this.syncTimer);
       this.syncTimer = undefined;
-    }
-    this.removeAllListeners();
-  }
-  destroy(): void {
-    if (this.syncTimer) {
-      clearInterval(this.syncTimer);
     }
     this.removeAllListeners();
   }
