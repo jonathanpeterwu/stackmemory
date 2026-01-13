@@ -1,0 +1,13 @@
+#!/bin/bash
+# Preserve context before clear
+
+# Save current context to ChromaDB
+if command -v stackmemory &> /dev/null; then
+    stackmemory context add observation "Claude session cleared - preserving context" 2>/dev/null
+fi
+
+# Get current context and save to ChromaDB
+CONTEXT_DATA="{\"reason\": \"clear\", \"preserved\": true}"
+"$HOME/.claude/hooks/chromadb-wrapper" "on-clear" "$CONTEXT_DATA" &
+
+exit 0

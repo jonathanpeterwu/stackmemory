@@ -1,0 +1,19 @@
+#!/bin/bash
+# Save task completion context and trigger Linear sync
+
+TASK_DATA="$1"
+if [ -z "$TASK_DATA" ]; then
+    TASK_DATA="{\"task\": \"unknown\"}"
+fi
+
+# Save to ChromaDB
+"$HOME/.claude/hooks/chromadb-wrapper" "on-task-complete" "$TASK_DATA" &
+
+# Trigger Linear sync on task completion only
+if [ -d ".stackmemory" ] && [ -f "scripts/sync-linear-graphql.js" ]; then
+    echo "🔄 Syncing completed task to Linear..."
+    npm run linear:sync >/dev/null 2>&1 || node scripts/sync-linear-graphql.js >/dev/null 2>&1 || true
+    echo "✅ Linear sync completed"
+fi
+
+exit 0

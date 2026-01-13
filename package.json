@@ -15,6 +15,7 @@
   "types": "dist/src/index.d.ts",
   "files": [
     "dist",
+    "templates",
     "README.md",
     "LICENSE"
   ],
@@ -40,7 +41,7 @@
   ],
   "scripts": {
     "setup": "npm install && npm run build && npm run init",
-    "postinstall": "node scripts/setup-alias.js || true",
+    "postinstall": "node scripts/install-claude-hooks-auto.js || true",
     "init": "node dist/scripts/initialize.js",
     "build": "node esbuild.config.js",
     "build:types": "tsc --emitDeclarationOnly --project tsconfig.build.json",
