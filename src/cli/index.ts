@@ -70,7 +70,9 @@ UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
 
 program
   .name('stackmemory')
-  .description('Lossless memory runtime for AI coding tools - organizes context as a call stack instead of linear chat logs, with team collaboration and infinite retention')
+  .description(
+    'Lossless memory runtime for AI coding tools - organizes context as a call stack instead of linear chat logs, with team collaboration and infinite retention'
+  )
   .version(VERSION);
 
 program
