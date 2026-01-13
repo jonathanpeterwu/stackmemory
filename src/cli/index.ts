@@ -12,7 +12,7 @@ import { logger } from '../core/monitoring/logger.js';
 import { FrameManager } from '../core/context/frame-manager.js';
 import { sessionManager, FrameQueryMode } from '../core/session/index.js';
 import { sharedContextLayer } from '../core/context/shared-context-layer.js';
-import { PebblesTaskStore } from '../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../features/tasks/linear-task-manager.js';
 import {
   LinearAuthManager,
   LinearOAuthSetup,

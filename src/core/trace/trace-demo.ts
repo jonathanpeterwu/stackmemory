@@ -123,7 +123,7 @@ async function runDemo() {
 
   // Enable verbose tracing for the demo
   if (process.env['DEBUG_TRACE'] !== 'true') {
-    console.log('📝 Enabling verbose tracing for this demo...\n');
+    console.log('Enabling verbose tracing for this demo...\n');
     enableVerboseTracing();
   }
 
@@ -139,7 +139,7 @@ async function runDemo() {
       const processed = await service.processData(data);
       service.cacheData('test-1', processed);
 
-      console.log('✅ Service operation completed\n');
+      console.log('Service operation completed\n');
     });
 
     // Example 2: Database operations
@@ -148,7 +148,7 @@ async function runDemo() {
 
       const results = await databaseExample();
 
-      console.log('✅ Database operations completed');
+      console.log('Database operations completed');
       console.log('   Found user:', results.user);
       console.log('   Query results:', results.results);
     });
@@ -162,7 +162,7 @@ async function runDemo() {
       try {
         await service.fetchData('error');
       } catch (error: unknown) {
-        console.log('✅ Error properly traced and handled\n');
+        console.log('Error properly traced and handled\n');
       }
     });
 
@@ -185,11 +185,11 @@ async function runDemo() {
           });
         }
 
-        console.log('✅ Performance tracking completed\n');
+        console.log('Performance tracking completed\n');
       }
     );
   } catch (error: unknown) {
-    console.error('❌ Demo failed:', error);
+    console.error('Demo failed:', error);
   }
 
   // Show execution summary
@@ -197,11 +197,11 @@ async function runDemo() {
 
   // Export traces for analysis
   const traces = trace.exportTraces();
-  console.log(`\n📊 Total traces collected: ${traces.length}`);
+  console.log(`\nTotal traces collected: ${traces.length}`);
 
   // Show example trace entry
   if (traces.length > 0) {
-    console.log('\n📍 Example trace entry:');
+    console.log('\nExample trace entry:');
     console.log(JSON.stringify(traces[0], null, 2));
   }
 }

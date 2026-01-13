@@ -14,11 +14,11 @@ export async function displayAnalyticsDashboard(
     const { metrics, recentTasks, teamMetrics } = state;
 
     console.clear();
-    console.log(chalk.bold.cyan('\n📊 StackMemory Analytics Dashboard\n'));
+    console.log(chalk.bold.cyan('\nStackMemory Analytics Dashboard\n'));
     console.log(chalk.gray('─'.repeat(50)));
 
     // Key Metrics
-    console.log(chalk.bold.white('\n📈 Key Metrics\n'));
+    console.log(chalk.bold.white('\nKey Metrics\n'));
 
     const metricsDisplay = [
       ['Total Tasks', metrics.totalTasks],
@@ -53,13 +53,13 @@ export async function displayAnalyticsDashboard(
 
     // Recent Tasks
     if (recentTasks.length > 0) {
-      console.log(chalk.bold.white('\n🚀 Recent Tasks\n'));
+      console.log(chalk.bold.white('\nRecent Tasks\n'));
       recentTasks.slice(0, 5).forEach((task) => {
-        const stateEmoji = {
-          completed: '✅',
-          in_progress: '🔄',
-          blocked: '🚫',
-          todo: '📝',
+        const statePrefix = {
+          completed: '[DONE]',
+          in_progress: '[PROG]',
+          blocked: '[BLCK]',
+          todo: '[TODO]',
         }[task.state];
 
         const priorityColor = {
@@ -70,7 +70,7 @@ export async function displayAnalyticsDashboard(
         }[task.priority];
 
         console.log(
-          `  ${stateEmoji} ${priorityColor(`[${task.priority.toUpperCase()}]`)} ${task.title.slice(0, 50)}`
+          `  ${statePrefix} ${priorityColor(`[${task.priority.toUpperCase()}]`)} ${task.title.slice(0, 50)}`
         );
       });
     }

@@ -573,7 +573,7 @@ export class FrameHandoffManager {
       type: 'request',
       requestId,
       recipientId: 'requester', // TODO: Get actual requester from handoff metadata
-      title: '🔄 Changes Requested for Handoff',
+      title: 'Changes Requested for Handoff',
       message: `${approval.reviewerId} has requested changes: ${approval.feedback || 'See detailed suggestions'}`,
       actionRequired: true,
       expiresAt: new Date(Date.now() + 48 * 60 * 60 * 1000), // 48 hours
@@ -620,7 +620,7 @@ export class FrameHandoffManager {
       type: 'completion',
       requestId,
       recipientId: 'all', // Will be distributed to all stakeholders
-      title: '✅ Handoff Completed Successfully',
+      title: 'Handoff Completed Successfully',
       message: `Frame transfer completed: ${result.mergedFrames.length} frames transferred${result.conflictFrames.length > 0 ? `, ${result.conflictFrames.length} conflicts resolved` : ''}`,
       actionRequired: false,
       createdAt: new Date(),
@@ -673,7 +673,7 @@ export class FrameHandoffManager {
       type: 'request', // Using 'request' type as it's informational
       requestId,
       recipientId: 'all', // Will be distributed to all stakeholders
-      title: '❌ Handoff Cancelled',
+      title: 'Handoff Cancelled',
       message: `Handoff request has been cancelled. Reason: ${reason}`,
       actionRequired: false,
       createdAt: new Date(),
@@ -953,7 +953,7 @@ export class FrameHandoffManager {
       type: 'request',
       requestId,
       recipientId: 'all',
-      title: '📊 Handoff Progress Update',
+      title: 'Handoff Progress Update',
       message: `Status: ${progress.status} | Step: ${progress.currentStep} | Progress: ${progress.transferredFrames}/${progress.totalFrames} frames`,
       actionRequired: false,
       createdAt: new Date(),

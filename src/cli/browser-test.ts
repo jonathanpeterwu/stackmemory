@@ -6,7 +6,7 @@
 import { BrowserMCPIntegration } from '../features/browser/browser-mcp.js';
 
 async function testBrowserMCP() {
-  console.log('🧪 Testing Browser MCP Integration...\n');
+  console.log('Testing Browser MCP Integration...\n');
 
   const browser = new BrowserMCPIntegration({
     headless: false, // Show browser for testing
@@ -15,7 +15,7 @@ async function testBrowserMCP() {
 
   await browser.initialize();
 
-  console.log('✅ Browser MCP initialized successfully!');
+  console.log('Browser MCP initialized successfully!');
   console.log('\nAvailable tools:');
   console.log('  - browser_navigate');
   console.log('  - browser_screenshot');
@@ -26,7 +26,7 @@ async function testBrowserMCP() {
   console.log('  - browser_get_content');
   console.log('  - browser_close');
 
-  console.log('\n🎯 Browser MCP is ready to use with StackMemory!');
+  console.log('\nBrowser MCP is ready to use with StackMemory!');
 
   // Clean up
   await browser.cleanup();
@@ -34,6 +34,6 @@ async function testBrowserMCP() {
 }
 
 testBrowserMCP().catch((error) => {
-  console.error('❌ Browser MCP test failed:', error);
+  console.error('Browser MCP test failed:', error);
   process.exit(1);
 });
