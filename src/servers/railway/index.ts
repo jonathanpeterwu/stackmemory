@@ -11,22 +11,22 @@ import cors from 'cors';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 // WebSocket transport will be handled differently for Railway
 import Database from 'better-sqlite3';
-import { BrowserMCPIntegration } from '../../features/browser/browser-mcp.js';
+// import { BrowserMCPIntegration } from '../../features/browser/browser-mcp.js';
 import { join, dirname } from 'path';
 import { existsSync, mkdirSync } from 'fs';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
+// Type-safe environment variable access - kept for potential future use
+// function getEnv(key: string, defaultValue?: string): string {
+//   const value = process.env[key];
+//   if (value === undefined) {
+//     if (defaultValue !== undefined) return defaultValue;
+//     throw new Error(`Environment variable ${key} is required`);
+//   }
+//   return value;
+// }
 
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
+// function getOptionalEnv(key: string): string | undefined {
+//   return process.env[key];
+// }
 
 // Configuration
 const config = {
@@ -57,7 +57,7 @@ class RailwayMCPServer {
   private mcpServer!: Server;
   private db!: Database.Database;
   private connections: Map<string, any> = new Map();
-  private browserMCP: BrowserMCPIntegration;
+  // private browserMCP: BrowserMCPIntegration;
 
   constructor() {
     this.app = express();
@@ -65,13 +65,14 @@ class RailwayMCPServer {
     this.initializeDatabase();
     this.setupMiddleware();
     this.setupRoutes();
-    this.setupMCPServer();
+    // MCP server disabled for Railway - using REST API instead
+    // this.setupMCPServer();
 
-    // Initialize Browser MCP for Railway
-    this.browserMCP = new BrowserMCPIntegration({
-      headless: true, // Always headless in production
-      defaultViewport: { width: 1280, height: 720 },
-    });
+    // Browser MCP disabled for Railway deployment
+    // this.browserMCP = new BrowserMCPIntegration({
+    //   headless: true, // Always headless in production
+    //   defaultViewport: { width: 1280, height: 720 },
+    // });
 
     if (config.enableWebSocket) {
       this.setupWebSocket();
@@ -229,6 +230,20 @@ class RailwayMCPServer {
         environment: config.environment,
       };
       res.json(health);
+    });
+
+    // Root route
+    this.app.get('/', (req, res) => {
+      res.json({
+        name: 'StackMemory Railway Server',
+        version: '1.0.0',
+        health: '/health',
+        api: {
+          'POST /api/context/save': 'Save context',
+          'GET /api/context/load': 'Load context',
+          'POST /api/tools/execute': 'Execute tool'
+        }
+      });
     });
 
     // API Routes
@@ -397,7 +412,8 @@ class RailwayMCPServer {
     );
 
     // Initialize Browser MCP with the server
-    await this.browserMCP.initialize(this.mcpServer);
+    // Skip browser MCP in production/Railway environment
+    // await this.browserMCP.initialize(this.mcpServer);
 
     // Register MCP tools
     this.mcpServer.setRequestHandler('tools/list' as any, async () => {
