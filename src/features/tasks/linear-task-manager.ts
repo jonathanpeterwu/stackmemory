@@ -6,8 +6,14 @@
 
 import { EventEmitter } from 'events';
 import { logger } from '../../core/monitoring/logger.js';
-import { Task, TaskStatus, TaskPriority, TaskMetadata } from '../../types/task.js';
+import {
+  Task,
+  TaskStatus,
+  TaskPriority,
+  TaskMetadata,
+} from '../../types/task.js';
 import { LinearClient, LinearIssue } from '../../integrations/linear/client.js';
+import { ProjectIsolationManager } from '../../core/projects/project-isolation.js';
 
 export interface LinearTaskManagerConfig {
   linearApiKey?: string;
@@ -15,6 +21,8 @@ export interface LinearTaskManagerConfig {
   projectFilter?: string; // Filter tasks by project name/org
   autoSync?: boolean;
   syncInterval?: number; // minutes
+  batchSize?: number; // Number of tasks to sync per batch (rate limiting)
+  rateLimitDelay?: number; // Delay between API calls in ms
 }
 
 export interface TaskMetrics {
@@ -33,17 +41,41 @@ export class LinearTaskManager extends EventEmitter {
   private config: LinearTaskManagerConfig;
   private projectId?: string;
   private syncTimer?: NodeJS.Timeout;
+  private isolationManager: ProjectIsolationManager;
+  private lastSyncTimestamp: number = 0;
+  private syncInProgress: boolean = false;
 
-  constructor(config: LinearTaskManagerConfig = {}, projectId?: string) {
+  constructor(
+    config: LinearTaskManagerConfig = {},
+    projectId?: string,
+    projectRoot?: string
+  ) {
     super();
     this.config = config;
     this.projectId = projectId;
+    this.isolationManager = ProjectIsolationManager.getInstance();
+
+    // Get project-specific configuration if projectRoot is provided
+    if (projectRoot) {
+      const projectInfo =
+        this.isolationManager.getProjectIdentification(projectRoot);
+      this.projectId = projectInfo.projectId;
+
+      // Override config with project-specific settings
+      this.config = {
+        ...config,
+        teamId: config.teamId || projectInfo.linearTeamId,
+        projectFilter: config.projectFilter || projectInfo.workspaceFilter,
+        batchSize: config.batchSize || 5, // Conservative batch size for rate limiting
+        rateLimitDelay: config.rateLimitDelay || 1000, // 1 second between calls
+      };
+    }
 
     // Initialize Linear client if API key is provided
     if (config.linearApiKey) {
       this.linearClient = new LinearClient({
         apiKey: config.linearApiKey,
-        teamId: config.teamId,
+        teamId: this.config.teamId,
       });
     }
 
@@ -65,15 +97,20 @@ export class LinearTaskManager extends EventEmitter {
   }): string {
     const id = this.generateTaskId();
     const now = new Date();
-    
+
     const task: Task = {
       id,
       title: options.title,
       description: options.description || '',
       status: 'todo',
       priority: options.priority || 'medium',
-      tags: options.tags || [],
-      metadata: options.metadata,
+      tags: [...(options.tags || []), ...this.getProjectTags()],
+      metadata: {
+        ...options.metadata,
+        projectId: this.projectId,
+        teamId: this.config.teamId,
+        projectFilter: this.config.projectFilter,
+      },
       createdAt: now,
       updatedAt: now,
     };
@@ -81,14 +118,18 @@ export class LinearTaskManager extends EventEmitter {
     this.tasks.set(id, task);
     this.emit('task:created', task);
     this.emit('sync:needed', 'task:created');
-    
+
     return id;
   }
 
   /**
    * Update task status
    */
-  updateTaskStatus(taskId: string, newStatus: TaskStatus, reason?: string): void {
+  updateTaskStatus(
+    taskId: string,
+    newStatus: TaskStatus,
+    _reason?: string
+  ): void {
     const task = this.tasks.get(taskId);
     if (!task) {
       throw new Error(`Task not found: ${taskId}`);
@@ -96,13 +137,13 @@ export class LinearTaskManager extends EventEmitter {
 
     task.status = newStatus;
     task.updatedAt = new Date();
-    
+
     this.tasks.set(taskId, task);
-    
+
     if (newStatus === 'done') {
       this.emit('task:completed', task);
     }
-    
+
     this.emit('task:updated', task);
     this.emit('sync:needed', 'task:updated');
   }
@@ -119,17 +160,17 @@ export class LinearTaskManager extends EventEmitter {
    */
   getActiveTasks(): Task[] {
     return Array.from(this.tasks.values())
-      .filter(task => !['done', 'cancelled'].includes(task.status))
+      .filter((task) => !['done', 'cancelled'].includes(task.status))
       .sort((a, b) => {
         // Sort by priority then by creation date
         const priorityOrder = { urgent: 4, high: 3, medium: 2, low: 1 };
         const aPriority = priorityOrder[a.priority || 'medium'];
         const bPriority = priorityOrder[b.priority || 'medium'];
-        
+
         if (aPriority !== bPriority) {
           return bPriority - aPriority; // Higher priority first
         }
-        
+
         return a.createdAt.getTime() - b.createdAt.getTime(); // Older first
       });
   }
@@ -138,7 +179,9 @@ export class LinearTaskManager extends EventEmitter {
    * Get tasks by status
    */
   getTasksByStatus(status: TaskStatus): Task[] {
-    return Array.from(this.tasks.values()).filter(task => task.status === status);
+    return Array.from(this.tasks.values()).filter(
+      (task) => task.status === status
+    );
   }
 
   /**
@@ -147,14 +190,14 @@ export class LinearTaskManager extends EventEmitter {
   getMetrics(): TaskMetrics {
     const allTasks = Array.from(this.tasks.values());
     const totalTasks = allTasks.length;
-    
+
     const byStatus: Record<TaskStatus, number> = {
       todo: 0,
       in_progress: 0,
       done: 0,
       cancelled: 0,
     };
-    
+
     const byPriority: Record<TaskPriority, number> = {
       low: 0,
       medium: 0,
@@ -207,16 +250,19 @@ export class LinearTaskManager extends EventEmitter {
             task.updatedAt = new Date();
             synced++;
           } catch (error) {
-            const errorMsg = error instanceof Error ? error.message : String(error);
+            const errorMsg =
+              error instanceof Error ? error.message : String(error);
             errors.push(`Failed to sync task ${task.id}: ${errorMsg}`);
-            logger.error('Failed to sync task to Linear', { taskId: task.id, error: errorMsg });
+            logger.error('Failed to sync task to Linear', {
+              taskId: task.id,
+              error: errorMsg,
+            });
           }
         }
       }
 
       this.emit('sync:completed', { synced, errors });
       return { synced, errors };
-      
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
       errors.push(`Sync failed: ${errorMsg}`);
@@ -239,18 +285,26 @@ export class LinearTaskManager extends EventEmitter {
 
       let loaded = 0;
       for (const issue of issues) {
-        const task = this.convertLinearIssueToTask(issue);
-        this.tasks.set(task.id, task);
-        loaded++;
+        // Only load issues that belong to this project
+        if (this.shouldIncludeIssue(issue)) {
+          const task = this.convertLinearIssueToTask(issue);
+          this.tasks.set(task.id, task);
+          loaded++;
+        }
       }
 
-      logger.info(`Loaded ${loaded} tasks from Linear`);
-      this.emit('tasks:loaded', { count: loaded });
+      logger.info(
+        `Loaded ${loaded} tasks from Linear for project ${this.projectId}`
+      );
+      this.emit('tasks:loaded', { count: loaded, projectId: this.projectId });
       return loaded;
-
     } catch (error) {
       const errorMsg = error instanceof Error ? error.message : String(error);
-      logger.error('Failed to load tasks from Linear', { error: errorMsg });
+      logger.error('Failed to load tasks from Linear', {
+        error: errorMsg,
+        projectId: this.projectId,
+        teamId: this.config.teamId,
+      });
       throw new Error(`Failed to load from Linear: ${errorMsg}`);
     }
   }
@@ -305,11 +359,11 @@ export class LinearTaskManager extends EventEmitter {
     };
 
     const statusMap: Record<string, TaskStatus> = {
-      'backlog': 'todo',
-      'unstarted': 'todo',
-      'started': 'in_progress',
-      'completed': 'done',
-      'cancelled': 'cancelled',
+      backlog: 'todo',
+      unstarted: 'todo',
+      started: 'in_progress',
+      completed: 'done',
+      cancelled: 'cancelled',
     };
 
     return {
@@ -318,7 +372,7 @@ export class LinearTaskManager extends EventEmitter {
       description: issue.description || '',
       status: statusMap[issue.state.type] || 'todo',
       priority: priorityMap[issue.priority] || 'medium',
-      tags: issue.labels?.map(label => label.name) || [],
+      tags: issue.labels?.map((label) => label.name) || [],
       externalId: issue.id,
       externalIdentifier: issue.identifier,
       externalUrl: issue.url,
@@ -343,14 +397,66 @@ export class LinearTaskManager extends EventEmitter {
       try {
         await this.syncWithLinear();
       } catch (error) {
-        logger.error('Auto-sync failed', error instanceof Error ? error : new Error(String(error)));
+        logger.error(
+          'Auto-sync failed',
+          error instanceof Error ? error : new Error(String(error))
+        );
       }
     }, intervalMs);
   }
 
   /**
+   * Get project-specific tags
+   */
+  private getProjectTags(): string[] {
+    const tags = [];
+    if (this.config.projectFilter) {
+      tags.push(`project:${this.config.projectFilter}`);
+    }
+    if (this.projectId) {
+      tags.push(`proj:${this.projectId.slice(-8)}`); // Short project ID
+    }
+    return tags;
+  }
+
+  /**
+   * Check if a Linear issue should be included in this project
+   */
+  private shouldIncludeIssue(issue: LinearIssue): boolean {
+    if (!this.config.projectFilter) {
+      return true; // Include all if no filter
+    }
+
+    // Check if issue has project tags
+    const projectTags = issue.labels?.map((label) => label.name) || [];
+    return projectTags.some(
+      (tag) =>
+        tag.includes(this.config.projectFilter!) ||
+        tag.includes(`proj:${this.projectId?.slice(-8)}`)
+    );
+  }
+
+  /**
+   * Get project information
+   */
+  getProjectInfo() {
+    return {
+      projectId: this.projectId,
+      teamId: this.config.teamId,
+      projectFilter: this.config.projectFilter,
+    };
+  }
+
+  /**
    * Cleanup resources
    */
+  destroy(): void {
+    if (this.syncTimer) {
+      clearInterval(this.syncTimer);
+      this.syncTimer = undefined;
+    }
+    this.removeAllListeners();
+  }
   destroy(): void {
     if (this.syncTimer) {
       clearInterval(this.syncTimer);

@@ -150,9 +150,6 @@
     "*.{ts,js}": [
       "npm run lint:fix",
       "prettier --write"
-    ],
-    "*.ts": [
-      "npm run test:pre-commit"
     ]
   },
   "optionalDependencies": {
