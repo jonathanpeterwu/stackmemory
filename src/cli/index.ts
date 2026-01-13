@@ -61,7 +61,7 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
-const VERSION = '0.3.13';
+const VERSION = '0.3.14';
 
 // Check for updates on CLI startup
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
