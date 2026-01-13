@@ -61,7 +61,7 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 
-const VERSION = '0.3.1';
+const VERSION = '0.3.12';
 
 // Check for updates on CLI startup
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
@@ -70,7 +70,7 @@ UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
 
 program
   .name('stackmemory')
-  .description('Lossless memory runtime for AI coding tools')
+  .description('Lossless memory runtime for AI coding tools - organizes context as a call stack instead of linear chat logs, with team collaboration and infinite retention')
   .version(VERSION);
 
 program
