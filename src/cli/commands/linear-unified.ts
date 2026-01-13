@@ -13,7 +13,7 @@ import {
 } from '../../integrations/linear/unified-sync.js';
 import { LinearAuthManager } from '../../integrations/linear/auth.js';
 import { LinearClient } from '../../integrations/linear/client.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
@@ -71,7 +71,7 @@ export function registerUnifiedLinearCommands(parent: Command) {
 
         // Initialize components
         const db = new Database(dbPath);
-        const taskStore = new PebblesTaskStore(projectRoot, db);
+        const taskStore = new LinearTaskManager(projectRoot, db);
         const authManager = new LinearAuthManager(projectRoot);
 
         // Build config from options
@@ -255,7 +255,7 @@ export function registerUnifiedLinearCommands(parent: Command) {
           // Run sync with task planning enabled
           const dbPath = join(projectRoot, '.stackmemory', 'context.db');
           const db = new Database(dbPath);
-          const taskStore = new PebblesTaskStore(projectRoot, db);
+          const taskStore = new LinearTaskManager(projectRoot, db);
           const authManager = new LinearAuthManager(projectRoot);
 
           const unifiedSync = new UnifiedLinearSync(

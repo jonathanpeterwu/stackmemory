@@ -20,7 +20,7 @@ import { logger } from '../core/monitoring/logger.js';
 import type { DualStackManager } from '../core/context/dual-stack-manager.js';
 import type { ContextRetriever } from '../core/retrieval/context-retriever.js';
 import type { FrameManager } from '../core/context/frame-manager.js';
-import type { PebblesTaskStore } from '../features/tasks/pebbles-task-store.js';
+import type { LinearTaskManager } from '../features/tasks/linear-task-manager.js';
 
 // Skill to RLM mapping configuration
 interface SkillToRLMConfig {
@@ -48,7 +48,7 @@ export class UnifiedRLMOrchestrator {
     frameManager: FrameManager,
     dualStackManager: DualStackManager,
     contextRetriever: ContextRetriever,
-    taskStore: PebblesTaskStore,
+    taskStore: LinearTaskManager,
     skillContext: SkillContext
   ) {
     // Initialize RLM orchestrator
@@ -517,7 +517,7 @@ export function initializeUnifiedOrchestrator(
   frameManager: FrameManager,
   dualStackManager: DualStackManager,
   contextRetriever: ContextRetriever,
-  taskStore: PebblesTaskStore,
+  taskStore: LinearTaskManager,
   skillContext: SkillContext
 ): UnifiedRLMOrchestrator {
   if (!unifiedOrchestrator) {

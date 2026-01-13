@@ -84,8 +84,8 @@ vi.mock('../core/context/frame-manager', () => ({
   })),
 }));
 
-vi.mock('../features/tasks/pebbles-task-store.js', () => ({
-  PebblesTaskStore: vi.fn().mockImplementation(() => ({
+vi.mock('../features/tasks/linear-task-manager.js', () => ({
+  LinearTaskManager: vi.fn().mockImplementation(() => ({
     createTask: vi.fn(() => 'task-123'),
     getActiveTasks: vi.fn(() => []),
     getMetrics: vi.fn(() => ({

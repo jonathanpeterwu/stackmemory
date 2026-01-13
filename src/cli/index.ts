@@ -444,7 +444,7 @@ linearCommand
       }
 
       const db = new Database(dbPath);
-      const taskStore = new PebblesTaskStore(projectRoot, db);
+      const taskStore = new LinearTaskManager(projectRoot, db);
 
       const syncConfig = {
         ...DEFAULT_SYNC_CONFIG,
@@ -744,7 +744,7 @@ linearCommand
       const dbPath = join(projectRoot, '.stackmemory', 'context.db');
       if (existsSync(dbPath)) {
         const db = new Database(dbPath);
-        const taskStore = new PebblesTaskStore(projectRoot, db);
+        const taskStore = new LinearTaskManager(projectRoot, db);
         const { LinearSyncEngine, DEFAULT_SYNC_CONFIG } =
           await import('../integrations/linear/sync.js');
         const syncEngine = new LinearSyncEngine(

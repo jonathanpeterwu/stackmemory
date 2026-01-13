@@ -214,7 +214,7 @@ export class TraceContext {
     }
 
     if (entry.duration && entry.duration > this.config.performanceThreshold) {
-      output += `\n${indent}  ⚠ SLOW: Exceeded ${this.config.performanceThreshold}ms threshold`;
+      output += `\n${indent}  WARNING: Exceeded ${this.config.performanceThreshold}ms threshold`;
     }
 
     if (includeChildren && entry.children.length > 0) {

@@ -1,6 +1,6 @@
 import { MetricsQueries } from '../queries/metrics-queries.js';
 import { LinearClient } from '../../../integrations/linear/client.js';
-import { PebblesTaskStore } from '../../tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../tasks/linear-task-manager.js';
 import Database from 'better-sqlite3';
 import {
   TaskMetrics,
@@ -30,7 +30,7 @@ function getOptionalEnv(key: string): string | undefined {
 export class AnalyticsService {
   private metricsQueries: MetricsQueries;
   private linearClient?: LinearClient;
-  private taskStore?: PebblesTaskStore;
+  private taskStore?: LinearTaskManager;
   private dbPath: string;
   private projectPath: string;
   private updateCallbacks: Set<(state: DashboardState) => void> = new Set();
@@ -59,7 +59,7 @@ export class AnalyticsService {
       );
       if (fs.existsSync(contextDbPath)) {
         const db = new Database(contextDbPath);
-        this.taskStore = new PebblesTaskStore(this.projectPath, db);
+        this.taskStore = new LinearTaskManager(this.projectPath, db);
       }
     } catch (error: unknown) {
       console.error('Failed to initialize task store:', error);

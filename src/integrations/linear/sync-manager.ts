@@ -6,7 +6,7 @@
 import { EventEmitter } from 'events';
 import { logger } from '../../core/monitoring/logger.js';
 import { LinearSyncEngine, SyncConfig, SyncResult } from './sync.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { LinearAuthManager } from './auth.js';
 
 export interface SyncManagerConfig extends SyncConfig {
@@ -26,10 +26,10 @@ export class LinearSyncManager extends EventEmitter {
   private syncInProgress: boolean = false;
   private syncLockAcquired: number = 0; // Timestamp when lock was acquired
   private readonly SYNC_LOCK_TIMEOUT = 300000; // 5 minutes max sync time
-  private taskStore: PebblesTaskStore;
+  private taskStore: LinearTaskManager;
 
   constructor(
-    taskStore: PebblesTaskStore,
+    taskStore: LinearTaskManager,
     authManager: LinearAuthManager,
     config: SyncManagerConfig,
     projectRoot?: string

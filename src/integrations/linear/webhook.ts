@@ -5,7 +5,7 @@
 
 import { logger } from '../../core/monitoring/logger.js';
 import { LinearSyncEngine } from './sync.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import crypto from 'crypto';
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
@@ -63,7 +63,7 @@ export interface LinearWebhookPayload {
 
 export class LinearWebhookHandler {
   private syncEngine?: LinearSyncEngine;
-  private taskStore?: PebblesTaskStore;
+  private taskStore?: LinearTaskManager;
   private webhookSecret?: string;
 
   constructor(webhookSecret?: string) {
@@ -80,7 +80,7 @@ export class LinearWebhookHandler {
   /**
    * Set the task store for direct updates
    */
-  setTaskStore(taskStore: PebblesTaskStore): void {
+  setTaskStore(taskStore: LinearTaskManager): void {
     this.taskStore = taskStore;
   }
 

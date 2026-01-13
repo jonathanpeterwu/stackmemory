@@ -10,7 +10,7 @@ import Database from 'better-sqlite3';
 import shellEscape from 'shell-escape';
 import { z } from 'zod';
 import { FrameManager } from '../../core/context/frame-manager.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { logger } from '../../core/monitoring/logger.js';
 
 // Input validation schemas  
@@ -129,7 +129,7 @@ export function createHandoffCommand(): Command {
           }
 
           // Get task status
-          const taskStore = new PebblesTaskStore(projectRoot, db);
+          const taskStore = new LinearTaskManager(projectRoot, db);
           const activeTasks = taskStore.getActiveTasks();
 
           const inProgress = activeTasks.filter(

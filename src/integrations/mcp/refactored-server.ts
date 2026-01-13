@@ -15,7 +15,7 @@ import { v4 as uuidv4 } from 'uuid';
 
 // Core components
 import { RefactoredFrameManager } from '../../core/context/refactored-frame-manager.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { LinearAuthManager } from '../linear/auth.js';
 import { LinearSyncEngine, DEFAULT_SYNC_CONFIG } from '../linear/sync.js';
 import { BrowserMCPIntegration } from '../../features/browser/browser-mcp.js';
@@ -65,7 +65,7 @@ class RefactoredStackMemoryMCP {
   
   // Core components
   private frameManager!: RefactoredFrameManager;
-  private taskStore!: PebblesTaskStore;
+  private taskStore!: LinearTaskManager;
   private linearAuthManager!: LinearAuthManager;
   private linearSync!: LinearSyncEngine;
   private browserMCP!: BrowserMCPIntegration;
@@ -115,7 +115,7 @@ class RefactoredStackMemoryMCP {
     this.frameManager = new RefactoredFrameManager(this.db, this.projectId);
 
     // Task store
-    this.taskStore = new PebblesTaskStore(this.projectRoot, this.db);
+    this.taskStore = new LinearTaskManager(this.projectRoot, this.db);
 
     // Linear integration
     this.linearAuthManager = new LinearAuthManager(this.projectRoot);

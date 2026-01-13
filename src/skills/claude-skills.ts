@@ -882,9 +882,9 @@ export class ClaudeSkillsManager {
 
     // Initialize RLM Orchestrator
     // Import dynamically to avoid circular dependencies
-    import('../features/tasks/pebbles-task-store.js')
+    import('../features/tasks/linear-task-manager.js')
       .then((module) => {
-        const taskStore = new module.PebblesTaskStore();
+        const taskStore = new module.LinearTaskManager();
 
         import('../core/context/frame-manager.js').then((frameModule) => {
           const frameManager = new frameModule.FrameManager();

@@ -20,7 +20,7 @@ import { FrameHandoffManager } from '../../core/context/frame-handoff-manager.js
 import { FrameManager } from '../../core/context/frame-manager.js';
 import { ContextRetriever } from '../../core/retrieval/context-retriever.js';
 import { SQLiteAdapter } from '../../core/database/sqlite-adapter.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { ConfigManager } from '../../core/config/config-manager.js';
 import * as path from 'path';
 import * as os from 'os';
@@ -61,7 +61,7 @@ async function initializeSkillContext(): Promise<{
   const handoffManager = new FrameHandoffManager(dualStackManager);
   const contextRetriever = new ContextRetriever(database);
   const frameManager = new FrameManager(database);
-  const taskStore = new PebblesTaskStore();
+  const taskStore = new LinearTaskManager();
 
   const context: SkillContext = {
     projectId,

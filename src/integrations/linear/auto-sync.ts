@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../../core/monitoring/logger.js';
-import { PebblesTaskStore } from '../../features/tasks/pebbles-task-store.js';
+import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { LinearAuthManager } from './auth.js';
 import { LinearSyncEngine, DEFAULT_SYNC_CONFIG, SyncConfig } from './sync.js';
 import { LinearConfigManager } from './config.js';
@@ -88,7 +88,7 @@ export class LinearAutoSyncService {
       }
 
       const db = new Database(dbPath);
-      const taskStore = new PebblesTaskStore(this.projectRoot, db);
+      const taskStore = new LinearTaskManager(this.projectRoot, db);
 
       this.syncEngine = new LinearSyncEngine(
         taskStore,

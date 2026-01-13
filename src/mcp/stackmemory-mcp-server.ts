@@ -17,9 +17,9 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import {
-  PebblesTaskStore,
+  LinearTaskManager,
   TaskPriority,
-} from '../features/tasks/pebbles-task-store.js';
+} from '../features/tasks/linear-task-manager.js';
 import { FrameManager } from '../core/context/frame-manager.js';
 import { AgentTaskManager } from '../agents/core/agent-task-manager.js';
 import { logger } from '../core/monitoring/logger.js';
@@ -35,7 +35,7 @@ if (!existsSync(stackmemoryDir)) {
 
 // Initialize database and managers
 const db = new Database(join(stackmemoryDir, 'cache.db'));
-const taskStore = new PebblesTaskStore(PROJECT_ROOT, db);
+const taskStore = new LinearTaskManager(PROJECT_ROOT, db);
 const frameManager = new FrameManager(db, PROJECT_ROOT, undefined);
 const agentTaskManager = new AgentTaskManager(taskStore, frameManager);
 

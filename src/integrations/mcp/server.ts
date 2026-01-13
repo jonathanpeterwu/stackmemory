@@ -13,10 +13,10 @@ import { join, dirname } from 'path';
 import { execSync } from 'child_process';
 import { FrameManager, FrameType } from '../../core/context/frame-manager.js';
 import {
-  PebblesTaskStore,
+  LinearTaskManager,
   TaskPriority,
   TaskStatus,
-} from '../../features/tasks/pebbles-task-store.js';
+} from '../../features/tasks/linear-task-manager.js';
 import { LinearAuthManager, LinearOAuthSetup } from '../linear/auth.js';
 import { LinearSyncEngine, DEFAULT_SYNC_CONFIG } from '../linear/sync.js';
 import { logger } from '../../core/monitoring/logger.js';
@@ -49,7 +49,7 @@ class LocalStackMemoryMCP {
   private db: Database.Database;
   private projectRoot: string;
   private frameManager: FrameManager;
-  private taskStore: PebblesTaskStore;
+  private taskStore: LinearTaskManager;
   private linearAuthManager: LinearAuthManager;
   private linearSync: LinearSyncEngine;
   private projectId: string;
@@ -78,7 +78,7 @@ class LocalStackMemoryMCP {
     this.frameManager = new FrameManager(this.db, this.projectId);
 
     // Initialize task store
-    this.taskStore = new PebblesTaskStore(this.projectRoot, this.db);
+    this.taskStore = new LinearTaskManager(this.projectRoot, this.db);
 
     // Initialize Linear integration
     this.linearAuthManager = new LinearAuthManager(this.projectRoot);

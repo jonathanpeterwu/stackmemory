@@ -9,7 +9,7 @@ import { v4 as uuidv4 } from 'uuid';
 // Create a new trace detector
 const detector = new TraceDetector();
 
-console.log('🔍 Trace Detection Demo\n');
+console.log('Trace Detection Demo\n');
 console.log('='.repeat(50));
 
 // Simulate a search-driven modification trace
@@ -49,7 +49,7 @@ searchDrivenTools.forEach((tool) => {
 });
 
 // Simulate an error recovery trace (separate due to time gap)
-console.log('\n🔧 Simulating Error Recovery:');
+console.log('\nSimulating Error Recovery:');
 const errorTime = baseTime + 40000; // 40 seconds later
 
 const errorRecoveryTools: ToolCall[] = [
@@ -114,7 +114,7 @@ featureTools.forEach((tool) => {
 detector.flush();
 
 // Get statistics
-console.log('\n📊 Trace Statistics:');
+console.log('\nTrace Statistics:');
 console.log('='.repeat(50));
 const stats = detector.getStatistics();
 console.log(`Total Traces: ${stats.totalTraces}`);
@@ -128,7 +128,7 @@ Object.entries(stats.tracesByType).forEach(([type, count]) => {
 });
 
 // Display all traces
-console.log('\n📝 Detected Traces:');
+console.log('\nDetected Traces:');
 console.log('='.repeat(50));
 const traces = detector.getTraces();
 traces.forEach((trace, index) => {
@@ -168,4 +168,4 @@ console.log('\n💾 Exporting traces to JSON...');
 const exported = detector.exportTraces();
 console.log(`Exported ${exported.length} characters of JSON data`);
 
-console.log('\n✅ Demo complete!');
+console.log('\nDemo complete!');
