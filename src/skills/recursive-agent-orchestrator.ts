@@ -53,10 +53,10 @@ export interface TaskNode {
   description: string;
   agent: SubagentType;
   dependencies: string[];
-  context: Record<string, any>;
+  context: Record<string, unknown>;
   children?: TaskNode[];
   status: 'pending' | 'running' | 'completed' | 'failed';
-  result?: any;
+  result?: unknown;
   error?: Error;
   attempts: number;
   startTime?: Date;
@@ -310,7 +310,7 @@ export class RecursiveAgentOrchestrator {
    */
   async execute(
     task: string,
-    context: Record<string, any>,
+    context: Record<string, unknown>,
     options?: RLMOptions
   ): Promise<ExecutionResult> {
     const opts = { ...this.defaultOptions, ...options };
@@ -388,7 +388,7 @@ export class RecursiveAgentOrchestrator {
    */
   private async planTask(
     task: string,
-    context: Record<string, any>,
+    context: Record<string, unknown>,
     options: Required<RLMOptions>
   ): Promise<TaskNode> {
     // Call planning agent using Claude Code Task tool
@@ -418,7 +418,7 @@ export class RecursiveAgentOrchestrator {
    */
   private async executeTaskTree(
     node: TaskNode,
-    context: Record<string, any>,
+    context: Record<string, unknown>,
     options: Required<RLMOptions>,
     depth: number
   ): Promise<void> {
@@ -503,7 +503,7 @@ export class RecursiveAgentOrchestrator {
    */
   private async executeLeafNode(
     node: TaskNode,
-    context: Record<string, any>,
+    context: Record<string, unknown>,
     options: Required<RLMOptions>
   ): Promise<void> {
     const agentConfig = this.subagentConfigs.get(node.agent)!;
@@ -719,7 +719,10 @@ export class RecursiveAgentOrchestrator {
     // Implementation would add review nodes at appropriate points
   }
 
-  private buildAgentPrompt(node: TaskNode, context: any): string {
+  private buildAgentPrompt(
+    node: TaskNode,
+    context: Record<string, unknown>
+  ): string {
     return `
       Task: ${node.description}
       
@@ -747,7 +750,7 @@ export class RecursiveAgentOrchestrator {
     logger.debug('Sharing agent results', { nodeId: _node.id });
   }
 
-  private applyImprovements(_rootNode: TaskNode, improvements: any): void {
+  private applyImprovements(_rootNode: TaskNode, improvements: unknown): void {
     // Apply improvements to the task tree
     logger.debug('Applying improvements', { improvements });
   }

@@ -31,8 +31,8 @@ interface SkillToRLMConfig {
   defaultOptions?: Partial<RLMOptions>;
   preprocessor?: (
     args: string[],
-    options: Record<string, any>
-  ) => { task: string; context: Record<string, any> };
+    options: Record<string, unknown>
+  ) => { task: string; context: Record<string, unknown> };
   postprocessor?: (result: ExecutionResult) => SkillResult;
 }
 
@@ -290,7 +290,7 @@ export class UnifiedRLMOrchestrator {
   async executeSkill(
     skillName: string,
     args: string[],
-    options?: Record<string, any>
+    options?: Record<string, unknown>
   ): Promise<SkillResult> {
     logger.info(`Executing skill through RLM: ${skillName}`, { args, options });
 
@@ -328,7 +328,7 @@ export class UnifiedRLMOrchestrator {
   private async executeViaRLM(
     mapping: SkillToRLMConfig,
     args: string[],
-    options: Record<string, any>
+    options: Record<string, unknown>
   ): Promise<SkillResult> {
     try {
       // Preprocess arguments
@@ -374,7 +374,7 @@ export class UnifiedRLMOrchestrator {
           details: result.rootNode,
         },
       };
-    } catch (error: any) {
+    } catch (error) {
       logger.error(`RLM execution failed for ${mapping.skillName}:`, error);
       return {
         success: false,
@@ -386,7 +386,10 @@ export class UnifiedRLMOrchestrator {
   /**
    * Helper: Find node by agent type in task tree
    */
-  private findNodeByAgent(node: any, agentType: SubagentType): any {
+  private findNodeByAgent(
+    node: ExecutionNode,
+    agentType: SubagentType
+  ): ExecutionNode | null {
     if (node.agent === agentType) {
       return node;
     }
@@ -439,7 +442,7 @@ This skill is executed through RLM orchestration for:
    */
   async executeTask(
     task: string,
-    context?: Record<string, any>
+    context?: Record<string, unknown>
   ): Promise<SkillResult> {
     // Analyze task to determine best skill/agent combination
     const taskAnalysis = this.analyzeTask(task);
@@ -474,7 +477,7 @@ This skill is executed through RLM orchestration for:
   private analyzeTask(task: string): {
     suggestedSkill?: string;
     args: string[];
-    options: Record<string, any>;
+    options: Record<string, unknown>;
   } {
     const taskLower = task.toLowerCase();
 
