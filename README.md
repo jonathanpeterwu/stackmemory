@@ -1,14 +1,17 @@
 # StackMemory
 
-**Lossless, project-scoped memory for AI tools** • v0.3.4
+**Lossless, project-scoped memory for AI tools** • v0.3.15
 
-StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions. With **Phases 1-3 complete**, it delivers:
+StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions. With **Phases 1-4 complete**, it delivers:
 
 - ✅ **89-98% faster** task operations than manual tracking
 - ✅ **10,000+ frame depth** support with hierarchical organization  
 - ✅ **Full Linear integration** with bidirectional sync
 - ✅ **20+ MCP tools** for Claude Code
 - ✅ **Context persistence** that survives /clear operations
+- ✅ **Two-tier storage system** with local tiers and infinite remote storage
+- ✅ **Smart compression** (LZ4/ZSTD) with 2.5-3.5x ratios
+- ✅ **Background migration** with configurable triggers
 
 Instead of a linear chat log, StackMemory organizes memory as a **call stack** of scoped work (frames), with intelligent LLM-driven retrieval and team collaboration features.
 
@@ -251,18 +254,33 @@ Each interaction: ingests events → updates indices → retrieves relevant cont
 
 ## Storage & limits
 
+### Two-Tier Storage System (v0.3.15+)
+
+StackMemory implements an intelligent two-tier storage architecture:
+
+#### Local Storage Tiers
+- **Young (<24h)**: Uncompressed, complete retention in memory/Redis
+- **Mature (1-7d)**: LZ4 compression (~2.5x), selective retention
+- **Old (7-30d)**: ZSTD compression (~3.5x), critical data only
+
+#### Remote Storage
+- **Archive (>30d)**: Infinite retention in S3 + TimeSeries DB
+- **Migration**: Automatic background migration based on age, size, and importance
+- **Offline Queue**: Persistent retry logic for failed uploads
+
 ### Free tier (hosted)
 
 - 1 project
-- Up to **X MB stored**
-- Up to **Y MB retrieval egress / month**
+- Up to **2GB local storage**
+- Up to **100GB retrieval egress / month**
 
 ### Paid tiers
 
 - Per-project pricing
-- Higher storage + retrieval
+- Unlimited storage + retrieval
 - Team sharing
 - Org controls
+- Custom retention policies
 
 **No seat-based pricing.**
 
@@ -391,6 +409,12 @@ stackmemory linear sync [--direction from_linear]
 stackmemory linear auto-sync --start
 stackmemory linear update ENG-123 --status done
 
+# Storage Management
+stackmemory storage status               # Show tier distribution
+stackmemory storage migrate [--tier young] # Trigger migration
+stackmemory storage cleanup --force      # Clean old data
+stackmemory storage config --show        # Show configuration
+
 # Analytics & Server
 stackmemory analytics [--view|--port 3000]
 stackmemory mcp-server [--port 3001]
@@ -401,15 +425,17 @@ stackmemory mcp-server [--port 3001]
 ## Status
 
 - Hosted: **Private beta**
-- OSS mirror: **Early preview**
+- OSS mirror: **Production ready**
 - MCP integration: **Stable**
-- CLI: **v0.3.1** - Full task, context, and Linear management
+- CLI: **v0.3.15** - Full task, context, Linear, and storage management
+- Two-tier storage: **Complete**
 
 ---
 
 ## Roadmap
 
-**Phase 2 (Current):** Query language, LLM retrieval, hybrid digests, scoring profiles  
+**Phase 4 (Completed):** Two-tier storage system with local tiers and infinite remote storage
+**Phase 5 (Next):** PostgreSQL production adapter, enhanced team collaboration, advanced analytics  
 **Phase 3:** Team collaboration, shared stacks, frame handoff  
 **Phase 4:** Two-tier storage, enterprise features, cost optimization
 
