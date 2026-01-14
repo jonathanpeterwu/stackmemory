@@ -289,6 +289,18 @@ describe('TwoTierStorageSystem', () => {
       const emptyStorage = new TwoTierStorageSystem(emptyConfig);
       expect(emptyStorage).toBeDefined();
     });
+
+    it('should validate compression types', () => {
+      expect(config.local.tiers[0].compressionType).toBe('none');
+      expect(config.local.tiers[1].compressionType).toBe('gzip');
+      expect(config.local.tiers[2].compressionType).toBe('gzip');
+    });
+
+    it('should validate tier order by age', () => {
+      const ages = config.local.tiers.map(tier => tier.maxAgeHours);
+      expect(ages[0]).toBeLessThan(ages[1]); // Young < Mature
+      expect(ages[1]).toBeLessThan(ages[2]); // Mature < Old
+    });
   });
 });
 
