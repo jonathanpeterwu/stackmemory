@@ -45,15 +45,8 @@ cleanup() {
     
     # Check if in a git repo with stackmemory
     if [ -d ".stackmemory" ] && [ -f "stackmemory.json" ]; then
-        # Save current context
-        stackmemory status 2>/dev/null
-        
-        # If Linear API key is set, final sync
-        if [ -n "$LINEAR_API_KEY" ]; then
-            echo "🔄 Final Linear sync..."
-            stackmemory linear sync 2>/dev/null
-        fi
-        
+        # Save current context (without sync)
+        stackmemory status 2>/dev/null || true
         echo "✅ StackMemory context saved"
     fi
 }
