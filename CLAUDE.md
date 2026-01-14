@@ -1,3 +1,24 @@
+# Working Directory and Access Control
+## Working Directory
+- **PRIMARY**: /Users/jwu/Dev/stackmemory
+- **ALLOWED**: All subdirectories within stackmemory project
+- **TEMP**: /tmp for temporary operations only
+
+## Forbidden Directories
+- **FORBIDDEN**: ~ (home directory root)
+- **FORBIDDEN**: ~/.ssh (SSH keys)
+- **FORBIDDEN**: ~/.aws (AWS credentials)
+- **FORBIDDEN**: /etc (system configuration)
+- **FORBIDDEN**: /usr (except /usr/bin for commands)
+- **FORBIDDEN**: Any directory outside /Users/jwu/Dev/stackmemory without explicit permission
+- **FORBIDDEN**: Production servers or databases
+
+## Docker Guidelines
+- Always use Docker containers for testing when available
+- Never modify host system configuration
+- Keep containers ephemeral and stateless
+- Clean up containers after use
+
 # CRITICAL: Code Validation Requirements
 - Always run tests and lint and build after code change tasks are complete
 - Always attempt to build and fix npm build issues after a task is complete
