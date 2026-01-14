@@ -5,6 +5,36 @@ All notable changes to StackMemory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.15] - 2025-01-14
+
+### Added
+- Phase 4: Two-Tier Storage System (STA-414)
+  - Local storage tiers: Young (<24h), Mature (1-7d), Old (7-30d)
+  - Remote storage: S3 + TimeSeries DB integration
+  - Compression strategies: LZ4 for mature, ZSTD for old data
+  - Background migration engine with configurable triggers
+  - Offline queue with persistent retry logic
+  - CLI commands: storage status, migrate, cleanup, config, test
+
+### Fixed
+- Frame manager test using non-existent getEvents method
+- Linear API authentication issues (env variable conflicts)
+- SQL syntax errors for SQLite INDEX creation
+- ESM import issues (missing .js extensions)
+
+### Changed
+- Repository structure reorganization
+  - Documentation moved to /docs and /docs/archives
+  - Test scripts moved to /scripts directory
+  - Linear cleanup files archived to /archive/linear-cleanup-2026
+  - Cleaner root directory structure
+
+### Performance
+- Storage compression ratios: LZ4 ~2.5x, ZSTD ~3.5x
+- Test suite: 467 passing tests, improved from 19 failures
+- Build time: ~90ms with esbuild
+- Session cleanup: Removed 1,032 old sessions (4.1MB saved)
+
 ## [0.3.4] - 2024-01-06
 
 ### Added
