@@ -974,7 +974,7 @@ export class ClaudeSkillsManager {
               details: result.rootNode,
             },
           };
-        } catch (error: any) {
+        } catch (error) {
           return {
             success: false,
             message: `Linting failed: ${error.message}`,
@@ -1125,7 +1125,7 @@ export class ClaudeSkillsManager {
               executionTree: result.rootNode,
             },
           };
-        } catch (error: any) {
+        } catch (error) {
           logger.error('RLM execution error:', error);
           return {
             success: false,
