@@ -486,7 +486,8 @@ export class RecursiveAgentOrchestrator {
 
       // Log completion for transparency
       if (options.verboseLogging) {
-        const duration = node.endTime.getTime() - node.startTime!.getTime();
+        const duration =
+          node.endTime.getTime() - (node.startTime?.getTime() ?? 0);
         logger.info(`Completed node: ${node.description}`, {
           id: node.id,
           status: node.status,
@@ -506,7 +507,10 @@ export class RecursiveAgentOrchestrator {
     context: Record<string, unknown>,
     options: Required<RLMOptions>
   ): Promise<void> {
-    const agentConfig = this.subagentConfigs.get(node.agent)!;
+    const agentConfig = this.subagentConfigs.get(node.agent);
+    if (!agentConfig) {
+      throw new Error(`Unknown agent type: ${node.agent}`);
+    }
 
     // Prepare agent-specific context
     const agentContext = await this.contextManager.prepareAgentContext(
