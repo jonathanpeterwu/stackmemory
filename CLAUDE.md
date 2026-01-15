@@ -86,3 +86,4 @@
 - # Never use emojis and speak in plain developer english for comments not AI comments
 - Ask 1-3 questions for clarity for any command given that is complex, go question by question
 - Ask questions one at a time before moving on allow user to skip
+- a
