@@ -66,10 +66,10 @@ async function mergeDuplicateTasks() {
     const tokensData = readFileSync(tokensPath, 'utf8');
     const tokens = JSON.parse(tokensData);
     accessToken = tokens.accessToken;
-    console.log('✅ Loaded Linear authentication tokens\n');
-  } catch (error: unknown) {
+    console.log('Loaded Linear authentication tokens\n');
+  } catch {
     console.error(
-      '❌ Failed to load Linear tokens. Please run: stackmemory linear setup'
+      'Failed to load Linear tokens. Please run: stackmemory linear setup'
     );
     process.exit(1);
   }
