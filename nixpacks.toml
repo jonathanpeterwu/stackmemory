@@ -1,16 +1,18 @@
 # Nixpacks configuration for Railway deployment
-# Fixed to prevent node_modules cache conflicts
+# Explicitly control all build phases to prevent duplicate operations
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "npm-10_x"]
 
 [phases.install]
-# Single install phase - no duplicate copying
+# Install dependencies once
 cmds = [
+    "rm -rf node_modules node_modules/.cache",
     "npm ci --legacy-peer-deps"
 ]
 
 [phases.build]
+# Only build, don't reinstall
 dependsOn = ["install"]
 cmds = [
     "rm -rf node_modules/.cache",
@@ -23,3 +25,4 @@ cmd = "node dist/servers/railway/minimal.js"
 [variables]
 NODE_ENV = "production"
 PUPPETEER_SKIP_DOWNLOAD = "true"
+PUPPETEER_SKIP_CHROMIUM_DOWNLOAD = "true"
