@@ -31,4 +31,4 @@ RUN rm -rf src/ scripts/ test/ tests/ __tests__ *.test.* *.spec.* node_modules/.
 EXPOSE 3000
 
 # Start the application
-CMD ["node", "dist/servers/railway/minimal.js"]
+CMD ["node", "dist/servers/railway/storage-test.js"]
