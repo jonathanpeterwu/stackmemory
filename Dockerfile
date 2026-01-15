@@ -1,4 +1,4 @@
-# Railway Optimized Dockerfile - Minimal Dependencies
+# Railway Optimized Dockerfile
 FROM node:20-slim
 
 # Install dependencies for build
@@ -11,17 +11,10 @@ RUN apt-get update && apt-get install -y \
 # Set working directory
 WORKDIR /app
 
-# Copy package files and use Railway-specific if available
+# Copy package files
 COPY package*.json ./
-COPY package.railway.json ./package.railway.json 2>/dev/null || true
 
-# Use Railway package.json if it exists (minimal dependencies)
-RUN if [ -f "package.railway.json" ]; then \
-      echo "Using Railway-specific package.json"; \
-      mv package.railway.json package.json; \
-    fi
-
-# Install only production dependencies
+# Install dependencies
 RUN npm ci --omit=dev --no-audit --no-fund && \
     npm cache clean --force
 
@@ -31,8 +24,8 @@ COPY . .
 # Build the application
 RUN npm run build
 
-# Clean up build dependencies
-RUN rm -rf src/ scripts/ test/ tests/ __tests__ *.test.* *.spec.*
+# Clean up build dependencies and unnecessary files
+RUN rm -rf src/ scripts/ test/ tests/ __tests__ *.test.* *.spec.* node_modules/.cache
 
 # Expose port
 EXPOSE 3000
