@@ -155,12 +155,8 @@ export class FrameDatabase {
         digest_json: JSON.parse(row.digest_json || '{}'),
       };
     } catch (error: unknown) {
-      throw new DatabaseError(
-        `Failed to get frame: ${frameId}`,
-        ErrorCode.DB_QUERY_FAILED,
-        { frameId, operation: 'getFrame' },
-        error instanceof Error ? error : undefined
-      );
+      logger.warn(`Failed to get frame: ${frameId}`, { error });
+      return undefined;
     }
   }
 
