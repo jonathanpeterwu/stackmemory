@@ -2,7 +2,6 @@
   "$schema": "https://railway.app/railway.schema.json",
   "build": {
     "builder": "NIXPACKS",
-    "buildCommand": "PUPPETEER_SKIP_DOWNLOAD=true npm ci --omit=dev && npm run build",
     "watchPatterns": [
       "src/**",
       "package.json"
@@ -14,23 +13,5 @@
     "restartPolicyMaxRetries": 3,
     "healthcheckPath": "/health",
     "healthcheckTimeout": 30
-  },
-  "environments": {
-    "production": {
-      "build": {
-        "buildCommand": "npm ci && npm run build"
-      },
-      "deploy": {
-        "startCommand": "NODE_ENV=production npm start"
-      }
-    },
-    "staging": {
-      "build": {
-        "buildCommand": "npm ci && npm run build"
-      },
-      "deploy": {
-        "startCommand": "NODE_ENV=staging npm start"
-      }
-    }
   }
 }
