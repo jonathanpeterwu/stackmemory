@@ -192,6 +192,11 @@ export class FrameManager {
     });
 
     try {
+      // Check if database is properly initialized
+      if (!this.db || typeof this.db.exec !== 'function') {
+        throw new Error('Database not properly initialized. Expected SQLite Database instance with exec() method.');
+      }
+
       // Enhanced frames table matching architecture
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS frames (
