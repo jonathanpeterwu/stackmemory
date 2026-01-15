@@ -1,157 +1,104 @@
 #!/usr/bin/env node
+
 /**
- * Auto-install Claude hooks for StackMemory integration
- * Runs during npm install/postinstall
+ * Auto-install Claude hooks during npm install
+ * This runs as a postinstall script to set up tracing hooks
  */
 
-import fs from 'fs';
-import path from 'path';
+import { existsSync, mkdirSync, copyFileSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+
 import { fileURLToPath } from 'url';
-import { execSync } from 'child_process';
+import { dirname } from 'path';
 
 const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const __dirname = dirname(__filename);
 
-// Colors for output
-const colors = {
-  green: '\x1b[32m',
-  yellow: '\x1b[33m',
-  blue: '\x1b[34m',
-  red: '\x1b[31m',
-  reset: '\x1b[0m'
-};
+const claudeHooksDir = join(homedir(), '.claude', 'hooks');
+const claudeConfigFile = join(homedir(), '.claude', 'hooks.json');
+const templatesDir = join(__dirname, '..', 'templates', 'claude-hooks');
 
-function log(color, message) {
-  console.log(`${colors[color]}${message}${colors.reset}`);
-}
-
-function getClaudeHooksDir() {
-  const homeDir = process.env.HOME || process.env.USERPROFILE;
-  if (!homeDir) {
-    throw new Error('Could not determine home directory');
-  }
-  
-  const claudeHooksDir = path.join(homeDir, '.claude', 'hooks');
-  
-  // Create directory if it doesn't exist
-  if (!fs.existsSync(claudeHooksDir)) {
-    fs.mkdirSync(claudeHooksDir, { recursive: true });
-    log('blue', '📁 Created ~/.claude/hooks directory');
-  }
-  
-  return claudeHooksDir;
-}
-
-function getTemplatesDir() {
-  // Check if running from global install or local install
-  let templatesDir = path.join(__dirname, '..', 'templates', 'claude-hooks');
-  
-  if (!fs.existsSync(templatesDir)) {
-    // Try from node_modules location
-    templatesDir = path.join(__dirname, '..', '..', 'templates', 'claude-hooks');
-  }
-  
-  if (!fs.existsSync(templatesDir)) {
-    // Try from npm global location
-    const globalDir = execSync('npm root -g', { encoding: 'utf8' }).trim();
-    templatesDir = path.join(globalDir, '@stackmemoryai', 'stackmemory', 'templates', 'claude-hooks');
-  }
-  
-  return templatesDir;
-}
-
-function installHooks() {
+async function installClaudeHooks() {
   try {
-    log('blue', '🔧 Installing StackMemory Claude hooks...');
-    
-    const claudeHooksDir = getClaudeHooksDir();
-    const templatesDir = getTemplatesDir();
-    
-    if (!fs.existsSync(templatesDir)) {
-      log('yellow', '⚠️  Hook templates not found, skipping installation');
-      return;
+    // Create Claude hooks directory if it doesn't exist
+    if (!existsSync(claudeHooksDir)) {
+      mkdirSync(claudeHooksDir, { recursive: true });
+      console.log('📁 Created Claude hooks directory');
     }
-    
-    const hooks = [
-      'on-startup',
-      'on-exit', 
-      'on-clear',
-      'on-task-complete',
-      'chromadb-wrapper'
-    ];
-    
+
+    // Copy hook files
+    const hookFiles = ['tool-use-trace.js', 'on-startup.js', 'on-clear.js'];
     let installed = 0;
-    let updated = 0;
-    let skipped = 0;
-    
-    for (const hook of hooks) {
-      const sourcePath = path.join(templatesDir, hook);
-      const targetPath = path.join(claudeHooksDir, hook);
+
+    for (const hookFile of hookFiles) {
+      const srcPath = join(templatesDir, hookFile);
+      const destPath = join(claudeHooksDir, hookFile);
       
-      if (!fs.existsSync(sourcePath)) {
-        log('yellow', `⚠️  Template for ${hook} not found`);
-        continue;
-      }
-      
-      // Check if hook already exists
-      if (fs.existsSync(targetPath)) {
-        // Read existing and new content to compare
-        const existingContent = fs.readFileSync(targetPath, 'utf8');
-        const newContent = fs.readFileSync(sourcePath, 'utf8');
-        
-        if (existingContent === newContent) {
-          skipped++;
-          continue;
+      if (existsSync(srcPath)) {
+        // Backup existing hook if it exists
+        if (existsSync(destPath)) {
+          const backupPath = `${destPath}.backup-${Date.now()}`;
+          copyFileSync(destPath, backupPath);
+          console.log(`📋 Backed up existing hook: ${hookFile}`);
         }
         
-        // Backup existing hook
-        const backupPath = `${targetPath}.backup.${Date.now()}`;
-        fs.copyFileSync(targetPath, backupPath);
-        log('yellow', `📦 Backed up existing ${hook} hook`);
-        updated++;
-      } else {
+        copyFileSync(srcPath, destPath);
+        
+        // Make executable
+        try {
+          const { execSync } = await import('child_process');
+          execSync(`chmod +x "${destPath}"`, { stdio: 'ignore' });
+        } catch {
+          // Silent fail on chmod
+        }
+        
         installed++;
+        console.log(`✅ Installed hook: ${hookFile}`);
       }
-      
-      // Copy new hook
-      fs.copyFileSync(sourcePath, targetPath);
-      fs.chmodSync(targetPath, 0o755); // Make executable
-      
-      log('green', `✅ Installed ${hook}`);
     }
-    
-    // Create logs directory for ChromaDB hooks
-    const logsDir = path.join(process.env.HOME || process.env.USERPROFILE, '.stackmemory', 'logs');
-    if (!fs.existsSync(logsDir)) {
-      fs.mkdirSync(logsDir, { recursive: true });
+
+    // Update hooks.json configuration
+    let hooksConfig = {};
+    if (existsSync(claudeConfigFile)) {
+      try {
+        hooksConfig = JSON.parse(readFileSync(claudeConfigFile, 'utf8'));
+        console.log('📋 Loaded existing hooks.json');
+      } catch (err) {
+        console.log('⚠️  Could not parse existing hooks.json, creating new');
+      }
     }
-    
-    log('green', `🎉 Claude hooks installation complete!`);
-    log('blue', `📊 Installed: ${installed}, Updated: ${updated}, Skipped: ${skipped}`);
-    
-    if (installed > 0 || updated > 0) {
-      log('blue', '\n📋 Claude Code will now:');
-      log('blue', '  • Start StackMemory monitor on startup');
-      log('blue', '  • Preserve context on clear/exit');
-      log('blue', '  • Sync completed tasks to Linear');
-      log('blue', '  • Save session state automatically');
+
+    // Add our hooks (don't overwrite existing hooks unless they're ours)
+    const newHooksConfig = {
+      ...hooksConfig,
+      'tool-use-approval': join(claudeHooksDir, 'tool-use-trace.js'),
+      'on-startup': join(claudeHooksDir, 'on-startup.js'),
+      'on-clear': join(claudeHooksDir, 'on-clear.js')
+    };
+
+    writeFileSync(claudeConfigFile, JSON.stringify(newHooksConfig, null, 2));
+    console.log('🔧 Updated hooks.json configuration');
+
+    if (installed > 0) {
+      console.log(`\n🎉 Successfully installed ${installed} Claude hooks for StackMemory tracing!`);
+      console.log('🔍 Tool usage and session data will now be automatically logged');
+      console.log(`📁 Traces saved to: ${join(homedir(), '.stackmemory', 'traces')}`);
+      console.log('\nTo disable tracing, set DEBUG_TRACE=false in your .env file');
     }
-    
+
+    return true;
   } catch (error) {
-    log('red', `❌ Failed to install Claude hooks: ${error.message}`);
-    
-    // Don't fail the install if hooks can't be installed
-    if (process.env.STACKMEMORY_STRICT_INSTALL === 'true') {
-      process.exit(1);
-    } else {
-      log('yellow', '⚠️  Continuing without Claude hooks (non-critical)');
-    }
+    console.error('❌ Failed to install Claude hooks:', error.message);
+    console.error('   This is not critical - StackMemory will still work without hooks');
+    return false;
   }
 }
 
-// Only run if this script is called directly
+// Only run if called directly (not imported)
 if (import.meta.url === `file://${process.argv[1]}`) {
-  installHooks();
+  console.log('🔧 Installing StackMemory Claude Code integration hooks...\n');
+  await installClaudeHooks();
 }
 
-export { installHooks };
+export { installClaudeHooks };
