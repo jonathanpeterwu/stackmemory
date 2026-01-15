@@ -1,6 +1,6 @@
 [build]
 builder = "nixpacks"
-buildCommand = "rm -rf node_modules/.cache && npm ci --omit=dev --ignore-scripts && npm run build"
+buildCommand = "rm -rf node_modules/.cache node_modules && npm ci && npm run build"
 
 [deploy]
 startCommand = "node dist/servers/railway/minimal.js"

@@ -6,17 +6,17 @@ nixPkgs = ["nodejs_20", "npm-10_x"]
 
 [phases.install]
 cmds = [
-    "rm -rf node_modules/.cache",
-    "npm ci --omit=dev --ignore-scripts"
+    "rm -rf node_modules/.cache node_modules",
+    "npm ci"
 ]
-cacheDirectories = ["/root/.npm"]
+cacheDirectories = []
 
 [phases.build]
 dependsOn = ["install"]
 cmds = ["npm run build"]
 
 [start]
-cmd = "node dist/servers/railway/index.js"
+cmd = "node dist/servers/railway/minimal.js"
 
 [variables]
 NODE_ENV = "production"
