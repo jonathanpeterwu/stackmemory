@@ -5,9 +5,14 @@
 nixPkgs = ["nodejs_20", "npm-10_x"]
 
 [phases.install]
-cmds = ["npm ci --omit=dev --ignore-scripts"]
+cmds = [
+    "rm -rf node_modules/.cache",
+    "npm ci --omit=dev --ignore-scripts"
+]
+cacheDirectories = ["/root/.npm"]
 
 [phases.build]
+dependsOn = ["install"]
 cmds = ["npm run build"]
 
 [start]
