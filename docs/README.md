@@ -1,55 +1,42 @@
-# Documentation Index
+# StackMemory Documentation
 
-## Core Documentation
+## Quick Start
 
-### Getting Started
-- [Main README](../README.md) - Project overview and quick start
-- [SPEC.md](SPEC.md) - Technical specification and architecture
-- [CHANGELOG.md](../CHANGELOG.md) - Version history and changes
+- **[Setup Guide](SETUP.md)** - Installation, Railway deployment, Linear/Claude integration
+- **[Features](FEATURES.md)** - Context persistence, TUI, storage, browser testing  
+- **[Development](DEVELOPMENT.md)** - Testing, architecture, quality gates, security
+- **[API Reference](API_REFERENCE.md)** - Commands, MCP tools, REST endpoints
 
-### Current State
-- [CURRENT_STATUS.md](CURRENT_STATUS.md) - v0.3.4 status and completed features
-- [FIXES_VERIFICATION.md](FIXES_VERIFICATION.md) - Recent fixes and verification
+## Core Documents
 
-### Integration Guides
-- [CLAUDE_INTEGRATION.md](CLAUDE_INTEGRATION.md) - Claude Code setup and skills
-- [MCP_INTEGRATION.md](MCP_INTEGRATION.md) - MCP server and tools
-- [LINEAR_INTEGRATION.md](LINEAR_INTEGRATION.md) - Linear task sync
+- **[SPEC.md](SPEC.md)** - Technical specification and system architecture
+- **[AGENTS.md](AGENTS.md)** - Agent system and skill management
+- **[BM25+RLM Search](BM25-RLM-10DAY-FINAL.md)** - Next-gen code search (10-day implementation)
 
-### Development
-- [TESTING.md](TESTING.md) - Test suite and performance testing
-- [CLEAR_SURVIVAL.md](CLEAR_SURVIVAL.md) - Context preservation system
+## Specialized Areas
 
 ### Architecture
-- [architecture/](architecture/) - Detailed architecture documents
-- [session-persistence-design.md](session-persistence-design.md) - Session design
-- [query-language.md](query-language.md) - Query language specification
+- [Technical Architecture](architecture/TECHNICAL_ARCHITECTURE.md) - System design patterns
+- [Deployment](architecture/DEPLOYMENT.md) - Infrastructure and scaling
+- [Multi-Project Support](architecture/MULTI_PROJECT.md) - Project isolation
 
-### Features
-- [POST_TASK_QUALITY_GATES.md](POST_TASK_QUALITY_GATES.md) - Quality validation
-- [AUTOCOMPACT_DESIGN.md](AUTOCOMPACT_DESIGN.md) - Auto-compaction system
-- [automatic-trace-referencing.md](automatic-trace-referencing.md) - Trace detection
+### Integrations
+- [Linear Integration](integrations/) - Task management sync
+- [Browser MCP](integrations/) - Web testing capabilities
+- [Database Migration](postgres-migration-plan.md) - PostgreSQL transition
 
-### Releases
-- [releases/](releases/) - Release notes by version
-- [RELEASE_NOTES.md](RELEASE_NOTES.md) - Current release notes
+### Development
+- [Session Persistence](session-persistence-design.md) - Context survival design
+- [Query Language](query-language.md) - Context query syntax
+- [Testing Agent](testing-agent.md) - Automated testing framework
 
-## Quick Links
-
-### For Users
-1. [Installation](../README.md#quickstart) 
-2. [Claude Integration](CLAUDE_INTEGRATION.md)
-3. [Available Tools](MCP_INTEGRATION.md#available-tools)
-
-### For Developers
-1. [Running Tests](TESTING.md#running-tests)
-2. [Architecture Overview](SPEC.md#core-architecture)
-3. [Contributing](../README.md#contributing)
+## Archives
+Historical documentation in [archives/](archives/) - implementation summaries, security reports, migration guides.
 
 ## Documentation Standards
 
-- No marketing language or buzzwords
-- Real metrics only (no theoretical claims)
-- Clear technical descriptions
-- Practical examples
-- Accurate version information
+- Technical accuracy over marketing language
+- Real metrics and benchmarks
+- Practical code examples
+- Version-specific information
+- Clear troubleshooting guides
