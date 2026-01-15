@@ -57,10 +57,28 @@ async function initializeSkillContext(): Promise<{
   const database = new SQLiteAdapter(projectId, { dbPath });
   await database.connect();
 
+  // Get raw database for FrameManager
+  const rawDatabase = database.getRawDatabase();
+  if (!rawDatabase) {
+    throw new Error('Failed to get raw database connection');
+  }
+  
+  // Validate database has required methods
+  if (typeof rawDatabase.exec !== 'function') {
+    throw new Error(`Invalid database instance: missing exec() method. Got: ${typeof rawDatabase.exec}`);
+  }
+  
+  // Test database connectivity
+  try {
+    rawDatabase.exec('SELECT 1');
+  } catch (err) {
+    throw new Error(`Database connection test failed: ${err.message}`);
+  }
+
   const dualStackManager = new DualStackManager(database, projectId, userId);
   const handoffManager = new FrameHandoffManager(dualStackManager);
   const contextRetriever = new ContextRetriever(database);
-  const frameManager = new FrameManager(database);
+  const frameManager = new FrameManager(rawDatabase);
   const taskStore = new LinearTaskManager();
 
   const context: SkillContext = {
