@@ -59,16 +59,136 @@ async function startServer() {
   // Root endpoint
   app.get('/', (req, res) => {
     res.json({
-      name: 'StackMemory Storage Test Server',
-      version: '1.0.0',
+      name: 'StackMemory Core API',
+      version: '0.3.17',
+      description: 'Core API with Redis, PostgreSQL, and Railway Buckets',
       endpoints: [
         '/health',
-        '/api/health', 
+        '/api/health',
+        '/api/login',
+        '/api/status',
         '/test-storage',
         '/create-frame',
-        '/list-frames'
-      ]
+        '/list-frames',
+        '/api/frames'
+      ],
+      storage_tiers: {
+        hot: 'Redis (< 24 hours)',
+        warm: 'Railway Buckets (1-30 days)', 
+        cold: 'PostgreSQL (30+ days)'
+      }
     });
+  });
+  
+  // Auto-login endpoint for seamless API access
+  app.post('/api/login', async (req, res) => {
+    try {
+      const { username, api_key } = req.body;
+      
+      // Simple API key validation (in production, use proper JWT/OAuth)
+      const validApiKey = process.env.API_KEY_SECRET || 'development-secret';
+      
+      if (api_key === validApiKey) {
+        // Store session in Redis if available
+        const sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        const sessionData = {
+          username: username || 'api_user',
+          created_at: new Date().toISOString(),
+          api_key_hash: 'valid',
+          permissions: ['read', 'write', 'admin']
+        };
+        
+        if (config.redisUrl) {
+          const redisClient = createClient({ url: config.redisUrl });
+          await redisClient.connect();
+          await redisClient.setEx(`session:${sessionId}`, 3600, JSON.stringify(sessionData)); // 1 hour
+          await redisClient.disconnect();
+        }
+        
+        res.json({
+          success: true,
+          session_id: sessionId,
+          message: 'Automatically logged into StackMemory Core API',
+          access: {
+            redis: config.redisUrl ? 'available' : 'not_configured',
+            postgresql: config.databaseUrl ? 'available' : 'not_configured',
+            buckets: 'configurable'
+          }
+        });
+      } else {
+        res.status(401).json({
+          success: false,
+          message: 'Invalid API key'
+        });
+      }
+    } catch (error: any) {
+      res.status(500).json({
+        success: false,
+        message: 'Login failed',
+        error: error.message
+      });
+    }
+  });
+  
+  // Core API status endpoint
+  app.get('/api/status', async (req, res) => {
+    const status: any = {
+      service: 'stackmemory-core-api',
+      version: '0.3.17',
+      environment: process.env.NODE_ENV || 'production',
+      timestamp: new Date().toISOString(),
+      storage: {
+        tiers: {}
+      }
+    };
+    
+    // Check Redis (Hot Tier)
+    if (config.redisUrl) {
+      try {
+        const redisClient = createClient({ url: config.redisUrl });
+        await redisClient.connect();
+        
+        const info = await redisClient.info('memory');
+        const keys = await redisClient.keys('*');
+        const usedMemory = info.match(/used_memory_human:(.+)/)?.[1];
+        
+        status.storage.tiers.hot_redis = {
+          status: 'connected',
+          memory_used: usedMemory?.trim(),
+          keys: keys.length,
+          ttl_policy: 'auto-expire'
+        };
+        
+        await redisClient.disconnect();
+      } catch (error: any) {
+        status.storage.tiers.hot_redis = { status: 'error', message: error.message };
+      }
+    } else {
+      status.storage.tiers.hot_redis = { status: 'not_configured' };
+    }
+    
+    // Check PostgreSQL (Cold Tier)
+    if (config.databaseUrl) {
+      try {
+        const pgClient = new Client({ connectionString: config.databaseUrl });
+        await pgClient.connect();
+        
+        const result = await pgClient.query('SELECT COUNT(*) as frames FROM frames WHERE created_at > NOW() - INTERVAL \'24 hours\'');
+        const totalFrames = await pgClient.query('SELECT COUNT(*) as total FROM frames');
+        
+        status.storage.tiers.cold_postgresql = {
+          status: 'connected',
+          recent_frames: parseInt(result.rows[0].frames),
+          total_frames: parseInt(totalFrames.rows[0].total)
+        };
+        
+        await pgClient.end();
+      } catch (error: any) {
+        status.storage.tiers.cold_postgresql = { status: 'error', message: error.message };
+      }
+    }
+    
+    res.json(status);
   });
   
   // Comprehensive storage test endpoint
@@ -316,7 +436,88 @@ async function startServer() {
     }
   });
   
-  // List recent frames
+  // Core API frames endpoint
+  app.get('/api/frames', async (req, res) => {
+    try {
+      const limit = parseInt(req.query.limit as string) || 10;
+      const source = req.query.source as string || 'all'; // 'redis', 'postgresql', 'all'
+      
+      const results: any = { 
+        frames: [],
+        sources_checked: [],
+        total_count: 0
+      };
+      
+      // From Redis (hot tier) - most recent
+      if ((source === 'all' || source === 'redis') && config.redisUrl) {
+        try {
+          const redisClient = createClient({ url: config.redisUrl });
+          await redisClient.connect();
+          const redisKeys = await redisClient.keys('frame:*');
+          const redisFrames = [];
+          for (const key of redisKeys.slice(0, limit)) {
+            const data = await redisClient.get(key);
+            if (data) {
+              const frame = JSON.parse(data);
+              frame.source = 'redis';
+              frame.tier = 'hot';
+              redisFrames.push(frame);
+            }
+          }
+          await redisClient.disconnect();
+          results.frames.push(...redisFrames);
+          results.sources_checked.push('redis');
+        } catch (error: any) {
+          results.redis_error = error.message;
+        }
+      }
+      
+      // From PostgreSQL (cold tier) - persistent storage
+      if ((source === 'all' || source === 'postgresql') && config.databaseUrl) {
+        try {
+          const pgClient = new Client({ connectionString: config.databaseUrl });
+          await pgClient.connect();
+          const pgFrames = await pgClient.query(
+            'SELECT *, \'postgresql\' as source, \'cold\' as tier FROM frames ORDER BY created_at DESC LIMIT $1',
+            [limit]
+          );
+          await pgClient.end();
+          results.frames.push(...pgFrames.rows);
+          results.sources_checked.push('postgresql');
+          results.total_count = pgFrames.rowCount;
+        } catch (error: any) {
+          results.postgresql_error = error.message;
+        }
+      }
+      
+      // Sort by created_at if multiple sources
+      if (results.frames.length > 1) {
+        results.frames.sort((a: any, b: any) => 
+          new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+        );
+      }
+      
+      res.json({
+        count: results.frames.length,
+        frames: results.frames.slice(0, limit),
+        metadata: {
+          sources_checked: results.sources_checked,
+          total_in_postgresql: results.total_count,
+          tier_explanation: {
+            hot: 'Redis - Recent frames (< 24 hours)',
+            cold: 'PostgreSQL - All frames (persistent storage)'
+          }
+        }
+      });
+    } catch (error: any) {
+      res.status(500).json({
+        error: 'Failed to fetch frames',
+        message: error.message
+      });
+    }
+  });
+
+  // List recent frames (legacy endpoint)
   app.get('/list-frames', async (req, res) => {
     const results: any = { sources: {} };
     
