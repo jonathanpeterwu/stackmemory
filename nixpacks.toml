@@ -1,22 +1,25 @@
 # Nixpacks configuration for Railway deployment
-# This configures the build environment without Puppeteer/Chromium
+# Fixed to prevent node_modules cache conflicts
 
 [phases.setup]
 nixPkgs = ["nodejs_20", "npm-10_x"]
 
 [phases.install]
+# Single install phase - no duplicate copying
 cmds = [
-    "rm -rf node_modules/.cache node_modules",
-    "npm ci"
+    "npm ci --legacy-peer-deps"
 ]
-cacheDirectories = []
 
 [phases.build]
 dependsOn = ["install"]
-cmds = ["npm run build"]
+cmds = [
+    "rm -rf node_modules/.cache",
+    "npm run build"
+]
 
 [start]
 cmd = "node dist/servers/railway/minimal.js"
 
 [variables]
 NODE_ENV = "production"
+PUPPETEER_SKIP_DOWNLOAD = "true"

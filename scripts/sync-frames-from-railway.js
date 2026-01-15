@@ -9,7 +9,10 @@ import { homedir } from 'os';
 const { Client } = pg;
 
 // Railway PostgreSQL connection
-const RAILWAY_DATABASE_URL = 'postgresql://postgres:YTSFXqPzFhghOcefgwPvJyWOBTYHbYxd@postgres.railway.internal:5432/railway';
+// Use environment variable or fallback to internal URL
+const RAILWAY_DATABASE_URL = process.env.RAILWAY_DATABASE_URL || 
+  process.env.DATABASE_URL ||
+  'postgresql://postgres:YTSFXqPzFhghOcefgwPvJyWOBTYHbYxd@postgres.railway.internal:5432/railway';
 
 // Local SQLite database path
 const dbPath = join(homedir(), '.stackmemory', 'context.db');
