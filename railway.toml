@@ -1,0 +1,9 @@
+[build]
+builder = "nixpacks"
+buildCommand = "rm -rf node_modules/.cache && npm ci --omit=dev --ignore-scripts && npm run build"
+
+[deploy]
+startCommand = "node dist/servers/railway/minimal.js"
+healthcheckPath = "/api/health"
+restartPolicyType = "on-failure"
+restartPolicyMaxRetries = 3

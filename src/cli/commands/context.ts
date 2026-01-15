@@ -8,6 +8,7 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { FrameManager, FrameType } from '../../core/context/frame-manager.js';
+import { createContextRehydrateCommand } from './context-rehydrate.js';
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
@@ -451,6 +452,9 @@ export function createContextCommands(): Command {
         db.close();
       }
     });
+
+  // Add rehydrate subcommand
+  context.addCommand(createContextRehydrateCommand());
 
   return context;
 }
