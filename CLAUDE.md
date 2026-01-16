@@ -87,3 +87,4 @@
 - Ask 1-3 questions for clarity for any command given that is complex, go question by question
 - Ask questions one at a time before moving on allow user to skip
 - a
+- Default to using subagents for multi step tasks if possible

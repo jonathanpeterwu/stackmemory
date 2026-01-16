@@ -1,0 +1,17 @@
+# Block multiple implementation files (anti-pattern #4)
+BAD_FILES=$(git diff --cached --name-only | grep -E '(-v[0-9]+|-new|-old|-backup)\.[jt]sx?$' || true)
+if [ -n "$BAD_FILES" ]; then
+  echo "ERROR: Multiple implementation files detected:"
+  echo "$BAD_FILES"
+  echo "Use ONE file per concept. Refactor, don't duplicate."
+  exit 1
+fi
+
+# Lint and format only staged files
+npx lint-staged
+
+# Type check the entire project (can't be limited to staged files)
+npm run typecheck
+
+# Validate cluster templates (catches hardcoded model names, broken configs)
+npm run validate:templates

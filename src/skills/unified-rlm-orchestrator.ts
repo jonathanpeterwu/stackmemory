@@ -10,6 +10,7 @@ import {
   type RLMOptions,
   type SubagentType,
   type ExecutionResult,
+  type TaskNode,
 } from './recursive-agent-orchestrator.js';
 import {
   ClaudeSkillsManager,
@@ -387,9 +388,9 @@ export class UnifiedRLMOrchestrator {
    * Helper: Find node by agent type in task tree
    */
   private findNodeByAgent(
-    node: ExecutionNode,
+    node: TaskNode,
     agentType: SubagentType
-  ): ExecutionNode | null {
+  ): TaskNode | null {
     if (node.agent === agentType) {
       return node;
     }

@@ -78,7 +78,7 @@ async function initializeSkillContext(): Promise<{
   const dualStackManager = new DualStackManager(database, projectId, userId);
   const handoffManager = new FrameHandoffManager(dualStackManager);
   const contextRetriever = new ContextRetriever(database);
-  const frameManager = new FrameManager(rawDatabase);
+  const frameManager = new FrameManager(rawDatabase, projectId);
   const taskStore = new LinearTaskManager();
 
   const context: SkillContext = {
@@ -88,6 +88,7 @@ async function initializeSkillContext(): Promise<{
     handoffManager,
     contextRetriever,
     database,
+    frameManager,
   };
   
   // Initialize unified RLM orchestrator

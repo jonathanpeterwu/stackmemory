@@ -10,6 +10,7 @@ import {
 import { DualStackManager } from '../core/context/dual-stack-manager.js';
 import { SQLiteAdapter } from '../core/database/sqlite-adapter.js';
 import { ContextRetriever } from '../core/retrieval/context-retriever.js';
+import type { FrameManager } from '../core/context/frame-manager.js';
 import { logger } from '../core/monitoring/logger.js';
 import {
   RepoIngestionSkill,
@@ -51,6 +52,7 @@ export interface SkillContext {
   handoffManager: FrameHandoffManager;
   contextRetriever: ContextRetriever;
   database: SQLiteAdapter;
+  frameManager?: FrameManager;
 }
 
 export interface SkillResult {
@@ -886,18 +888,20 @@ export class ClaudeSkillsManager {
       .then((module) => {
         const taskStore = new module.LinearTaskManager();
 
-        import('../core/context/frame-manager.js').then((frameModule) => {
-          const frameManager = new frameModule.FrameManager();
+        // Use frameManager from context if available
+        const frameManager = context.frameManager;
+        if (!frameManager) {
+          throw new Error('FrameManager not provided in context - required for RLM orchestrator');
+        }
 
-          this.rlmOrchestrator = new RecursiveAgentOrchestrator(
-            frameManager,
-            context.dualStackManager,
-            context.contextRetriever,
-            taskStore
-          );
+        this.rlmOrchestrator = new RecursiveAgentOrchestrator(
+          frameManager,
+          context.dualStackManager,
+          context.contextRetriever,
+          taskStore
+        );
 
-          logger.info('RLM Orchestrator initialized');
-        });
+        logger.info('RLM Orchestrator initialized');
       })
       .catch((error: unknown) => {
         logger.warn('RLM Orchestrator initialization failed:', error);
