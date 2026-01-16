@@ -325,7 +325,7 @@ export class RecursiveAgentOrchestrator {
 
     try {
       // Create root frame for execution
-      const rootFrame = await this.createExecutionFrame(executionId, task);
+      const rootFrameId = await this.createExecutionFrame(executionId, task);
 
       // Step 1: Planning - Decompose task into subtasks
       const rootNode = await this.planTask(task, context, opts);
@@ -363,7 +363,7 @@ export class RecursiveAgentOrchestrator {
       this.executionHistory.push(result);
 
       // Update frame with results
-      await this.updateExecutionFrame(rootFrame, result);
+      await this.updateExecutionFrame(rootFrameId, result);
 
       logger.info('RLM execution completed', {
         executionId,
@@ -642,25 +642,27 @@ export class RecursiveAgentOrchestrator {
   private async createExecutionFrame(
     executionId: string,
     task: string
-  ): Promise<Frame> {
-    return this.frameManager.pushFrame({
+  ): Promise<string> {
+    return this.frameManager.createFrame({
       name: `RLM: ${task.slice(0, 50)}`,
-      type: 'rlm-execution',
-      metadata: { executionId },
+      type: 'task',
+      inputs: { executionId, task, type: 'rlm-execution' },
     });
   }
 
   private async updateExecutionFrame(
-    frame: Frame,
+    frameId: string,
     result: ExecutionResult
   ): Promise<void> {
-    frame.outputs = [
-      {
-        type: 'rlm-result',
-        content: JSON.stringify(result, null, 2),
-      },
-    ];
-    frame.state = result.success ? 'completed' : 'failed';
+    // Close the frame with the execution result
+    this.frameManager.closeFrame(frameId, {
+      type: 'rlm-result',
+      content: JSON.stringify(result, null, 2),
+      success: result.success,
+      duration: result.duration,
+      totalTokens: result.totalTokens,
+      totalCost: result.totalCost,
+    });
   }
 
   private logExecutionTree(node: TaskNode, depth: number = 0): void {
