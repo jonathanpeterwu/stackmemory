@@ -890,7 +890,9 @@ export class ClaudeSkillsManager {
         // Use frameManager from context if available
         const frameManager = context.frameManager;
         if (!frameManager) {
-          throw new Error('FrameManager not provided in context - required for RLM orchestrator');
+          throw new Error(
+            'FrameManager not provided in context - required for RLM orchestrator'
+          );
         }
 
         this.rlmOrchestrator = new RecursiveAgentOrchestrator(

@@ -20,7 +20,6 @@ import { LinearTaskManager } from '../features/tasks/linear-task-manager.js';
 import { ParallelExecutor } from '../core/execution/parallel-executor.js';
 import { RecursiveContextManager } from '../core/context/recursive-context-manager.js';
 import { ClaudeCodeSubagentClient } from '../integrations/claude-code/subagent-client.js';
-import type { Frame } from '../core/context/frame-manager.js';
 
 // Subagent types
 export type SubagentType =
@@ -584,13 +583,15 @@ export class RecursiveAgentOrchestrator {
       };
 
       currentQuality = reviewResult.quality || 0.5; // Default quality if missing
-      
+
       // Safely handle suggestions array
       if (reviewResult.suggestions && Array.isArray(reviewResult.suggestions)) {
         improvements.push(...reviewResult.suggestions);
       } else {
         // Fallback for mock/test results
-        improvements.push(`Stage ${stage}: Review completed with quality ${currentQuality}`);
+        improvements.push(
+          `Stage ${stage}: Review completed with quality ${currentQuality}`
+        );
       }
 
       logger.info(`Review stage ${stage} complete`, {
