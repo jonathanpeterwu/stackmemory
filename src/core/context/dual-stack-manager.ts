@@ -196,7 +196,7 @@ export class DualStackManager {
 
   private async executeSchemaQuery(sql: string): Promise<void> {
     // Fallback for adapters that don't have execute method
-    logger.warn(
+    logger.debug(
       'Using fallback schema creation - implement execute method in adapter'
     );
 

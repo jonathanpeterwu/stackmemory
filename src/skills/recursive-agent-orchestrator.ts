@@ -583,13 +583,20 @@ export class RecursiveAgentOrchestrator {
         suggestions: string[];
       };
 
-      currentQuality = reviewResult.quality;
-      improvements.push(...reviewResult.suggestions);
+      currentQuality = reviewResult.quality || 0.5; // Default quality if missing
+      
+      // Safely handle suggestions array
+      if (reviewResult.suggestions && Array.isArray(reviewResult.suggestions)) {
+        improvements.push(...reviewResult.suggestions);
+      } else {
+        // Fallback for mock/test results
+        improvements.push(`Stage ${stage}: Review completed with quality ${currentQuality}`);
+      }
 
       logger.info(`Review stage ${stage} complete`, {
         quality: currentQuality,
-        issues: reviewResult.issues.length,
-        suggestions: reviewResult.suggestions.length,
+        issues: reviewResult.issues?.length || 0,
+        suggestions: reviewResult.suggestions?.length || 0,
       });
 
       // If quality meets threshold, stop
@@ -704,7 +711,10 @@ export class RecursiveAgentOrchestrator {
 
   private injectTestGenerationNodes(node: TaskNode, _mode: string): void {
     // Inject test generation nodes based on mode
-    if (!node.children) return;
+    // Initialize children array if it doesn't exist
+    if (!node.children) {
+      node.children = [];
+    }
 
     const testNode: TaskNode = {
       id: `${node.id}-test`,

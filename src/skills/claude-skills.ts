@@ -857,10 +857,9 @@ export class ClaudeSkillsManager {
     // Initialize dashboard launcher (lazy import to avoid circular deps)
     import('./dashboard-launcher.js').then((module) => {
       this.dashboardLauncher = new module.DashboardLauncherSkill();
-      // Auto-launch on session start
-      this.dashboardLauncher.launch().catch((error: unknown) => {
-        logger.warn('Dashboard auto-launch failed:', error);
-      });
+      // Don't auto-launch dashboard to avoid startup errors
+      // User can manually launch with 'stackmemory skills dashboard launch'
+      logger.info('Dashboard launcher initialized (manual launch required)');
     });
 
     // Initialize repo ingestion skill if ChromaDB is configured
