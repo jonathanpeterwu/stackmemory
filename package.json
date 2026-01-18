@@ -41,7 +41,7 @@
     "persistence"
   ],
   "scripts": {
-    "start": "node dist/servers/railway/minimal.js",
+    "start": "node dist/servers/railway/index.js",
     "start:minimal": "node dist/servers/railway/minimal.js",
     "start:full": "node dist/servers/railway/index.js",
     "setup": "npm install && npm run build && npm run init",
