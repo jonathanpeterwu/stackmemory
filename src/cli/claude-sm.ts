@@ -461,9 +461,7 @@ class ClaudeSM {
       console.error(chalk.red('❌ Failed to launch Claude CLI.'));
       if (err.code === 'ENOENT') {
         console.error(
-          chalk.gray(
-            '   Not found. Set CLAUDE_BIN or install claude on PATH.'
-          )
+          chalk.gray('   Not found. Set CLAUDE_BIN or install claude on PATH.')
         );
       } else if (err.code === 'EPERM' || err.code === 'EACCES') {
         console.error(
