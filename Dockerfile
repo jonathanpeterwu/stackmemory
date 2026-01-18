@@ -12,10 +12,10 @@ RUN apt-get update && apt-get install -y \
 WORKDIR /app
 
 # Copy package files
-COPY package*.json ./
+COPY package.json ./
 
-# Install dependencies
-RUN npm ci --omit=dev --no-audit --no-fund && \
+# Install dependencies (using install instead of ci for flexibility)
+RUN npm install --omit=dev --no-audit --no-fund && \
     npm cache clean --force
 
 # Copy source code
