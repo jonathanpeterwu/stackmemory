@@ -27,8 +27,8 @@ RUN npm run build
 # Clean up build dependencies and unnecessary files
 RUN rm -rf src/ scripts/ test/ tests/ __tests__ *.test.* *.spec.* node_modules/.cache
 
-# Expose port
+# Expose port (Railway uses PORT env var)
 EXPOSE 3000
 
-# Start the application
-CMD ["npm", "start"]
+# Start the FULL server explicitly
+CMD ["node", "dist/servers/railway/index.js"]
