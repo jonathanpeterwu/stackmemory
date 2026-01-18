@@ -25,6 +25,7 @@ interface ClaudeConfig {
   task?: string;
   tracingEnabled: boolean;
   verboseTracing: boolean;
+  claudeBin?: string;
 }
 
 class ClaudeSM {
@@ -108,6 +109,22 @@ class ClaudeSM {
     } catch {
       return false;
     }
+  }
+
+  private resolveClaudeBin(): string | null {
+    // 1) CLI-specified
+    if (this.config.claudeBin && this.config.claudeBin.trim()) {
+      return this.config.claudeBin.trim();
+    }
+    // 2) Env override
+    const envBin = process.env['CLAUDE_BIN'];
+    if (envBin && envBin.trim()) return envBin.trim();
+    // 3) PATH detection
+    try {
+      execSync('which claude', { stdio: 'ignore' });
+      return 'claude';
+    } catch {}
+    return null;
   }
 
   private setupWorktree(): string | null {
@@ -298,6 +315,11 @@ class ClaudeSM {
           i++;
           this.config.task = args[i];
           break;
+        case '--claude-bin':
+          i++;
+          this.config.claudeBin = args[i];
+          process.env['CLAUDE_BIN'] = this.config.claudeBin;
+          break;
         case '--auto':
         case '-a':
           // Auto mode: detect and apply best settings
@@ -414,10 +436,45 @@ class ClaudeSM {
     console.log(chalk.gray('Starting Claude...'));
     console.log(chalk.gray('─'.repeat(42)));
 
+    const claudeBin = this.resolveClaudeBin();
+    if (!claudeBin) {
+      console.error(chalk.red('❌ Claude CLI not found.'));
+      console.log(
+        chalk.gray(
+          '   Install Claude CLI or set an override:\n' +
+            '     export CLAUDE_BIN=/path/to/claude\n' +
+            '     claude-sm --help\n\n' +
+            '   Ensure PATH includes npm global bin (npm bin -g).'
+        )
+      );
+      process.exit(1);
+      return;
+    }
+
     // Launch Claude
-    const claude = spawn('claude', claudeArgs, {
+    const claude = spawn(claudeBin, claudeArgs, {
       stdio: 'inherit',
       env: process.env,
+    });
+
+    claude.on('error', (err: NodeJS.ErrnoException) => {
+      console.error(chalk.red('❌ Failed to launch Claude CLI.'));
+      if (err.code === 'ENOENT') {
+        console.error(
+          chalk.gray(
+            '   Not found. Set CLAUDE_BIN or install claude on PATH.'
+          )
+        );
+      } else if (err.code === 'EPERM' || err.code === 'EACCES') {
+        console.error(
+          chalk.gray(
+            '   Permission/sandbox issue. Try outside a sandbox or set CLAUDE_BIN.'
+          )
+        );
+      } else {
+        console.error(chalk.gray(`   ${err.message}`));
+      }
+      process.exit(1);
     });
 
     // Handle exit
@@ -479,6 +536,7 @@ program
   .option('-a, --auto', 'Automatically detect and apply best settings')
   .option('-b, --branch <name>', 'Specify branch name for worktree')
   .option('-t, --task <desc>', 'Task description for context')
+  .option('--claude-bin <path>', 'Path to claude CLI (or use CLAUDE_BIN)')
   .option('--no-context', 'Disable StackMemory context integration')
   .option('--no-trace', 'Disable debug tracing (enabled by default)')
   .option('--verbose-trace', 'Enable verbose debug tracing with full details')
@@ -491,6 +549,5 @@ program
   });
 
 // Handle direct execution
-if (require.main === module) {
-  program.parse(process.argv);
-}
+// ESM-safe CLI entry
+program.parse(process.argv);

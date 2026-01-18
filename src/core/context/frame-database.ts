@@ -19,6 +19,8 @@ export class FrameDatabase {
       // Enable WAL mode for better concurrency
       this.db.pragma('journal_mode = WAL');
       this.db.pragma('synchronous = NORMAL');
+      // Enforce referential integrity
+      this.db.pragma('foreign_keys = ON');
 
       // Create frames table
       this.db.exec(`

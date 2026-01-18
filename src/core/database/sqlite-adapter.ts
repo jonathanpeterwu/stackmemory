@@ -64,6 +64,9 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
     this.db = new Database(this.dbPath);
 
+    // Enforce referential integrity
+    this.db.pragma('foreign_keys = ON');
+
     // Configure SQLite for better performance
     if (config.walMode !== false) {
       this.db.pragma('journal_mode = WAL');
@@ -144,7 +147,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
         event_type TEXT NOT NULL,
         payload TEXT NOT NULL,
         ts INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY(frame_id) REFERENCES frames(frame_id)
+        FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS anchors (
@@ -156,7 +159,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
         priority INTEGER DEFAULT 0,
         created_at INTEGER DEFAULT (unixepoch()),
         metadata TEXT DEFAULT '{}',
-        FOREIGN KEY(frame_id) REFERENCES frames(frame_id)
+        FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
       );
 
       CREATE TABLE IF NOT EXISTS schema_version (
@@ -177,6 +180,80 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
       -- Set initial schema version if not exists
       INSERT OR IGNORE INTO schema_version (version) VALUES (1);
     `);
+
+    // Ensure cascade constraints exist on dependent tables for existing DBs
+    try {
+      this.ensureCascadeConstraints();
+    } catch (e) {
+      logger.warn('Failed to ensure cascade constraints', e as Error);
+    }
+  }
+
+  /**
+   * Ensure ON DELETE CASCADE exists for events/anchors referencing frames
+   * Migrates existing tables in-place if needed without data loss.
+   */
+  private ensureCascadeConstraints(): void {
+    if (!this.db) return;
+
+    const needsCascade = (table: string): boolean => {
+      const rows = this.db!.prepare(`PRAGMA foreign_key_list(${table})`).all() as any[];
+      // If any FK points to frames without cascade, we need migration
+      return rows.some((r) => r.table === 'frames' && String(r.on_delete).toUpperCase() !== 'CASCADE');
+    };
+
+    const migrateTable = (table: 'events' | 'anchors') => {
+      const createSql =
+        table === 'events'
+          ? `CREATE TABLE events_new (
+              event_id TEXT PRIMARY KEY,
+              run_id TEXT NOT NULL,
+              frame_id TEXT NOT NULL,
+              seq INTEGER NOT NULL,
+              event_type TEXT NOT NULL,
+              payload TEXT NOT NULL,
+              ts INTEGER DEFAULT (unixepoch()),
+              FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
+            );`
+          : `CREATE TABLE anchors_new (
+              anchor_id TEXT PRIMARY KEY,
+              frame_id TEXT NOT NULL,
+              project_id TEXT NOT NULL,
+              type TEXT NOT NULL,
+              text TEXT NOT NULL,
+              priority INTEGER DEFAULT 0,
+              created_at INTEGER DEFAULT (unixepoch()),
+              metadata TEXT DEFAULT '{}',
+              FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
+            );`;
+
+      const cols = table === 'events'
+        ? 'event_id, run_id, frame_id, seq, event_type, payload, ts'
+        : 'anchor_id, frame_id, project_id, type, text, priority, created_at, metadata';
+
+      const idxSql = table === 'events'
+        ? [
+            'CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);',
+            'CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);',
+          ]
+        : [
+            'CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);',
+          ];
+
+      this.db!.exec('PRAGMA foreign_keys = OFF;');
+      this.db!.exec('BEGIN;');
+      this.db!.exec(createSql);
+      this.db!.prepare(`INSERT INTO ${table === 'events' ? 'events_new' : 'anchors_new'} (${cols}) SELECT ${cols} FROM ${table}`).run();
+      this.db!.exec(`DROP TABLE ${table};`);
+      this.db!.exec(`ALTER TABLE ${table}_new RENAME TO ${table};`);
+      for (const stmt of idxSql) this.db!.exec(stmt);
+      this.db!.exec('COMMIT;');
+      this.db!.exec('PRAGMA foreign_keys = ON;');
+      logger.info(`Migrated ${table} to include ON DELETE CASCADE`);
+    };
+
+    if (needsCascade('events')) migrateTable('events');
+    if (needsCascade('anchors')) migrateTable('anchors');
   }
 
   async migrateSchema(targetVersion: number): Promise<void> {

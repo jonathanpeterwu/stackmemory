@@ -197,6 +197,9 @@ export class FrameManager {
         throw new Error('Database not properly initialized. Expected SQLite Database instance with exec() method.');
       }
 
+      // Enforce referential integrity
+      this.db.pragma('foreign_keys = ON');
+
       // Enhanced frames table matching architecture
       this.db.exec(`
         CREATE TABLE IF NOT EXISTS frames (
@@ -224,7 +227,7 @@ export class FrameManager {
           event_type TEXT NOT NULL,
           payload TEXT NOT NULL,
           ts INTEGER DEFAULT (unixepoch()),
-          FOREIGN KEY(frame_id) REFERENCES frames(frame_id)
+          FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS anchors (
@@ -236,7 +239,7 @@ export class FrameManager {
           priority INTEGER DEFAULT 0,
           created_at INTEGER DEFAULT (unixepoch()),
           metadata TEXT DEFAULT '{}',
-          FOREIGN KEY(frame_id) REFERENCES frames(frame_id)
+          FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
         );
 
         CREATE TABLE IF NOT EXISTS handoff_requests (
@@ -260,6 +263,13 @@ export class FrameManager {
         CREATE INDEX IF NOT EXISTS idx_handoff_requests_status ON handoff_requests(status);
         CREATE INDEX IF NOT EXISTS idx_handoff_requests_target ON handoff_requests(target_stack_id);
       `);
+
+      // For existing databases, ensure cascade constraints are applied
+      try {
+        this.ensureCascadeConstraints();
+      } catch (e) {
+        logger.warn('Failed to ensure cascade constraints (frame-manager)', e as Error);
+      }
     } catch (error: unknown) {
       const dbError = errorHandler(error, {
         operation: 'initializeSchema',
@@ -280,6 +290,67 @@ export class FrameManager {
       }
       throw dbError;
     }
+  }
+
+  // Ensure ON DELETE CASCADE for events/anchors referencing frames
+  private ensureCascadeConstraints(): void {
+    const needsCascade = (table: string): boolean => {
+      const rows = this.db.prepare(`PRAGMA foreign_key_list(${table})`).all() as any[];
+      return rows.some((r) => r.table === 'frames' && String(r.on_delete).toUpperCase() !== 'CASCADE');
+    };
+
+    const migrateTable = (table: 'events' | 'anchors') => {
+      const createSql =
+        table === 'events'
+          ? `CREATE TABLE events_new (
+               event_id TEXT PRIMARY KEY,
+               run_id TEXT NOT NULL,
+               frame_id TEXT NOT NULL,
+               seq INTEGER NOT NULL,
+               event_type TEXT NOT NULL,
+               payload TEXT NOT NULL,
+               ts INTEGER DEFAULT (unixepoch()),
+               FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
+             );`
+          : `CREATE TABLE anchors_new (
+               anchor_id TEXT PRIMARY KEY,
+               frame_id TEXT NOT NULL,
+               project_id TEXT NOT NULL,
+               type TEXT NOT NULL,
+               text TEXT NOT NULL,
+               priority INTEGER DEFAULT 0,
+               created_at INTEGER DEFAULT (unixepoch()),
+               metadata TEXT DEFAULT '{}',
+               FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
+             );`;
+
+      const cols = table === 'events'
+        ? 'event_id, run_id, frame_id, seq, event_type, payload, ts'
+        : 'anchor_id, frame_id, project_id, type, text, priority, created_at, metadata';
+
+      const idxSql = table === 'events'
+        ? [
+            'CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);',
+            'CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);',
+          ]
+        : [
+            'CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);',
+          ];
+
+      this.db.exec('PRAGMA foreign_keys = OFF;');
+      this.db.exec('BEGIN;');
+      this.db.exec(createSql);
+      this.db.prepare(`INSERT INTO ${table === 'events' ? 'events_new' : 'anchors_new'} (${cols}) SELECT ${cols} FROM ${table}`).run();
+      this.db.exec(`DROP TABLE ${table};`);
+      this.db.exec(`ALTER TABLE ${table}_new RENAME TO ${table};`);
+      for (const stmt of idxSql) this.db.exec(stmt);
+      this.db.exec('COMMIT;');
+      this.db.exec('PRAGMA foreign_keys = ON;');
+      logger.info(`Migrated ${table} to include ON DELETE CASCADE (frame-manager)`);
+    };
+
+    if (needsCascade('events')) migrateTable('events');
+    if (needsCascade('anchors')) migrateTable('anchors');
   }
 
   private loadActiveStack() {

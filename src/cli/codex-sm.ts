@@ -23,6 +23,7 @@ interface CodexConfig {
   task?: string;
   tracingEnabled: boolean;
   verboseTracing: boolean;
+  codexBin?: string;
 }
 
 class CodexSM {
@@ -89,6 +90,28 @@ class CodexSM {
     } catch {
       return false;
     }
+  }
+
+  private resolveCodexBin(): string | null {
+    // 1) CLI option
+    if (this.config.codexBin && this.config.codexBin.trim()) {
+      return this.config.codexBin.trim();
+    }
+    // 2) Environment override
+    const envBin = process.env['CODEX_BIN'];
+    if (envBin && envBin.trim()) {
+      return envBin.trim();
+    }
+    // 3) Detect on PATH
+    try {
+      execSync('which codex', { stdio: 'ignore' });
+      return 'codex';
+    } catch {}
+    try {
+      execSync('which codex-cli', { stdio: 'ignore' });
+      return 'codex-cli';
+    } catch {}
+    return null;
   }
 
   private setupWorktree(): string | null {
@@ -223,6 +246,11 @@ class CodexSM {
           i++;
           this.config.task = args[i];
           break;
+        case '--codex-bin':
+          i++;
+          this.config.codexBin = args[i];
+          process.env['CODEX_BIN'] = this.config.codexBin;
+          break;
         case '--auto':
         case '-a':
           if (this.isGitRepo()) {
@@ -299,21 +327,17 @@ class CodexSM {
     console.log(chalk.gray('Starting Codex...'));
     console.log(chalk.gray('─'.repeat(42)));
 
-    const codexBin = (() => {
-      try {
-        execSync('which codex', { stdio: 'ignore' });
-        return 'codex';
-      } catch {}
-      try {
-        execSync('which codex-cli', { stdio: 'ignore' });
-        return 'codex-cli';
-      } catch {}
-      return null;
-    })();
-
+    const codexBin = this.resolveCodexBin();
+    
     if (!codexBin) {
-      console.error(
-        chalk.red('❌ Codex CLI not found in PATH (codex or codex-cli).')
+      console.error(chalk.red('❌ Codex CLI not found.'));
+      console.log(
+        chalk.gray(
+          '   Install codex/codex-cli or set an override:\n' +
+            '     export CODEX_BIN=/path/to/codex\n' +
+            '     codex-sm --help\n\n' +
+            '   Ensure PATH includes npm global bin (npm bin -g).'
+        )
       );
       process.exit(1);
       return;
@@ -322,6 +346,26 @@ class CodexSM {
     const child = spawn(codexBin, codexArgs, {
       stdio: 'inherit',
       env: process.env,
+    });
+
+    child.on('error', (err: NodeJS.ErrnoException) => {
+      console.error(chalk.red('❌ Failed to launch Codex CLI.'));
+      if (err.code === 'ENOENT') {
+        console.error(
+          chalk.gray(
+            '   Not found. Set CODEX_BIN or install codex/codex-cli on PATH.'
+          )
+        );
+      } else if (err.code === 'EPERM' || err.code === 'EACCES') {
+        console.error(
+          chalk.gray(
+            '   Permission/sandbox issue. Try running outside a sandbox or set CODEX_BIN.'
+          )
+        );
+      } else {
+        console.error(chalk.gray(`   ${err.message}`));
+      }
+      process.exit(1);
     });
 
     child.on('exit', (code) => {
@@ -369,6 +413,7 @@ program
   .option('-a, --auto', 'Automatically detect and apply best settings')
   .option('-b, --branch <name>', 'Specify branch name for worktree')
   .option('-t, --task <desc>', 'Task description for context')
+  .option('--codex-bin <path>', 'Path to codex/codex-cli (or use CODEX_BIN)')
   .option('--no-context', 'Disable StackMemory context integration')
   .option('--no-trace', 'Disable debug tracing (enabled by default)')
   .option('--verbose-trace', 'Enable verbose debug tracing with full details')
@@ -380,6 +425,5 @@ program
     await codexSM.run(args);
   });
 
-if (require.main === module) {
-  program.parse(process.argv);
-}
+// ESM-safe CLI entry
+program.parse(process.argv);

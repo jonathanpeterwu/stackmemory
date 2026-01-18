@@ -7,10 +7,10 @@
     "npm": ">=10.0.0"
   },
   "type": "module",
-  "main": "dist/src/index.js",
+  "main": "dist/index.js",
   "bin": {
-    "stackmemory": "dist/src/cli/index.js",
-    "codex-sm": "dist/src/cli/codex-sm.js"
+    "stackmemory": "dist/cli/index.js",
+    "codex-sm": "dist/cli/codex-sm.js"
   },
   "types": "dist/src/index.d.ts",
   "files": [
@@ -68,6 +68,8 @@
     "linear:mirror": "node scripts/sync-linear-graphql.js --mirror",
     "railway:setup": "./scripts/setup-railway-deployment.sh",
     "railway:deploy": "railway up --detach",
+    "railway:migrate": "tsx src/cli/commands/migrate.ts",
+    "railway:schema:verify": "tsx scripts/verify-railway-schema.ts",
     "railway:logs": "railway logs",
     "claude:setup": "node scripts/setup-claude-integration.js",
     "daemons:start": "node scripts/claude-sm-autostart.js",
@@ -78,6 +80,7 @@
     "prepare": "echo 'Prepare step completed'"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.71.2",
     "@aws-sdk/client-s3": "^3.958.0",
     "@browsermcp/mcp": "^0.1.3",
     "@google-cloud/storage": "^7.18.0",
@@ -89,6 +92,7 @@
     "bcryptjs": "^3.0.3",
     "better-sqlite3": "^9.2.2",
     "chalk": "^5.3.0",
+    "chromadb": "^3.2.2",
     "cli-table3": "^0.6.5",
     "commander": "^11.1.0",
     "compression": "^1.8.1",
