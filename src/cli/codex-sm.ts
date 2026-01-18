@@ -328,7 +328,7 @@ class CodexSM {
     console.log(chalk.gray('─'.repeat(42)));
 
     const codexBin = this.resolveCodexBin();
-    
+
     if (!codexBin) {
       console.error(chalk.red('❌ Codex CLI not found.'));
       console.log(
