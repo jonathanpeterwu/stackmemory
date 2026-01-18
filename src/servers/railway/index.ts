@@ -865,10 +865,10 @@ class RailwayMCPServer {
 const ROLES = ['owner','editor','viewer','admin'];
 async function loadProjects(){
   const r = await fetch('/admin/api/projects'); const j = await r.json();
-  const rows = (j.projects||[]).map(p=>`<tr><td>${p.id}</td><td>${p.name||''}</td><td>${p.is_public? 'yes':'no'}</td>
-    <td><button onclick=\"togglePublic('${p.id}',${!p.is_public})\">make ${!p.is_public?'public':'private'}</button>
-    <button onclick=\"viewMembers('${p.id}')\">members</button></td></tr>`).join('');
-  document.getElementById('projects').innerHTML = `<table><tr><th>id</th><th>name</th><th>public</th><th>actions</th></tr>${rows}</table><div id="members"></div>`;
+  const rows = (j.projects||[]).map(p=>\`<tr><td>\${p.id}</td><td>\${p.name||''}</td><td>\${p.is_public? 'yes':'no'}</td>
+    <td><button onclick="togglePublic('\${p.id}',\${!p.is_public})">make \${!p.is_public?'public':'private'}</button>
+    <button onclick="viewMembers('\${p.id}')">members</button></td></tr>\`).join('');
+  document.getElementById('projects').innerHTML = \`<table><tr><th>id</th><th>name</th><th>public</th><th>actions</th></tr>\${rows}</table><div id="members"></div>\`;
 }
 async function createProject(){
   const id = document.getElementById('newId').value; const name = document.getElementById('newName').value; const isPublic = document.getElementById('newPublic').checked;
@@ -881,12 +881,12 @@ async function togglePublic(id, isPublic){
 }
 async function viewMembers(id){
   const r = await fetch('/admin/api/projects/'+id+'/members'); const j = await r.json();
-  const rows = (j.members||[]).map(m=>`<tr><td>${m.user_id}</td><td>${m.name||''}</td><td>${m.email||''}</td><td>${m.role}</td>
-    <td><button onclick=\"removeMember('${id}','${m.user_id}')\">remove</button></td></tr>`).join('');
-  document.getElementById('members').innerHTML = `<h3>Members of ${id}</h3>
-    <div class=\"row\"><input id=\"mUser\" placeholder=\"user id\"/><select id=\"mRole\">${ROLES.map(r=>`<option>${r}</option>`).join('')}</select>
-    <button onclick=\"addMember('${id}')\">add/update</button></div>
-    <table><tr><th>user</th><th>name</th><th>email</th><th>role</th><th>actions</th></tr>${rows}</table>`;
+  const rows = (j.members||[]).map(m=>\`<tr><td>\${m.user_id}</td><td>\${m.name||''}</td><td>\${m.email||''}</td><td>\${m.role}</td>
+    <td><button onclick="removeMember('\${id}','\${m.user_id}')">remove</button></td></tr>\`).join('');
+  document.getElementById('members').innerHTML = \`<h3>Members of \${id}</h3>
+    <div class="row"><input id="mUser" placeholder="user id"/><select id="mRole">\${ROLES.map(r=>\`<option>\${r}</option>\`).join('')}</select>
+    <button onclick="addMember('\${id}')">add/update</button></div>
+    <table><tr><th>user</th><th>name</th><th>email</th><th>role</th><th>actions</th></tr>\${rows}</table>\`;
 }
 async function addMember(id){
   const userId = document.getElementById('mUser').value; const role = document.getElementById('mRole').value;
@@ -900,8 +900,8 @@ async function removeMember(id, userId){
 }
 async function loadSessions(){
   const r = await fetch('/admin/api/sessions'); const j = await r.json();
-  const rows = (j.sessions||[]).map(s=>`<tr><td>${s.id}</td><td>${s.user_id}</td><td>${new Date(s.created_at).toLocaleString()}</td><td>${new Date(s.expires_at).toLocaleString()}</td><td>${s.ip||''}</td><td>${(s.user_agent||'').slice(0,40)}</td><td><button onclick=\"killSession('${s.id}')\">terminate</button></td></tr>`).join('');
-  document.getElementById('sessions').innerHTML = `<table><tr><th>id</th><th>user</th><th>created</th><th>expires</th><th>ip</th><th>agent</th><th>actions</th></tr>${rows}</table>`;
+  const rows = (j.sessions||[]).map(s=>\`<tr><td>\${s.id}</td><td>\${s.user_id}</td><td>\${new Date(s.created_at).toLocaleString()}</td><td>\${new Date(s.expires_at).toLocaleString()}</td><td>\${s.ip||''}</td><td>\${(s.user_agent||'').slice(0,40)}</td><td><button onclick="killSession('\${s.id}')">terminate</button></td></tr>\`).join('');
+  document.getElementById('sessions').innerHTML = \`<table><tr><th>id</th><th>user</th><th>created</th><th>expires</th><th>ip</th><th>agent</th><th>actions</th></tr>\${rows}</table>\`;
 }
 async function killSession(id){
   await fetch('/admin/api/sessions/'+id,{method:'DELETE'});
