@@ -2,18 +2,41 @@
 
 The `codex-sm` wrapper lets you run Codex CLI while automatically loading and saving StackMemory context. It mirrors the `opencode-sm` and `claude-sm` workflows for a consistent experience.
 
-## Quick Setup
+## Public Install (recommended)
+
+Install via npm to get real binaries on your PATH. This is the preferred path for end users and CI.
 
 ```bash
-# Option A: Use npm-installed binary (recommended)
-npm run build
-npm link   # or install from npm when published
-codex-sm   # now available on PATH
+# Install globally
+npm i -g @stackmemoryai/stackmemory
 
-# Option B: Add the codex-sm alias to your shell
-node scripts/setup/configure-codex-alias.js
-source ~/.zshrc  # or ~/.bashrc
-codex-sm
+# Verify
+codex-sm --help
+```
+
+Notes:
+- Uses the package `bin` entry (`codex-sm`) with a `#!/usr/bin/env node` shebang for portability.
+- No shell aliasing required. Uninstall with `npm rm -g @stackmemoryai/stackmemory`.
+
+## Local Dev (repo checkout)
+
+If you are developing from a local clone, you can expose the CLI without publishing:
+
+```bash
+# Build and link locally
+npm run build
+npm link
+
+# Or create a small shim (zsh shown) in ~/.stackmemory/bin
+mkdir -p ~/.stackmemory/bin
+cat > ~/.stackmemory/bin/codex-sm <<'EOF'
+#!/usr/bin/env zsh
+exec zsh "$HOME/Dev/stackmemory/scripts/codex-wrapper.sh" "$@"
+EOF
+chmod +x ~/.stackmemory/bin/codex-sm
+
+# Ensure ~/.stackmemory/bin is on PATH (your ~/.zshrc)
+export PATH="$HOME/.stackmemory/bin:$PATH"
 ```
 
 ## What codex-sm Does

@@ -25,6 +25,8 @@ interface OnboardingConfig {
   linearApiKey?: string;
   enableAnalytics: boolean;
   defaultContextPath: string;
+  storageMode: 'local' | 'hosted';
+  databaseUrl?: string;
 }
 
 export function registerOnboardingCommand(program: Command): void {
@@ -98,7 +100,59 @@ async function runOnboarding(): Promise<OnboardingConfig> {
     enableLinear: false,
     enableAnalytics: true,
     defaultContextPath: join(homedir(), '.stackmemory'),
+    storageMode: 'local',
   };
+
+  // Choose storage mode
+  const { storageMode } = await inquirer.prompt([
+    {
+      type: 'list',
+      name: 'storageMode',
+      message: 'Where should StackMemory store data?',
+      choices: [
+        { name: 'Local (free, SQLite in ~/.stackmemory)', value: 'local' },
+        { name: 'Hosted (paid, managed Postgres)', value: 'hosted' },
+      ],
+      default: 'local',
+    },
+  ]);
+  config.storageMode = storageMode;
+
+  if (storageMode === 'hosted') {
+    const { hasAccount } = await inquirer.prompt([
+      {
+        type: 'confirm',
+        name: 'hasAccount',
+        message: 'Do you already have a hosted account & connection string?',
+        default: false,
+      },
+    ]);
+
+    if (!hasAccount) {
+      try {
+        const signupUrl = 'https://stackmemory.ai/hosted';
+        console.log(chalk.gray(`Opening signup page: ${signupUrl}`));
+        // Lazy load open to avoid ES module issues
+        const mod = await import('open');
+        await mod.default(signupUrl);
+      } catch (e) {
+        console.log(chalk.yellow('Could not open browser automatically. Please sign up and obtain your DATABASE_URL.'));
+      }
+    }
+
+    const { databaseUrl } = await inquirer.prompt([
+      {
+        type: 'password',
+        name: 'databaseUrl',
+        message: 'Paste your DATABASE_URL (postgres://...)',
+        validate: (input: string) =>
+          input.startsWith('postgres://') || input.startsWith('postgresql://')
+            ? true
+            : 'Must start with postgres:// or postgresql://',
+      },
+    ]);
+    config.databaseUrl = databaseUrl;
+  }
 
   if (setupType === 'basic') {
     // Basic setup with sensible defaults
@@ -368,12 +422,28 @@ async function applyConfiguration(config: OnboardingConfig): Promise<void> {
     paths: {
       default: config.defaultContextPath,
     },
+    database: {
+      mode: config.storageMode,
+      ...(config.databaseUrl ? { url: config.databaseUrl } : {}),
+    },
   };
 
   writeFileSync(
     join(configPath, 'config.json'),
     JSON.stringify(mainConfig, null, 2)
   );
+
+  // If hosted selected, persist a simple env file suggestion
+  if (config.storageMode === 'hosted' && config.databaseUrl) {
+    try {
+      const envFile = join(configPath, 'railway.env');
+      writeFileSync(envFile, `# StackMemory hosted DB\nDATABASE_URL=${config.databaseUrl}\n`);
+      console.log(chalk.green('  ✓ Saved hosted DB settings to ~/.stackmemory/railway.env'));
+      console.log(chalk.gray('    Tip: export DATABASE_URL from this file in your shell profile.'));
+    } catch (e) {
+      console.log(chalk.yellow('  ⚠ Could not write hosted DB env file'));
+    }
+  }
 
   // Create claude-sm symlink for easy access
   const binPath = '/usr/local/bin/claude-sm';
@@ -413,6 +483,108 @@ exec stackmemory "$@"
       chalk.yellow('  ⚠ Could not create claude-sm symlink (may need sudo)')
     );
   }
+
+  // Create codex-sm symlink for easy access
+  const codexBinPath = '/usr/local/bin/codex-sm';
+  const codexSourcePath = join(configPath, 'bin', 'codex-sm');
+
+  try {
+    // Create Codex wrapper script (based on scripts/codex-wrapper.sh)
+    const codexWrapper = `#!/bin/bash
+# Codex CLI wrapper with StackMemory integration
+# Usage: codex-sm [--auto-sync] [--sync-interval=MINUTES] [args...]
+
+# Flags
+AUTO_SYNC=false
+SYNC_INTERVAL=5
+for arg in "$@"; do
+    case $arg in
+        --auto-sync)
+            AUTO_SYNC=true
+            shift
+            ;;
+        --sync-interval=*)
+            SYNC_INTERVAL="\${arg#*=}"
+            shift
+            ;;
+    esac
+done
+
+# Auto-initialize StackMemory if in git repo without it
+if [ -d ".git" ] && [ ! -d ".stackmemory" ]; then
+    echo "📦 Initializing StackMemory for this project..."
+    stackmemory init --silent 2>/dev/null || true
+fi
+
+# Load existing context if available
+if [ -d ".stackmemory" ]; then
+    echo "🧠 Loading StackMemory context..."
+    stackmemory status --brief 2>/dev/null || true
+fi
+
+# Start Linear auto-sync in background if requested
+SYNC_PID=""
+if [ "$AUTO_SYNC" = true ] && [ -n "$LINEAR_API_KEY" ]; then
+    echo "🔄 Starting Linear auto-sync (${SYNC_INTERVAL}min intervals)..."
+    (
+        while true; do
+            sleep $((SYNC_INTERVAL * 60))
+            if [ -d ".stackmemory" ]; then
+                stackmemory linear sync --quiet 2>/dev/null || true
+            fi
+        done
+    ) &
+    SYNC_PID=$!
+fi
+
+cleanup() {
+    echo ""
+    echo "📝 Saving StackMemory context..."
+
+    # Kill auto-sync if running
+    if [ -n "$SYNC_PID" ] && kill -0 $SYNC_PID 2>/dev/null; then
+        echo "🛑 Stopping auto-sync..."
+        kill $SYNC_PID 2>/dev/null || true
+    fi
+
+    # Save project status and final sync
+    if [ -d ".stackmemory" ]; then
+        stackmemory status 2>/dev/null
+        if [ -n "$LINEAR_API_KEY" ]; then
+            echo "🔄 Final Linear sync..."
+            stackmemory linear sync 2>/dev/null
+        fi
+        echo "✅ StackMemory context saved"
+    fi
+}
+
+trap cleanup EXIT INT TERM
+
+# Run Codex CLI
+if command -v codex &> /dev/null; then
+    codex "$@"
+elif command -v codex-cli &> /dev/null; then
+    codex-cli "$@"
+else
+    echo "❌ Codex CLI not found. Please install it first."
+    echo "   See: https://github.com/openai/codex-cli"
+    exit 1
+fi
+`;
+
+    writeFileSync(codexSourcePath, codexWrapper);
+    execFileSync('chmod', ['+x', codexSourcePath]);
+
+    // Create symlink if it doesn't exist
+    if (!existsSync(codexBinPath)) {
+      execFileSync('ln', ['-s', codexSourcePath, codexBinPath]);
+      console.log(chalk.green('  ✓ Created codex-sm command'));
+    }
+  } catch (error: unknown) {
+    console.log(
+      chalk.yellow('  ⚠ Could not create codex-sm symlink (may need sudo)')
+    );
+  }
 }
 
 function showNextSteps(config: OnboardingConfig): void {
@@ -440,8 +612,11 @@ function showNextSteps(config: OnboardingConfig): void {
   console.log('3. Use with Claude:');
   console.log(chalk.gray('   claude-sm  # Or use stackmemory directly\n'));
 
+  console.log('4. Use with Codex:');
+  console.log(chalk.gray('   codex-sm   # Codex + StackMemory integration\n'));
+
   if (config.enableLinear) {
-    console.log('4. Sync with Linear:');
+    console.log('5. Sync with Linear:');
     console.log(chalk.gray('   stackmemory linear sync\n'));
   }
 

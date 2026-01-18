@@ -39,6 +39,8 @@ import clearCommand from './commands/clear.js';
 import createWorkflowCommand from './commands/workflow.js';
 import monitorCommand from './commands/monitor.js';
 import qualityCommand from './commands/quality.js';
+import { registerLoginCommand } from './commands/login.js';
+import { registerLogoutCommand, registerDbCommands } from './commands/db.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -428,6 +430,9 @@ program
 // Register project management commands
 // Register command modules
 registerOnboardingCommand(program);
+registerLoginCommand(program);
+registerLogoutCommand(program);
+registerDbCommands(program);
 registerProjectCommands(program);
 registerWorktreeCommands(program);
 

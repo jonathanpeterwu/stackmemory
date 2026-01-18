@@ -232,7 +232,14 @@ export abstract class DatabaseAdapter {
     direction?: 'ASC' | 'DESC'
   ): string {
     if (!orderBy) return '';
-    return ` ORDER BY ${orderBy} ${direction || 'ASC'}`;
+    // Whitelist validation: allow letters, numbers, underscore, dot (for table aliasing)
+    const isSafe = /^[a-zA-Z0-9_.]+$/.test(orderBy);
+    if (!isSafe) {
+      // Drop ORDER BY if unsafe to prevent injection via column name
+      return '';
+    }
+    const dir = direction === 'DESC' ? 'DESC' : 'ASC';
+    return ` ORDER BY ${orderBy} ${dir}`;
   }
 
   protected buildLimitClause(limit?: number, offset?: number): string {
