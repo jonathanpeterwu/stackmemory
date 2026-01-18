@@ -356,7 +356,7 @@ class RailwayMCPServer {
         } else if (this.db) {
           this.db.prepare('DELETE FROM admin_sessions WHERE datetime(expires_at) <= datetime("now")').run();
         }
-      } catch (e) {
+      } catch {
         console.warn('Admin session cleanup failed:', e);
       }
     };
