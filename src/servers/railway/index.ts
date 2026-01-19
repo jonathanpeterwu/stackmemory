@@ -374,8 +374,8 @@ class RailwayMCPServer {
             this.db.prepare('DELETE FROM admin_sessions WHERE datetime(expires_at) <= datetime("now")').run();
           }
         }
-      } catch (e) {
-        console.warn('Admin session cleanup failed:', e);
+      } catch (error) {
+        console.warn('Admin session cleanup failed:', error);
       }
     };
     // initial cleanup and then interval
@@ -715,8 +715,7 @@ class RailwayMCPServer {
             );
           }
 
-          // Get database URL for this user's context
-          const databaseUrl = process.env.DATABASE_URL;
+          // Database URL is available via env for client configuration
         } else {
           // SQLite version
           const keyRow = this.db.prepare(
@@ -1041,7 +1040,9 @@ class RailwayMCPServer {
           } else {
             this.db.prepare('DELETE FROM admin_sessions WHERE id = ?').run(oldJti);
           }
-        } catch {}
+        } catch (error) {
+          console.warn('Failed to delete session during refresh:', error);
+        }
 
         const jti = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
         const hours = parseInt(process.env['ADMIN_SESSION_HOURS'] || '8', 10);
@@ -1285,7 +1286,9 @@ loadSessions();
             } else {
               this.db.prepare('DELETE FROM admin_sessions WHERE id = ?').run(verified.jti);
             }
-          } catch {}
+          } catch (error) {
+            console.warn('Failed to delete session during logout:', error);
+          }
         }
       }
       clearJwtCookie(res);
