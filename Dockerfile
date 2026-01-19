@@ -1,4 +1,4 @@
-# Railway Optimized Dockerfile
+# Railway Optimized Dockerfile - Force rebuild v2
 FROM node:20-slim
 
 # Install dependencies for build
@@ -29,6 +29,9 @@ RUN rm -rf src/ scripts/ test/ tests/ __tests__ *.test.* *.spec.* node_modules/.
 
 # Expose port (Railway uses PORT env var)
 EXPOSE 3000
+
+# Ensure minimal.js doesn't exist and start FULL server
+RUN rm -f dist/servers/railway/minimal.js dist/servers/railway/minimal.js.map || true
 
 # Start the FULL server with authentication endpoints
 CMD ["node", "dist/servers/railway/index.js"]
