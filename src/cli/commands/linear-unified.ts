@@ -9,7 +9,6 @@ import {
   UnifiedLinearSync,
   UnifiedSyncConfig,
   SyncStats,
-  DEFAULT_UNIFIED_CONFIG,
 } from '../../integrations/linear/unified-sync.js';
 import { LinearAuthManager } from '../../integrations/linear/auth.js';
 import { LinearClient } from '../../integrations/linear/client.js';
@@ -17,7 +16,7 @@ import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
-import { logger } from '../../core/monitoring/logger.js';
+// import { logger } from '../../core/monitoring/logger.js';
 import Table from 'cli-table3';
 import ora from 'ora';
 
@@ -184,7 +183,7 @@ export function registerUnifiedLinearCommands(parent: Command) {
         const authManager = new LinearAuthManager(process.cwd());
         const hasAuth = authManager.isConfigured();
 
-        if (!hasAuth && !process.env.LINEAR_API_KEY) {
+        if (!hasAuth && !process.env.STACKMEMORY_LINEAR_API_KEY && !process.env.LINEAR_API_KEY) {
           console.log(chalk.yellow('⚠ Not connected to Linear'));
           console.log('Run "stackmemory linear auth" to connect');
           return;
@@ -352,11 +351,11 @@ export function registerUnifiedLinearCommands(parent: Command) {
     .option('--oauth', 'Use OAuth flow')
     .action(async (options) => {
       try {
-        const authManager = new LinearAuthManager(process.cwd());
+        // const authManager = new LinearAuthManager(process.cwd());
 
         if (options.apiKey) {
           // Simple API key setup
-          process.env.LINEAR_API_KEY = options.apiKey;
+          process.env.STACKMEMORY_LINEAR_API_KEY = options.apiKey;
           console.log(chalk.green('✓ API key configured'));
 
           // Test connection
