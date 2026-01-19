@@ -16,14 +16,14 @@ dotenv.config({
 });
 
 // Debug: Check if key is loaded
-console.log(`API Key loaded: ${process.env.LINEAR_API_KEY ? 'Yes' : 'No'} (length: ${process.env.LINEAR_API_KEY?.length || 0})`);
+console.log(`API Key loaded: ${(process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY) ? 'Yes' : 'No'} (length: ${(process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY)?.length || 0})`);
 
 async function queryLinear(query, variables = {}) {
   const response = await fetch('https://api.linear.app/graphql', {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': process.env.LINEAR_API_KEY
+      'Authorization': process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY
     },
     body: JSON.stringify({ query, variables })
   });
@@ -36,7 +36,7 @@ async function queryLinear(query, variables = {}) {
 }
 
 async function syncLinearTasks() {
-  const apiKey = process.env.LINEAR_API_KEY;
+  const apiKey = process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY;
   
   if (!apiKey) {
     console.error('❌ LINEAR_API_KEY not found in environment');

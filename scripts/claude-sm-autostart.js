@@ -126,7 +126,7 @@ class ClaudeAutoStartManager {
    * Already created, just ensure it's running
    */
   startLinearSync() {
-    if (!process.env.LINEAR_API_KEY) {
+    if (!process.env.STACKMEMORY_LINEAR_API_KEY && !process.env.LINEAR_API_KEY) {
       this.log('Linear sync skipped - no API key', 'WARN');
       return;
     }

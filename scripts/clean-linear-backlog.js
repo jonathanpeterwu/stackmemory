@@ -18,7 +18,7 @@ async function queryLinear(query, variables = {}) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': process.env.LINEAR_API_KEY
+      'Authorization': process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY
     },
     body: JSON.stringify({ query, variables })
   });
@@ -31,7 +31,7 @@ async function queryLinear(query, variables = {}) {
 }
 
 async function cleanLinearBacklog() {
-  const apiKey = process.env.LINEAR_API_KEY;
+  const apiKey = process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY;
   
   if (!apiKey) {
     console.error('❌ LINEAR_API_KEY not found in environment');
