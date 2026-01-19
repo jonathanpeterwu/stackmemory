@@ -23,7 +23,7 @@ function getTaskStore(projectRoot: string): LinearTaskManager | null {
   
   // Use project isolation for proper task management
   const config = {
-    linearApiKey: process.env.LINEAR_API_KEY,
+    linearApiKey: process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY,
     autoSync: true,
     syncInterval: 15,
   };

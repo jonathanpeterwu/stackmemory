@@ -1,0 +1,59 @@
+{
+  "pre-tool-use": {
+    "description": "Controls tool usage based on configured policies",
+    "version": "1.0.0",
+    "modes": {
+      "permissive": {
+        "description": "Allow all tools but log dangerous operations",
+        "default": true,
+        "restrictions": []
+      },
+      "restrictive": {
+        "description": "Block potentially dangerous tools",
+        "restrictions": ["Bash", "Write", "Edit", "Delete", "WebFetch"],
+        "allowed": ["TodoWrite", "TodoRead", "Read", "Grep", "LS"]
+      },
+      "code_only": {
+        "description": "Only allow code execution tools - pure computational environment",
+        "restrictions": ["*"],
+        "allowed": ["mcp__stackmemory__code.execute", "mcp__code-executor__execute_code", "TodoWrite", "TodoRead"]
+      }
+    },
+    "alwaysAllowed": [
+      "mcp__stackmemory__save_context",
+      "mcp__stackmemory__load_context",
+      "TodoWrite",
+      "TodoRead"
+    ],
+    "dangerousTools": [
+      "Bash",
+      "Write",
+      "Edit",
+      "Delete",
+      "WebFetch",
+      "MultiEdit"
+    ],
+    "codeExecutionTools": [
+      "mcp__code-executor__execute_code",
+      "mcp__stackmemory__code.execute"
+    ]
+  },
+  "installation": {
+    "commands": [
+      "# Install pre-tool-use hook",
+      "cp templates/claude-hooks/pre-tool-use ~/.claude/hooks/",
+      "chmod +x ~/.claude/hooks/pre-tool-use",
+      "",
+      "# Set mode (optional, defaults to permissive)",
+      "export STACKMEMORY_TOOL_MODE=permissive  # or restrictive, code_only",
+      "",
+      "# View tool usage logs",
+      "tail -f ~/.stackmemory/tool-use.log"
+    ]
+  },
+  "usage": {
+    "permissive_mode": "Default mode - all tools allowed with logging",
+    "restrictive_mode": "Blocks dangerous tools like Bash, Write, Edit",
+    "code_only_mode": "Only code execution allowed - ideal for pure computation tasks"
+  }
+}

@@ -370,7 +370,7 @@ class RailwayMCPServer {
         } else if (this.db) {
           this.db.prepare('DELETE FROM admin_sessions WHERE datetime(expires_at) <= datetime("now")').run();
         }
-      } catch {
+      } catch (e) {
         console.warn('Admin session cleanup failed:', e);
       }
     };
@@ -414,7 +414,7 @@ class RailwayMCPServer {
     next: express.NextFunction
   ): any {
     // Skip auth for health check
-    if (req.path === '/health' || req.path === '/health/db') {
+    if (req.path === '/health' || req.path === '/api/health' || req.path === '/health/db') {
       return next();
     }
 
@@ -523,8 +523,8 @@ class RailwayMCPServer {
   }
 
   private setupRoutes(): void {
-    // Health check
-    this.app.get('/health', (req, res) => {
+    // Health check - support both /health and /api/health for Railway
+    const healthHandler = (req: express.Request, res: express.Response) => {
       const health = {
         status: 'healthy',
         version: '1.0.0',
@@ -533,7 +533,10 @@ class RailwayMCPServer {
         environment: config.environment,
       };
       res.json(health);
-    });
+    };
+    
+    this.app.get('/health', healthHandler);
+    this.app.get('/api/health', healthHandler);
 
     // Root route
     this.app.get('/', (req, res) => {

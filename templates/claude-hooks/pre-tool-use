@@ -1,0 +1,189 @@
+#!/usr/bin/env node
+
+/**
+ * Pre-Tool-Use Hook for StackMemory
+ * Controls and filters tool usage based on configured policies
+ */
+
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+// Configuration for tool restrictions
+const CONFIG = {
+  // Mode: 'restrictive' | 'permissive' | 'code_only'
+  mode: process.env.STACKMEMORY_TOOL_MODE || 'permissive',
+  
+  // Tools that are always allowed
+  alwaysAllowed: [
+    'mcp__stackmemory__save_context',
+    'mcp__stackmemory__load_context',
+    'TodoWrite',
+    'TodoRead',
+  ],
+  
+  // Tools that are blocked in restrictive mode
+  restrictedTools: [
+    'Bash',
+    'Write',
+    'Edit',
+    'Delete',
+    'WebFetch',
+  ],
+  
+  // Code execution tools
+  codeExecutionTools: [
+    'mcp__code-executor__execute_code',
+    'mcp__stackmemory__code.execute',
+  ],
+  
+  // Log file for audit
+  logFile: path.join(process.env.HOME || '/tmp', '.stackmemory', 'tool-use.log'),
+};
+
+// Read input from stdin
+async function readInput() {
+  let input = '';
+  for await (const chunk of process.stdin) {
+    input += chunk;
+  }
+  return JSON.parse(input);
+}
+
+// Log tool usage
+function logToolUse(toolName, allowed, reason) {
+  try {
+    const logDir = path.dirname(CONFIG.logFile);
+    if (!fs.existsSync(logDir)) {
+      fs.mkdirSync(logDir, { recursive: true });
+    }
+    
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      tool: toolName,
+      allowed,
+      reason,
+      mode: CONFIG.mode,
+    };
+    
+    fs.appendFileSync(CONFIG.logFile, JSON.stringify(logEntry) + '\n');
+  } catch (error) {
+    // Silently fail logging
+  }
+}
+
+// Check if tool should be allowed
+function shouldAllowTool(toolName, params) {
+  // Always allowed tools
+  if (CONFIG.alwaysAllowed.includes(toolName)) {
+    return { allowed: true, reason: 'Always allowed tool' };
+  }
+  
+  // Mode-specific logic
+  switch (CONFIG.mode) {
+    case 'code_only':
+      // Only allow code execution tools
+      if (CONFIG.codeExecutionTools.includes(toolName)) {
+        return { allowed: true, reason: 'Code execution tool in code_only mode' };
+      }
+      return {
+        allowed: false,
+        reason: 'Only code execution is allowed in code_only mode',
+        suggestion: 'Use mcp__stackmemory__code.execute to run Python/JavaScript code',
+      };
+    
+    case 'restrictive':
+      // Block restricted tools
+      if (CONFIG.restrictedTools.includes(toolName)) {
+        return {
+          allowed: false,
+          reason: `Tool '${toolName}' is restricted in current mode`,
+          suggestion: 'This tool is blocked for safety. Consider using code execution instead.',
+        };
+      }
+      return { allowed: true, reason: 'Not in restricted list' };
+    
+    case 'permissive':
+    default:
+      // Allow everything but log dangerous operations
+      if (CONFIG.restrictedTools.includes(toolName)) {
+        logToolUse(toolName, true, 'Potentially dangerous tool in permissive mode');
+      }
+      return { allowed: true, reason: 'Permissive mode' };
+  }
+}
+
+// Main hook logic
+async function main() {
+  try {
+    const input = await readInput();
+    const { tool_name, parameters } = input;
+    
+    // Check if tool should be allowed
+    const decision = shouldAllowTool(tool_name, parameters);
+    
+    // Log the decision
+    logToolUse(tool_name, decision.allowed, decision.reason);
+    
+    if (!decision.allowed) {
+      // Block the tool
+      console.error(JSON.stringify({
+        status: 'blocked',
+        tool: tool_name,
+        reason: decision.reason,
+        suggestion: decision.suggestion,
+        message: `Tool '${tool_name}' is blocked. ${decision.suggestion || ''}`,
+      }));
+      process.exit(1);
+    }
+    
+    // Special handling for code execution
+    if (CONFIG.codeExecutionTools.includes(tool_name)) {
+      // Add safety warnings
+      if (parameters.code && parameters.code.includes('import os')) {
+        console.error(JSON.stringify({
+          status: 'warning',
+          message: 'Code contains potentially dangerous imports. Reviewing...',
+        }));
+      }
+    }
+    
+    // Allow the tool
+    console.log(JSON.stringify({
+      status: 'allowed',
+      tool: tool_name,
+      mode: CONFIG.mode,
+    }));
+    
+  } catch (error) {
+    // On error, allow by default (fail open)
+    console.error(JSON.stringify({
+      status: 'error',
+      message: error.message,
+      fallback: 'allowing tool due to hook error',
+    }));
+  }
+}
+
+// Handle environment info request
+if (process.argv.includes('--info')) {
+  console.log(JSON.stringify({
+    hook: 'pre-tool-use',
+    version: '1.0.0',
+    mode: CONFIG.mode,
+    modes: ['permissive', 'restrictive', 'code_only'],
+    description: 'Controls tool usage based on configured policies',
+  }));
+  process.exit(0);
+}
+
+main().catch(error => {
+  console.error(JSON.stringify({
+    status: 'error',
+    message: error.message,
+  }));
+  process.exit(1);
+});
