@@ -368,7 +368,11 @@ class RailwayMCPServer {
         if (this.pgPool) {
           await this.pgPool.query('DELETE FROM admin_sessions WHERE expires_at <= NOW()');
         } else if (this.db) {
-          this.db.prepare('DELETE FROM admin_sessions WHERE datetime(expires_at) <= datetime("now")').run();
+          // Check if table exists before cleanup
+          const tableExists = this.db.prepare(`SELECT name FROM sqlite_master WHERE type='table' AND name='admin_sessions'`).get();
+          if (tableExists) {
+            this.db.prepare('DELETE FROM admin_sessions WHERE datetime(expires_at) <= datetime("now")').run();
+          }
         }
       } catch (e) {
         console.warn('Admin session cleanup failed:', e);
@@ -1226,6 +1230,67 @@ loadSessions();
         }
       });
     }
+
+    // Admin login/logout routes
+    this.app.get('/admin/login', (_req, res) => {
+      res.setHeader('Content-Type', 'text/html');
+      res.send(`<!doctype html><html><head><meta charset="utf-8"/><title>Admin Login</title>
+<style>body{font-family:system-ui;margin:40px} input{padding:8px;margin:4px} button{padding:8px}</style></head>
+<body><h3>Admin Login</h3>
+<p>Paste an admin API key to manage projects and members.</p>
+<form method="POST" action="/admin/login">
+  <input type="password" name="apiKey" placeholder="sk-..." style="min-width:360px" required/>
+  <div><button type="submit">Login</button></div>
+  <p style="color:#666">Your key is validated server-side and not stored in the browser; a short-lived session cookie is created.</p>
+</form>
+</body></html>`);
+    });
+    
+    // Accept urlencoded form
+    this.app.post('/admin/login', express.urlencoded({ extended: false }), async (req, res) => {
+      try {
+        const apiKey = req.body?.apiKey || '';
+        if (!apiKey) return res.status(400).send('Missing API key');
+        const u = await this.validateApiKey(apiKey);
+        if (!u || (u as any).role !== 'admin') return res.status(403).send('Not an admin API key');
+        // Create DB-backed admin session and sign JWT
+        const jti = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
+        const hours = parseInt(process.env['ADMIN_SESSION_HOURS'] || '8', 10);
+        const expMs = Date.now() + hours * 3600 * 1000;
+        const expDateIso = new Date(expMs).toISOString();
+        const ua = req.headers['user-agent'] || '';
+        const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
+        if (this.pgPool) {
+          await this.pgPool.query('INSERT INTO admin_sessions (id, user_id, expires_at, user_agent, ip) VALUES ($1, $2, $3, $4, $5)', [jti, (u as any).id, expDateIso, ua, ip]);
+        } else {
+          this.db.prepare('INSERT INTO admin_sessions (id, user_id, expires_at, user_agent, ip) VALUES (?, ?, ?, ?, ?)').run(jti, (u as any).id, expDateIso, ua, ip);
+        }
+        const token = jwt.sign({ sub: (u as any).id, role: 'admin', jti }, process.env['ADMIN_JWT_SECRET'] || 'dev-admin-secret', { expiresIn: hours + 'h' });
+        setJwtCookie(res, token);
+        res.redirect('/admin');
+      } catch (e: any) {
+        res.status(500).send('Login failed');
+      }
+    });
+    
+    this.app.get('/admin/logout', async (req, res) => {
+      const cookies = parseCookies(req.headers.cookie);
+      const t = cookies['sm_admin_jwt'];
+      if (t) {
+        const verified = verifyAdminJwt(t);
+        if (verified) {
+          try {
+            if (this.pgPool) {
+              await this.pgPool.query('DELETE FROM admin_sessions WHERE id = $1', [verified.jti]);
+            } else {
+              this.db.prepare('DELETE FROM admin_sessions WHERE id = ?').run(verified.jti);
+            }
+          } catch {}
+        }
+      }
+      clearJwtCookie(res);
+      res.redirect('/admin/login');
+    });
   }
 
   private setupWebSocket(): void {
@@ -1480,61 +1545,3 @@ process.on('SIGINT', () => {
   console.log('Shutting down...');
   process.exit(0);
 });
-    // Admin login/logout
-    this.app.get('/admin/login', (_req, res) => {
-      res.setHeader('Content-Type', 'text/html');
-      res.send(`<!doctype html><html><head><meta charset="utf-8"/><title>Admin Login</title>
-<style>body{font-family:system-ui;margin:40px} input{padding:8px;margin:4px} button{padding:8px}</style></head>
-<body><h3>Admin Login</h3>
-<p>Paste an admin API key to manage projects and members.</p>
-<form method="POST" action="/admin/login">
-  <input type="password" name="apiKey" placeholder="sk-..." style="min-width:360px" required/>
-  <div><button type="submit">Login</button></div>
-  <p style="color:#666">Your key is validated server-side and not stored in the browser; a short-lived session cookie is created.</p>
-</form>
-</body></html>`);
-    });
-    // Accept urlencoded form
-    this.app.post('/admin/login', express.urlencoded({ extended: false }), async (req, res) => {
-      try {
-        const apiKey = req.body?.apiKey || '';
-        if (!apiKey) return res.status(400).send('Missing API key');
-        const u = await this.validateApiKey(apiKey);
-        if (!u || (u as any).role !== 'admin') return res.status(403).send('Not an admin API key');
-        // Create DB-backed admin session and sign JWT
-        const jti = Math.random().toString(36).slice(2) + Math.random().toString(36).slice(2);
-        const hours = parseInt(process.env['ADMIN_SESSION_HOURS'] || '8', 10);
-        const expMs = Date.now() + hours * 3600 * 1000;
-        const expDateIso = new Date(expMs).toISOString();
-        const ua = req.headers['user-agent'] || '';
-        const ip = (req.headers['x-forwarded-for'] as string) || req.socket.remoteAddress || '';
-        if (this.pgPool) {
-          await this.pgPool.query('INSERT INTO admin_sessions (id, user_id, expires_at, user_agent, ip) VALUES ($1, $2, $3, $4, $5)', [jti, (u as any).id, expDateIso, ua, ip]);
-        } else {
-          this.db.prepare('INSERT INTO admin_sessions (id, user_id, expires_at, user_agent, ip) VALUES (?, ?, ?, ?, ?)').run(jti, (u as any).id, expDateIso, ua, ip);
-        }
-        const token = jwt.sign({ sub: (u as any).id, role: 'admin', jti }, process.env['ADMIN_JWT_SECRET'] || 'dev-admin-secret', { expiresIn: hours + 'h' });
-        setJwtCookie(res, token);
-        res.redirect('/admin');
-      } catch (e: any) {
-        res.status(500).send('Login failed');
-      }
-    });
-    this.app.get('/admin/logout', async (req, res) => {
-      const cookies = parseCookies(req.headers.cookie);
-      const t = cookies['sm_admin_jwt'];
-      if (t) {
-        const verified = verifyAdminJwt(t);
-        if (verified) {
-          try {
-            if (this.pgPool) {
-              await this.pgPool.query('DELETE FROM admin_sessions WHERE id = $1', [verified.jti]);
-            } else {
-              this.db.prepare('DELETE FROM admin_sessions WHERE id = ?').run(verified.jti);
-            }
-          } catch {}
-        }
-      }
-      clearJwtCookie(res);
-      res.redirect('/admin/login');
-    });
