@@ -30,5 +30,5 @@ RUN rm -rf src/ scripts/ test/ tests/ __tests__ *.test.* *.spec.* node_modules/.
 # Expose port (Railway uses PORT env var)
 EXPOSE 3000
 
-# Start the FULL server explicitly
+# Start the FULL server with authentication endpoints
 CMD ["node", "dist/servers/railway/index.js"]
