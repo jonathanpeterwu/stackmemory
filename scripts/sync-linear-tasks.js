@@ -12,7 +12,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 dotenv.config({ path: path.join(__dirname, '..', '.env') });
 
 async function syncLinearTasks() {
-  const apiKey = process.env.LINEAR_API_KEY;
+  const apiKey = process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY;
   
   if (!apiKey) {
     console.error('❌ LINEAR_API_KEY not found in environment');

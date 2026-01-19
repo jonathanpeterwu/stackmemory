@@ -8,7 +8,7 @@ import 'dotenv/config';
 import fs from 'fs';
 import readline from 'readline';
 
-const API_KEY = process.env.LINEAR_API_KEY;
+const API_KEY = process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY;
 if (!API_KEY) {
   console.error('❌ LINEAR_API_KEY environment variable not set');
   console.log('Please set LINEAR_API_KEY in your .env file or export it in your shell');
@@ -83,7 +83,7 @@ async function deleteLinearTasks() {
         const response = await fetch('https://api.linear.app/graphql', {
           method: 'POST',
           headers: {
-            'Authorization': API_KEY,
+            'Authorization': `Bearer ${API_KEY}`,
             'Content-Type': 'application/json'
           },
           body: JSON.stringify({

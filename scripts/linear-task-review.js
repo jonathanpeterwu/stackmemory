@@ -17,7 +17,7 @@ async function queryLinear(query, variables = {}) {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'Authorization': process.env.LINEAR_API_KEY
+      'Authorization': process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY
     },
     body: JSON.stringify({ query, variables })
   });
