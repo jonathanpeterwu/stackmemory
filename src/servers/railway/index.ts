@@ -126,8 +126,9 @@ class RailwayMCPServer {
       await this.pgPool.query(`
         CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY,
-          email TEXT,
+          email TEXT UNIQUE,
           name TEXT,
+          password_hash TEXT,
           tier TEXT DEFAULT 'free',
           role TEXT DEFAULT 'user',
           created_at TIMESTAMPTZ DEFAULT NOW(),
@@ -135,6 +136,7 @@ class RailwayMCPServer {
         );
       `);
       try { await this.pgPool.query(`ALTER TABLE users ADD COLUMN role TEXT DEFAULT 'user'`); } catch {}
+      try { await this.pgPool.query(`ALTER TABLE users ADD COLUMN password_hash TEXT`); } catch {}
       // Role constraints (best-effort)
       try { await this.pgPool.query(`ALTER TABLE project_members ADD CONSTRAINT project_members_role_check CHECK (role IN ('admin','owner','editor','viewer'))`); } catch {}
       try { await this.pgPool.query(`ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','user'))`); } catch {}
@@ -211,8 +213,9 @@ class RailwayMCPServer {
 
         CREATE TABLE IF NOT EXISTS users (
           id TEXT PRIMARY KEY,
-          email TEXT,
+          email TEXT UNIQUE,
           name TEXT,
+          password_hash TEXT,
           tier TEXT DEFAULT 'free',
           role TEXT DEFAULT 'user',
           created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -306,6 +309,12 @@ class RailwayMCPServer {
         `ALTER TABLE project_members ADD CONSTRAINT project_members_role_check CHECK (role IN ('admin','owner','editor','viewer'))`,
         `ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','user'))`
       ]);
+
+      // v4: password authentication support
+      await apply(4, 'password authentication', [
+        `ALTER TABLE users ADD COLUMN IF NOT EXISTS password_hash TEXT`,
+        `ALTER TABLE users ADD CONSTRAINT users_email_unique UNIQUE (email)`
+      ]);
     } else {
       // sqlite
       this.db.exec(`CREATE TABLE IF NOT EXISTS railway_schema_version (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP, description TEXT)`);
@@ -341,6 +350,11 @@ class RailwayMCPServer {
       apply(2, 'admin sessions', [
         `CREATE TABLE IF NOT EXISTS admin_sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at DATETIME DEFAULT CURRENT_TIMESTAMP, expires_at DATETIME NOT NULL, user_agent TEXT, ip TEXT)`,
         `CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id)`
+      ]);
+
+      // v3: password authentication support
+      apply(3, 'password authentication', [
+        `ALTER TABLE users ADD COLUMN password_hash TEXT`
       ]);
     }
   }
@@ -533,6 +547,213 @@ class RailwayMCPServer {
           'POST /api/tools/execute': 'Execute tool'
         }
       });
+    });
+
+    // Authentication Routes
+    this.app.post('/auth/signup', async (req, res) => {
+      try {
+        const { email, password, name } = req.body;
+        
+        // Validate input
+        if (!email || !password) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Email and password are required' 
+          });
+        }
+
+        // Check if user already exists
+        if (this.pgPool) {
+          const existingUser = await this.pgPool.query(
+            'SELECT id FROM users WHERE email = $1',
+            [email]
+          );
+          if (existingUser.rowCount > 0) {
+            return res.status(409).json({ 
+              success: false, 
+              error: 'User already exists' 
+            });
+          }
+        } else {
+          const existingUser = this.db.prepare('SELECT id FROM users WHERE email = ?').get(email);
+          if (existingUser) {
+            return res.status(409).json({ 
+              success: false, 
+              error: 'User already exists' 
+            });
+          }
+        }
+
+        // Hash password
+        const passwordHash = await bcrypt.hash(password, 10);
+        const userId = `user_${Date.now()}_${Math.random().toString(36).substring(7)}`;
+
+        // Create user
+        if (this.pgPool) {
+          await this.pgPool.query(
+            'INSERT INTO users (id, email, name, password_hash, tier, role) VALUES ($1, $2, $3, $4, $5, $6)',
+            [userId, email, name || email.split('@')[0], passwordHash, 'free', 'user']
+          );
+        } else {
+          this.db.prepare(
+            'INSERT INTO users (id, email, name, password_hash, tier, role) VALUES (?, ?, ?, ?, ?, ?)'
+          ).run(userId, email, name || email.split('@')[0], passwordHash, 'free', 'user');
+        }
+
+        // Generate API key for the user
+        const apiKey = `sk_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
+        const apiKeyHash = await bcrypt.hash(apiKey, 10);
+
+        if (this.pgPool) {
+          await this.pgPool.query(
+            'INSERT INTO api_keys (key_hash, user_id, name) VALUES ($1, $2, $3)',
+            [apiKeyHash, userId, 'Default API Key']
+          );
+        } else {
+          this.db.prepare(
+            'INSERT INTO api_keys (key_hash, user_id, name) VALUES (?, ?, ?)'
+          ).run(apiKeyHash, userId, 'Default API Key');
+        }
+
+        // Generate JWT token
+        const token = jwt.sign(
+          { sub: userId, email, role: 'user' },
+          config.jwtSecret,
+          { expiresIn: '30d' }
+        );
+
+        res.json({
+          success: true,
+          apiKey,
+          token,
+          email,
+          userId,
+          message: 'Account created successfully'
+        });
+      } catch (error: any) {
+        console.error('Signup error:', error);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Failed to create account' 
+        });
+      }
+    });
+
+    this.app.post('/auth/login', async (req, res) => {
+      try {
+        const { email, password } = req.body;
+        
+        // Validate input
+        if (!email || !password) {
+          return res.status(400).json({ 
+            success: false, 
+            error: 'Email and password are required' 
+          });
+        }
+
+        // Find user
+        let user: any = null;
+        if (this.pgPool) {
+          const result = await this.pgPool.query(
+            'SELECT id, email, name, password_hash, tier, role FROM users WHERE email = $1',
+            [email]
+          );
+          user = result.rows[0];
+        } else {
+          user = this.db.prepare(
+            'SELECT id, email, name, password_hash, tier, role FROM users WHERE email = ?'
+          ).get(email);
+        }
+
+        if (!user) {
+          return res.status(401).json({ 
+            success: false, 
+            error: 'Invalid credentials' 
+          });
+        }
+
+        // Verify password
+        const validPassword = await bcrypt.compare(password, user.password_hash);
+        if (!validPassword) {
+          return res.status(401).json({ 
+            success: false, 
+            error: 'Invalid credentials' 
+          });
+        }
+
+        // Get or create API key
+        let apiKey: string | null = null;
+        if (this.pgPool) {
+          // Try to get existing API key
+          const keyResult = await this.pgPool.query(
+            'SELECT id FROM api_keys WHERE user_id = $1 AND revoked = false LIMIT 1',
+            [user.id]
+          );
+          
+          if (keyResult.rowCount === 0) {
+            // Create new API key
+            apiKey = `sk_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
+            const apiKeyHash = await bcrypt.hash(apiKey, 10);
+            await this.pgPool.query(
+              'INSERT INTO api_keys (key_hash, user_id, name) VALUES ($1, $2, $3)',
+              [apiKeyHash, user.id, 'Default API Key']
+            );
+          } else {
+            // For existing keys, we can't retrieve the original, so generate a new one
+            apiKey = `sk_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
+            const apiKeyHash = await bcrypt.hash(apiKey, 10);
+            await this.pgPool.query(
+              'UPDATE api_keys SET key_hash = $1, last_used = NOW() WHERE id = $2',
+              [apiKeyHash, keyResult.rows[0].id]
+            );
+          }
+
+          // Get database URL for this user's context
+          const databaseUrl = process.env.DATABASE_URL;
+        } else {
+          // SQLite version
+          const keyRow = this.db.prepare(
+            'SELECT id FROM api_keys WHERE user_id = ? AND revoked = 0 LIMIT 1'
+          ).get(user.id) as any;
+          
+          if (!keyRow) {
+            apiKey = `sk_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
+            const apiKeyHash = await bcrypt.hash(apiKey, 10);
+            this.db.prepare(
+              'INSERT INTO api_keys (key_hash, user_id, name) VALUES (?, ?, ?)'
+            ).run(apiKeyHash, user.id, 'Default API Key');
+          } else {
+            apiKey = `sk_${Math.random().toString(36).substring(2)}${Math.random().toString(36).substring(2)}`;
+            const apiKeyHash = await bcrypt.hash(apiKey, 10);
+            this.db.prepare(
+              'UPDATE api_keys SET key_hash = ?, last_used = CURRENT_TIMESTAMP WHERE id = ?'
+            ).run(apiKeyHash, keyRow.id);
+          }
+        }
+
+        // Generate JWT token
+        const token = jwt.sign(
+          { sub: user.id, email: user.email, role: user.role },
+          config.jwtSecret,
+          { expiresIn: '30d' }
+        );
+
+        res.json({
+          success: true,
+          apiKey,
+          token,
+          email: user.email,
+          userId: user.id,
+          databaseUrl: process.env.DATABASE_URL, // For client configuration
+          message: 'Login successful'
+        });
+      } catch (error: any) {
+        console.error('Login error:', error);
+        res.status(500).json({ 
+          success: false, 
+          error: 'Login failed' 
+        });
+      }
     });
 
     // API Routes
