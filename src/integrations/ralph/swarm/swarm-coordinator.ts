@@ -5,11 +5,14 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
+import * as fs from 'fs/promises';
+import * as path from 'path';
 import { logger } from '../../../core/monitoring/logger.js';
 import { FrameManager } from '../../../core/context/frame-manager.js';
 import { sessionManager } from '../../../core/session/index.js';
 import { sharedContextLayer } from '../../../core/context/shared-context-layer.js';
 import { RalphStackMemoryBridge } from '../bridge/ralph-stackmemory-bridge.js';
+import { GitWorkflowManager } from './git-workflow-manager.js';
 import {
   SwarmConfiguration,
   Agent,
@@ -38,6 +41,7 @@ export class SwarmCoordinator {
   private config: SwarmCoordinatorConfig;
   private coordinationTimer?: NodeJS.Timeout;
   private plannerWakeupQueue: Map<string, () => void> = new Map();
+  private gitWorkflowManager: GitWorkflowManager;
 
   constructor(config?: Partial<SwarmCoordinatorConfig>) {
     this.config = {
@@ -68,6 +72,15 @@ export class SwarmCoordinator {
         coordination_overhead: 0
       }
     };
+
+    // Initialize git workflow manager
+    this.gitWorkflowManager = new GitWorkflowManager({
+      enableGitWorkflow: true,
+      branchStrategy: 'agent',
+      autoCommit: true,
+      commitFrequency: 5,
+      mergStrategy: 'squash'
+    });
 
     logger.info('Swarm coordinator initialized', this.config);
   }
@@ -359,6 +372,9 @@ export class SwarmCoordinator {
     try {
       agent.status = 'active';
       
+      // Initialize git workflow for this agent
+      await this.gitWorkflowManager.initializeAgentWorkflow(agent, task);
+      
       // Create Ralph loop for this agent/task
       const ralph = new RalphStackMemoryBridge({
         baseDir: path.join(agent.workingDirectory, task.id),
@@ -380,8 +396,14 @@ export class SwarmCoordinator {
       // Run the task
       await ralph.run();
 
+      // Commit agent's work
+      await this.gitWorkflowManager.commitAgentWork(agent, task);
+
       // Update performance metrics
       this.updateAgentPerformance(agent, true);
+      
+      // Merge agent's work back
+      await this.gitWorkflowManager.mergeAgentWork(agent, task);
       
       // Notify planners and collaborators
       await this.notifyTaskCompletion(agent, task, true);
@@ -643,6 +665,224 @@ You are a PROJECT COORDINATOR. Your role is to:
   }
 
   // Implement remaining helper methods...
+  private async setupAgentEnvironment(agent: Agent): Promise<void> {
+    // Create working directory for agent
+    try {
+      await fs.mkdir(agent.workingDirectory, { recursive: true });
+      logger.debug(`Created working directory for agent ${agent.id}: ${agent.workingDirectory}`);
+    } catch (error: unknown) {
+      logger.warn(`Could not create working directory for agent ${agent.id}`, error as Error);
+    }
+  }
+
+  private async configureAgentPrompts(agent: Agent): Promise<void> {
+    // Configure agent with role-specific prompts
+    // This would be expanded with actual prompt templates
+    logger.debug(`Configured prompts for agent ${agent.role}`);
+  }
+
+  private topologicalSort(tasks: SwarmTask[]): SwarmTask[] {
+    // Simple topological sort for task dependencies
+    const sorted: SwarmTask[] = [];
+    const visited = new Set<string>();
+    const visiting = new Set<string>();
+
+    const visit = (task: SwarmTask) => {
+      if (visited.has(task.id)) return;
+      if (visiting.has(task.id)) {
+        logger.warn(`Circular dependency detected for task: ${task.id}`);
+        return;
+      }
+
+      visiting.add(task.id);
+
+      for (const depId of task.dependencies) {
+        const depTask = tasks.find(t => t.id === depId);
+        if (depTask) visit(depTask);
+      }
+
+      visiting.delete(task.id);
+      visited.add(task.id);
+      sorted.push(task);
+    };
+
+    tasks.forEach(visit);
+    return sorted;
+  }
+
+  private agentCanHandle(agent: Agent, role: string): boolean {
+    return agent.role === role || agent.capabilities.includes(role);
+  }
+
+  private selectOptimalAgent(agents: Agent[], task: SwarmTask): Agent {
+    // Select agent with lowest workload
+    return agents.reduce((best, current) => {
+      const bestLoad = best.currentTask ? 1 : 0;
+      const currentLoad = current.currentTask ? 1 : 0;
+      return currentLoad < bestLoad ? current : best;
+    });
+  }
+
+  private estimateTaskDuration(task: SwarmTask): number {
+    // Estimate based on complexity
+    const durations: Record<string, number> = {
+      low: 60000,    // 1 minute
+      medium: 300000, // 5 minutes
+      high: 900000    // 15 minutes
+    };
+    return durations[task.estimatedEffort] || 300000;
+  }
+
+  private findCollaborators(agent: Agent, task: SwarmTask, agents: Agent[]): string[] {
+    // Find other agents working on related tasks
+    return agents
+      .filter(a => a.id !== agent.id && a.currentTask)
+      .map(a => a.id)
+      .slice(0, 2); // Limit to 2 collaborators
+  }
+
+  private findReviewers(agent: Agent, task: SwarmTask, agents: Agent[]): string[] {
+    // Find agents with reviewer role
+    return agents
+      .filter(a => a.role === 'reviewer' && a.id !== agent.id)
+      .map(a => a.id);
+  }
+
+  private calculateMaxIterations(task: SwarmTask): number {
+    // Calculate based on task complexity
+    const iterations: Record<string, number> = {
+      low: 5,
+      medium: 10,
+      high: 20
+    };
+    return iterations[task.estimatedEffort] || 10;
+  }
+
+  private async getSwarmContext(task: SwarmTask): Promise<string> {
+    // Get relevant context from other swarm members
+    const relatedTasks = Array.from(this.activeAgents.values())
+      .filter(a => a.currentTask)
+      .map(a => `- Agent ${a.role} is working on task ${a.currentTask}`)
+      .join('\n');
+    
+    return relatedTasks || 'No other agents currently active';
+  }
+
+  private getCoordinationInstructions(agent: Agent): string {
+    return `
+- Save progress to shared context regularly
+- Check for updates from collaborators
+- Request help if blocked for more than 2 iterations
+- Report completion immediately`;
+  }
+
+  private setupAgentCoordination(agent: Agent, ralph: any, assignment: any): void {
+    // Setup coordination hooks
+    logger.debug(`Setting up coordination for agent ${agent.id}`);
+  }
+
+  private updateAgentPerformance(agent: Agent, success: boolean): void {
+    agent.performance.tasksCompleted++;
+    if (!success) {
+      agent.performance.successRate = 
+        (agent.performance.successRate * (agent.performance.tasksCompleted - 1)) / 
+        agent.performance.tasksCompleted;
+    }
+  }
+
+  private async notifyTaskCompletion(agent: Agent, task: SwarmTask, success: boolean): Promise<void> {
+    const event: CoordinationEvent = {
+      type: 'task_completion',
+      agentId: agent.id,
+      timestamp: Date.now(),
+      data: {
+        taskId: task.id,
+        success,
+        agent: agent.role
+      }
+    };
+
+    this.swarmState.coordination?.events.push(event);
+    logger.info(`Task ${task.id} completed by agent ${agent.role}: ${success ? 'SUCCESS' : 'FAILED'}`);
+  }
+
+  private async handleTaskFailure(agent: Agent, task: SwarmTask, error: Error): Promise<void> {
+    logger.error(`Agent ${agent.role} failed task ${task.id}`, error);
+    
+    // Record conflict
+    if (this.swarmState.coordination) {
+      this.swarmState.coordination.conflicts.push({
+        type: 'task_failure',
+        agents: [agent.id],
+        timestamp: Date.now(),
+        description: error.message
+      });
+    }
+  }
+
+  private async detectTunnelVision(agent: Agent): Promise<boolean> {
+    // Check if agent is stuck in same approach
+    // Simplified implementation
+    return false;
+  }
+
+  private async provideAlternativeApproach(agent: Agent): Promise<void> {
+    logger.info(`Providing alternative approach to agent ${agent.role}`);
+  }
+
+  private async detectExcessiveRuntime(agent: Agent): Promise<boolean> {
+    // Check if agent has been running too long
+    if (!agent.performance.lastFreshStart) return false;
+    return Date.now() - agent.performance.lastFreshStart > 3600000; // 1 hour
+  }
+
+  private async requestCheckpoint(agent: Agent): Promise<void> {
+    logger.info(`Requesting checkpoint from agent ${agent.role}`);
+  }
+
+  private async triggerFreshStart(agent: Agent): Promise<void> {
+    logger.info(`Triggering fresh start for agent ${agent.role}`);
+    agent.performance.lastFreshStart = Date.now();
+    agent.performance.driftDetected = false;
+  }
+
+  private async resolveActiveConflicts(): Promise<void> {
+    // Resolve any active conflicts
+    if (this.swarmState.coordination?.conflicts.length) {
+      logger.debug(`Resolving ${this.swarmState.coordination.conflicts.length} conflicts`);
+    }
+  }
+
+  private async rebalanceWorkload(): Promise<void> {
+    // Rebalance workload among agents
+    const activeAgents = Array.from(this.activeAgents.values()).filter(a => a.status === 'active');
+    if (activeAgents.length > 0) {
+      logger.debug(`Rebalancing workload among ${activeAgents.length} active agents`);
+    }
+  }
+
+  private async triggerFreshStartsIfNeeded(): Promise<void> {
+    for (const agent of this.activeAgents.values()) {
+      if (agent.performance.driftDetected) {
+        await this.triggerFreshStart(agent);
+      }
+    }
+  }
+
+  private updateSwarmMetrics(): void {
+    if (!this.swarmState.performance) return;
+
+    const activeCount = Array.from(this.activeAgents.values())
+      .filter(a => a.status === 'active').length;
+    
+    this.swarmState.performance.throughput = 
+      this.swarmState.completedTaskCount / 
+      ((Date.now() - this.swarmState.startTime) / 1000);
+    
+    this.swarmState.performance.efficiency = 
+      activeCount > 0 ? this.swarmState.completedTaskCount / activeCount : 0;
+  }
+
   [Symbol.toStringTag] = 'SwarmCoordinator';
 }
 
