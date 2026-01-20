@@ -234,7 +234,7 @@ export class SwarmTUI {
       left: 0,
       width: '100%',
       height: 1,
-      content: 'Press q to quit, r to refresh, s to start swarm, t to stop swarm',
+      content: 'q=quit | r=refresh | s=start swarm | t=stop swarm | h=help | c=clear logs | d=detect swarms',
       style: {
         bg: 'white',
         fg: 'black'
@@ -254,11 +254,23 @@ export class SwarmTUI {
     });
 
     this.screen.key(['s'], () => {
-      this.logBox.log('Start swarm command - feature coming soon');
+      this.startSwarmInteractive();
     });
 
     this.screen.key(['t'], () => {
-      this.logBox.log('Stop swarm command - feature coming soon');
+      this.stopSwarmInteractive();
+    });
+
+    this.screen.key(['h'], () => {
+      this.showHelp();
+    });
+
+    this.screen.key(['c'], () => {
+      this.clearLogs();
+    });
+
+    this.screen.key(['d'], () => {
+      this.showDetectedSwarms();
     });
   }
 
@@ -601,6 +613,115 @@ Run: stackmemory ralph swarm <task>`);
     if (hours > 0) return `${hours}h ${minutes % 60}m`;
     if (minutes > 0) return `${minutes}m ${seconds % 60}s`;
     return `${seconds}s`;
+  }
+
+  /**
+   * Start swarm interactively
+   */
+  private startSwarmInteractive(): void {
+    this.logBox.log('🚀 Start Swarm Interactive Mode:');
+    this.logBox.log('Example: stackmemory ralph swarm "Implement feature" --agents developer,tester');
+    this.logBox.log('Tip: Run the command in another terminal, then press "d" to detect it');
+  }
+
+  /**
+   * Stop swarm interactively
+   */
+  private stopSwarmInteractive(): void {
+    if (this.swarmCoordinator) {
+      this.logBox.log('🛑 Stopping current swarm...');
+      // In a real implementation, we'd call swarmCoordinator.stop()
+      this.logBox.log('Note: Swarm stopping not yet implemented - use Ctrl+C in swarm terminal');
+    } else {
+      this.logBox.log('❌ No active swarm coordinator to stop');
+      this.logBox.log('External Ralph processes must be stopped manually');
+    }
+  }
+
+  /**
+   * Show help dialog
+   */
+  private showHelp(): void {
+    this.logBox.log('🦾 Ralph Swarm Monitor - Help');
+    this.logBox.log('');
+    this.logBox.log('Keyboard Shortcuts:');
+    this.logBox.log('  q, Esc, Ctrl+C - Quit TUI');
+    this.logBox.log('  r - Refresh data manually');
+    this.logBox.log('  s - Show start swarm commands');
+    this.logBox.log('  t - Stop current swarm');
+    this.logBox.log('  h - Show this help');
+    this.logBox.log('  c - Clear log output');
+    this.logBox.log('  d - Detect and list available swarms');
+    this.logBox.log('');
+    this.logBox.log('Usage:');
+    this.logBox.log('  stackmemory ralph tui                    # Auto-detect swarms');
+    this.logBox.log('  stackmemory ralph tui --swarm-id <id>   # Monitor specific swarm');
+    this.logBox.log('');
+    this.logBox.log('Starting Swarms:');
+    this.logBox.log('  stackmemory ralph swarm "Task description" --agents developer,tester');
+    this.logBox.log('');
+  }
+
+  /**
+   * Clear log output
+   */
+  private clearLogs(): void {
+    this.logBox.setContent('');
+    this.logBox.log('📝 Logs cleared - monitoring continues...');
+  }
+
+  /**
+   * Show detected swarms
+   */
+  private async showDetectedSwarms(): Promise<void> {
+    this.logBox.log('🔍 Detecting active swarms...');
+    
+    try {
+      const registry = SwarmRegistry.getInstance();
+      const activeSwarms = registry.listActiveSwarms();
+      const stats = registry.getStatistics();
+      
+      this.logBox.log('');
+      this.logBox.log('📊 Swarm Registry Status:');
+      this.logBox.log(`   Total swarms: ${stats.totalSwarms}`);
+      this.logBox.log(`   Active swarms: ${stats.activeSwarms}`);
+      this.logBox.log(`   Completed swarms: ${stats.completedSwarms}`);
+      
+      if (activeSwarms.length > 0) {
+        this.logBox.log('');
+        this.logBox.log('🦾 Active Swarms:');
+        
+        for (const swarm of activeSwarms) {
+          const uptime = this.formatDuration(Date.now() - swarm.startTime);
+          this.logBox.log(`   • ${swarm.id}: ${swarm.description} (${uptime})`);
+        }
+        
+        this.logBox.log('');
+        this.logBox.log('💡 Use --swarm-id to connect to specific swarm');
+      } else {
+        this.logBox.log('');
+        this.logBox.log('❌ No active swarms in registry');
+        
+        // Check for external processes
+        try {
+          const ralphProcesses = execSync('ps aux | grep "ralph" | grep -v grep', { encoding: 'utf8' });
+          if (ralphProcesses.trim()) {
+            this.logBox.log('🔍 External Ralph processes detected:');
+            ralphProcesses.split('\n').filter(line => line.trim()).forEach(line => {
+              const parts = line.split(/\s+/);
+              this.logBox.log(`   PID ${parts[1]}: ${parts.slice(10).join(' ').slice(0, 60)}`);
+            });
+          }
+        } catch {
+          this.logBox.log('🔍 No external Ralph processes found');
+        }
+        
+        this.logBox.log('');
+        this.logBox.log('💡 Start a swarm: stackmemory ralph swarm "Task" --agents developer');
+      }
+    } catch (error: unknown) {
+      this.logBox.log(`❌ Detection failed: ${(error as Error).message}`);
+    }
   }
 
   /**
