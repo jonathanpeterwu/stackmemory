@@ -447,6 +447,28 @@ export function createRalphCommand(): Command {
       });
     });
 
+  // TUI command for real-time monitoring
+  ralph
+    .command('tui')
+    .description('Launch TUI monitor for active swarms')
+    .option('--swarm-id <id>', 'Monitor specific swarm ID')
+    .action(async (options) => {
+      try {
+        const { SwarmTUI } = await import('../../features/tui/swarm-monitor.js');
+        
+        const tui = new SwarmTUI();
+        
+        // Initialize with optional swarm ID
+        await tui.initialize(undefined, options.swarmId);
+        tui.start();
+        
+      } catch (error: unknown) {
+        logger.error('TUI launch failed', error as Error);
+        console.error('❌ TUI failed:', (error as Error).message);
+        process.exit(1);
+      }
+    });
+
   return ralph;
 }
 

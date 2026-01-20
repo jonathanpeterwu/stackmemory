@@ -13,6 +13,7 @@ import { sessionManager } from '../../../core/session/index.js';
 import { sharedContextLayer } from '../../../core/context/shared-context-layer.js';
 import { RalphStackMemoryBridge } from '../bridge/ralph-stackmemory-bridge.js';
 import { GitWorkflowManager } from './git-workflow-manager.js';
+import { SwarmRegistry } from '../monitoring/swarm-registry.js';
 import {
   SwarmConfiguration,
   Agent,
@@ -42,6 +43,7 @@ export class SwarmCoordinator {
   private coordinationTimer?: NodeJS.Timeout;
   private plannerWakeupQueue: Map<string, () => void> = new Map();
   private gitWorkflowManager: GitWorkflowManager;
+  private registeredSwarmId?: string;
 
   constructor(config?: Partial<SwarmCoordinatorConfig>) {
     this.config = {
@@ -97,6 +99,10 @@ export class SwarmCoordinator {
 
       // Start coordination monitoring
       this.startCoordinationLoop();
+
+      // Register with global swarm registry for TUI monitoring
+      const registry = SwarmRegistry.getInstance();
+      this.registeredSwarmId = registry.registerSwarm(this, `Swarm ${this.swarmState.id.substring(0, 8)}`);
 
       logger.info('Swarm coordinator initialized successfully');
     } catch (error: unknown) {
