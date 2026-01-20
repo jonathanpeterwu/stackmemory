@@ -7,6 +7,13 @@ import { execSync } from 'child_process';
 import { logger } from '../../../core/monitoring/logger.js';
 import { Agent, SwarmTask } from '../types.js';
 
+export class GitWorkflowError extends Error {
+  constructor(message: string, public context?: Record<string, unknown>) {
+    super(message);
+    this.name = 'GitWorkflowError';
+  }
+}
+
 export interface GitConfig {
   enableGitWorkflow: boolean;
   branchStrategy: 'feature' | 'agent' | 'task';
@@ -230,17 +237,21 @@ export class GitWorkflowManager {
 
   // Private helper methods
   private getCurrentBranch(): string {
-    return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+    try {
+      return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
+    } catch (error: unknown) {
+      logger.warn('Failed to get current branch', error as Error);
+      return 'main';
+    }
   }
 
   private getMainBranch(): string {
     try {
-      // Try to detect main branch
       const branches = execSync('git branch -r', { encoding: 'utf8' });
       if (branches.includes('origin/main')) return 'main';
       if (branches.includes('origin/master')) return 'master';
-    } catch (error) {
-      // Fallback to current branch
+    } catch (error: unknown) {
+      logger.debug('Could not detect main branch from remotes', error as Error);
     }
     return this.getCurrentBranch();
   }
@@ -263,11 +274,55 @@ export class GitWorkflowManager {
   }
 
   private createBranch(branchName: string): void {
-    execSync(`git checkout -b ${branchName}`, { encoding: 'utf8' });
+    try {
+      // Check if branch already exists and delete it for clean test runs
+      try {
+        // First check if this is the current branch
+        const currentBranch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
+        if (currentBranch === branchName) {
+          // Switch to main/master before deleting
+          try {
+            execSync('git checkout main', { encoding: 'utf8' });
+          } catch {
+            execSync('git checkout master', { encoding: 'utf8' });
+          }
+        }
+        
+        // Remove any worktrees using this branch
+        try {
+          const worktrees = execSync('git worktree list --porcelain', { encoding: 'utf8' });
+          const lines = worktrees.split('\n');
+          for (let i = 0; i < lines.length; i++) {
+            if (lines[i].startsWith('branch ') && lines[i].includes(branchName)) {
+              const worktreetPath = lines[i-1].replace('worktree ', '');
+              execSync(`git worktree remove --force "${worktreetPath}"`, { encoding: 'utf8' });
+              logger.info(`Removed worktree at ${worktreetPath} for branch ${branchName}`);
+            }
+          }
+        } catch (worktreeError) {
+          logger.warn('Failed to check/remove worktrees', worktreeError as Error);
+        }
+        
+        execSync(`git branch -D ${branchName}`, { encoding: 'utf8' });
+        logger.info(`Deleted existing branch ${branchName} for fresh start`);
+      } catch {
+        // Branch doesn't exist, which is fine
+      }
+      
+      execSync(`git checkout -b ${branchName}`, { encoding: 'utf8' });
+    } catch (error: unknown) {
+      logger.error(`Failed to create branch ${branchName}`, error as Error);
+      throw new GitWorkflowError(`Failed to create branch: ${branchName}`, { branchName });
+    }
   }
 
   private checkoutBranch(branchName: string): void {
-    execSync(`git checkout ${branchName}`, { encoding: 'utf8' });
+    try {
+      execSync(`git checkout ${branchName}`, { encoding: 'utf8' });
+    } catch (error: unknown) {
+      logger.error(`Failed to checkout branch ${branchName}`, error as Error);
+      throw new GitWorkflowError(`Failed to checkout branch: ${branchName}`, { branchName });
+    }
   }
 
   private branchExists(branchName: string): boolean {
@@ -310,8 +365,13 @@ export class GitWorkflowManager {
   }
 
   private hasUncommittedChanges(): boolean {
-    const status = execSync('git status --porcelain', { encoding: 'utf8' });
-    return status.trim().length > 0;
+    try {
+      const status = execSync('git status --porcelain', { encoding: 'utf8' });
+      return status.trim().length > 0;
+    } catch (error: unknown) {
+      logger.warn('Failed to check git status', error as Error);
+      return false;
+    }
   }
 
   private hasRemote(): boolean {
@@ -335,12 +395,17 @@ export class GitWorkflowManager {
   }
 
   private isAgentFile(file: string, agent: Agent): boolean {
-    // Simple heuristic: check if file is in agent's working directory
+    if (!file || !agent?.role || !agent?.id) {
+      return false;
+    }
     return file.includes(agent.role) || file.includes(agent.id);
   }
 
   private generateCommitMessage(agent: Agent, task: SwarmTask): string {
-    return `[${agent.role}] ${task.title} - Iteration ${agent.performance?.tasksCompleted || 1}`;
+    const role = agent?.role || 'agent';
+    const title = task?.title || 'task';
+    const iteration = agent?.performance?.tasksCompleted || 1;
+    return `[${role}] ${title} - Iteration ${iteration}`;
   }
 
   private scheduleAutoCommit(agent: Agent, task: SwarmTask): void {
