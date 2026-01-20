@@ -55,21 +55,46 @@ export class SwarmTUI {
   private agentsTable: blessed.Widgets.TableElement;
   private metricsBox: blessed.Widgets.BoxElement;
   private logBox: blessed.Widgets.LogElement;
-  
+
   private swarmCoordinator: SwarmCoordinator | null = null;
   private swarmDashboard: SwarmDashboard | null = null;
   private refreshInterval: NodeJS.Timeout | null = null;
   private commitMetrics: Map<string, SwarmCommitMetrics> = new Map();
-  
+
   constructor() {
+    // Detect terminal capabilities and set safe defaults
+    const isGhostty =
+      process.env.TERM_PROGRAM === 'ghostty' ||
+      process.env.TERM?.includes('ghostty');
+    const isBasicTerm =
+      process.env.TERM === 'dumb' || process.env.TERM === 'unknown';
+
     this.screen = blessed.screen({
-      smartCSR: true,
-      title: 'Ralph Swarm Monitor'
+      smartCSR: !isGhostty, // Disable smart CSR for ghostty
+      title: 'Ralph Swarm Monitor',
+      terminal: isGhostty ? 'xterm-256color' : undefined,
+      fullUnicode: !isBasicTerm,
+      dockBorders: false,
+      ignoreDockContrast: true,
+      useBCE: false, // Disable background color erase for compatibility
+      forceUnicode: false,
+      debug: false,
     });
-    
+
+    // Add error handler for terminal issues
+    this.screen.on('error', (err) => {
+      logger.error('TUI screen error:', err);
+      console.log(
+        '⚠️  TUI display error detected. Try setting TERM=xterm-256color'
+      );
+      console.log(
+        '   Alternative: Use stackmemory ralph status for text-based monitoring'
+      );
+    });
+
     this.createUI();
     this.setupKeyHandlers();
-    
+
     logger.info('SwarmTUI initialized');
   }
 
@@ -82,9 +107,15 @@ export class SwarmTUI {
       width: '100%',
       height: '100%',
       style: {
-        bg: 'black'
-      }
+        bg: 'black',
+      },
     });
+
+    // Detect terminal capabilities for styling
+    const isGhostty =
+      process.env.TERM_PROGRAM === 'ghostty' ||
+      process.env.TERM?.includes('ghostty');
+    const safeColors = isGhostty;
 
     // Title bar
     blessed.box({
@@ -94,14 +125,19 @@ export class SwarmTUI {
       width: '100%',
       height: 3,
       content: '🦾 Ralph Swarm Monitor - Real-time Swarm Operations',
-      style: {
-        bg: 'blue',
-        fg: 'white',
-        bold: true
-      },
+      style: safeColors
+        ? {
+            fg: 'white',
+            bold: false,
+          }
+        : {
+            bg: 'blue',
+            fg: 'white',
+            bold: true,
+          },
       border: {
-        type: 'line'
-      }
+        type: 'line',
+      },
     });
 
     // Status box (top right)
@@ -115,12 +151,12 @@ export class SwarmTUI {
       content: 'No active swarm',
       style: {
         bg: 'black',
-        fg: 'white'
+        fg: 'white',
       },
       border: {
         type: 'line',
-        fg: 'cyan'
-      }
+        fg: 'cyan',
+      },
     });
 
     // Metrics box (top left)
@@ -134,12 +170,12 @@ export class SwarmTUI {
       content: 'Waiting for data...',
       style: {
         bg: 'black',
-        fg: 'white'
+        fg: 'white',
       },
       border: {
         type: 'line',
-        fg: 'green'
-      }
+        fg: 'green',
+      },
     });
 
     // Agents table (middle left)
@@ -156,22 +192,20 @@ export class SwarmTUI {
         header: {
           bg: 'blue',
           fg: 'white',
-          bold: true
+          bold: true,
         },
         cell: {
           selected: {
             bg: 'blue',
-            fg: 'white'
-          }
-        }
+            fg: 'white',
+          },
+        },
       },
       border: {
         type: 'line',
-        fg: 'yellow'
+        fg: 'yellow',
       },
-      data: [
-        ['Role', 'Status', 'Iteration', 'Task', 'Last Active']
-      ]
+      data: [['Role', 'Status', 'Iteration', 'Task', 'Last Active']],
     });
 
     // Commits table (middle right)
@@ -188,22 +222,20 @@ export class SwarmTUI {
         header: {
           bg: 'blue',
           fg: 'white',
-          bold: true
+          bold: true,
         },
         cell: {
           selected: {
             bg: 'blue',
-            fg: 'white'
-          }
-        }
+            fg: 'white',
+          },
+        },
       },
       border: {
         type: 'line',
-        fg: 'magenta'
+        fg: 'magenta',
       },
-      data: [
-        ['Agent', 'Message', 'Lines +/-', 'Time']
-      ]
+      data: [['Agent', 'Message', 'Lines +/-', 'Time']],
     });
 
     // Log output (bottom)
@@ -216,15 +248,15 @@ export class SwarmTUI {
       label: ' Swarm Logs ',
       style: {
         bg: 'black',
-        fg: 'white'
+        fg: 'white',
       },
       border: {
         type: 'line',
-        fg: 'white'
+        fg: 'white',
       },
       scrollable: true,
       alwaysScroll: true,
-      mouse: true
+      mouse: true,
     });
 
     // Help text
@@ -234,11 +266,12 @@ export class SwarmTUI {
       left: 0,
       width: '100%',
       height: 1,
-      content: 'q=quit | r=refresh | s=start swarm | t=stop swarm | h=help | c=clear logs | d=detect swarms',
+      content:
+        'q=quit | r=refresh | s=start swarm | t=stop swarm | h=help | c=clear logs | d=detect swarms',
       style: {
         bg: 'white',
-        fg: 'black'
-      }
+        fg: 'black',
+      },
     });
   }
 
@@ -277,7 +310,10 @@ export class SwarmTUI {
   /**
    * Initialize swarm monitoring
    */
-  async initialize(swarmCoordinator?: SwarmCoordinator, swarmId?: string): Promise<void> {
+  async initialize(
+    swarmCoordinator?: SwarmCoordinator,
+    swarmId?: string
+  ): Promise<void> {
     try {
       // Connect to existing swarm if ID provided
       if (swarmId) {
@@ -304,7 +340,7 @@ export class SwarmTUI {
       if (this.swarmCoordinator) {
         this.swarmDashboard = new SwarmDashboard(this.swarmCoordinator);
         this.swarmDashboard.startMonitoring(2000); // 2 second refresh
-        
+
         // Listen to swarm events
         this.swarmDashboard.on('metricsUpdated', (metrics) => {
           this.updateUI(metrics);
@@ -339,7 +375,7 @@ export class SwarmTUI {
     try {
       // Update commit metrics
       await this.updateCommitMetrics();
-      
+
       // Update swarm status if coordinator available
       if (this.swarmCoordinator) {
         const status = this.getSwarmStatus();
@@ -348,7 +384,7 @@ export class SwarmTUI {
         // Try to detect active swarms
         await this.detectActiveSwarms();
       }
-      
+
       this.screen.render();
     } catch (error: unknown) {
       logger.error('Failed to refresh TUI data', error as Error);
@@ -369,8 +405,7 @@ export class SwarmTUI {
 
       const commits = this.parseGitCommits(gitLog);
       this.updateCommitsTable(commits);
-      
-    } catch (error: unknown) {
+    } catch {
       // Git might fail if no commits, that's okay
       this.logBox.log('No recent commits found');
     }
@@ -389,9 +424,9 @@ export class SwarmTUI {
   }> {
     const commits = [];
     const lines = gitLog.split('\n').filter(Boolean);
-    
+
     let currentCommit: any = null;
-    
+
     for (const line of lines) {
       if (line.includes('|')) {
         // Commit info line
@@ -402,19 +437,19 @@ export class SwarmTUI {
           message: message.substring(0, 50),
           timestamp: parseInt(timestamp),
           linesAdded: 0,
-          linesDeleted: 0
+          linesDeleted: 0,
         };
       } else if (currentCommit && line.match(/^\d+\s+\d+/)) {
         // Stat line (added/deleted)
         const [added, deleted] = line.split('\t')[0].split(' ');
         currentCommit.linesAdded += parseInt(added) || 0;
         currentCommit.linesDeleted += parseInt(deleted) || 0;
-        
+
         commits.push({ ...currentCommit });
         currentCommit = null;
       }
     }
-    
+
     return commits.slice(0, 10); // Show last 10 commits
   }
 
@@ -427,15 +462,21 @@ export class SwarmTUI {
     if (agentMatch) {
       return agentMatch[1];
     }
-    
+
     // Fallback to checking if author contains known agent roles
-    const roles = ['developer', 'tester', 'optimizer', 'documenter', 'architect'];
+    const roles = [
+      'developer',
+      'tester',
+      'optimizer',
+      'documenter',
+      'architect',
+    ];
     for (const role of roles) {
       if (author.toLowerCase().includes(role)) {
         return role;
       }
     }
-    
+
     return 'user';
   }
 
@@ -443,20 +484,13 @@ export class SwarmTUI {
    * Update commits table display
    */
   private updateCommitsTable(commits: any[]): void {
-    const tableData = [
-      ['Agent', 'Message', 'Lines +/-', 'Time']
-    ];
+    const tableData = [['Agent', 'Message', 'Lines +/-', 'Time']];
 
     for (const commit of commits) {
       const timeAgo = this.formatTimeAgo(commit.timestamp * 1000);
       const linesChange = `+${commit.linesAdded}/-${commit.linesDeleted}`;
-      
-      tableData.push([
-        commit.agent,
-        commit.message,
-        linesChange,
-        timeAgo
-      ]);
+
+      tableData.push([commit.agent, commit.message, linesChange, timeAgo]);
     }
 
     this.commitsTable.setData(tableData);
@@ -470,7 +504,7 @@ export class SwarmTUI {
 
     const usage = this.swarmCoordinator.getResourceUsage();
     const swarmState = (this.swarmCoordinator as any).swarmState;
-    
+
     if (!swarmState) return null;
 
     return {
@@ -478,20 +512,24 @@ export class SwarmTUI {
       status: swarmState.status,
       startTime: swarmState.startTime,
       uptime: Date.now() - swarmState.startTime,
-      agents: usage.activeAgents ? Array.from((this.swarmCoordinator as any).activeAgents?.values() || []).map((agent: any) => ({
-        id: agent.id,
-        role: agent.role,
-        status: agent.status,
-        currentTask: agent.currentTask,
-        iteration: agent.performance?.tasksCompleted || 0,
-        lastActivity: agent.performance?.lastFreshStart || Date.now()
-      })) : [],
+      agents: usage.activeAgents
+        ? Array.from(
+            (this.swarmCoordinator as any).activeAgents?.values() || []
+          ).map((agent: any) => ({
+            id: agent.id,
+            role: agent.role,
+            status: agent.status,
+            currentTask: agent.currentTask,
+            iteration: agent.performance?.tasksCompleted || 0,
+            lastActivity: agent.performance?.lastFreshStart || Date.now(),
+          }))
+        : [],
       performance: {
         throughput: swarmState.performance?.throughput || 0,
         efficiency: swarmState.performance?.efficiency || 0,
         totalTasks: swarmState.totalTaskCount || 0,
-        completedTasks: swarmState.completedTaskCount || 0
-      }
+        completedTasks: swarmState.completedTaskCount || 0,
+      },
     };
   }
 
@@ -501,7 +539,9 @@ export class SwarmTUI {
   private updateStatusDisplay(status: SwarmStatus | null): void {
     if (!status) {
       this.statusBox.setContent('No active swarm detected');
-      this.agentsTable.setData([['Role', 'Status', 'Iteration', 'Task', 'Last Active']]);
+      this.agentsTable.setData([
+        ['Role', 'Status', 'Iteration', 'Task', 'Last Active'],
+      ]);
       this.metricsBox.setContent('Waiting for swarm data...');
       return;
     }
@@ -512,21 +552,23 @@ export class SwarmTUI {
 Status: ${status.status.toUpperCase()}
 Uptime: ${uptimeStr}
 Agents: ${status.agents.length}`;
-    
+
     this.statusBox.setContent(statusContent);
 
     // Update agents table
     const agentData = [['Role', 'Status', 'Iteration', 'Task', 'Last Active']];
     for (const agent of status.agents) {
       const lastActivity = this.formatTimeAgo(agent.lastActivity);
-      const task = agent.currentTask ? agent.currentTask.substring(0, 20) : 'idle';
-      
+      const task = agent.currentTask
+        ? agent.currentTask.substring(0, 20)
+        : 'idle';
+
       agentData.push([
         agent.role,
         agent.status,
         agent.iteration.toString(),
         task,
-        lastActivity
+        lastActivity,
       ]);
     }
     this.agentsTable.setData(agentData);
@@ -536,7 +578,7 @@ Agents: ${status.agents.length}`;
 Efficiency: ${(status.performance.efficiency * 100).toFixed(1)}%
 Tasks: ${status.performance.completedTasks}/${status.performance.totalTasks}
 Success Rate: ${status.performance.efficiency > 0 ? (status.performance.efficiency * 100).toFixed(1) : 'N/A'}%`;
-    
+
     this.metricsBox.setContent(metricsContent);
   }
 
@@ -544,7 +586,9 @@ Success Rate: ${status.performance.efficiency > 0 ? (status.performance.efficien
    * Update UI with metrics from dashboard
    */
   private updateUI(metrics: any): void {
-    this.logBox.log(`Metrics updated: ${metrics.status} - ${metrics.activeAgents} agents`);
+    this.logBox.log(
+      `Metrics updated: ${metrics.status} - ${metrics.activeAgents} agents`
+    );
   }
 
   /**
@@ -555,7 +599,7 @@ Success Rate: ${status.performance.efficiency > 0 ? (status.performance.efficien
       const registry = SwarmRegistry.getInstance();
       const activeSwarms = registry.listActiveSwarms();
       const stats = registry.getStatistics();
-      
+
       if (activeSwarms.length > 0) {
         let statusContent = `Available Swarms (${activeSwarms.length}):\n`;
         for (const swarm of activeSwarms.slice(0, 3)) {
@@ -566,14 +610,21 @@ Success Rate: ${status.performance.efficiency > 0 ? (status.performance.efficien
           statusContent += `... and ${activeSwarms.length - 3} more`;
         }
         this.statusBox.setContent(statusContent);
-        this.logBox.log(`Found ${activeSwarms.length} active swarms in registry`);
+        this.logBox.log(
+          `Found ${activeSwarms.length} active swarms in registry`
+        );
       } else {
         // Check for Ralph processes as fallback
-        const ralphProcesses = execSync('ps aux | grep "ralph" | grep -v grep', { encoding: 'utf8' });
-        
+        const ralphProcesses = execSync(
+          'ps aux | grep "ralph" | grep -v grep',
+          { encoding: 'utf8' }
+        );
+
         if (ralphProcesses.trim()) {
           this.logBox.log('Detected Ralph processes running');
-          this.statusBox.setContent('External Ralph processes detected\n(Use swarm coordinator for full monitoring)');
+          this.statusBox.setContent(
+            'External Ralph processes detected\n(Use swarm coordinator for full monitoring)'
+          );
         } else {
           this.statusBox.setContent(`No active swarms detected
 Total swarms: ${stats.totalSwarms}
@@ -620,8 +671,12 @@ Run: stackmemory ralph swarm <task>`);
    */
   private startSwarmInteractive(): void {
     this.logBox.log('🚀 Start Swarm Interactive Mode:');
-    this.logBox.log('Example: stackmemory ralph swarm "Implement feature" --agents developer,tester');
-    this.logBox.log('Tip: Run the command in another terminal, then press "d" to detect it');
+    this.logBox.log(
+      'Example: stackmemory ralph swarm "Implement feature" --agents developer,tester'
+    );
+    this.logBox.log(
+      'Tip: Run the command in another terminal, then press "d" to detect it'
+    );
   }
 
   /**
@@ -631,7 +686,9 @@ Run: stackmemory ralph swarm <task>`);
     if (this.swarmCoordinator) {
       this.logBox.log('🛑 Stopping current swarm...');
       // In a real implementation, we'd call swarmCoordinator.stop()
-      this.logBox.log('Note: Swarm stopping not yet implemented - use Ctrl+C in swarm terminal');
+      this.logBox.log(
+        'Note: Swarm stopping not yet implemented - use Ctrl+C in swarm terminal'
+      );
     } else {
       this.logBox.log('❌ No active swarm coordinator to stop');
       this.logBox.log('External Ralph processes must be stopped manually');
@@ -654,11 +711,17 @@ Run: stackmemory ralph swarm <task>`);
     this.logBox.log('  d - Detect and list available swarms');
     this.logBox.log('');
     this.logBox.log('Usage:');
-    this.logBox.log('  stackmemory ralph tui                    # Auto-detect swarms');
-    this.logBox.log('  stackmemory ralph tui --swarm-id <id>   # Monitor specific swarm');
+    this.logBox.log(
+      '  stackmemory ralph tui                    # Auto-detect swarms'
+    );
+    this.logBox.log(
+      '  stackmemory ralph tui --swarm-id <id>   # Monitor specific swarm'
+    );
     this.logBox.log('');
     this.logBox.log('Starting Swarms:');
-    this.logBox.log('  stackmemory ralph swarm "Task description" --agents developer,tester');
+    this.logBox.log(
+      '  stackmemory ralph swarm "Task description" --agents developer,tester'
+    );
     this.logBox.log('');
   }
 
@@ -675,49 +738,59 @@ Run: stackmemory ralph swarm <task>`);
    */
   private async showDetectedSwarms(): Promise<void> {
     this.logBox.log('🔍 Detecting active swarms...');
-    
+
     try {
       const registry = SwarmRegistry.getInstance();
       const activeSwarms = registry.listActiveSwarms();
       const stats = registry.getStatistics();
-      
+
       this.logBox.log('');
       this.logBox.log('📊 Swarm Registry Status:');
       this.logBox.log(`   Total swarms: ${stats.totalSwarms}`);
       this.logBox.log(`   Active swarms: ${stats.activeSwarms}`);
       this.logBox.log(`   Completed swarms: ${stats.completedSwarms}`);
-      
+
       if (activeSwarms.length > 0) {
         this.logBox.log('');
         this.logBox.log('🦾 Active Swarms:');
-        
+
         for (const swarm of activeSwarms) {
           const uptime = this.formatDuration(Date.now() - swarm.startTime);
           this.logBox.log(`   • ${swarm.id}: ${swarm.description} (${uptime})`);
         }
-        
+
         this.logBox.log('');
         this.logBox.log('💡 Use --swarm-id to connect to specific swarm');
       } else {
         this.logBox.log('');
         this.logBox.log('❌ No active swarms in registry');
-        
+
         // Check for external processes
         try {
-          const ralphProcesses = execSync('ps aux | grep "ralph" | grep -v grep', { encoding: 'utf8' });
+          const ralphProcesses = execSync(
+            'ps aux | grep "ralph" | grep -v grep',
+            { encoding: 'utf8' }
+          );
           if (ralphProcesses.trim()) {
             this.logBox.log('🔍 External Ralph processes detected:');
-            ralphProcesses.split('\n').filter(line => line.trim()).forEach(line => {
-              const parts = line.split(/\s+/);
-              this.logBox.log(`   PID ${parts[1]}: ${parts.slice(10).join(' ').slice(0, 60)}`);
-            });
+            ralphProcesses
+              .split('\n')
+              .filter((line) => line.trim())
+              .forEach((line) => {
+                const parts = line.split(/\s+/);
+                this.logBox.log(
+                  `   PID ${parts[1]}: ${parts.slice(10).join(' ').slice(0, 60)}`
+                );
+              });
           }
         } catch {
           this.logBox.log('🔍 No external Ralph processes found');
         }
-        
+
         this.logBox.log('');
-        this.logBox.log('💡 Start a swarm: stackmemory ralph swarm "Task" --agents developer');
+        this.logBox.log(
+          '💡 Start a swarm: stackmemory ralph swarm "Task" --agents developer'
+        );
       }
     } catch (error: unknown) {
       this.logBox.log(`❌ Detection failed: ${(error as Error).message}`);
@@ -731,11 +804,11 @@ Run: stackmemory ralph swarm <task>`);
     if (this.refreshInterval) {
       clearInterval(this.refreshInterval);
     }
-    
+
     if (this.swarmDashboard) {
       this.swarmDashboard.stopMonitoring();
     }
-    
+
     logger.info('SwarmTUI cleaned up');
   }
 }
