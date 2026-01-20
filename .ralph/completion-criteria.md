@@ -1,3 +1,3 @@
-- Tests pass
-- Function works
-- Code is clean
+- Function works correctly
+- Has unit tests
+- Handles edge cases like 0 bytes
