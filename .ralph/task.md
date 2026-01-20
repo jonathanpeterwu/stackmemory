@@ -1,0 +1,1 @@
+Add a simple calculator function to the codebase

@@ -39,6 +39,7 @@ import clearCommand from './commands/clear.js';
 import createWorkflowCommand from './commands/workflow.js';
 import monitorCommand from './commands/monitor.js';
 import qualityCommand from './commands/quality.js';
+import createRalphCommand from './commands/ralph.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerSignupCommand } from './commands/signup.js';
 import { registerLogoutCommand, registerDbCommands } from './commands/db.js';
@@ -458,6 +459,7 @@ program.addCommand(clearCommand);
 program.addCommand(createWorkflowCommand());
 program.addCommand(monitorCommand);
 program.addCommand(qualityCommand);
+program.addCommand(createRalphCommand());
 
 // Register dashboard command
 program
