@@ -1,1 +1,1 @@
-Add a simple calculator function to the codebase
+Add a utility function to format file sizes (bytes to human readable like 1.2 MB)
