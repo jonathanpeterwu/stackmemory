@@ -1,90 +1,99 @@
-# Working Directory and Access Control
+# StackMemory - Project Configuration
+
+## Project Structure
+
+```
+src/
+  cli/           # CLI commands and entry point
+  core/          # Core business logic
+    context/     # Frame and context management
+    database/    # Database adapters (SQLite, ParadeDB)
+    digest/      # Digest generation
+    query/       # Query parsing and routing
+  integrations/  # External integrations (Linear, MCP)
+  services/      # Business services
+  skills/        # Claude Code skills
+  utils/         # Shared utilities
+scripts/         # Build and utility scripts
+config/          # Configuration files
+docs/            # Documentation
+```
+
+## Key Files
+
+- Entry: src/cli/index.ts
+- MCP Server: src/integrations/mcp/server.ts
+- Frame Manager: src/core/context/frame-manager.ts
+- Database: src/core/database/sqlite-adapter.ts
+
+## Detailed Guides
+
+Quick reference (agent_docs/):
+- linear_integration.md - Linear sync
+- railway_deployment.md - Deployment
+- mcp_server.md - MCP tools
+- database_storage.md - Storage
+- claude_hooks.md - Hooks
+
+Full documentation (docs/):
+- SPEC.md - Technical specification
+- API_REFERENCE.md - API docs
+- DEVELOPMENT.md - Dev guide
+- SETUP.md - Installation
+
+## Commands
+
+```bash
+npm run build          # Compile TypeScript (esbuild)
+npm run lint           # ESLint check
+npm run lint:fix       # Auto-fix lint issues
+npm test               # Run Vitest (watch)
+npm run test:run       # Run tests once
+npm run linear:sync    # Sync with Linear
+```
+
 ## Working Directory
-- **PRIMARY**: /Users/jwu/Dev/stackmemory
-- **ALLOWED**: All subdirectories within stackmemory project
-- **TEMP**: /tmp for temporary operations only
 
-## Forbidden Directories
-- **FORBIDDEN**: ~ (home directory root)
-- **FORBIDDEN**: ~/.ssh (SSH keys)
-- **FORBIDDEN**: ~/.aws (AWS credentials)
-- **FORBIDDEN**: /etc (system configuration)
-- **FORBIDDEN**: /usr (except /usr/bin for commands)
-- **FORBIDDEN**: Any directory outside /Users/jwu/Dev/stackmemory without explicit permission
-- **FORBIDDEN**: Production servers or databases
+- PRIMARY: /Users/jwu/Dev/stackmemory
+- ALLOWED: All subdirectories
+- TEMP: /tmp for temporary operations
 
-## Docker Guidelines
-- Always use Docker containers for testing when available
-- Never modify host system configuration
-- Keep containers ephemeral and stateless
-- Clean up containers after use
+## Validation (MUST DO)
 
-# CRITICAL: Code Validation Requirements
-- Always run tests and lint and build after code change tasks are complete
-- Always attempt to build and fix npm build issues after a task is complete
-- Never fallback to mock or fake data - try to fix the actual error
+After code changes:
+1. `npm run lint` - fix any errors
+2. `npm test` - verify no regressions
+3. `npm run build` - ensure compilation
+4. Run code to verify it works
 
-# Validation Checklist (MUST DO):
-1. Run `npm run lint` after any code changes
-2. Run `npm test` to verify no regressions
-3. Run `npm run build` to ensure compilation succeeds
-4. Actually execute the code/command to confirm it works
-5. If any step fails, fix it before proceeding
-- Ensure whenever we create scripts, files, test, etc to place them in the correct folder based on the repo folder structure provided in the reposiutory
-- Always review most recent commit to load context and stackmemory.json if possible as well as recent frames to remember session whenever claude code is loaded
-- When syncing from linear fallback to using the api script if its not working
-- always check .env for api keys first and .zsrhc before asking for it
-- Whenever needing to test page builds use the browser mcp or chrome claude mcp extension, if you need to do visual research do it using browser mcp
-- Remember to run npm run linear:sync whenever a task is complete or updated
-- Never assume or skip testing - always run lint, tests, and build after code changes
-- Always confirm code works by running it - don't just make a guess
-- Ask questions if you get stuck or are not 100% certain about something
-- Tests should always pass before proceeding - fix tests first
+Never: Assume success | Skip testing | Use mock data as fallback
 
-# Security Best Practices (CRITICAL):
+## Security
 
-## API Keys and Secrets Management
-1. **NEVER hardcode API keys or secrets in code files**
-   - Always use environment variables: `process.env.API_KEY`
-   - Add dotenv/config import: `import 'dotenv/config'`
-   - Check .env file first, then .zshrc/.bashrc
-   
-2. **When fixing hardcoded secrets:**
-   - Replace with: `process.env.KEY_NAME || process.env.FALLBACK_KEY`
-   - Add error handling:
-     ```javascript
-     if (!API_KEY) {
-       console.error('❌ API_KEY environment variable not set');
-       console.log('Please set API_KEY in your .env file or export it in your shell');
-       process.exit(1);
-     }
-     ```
-   - Always add `import 'dotenv/config'` at the top of scripts
-   
-3. **GitHub Push Protection Issues:**
-   - If push is blocked due to secrets in OLD commits:
-     - Option 1: Visit GitHub URLs to allow specific secrets (if they're being removed)
-     - Option 2: Use BFG Repo-Cleaner to remove from history
-     - Option 3: Interactive rebase to edit old commits
-   - Prevention: Always check for secrets BEFORE committing with:
-     - `git diff --staged | grep -E "(api_key|token|secret|password)"`
-     - Use pre-commit hooks to scan for secrets
-     
-4. **Environment Variable Sources (check in order):**
-   - .env file (for development)
-   - .env.local (for local overrides)
-   - ~/.zshrc or ~/.bashrc (for user-specific)
-   - Process environment (for CI/CD)
+NEVER hardcode secrets - use process.env with dotenv/config
 
-## Common Secret Patterns to Watch For:
-- `lin_api_*` - Linear API keys
-- `lin_oauth_*` - Linear OAuth tokens  
-- `sk-*` - OpenAI/Stripe keys
-- `npm_*` - NPM tokens
-- Any base64 encoded strings that look like tokens
-- Hardcoded URLs with embedded credentials
-- # Never use emojis and speak in plain developer english for comments not AI comments
-- Ask 1-3 questions for clarity for any command given that is complex, go question by question
-- Ask questions one at a time before moving on allow user to skip
-- a
-- Default to using subagents for multi step tasks if possible
+```javascript
+import 'dotenv/config';
+const API_KEY = process.env.LINEAR_API_KEY;
+if (!API_KEY) {
+  console.error('LINEAR_API_KEY not set');
+  process.exit(1);
+}
+```
+
+Environment sources (check in order):
+1. .env file
+2. .env.local
+3. ~/.zshrc
+4. Process environment
+
+Secret patterns to block: lin_api_* | lin_oauth_* | sk-* | npm_*
+
+## Workflow
+
+- Check .env for API keys before asking
+- Run npm run linear:sync after task completion
+- Use browser MCP for visual testing
+- Review recent commits and stackmemory.json on session start
+- Use subagents for multi-step tasks
+- Ask 1-3 clarifying questions for complex commands (one at a time)

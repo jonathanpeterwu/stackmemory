@@ -1,0 +1,41 @@
+# StackMemory Guardian Service - Linux systemd configuration
+#
+# This service file is generated dynamically during `stackmemory service install`.
+# Edit this template to customize the service behavior.
+#
+# Installation location: ~/.config/systemd/user/stackmemory-guardian.service
+#
+# Manual commands:
+#   systemctl --user start stackmemory-guardian
+#   systemctl --user stop stackmemory-guardian
+#   systemctl --user status stackmemory-guardian
+#   journalctl --user -u stackmemory-guardian -f
+
+[Unit]
+Description=StackMemory Guardian Service
+Documentation=https://github.com/stackmemoryai/stackmemory
+After=network.target
+
+[Service]
+Type=simple
+
+# Command to execute
+ExecStart=/usr/bin/node $HOME/.stackmemory/guardian.js
+
+# Restart on failure with 30 second delay
+Restart=on-failure
+RestartSec=30
+
+# Working directory
+WorkingDirectory=$HOME/.stackmemory
+
+# Environment
+Environment=HOME=$HOME
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+
+# Log output
+StandardOutput=append:$HOME/.stackmemory/logs/guardian.log
+StandardError=append:$HOME/.stackmemory/logs/guardian.error.log
+
+[Install]
+WantedBy=default.target

@@ -74,6 +74,8 @@
     "daemons:start": "node scripts/claude-sm-autostart.js",
     "daemons:status": "node scripts/claude-sm-autostart.js status",
     "daemons:stop": "node scripts/claude-sm-autostart.js stop",
+    "daemon:session": "node dist/daemon/session-daemon.js",
+    "daemon:session:start": "node dist/daemon/session-daemon.js --session-id",
     "sync:start": "node scripts/background-sync-manager.js",
     "sync:setup": "./scripts/setup-background-sync.sh",
     "prepare": "echo 'Prepare step completed'"

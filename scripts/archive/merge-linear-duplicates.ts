@@ -138,9 +138,9 @@ async function mergeDuplicateTasks() {
           console.log(
             `   ✅ Marked ${duplicateId} as duplicate of ${group.primaryId}`
           );
-        } catch (error: any) {
+        } catch (error: unknown) {
           console.log(
-            `   ❌ Failed to process ${duplicateId}: ${error.message}`
+            `   [ERROR] Failed to process ${duplicateId}: ${error instanceof Error ? error.message : String(error)}`
           );
         }
       }
@@ -156,8 +156,10 @@ async function mergeDuplicateTasks() {
       }
 
       console.log(`   ✅ Group "${group.name}" processed successfully`);
-    } catch (error: any) {
-      console.error(`   ❌ Error processing group: ${error.message}`);
+    } catch (error: unknown) {
+      console.error(
+        `   [ERROR] Error processing group: ${error instanceof Error ? error.message : String(error)}`
+      );
     }
   }
 
