@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 
 
 You are a SPECIALIZED DEVELOPER. Your role is to:
@@ -31,3 +32,6 @@ ACCEPTANCE CRITERIA:
 - Feature works correctly
 - Handles edge cases
 - Follows coding standards
+=======
+Implement missing SwarmCoordinator methods (getSwarmStatus, getAllActiveSwarms, stopSwarm, forceStopSwarm, cleanup) and create hybrid storage solution for short-duration VMs
+>>>>>>> swarm/developer-implement-core-feature

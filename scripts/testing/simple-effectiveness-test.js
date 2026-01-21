@@ -266,7 +266,7 @@ class SimpleEffectivenessTest {
     });
     
     // Save report to file
-    const reportPath = path.join(process.cwd(), 'test-results', 'simple-effectiveness-report.json');
+    const reportPath = path.join(process.cwd(), 'scripts', 'testing', 'results', 'simple-effectiveness-report.json');
     const reportDir = path.dirname(reportPath);
     
     if (!fs.existsSync(reportDir)) {

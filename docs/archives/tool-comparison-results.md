@@ -27,7 +27,7 @@ Test Feature: "Add a new CLI command 'stackmemory ping' that tests Redis connect
 
 **Architecture**: Message-passing pub/sub with SQLite ledger
 **Status**: ⚠️ Partially working with mock provider
-**Location**: `/Users/jwu/Dev/stackmemory/zeroshot/`
+**Location**: `/Users/jwu/Dev/stackmemory/external/zeroshot-main/`
 
 **Key Components**:
 - **Conductor**: 2D classification (Complexity × TaskType)
@@ -59,7 +59,7 @@ Test Feature: "Add a new CLI command 'stackmemory ping' that tests Redis connect
 
 **Architecture**: Simple prompt-response loop
 **Status**: ❌ Not tested (requires Claude CLI)
-**Location**: `/Users/jwu/Dev/stackmemory/bjarne/`
+**Location**: `/Users/jwu/Dev/stackmemory/external/bjarne/`
 
 **Strengths**:
 - Simple, lightweight design
@@ -124,7 +124,7 @@ Agent A → publish() → SQLite Ledger → LogicEngine → trigger match → Ag
 
 2. **Created API wrapper** using Anthropic SDK:
    - Installed `@anthropic-ai/sdk` package
-   - Created `claude-api-wrapper.cjs` to bypass CLI
+   - Created `tools/wrappers/claude-api-wrapper.cjs` to bypass CLI
    - Result: ❌ API key returns 401 authentication error
 
 3. **Mock Provider** for Zeroshot:
