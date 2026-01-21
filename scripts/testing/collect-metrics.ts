@@ -351,7 +351,7 @@ export class MetricsCollector {
 
   async saveMetrics(
     sessionId: string,
-    outputDir: string = './test-results'
+    outputDir: string = './scripts/testing/results'
   ): Promise<void> {
     const metrics = this.metrics.get(sessionId);
     if (!metrics) return;
@@ -362,7 +362,7 @@ export class MetricsCollector {
   }
 
   async generateReport(
-    outputPath: string = './test-results/report.md'
+    outputPath: string = './scripts/testing/results/report.md'
   ): Promise<void> {
     const withStackMemory = Array.from(this.metrics.values()).filter(
       (m) => m.variant === 'with_stackmemory'
