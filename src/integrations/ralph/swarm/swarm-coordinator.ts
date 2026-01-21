@@ -685,7 +685,7 @@ ${task.acceptanceCriteria.map((c) => `- ${c}`).join('\n')}
     registry.unregisterSwarm(swarmId);
 
     // Kill all agent processes if any
-    this.agents = [];
+    this.activeAgents.clear();
 
     logger.info('Swarm force stopped', { swarmId });
   }
@@ -714,7 +714,7 @@ ${task.acceptanceCriteria.map((c) => `- ${c}`).join('\n')}
     registry.cleanup();
 
     // Clear agent list
-    this.agents = [];
+    this.activeAgents.clear();
 
     logger.info('SwarmCoordinator cleanup completed');
   }
