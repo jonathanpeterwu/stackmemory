@@ -1,1 +1,1 @@
-Test context integration
+Implement missing SwarmCoordinator methods (getSwarmStatus, getAllActiveSwarms, stopSwarm, forceStopSwarm, cleanup) and create hybrid storage solution for short-duration VMs

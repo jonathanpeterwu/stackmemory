@@ -369,6 +369,166 @@ export function createRalphCommand(): Command {
       });
     });
 
+  // Swarm status command
+  ralph
+    .command('swarm-status')
+    .description('Check status of all active swarms or a specific swarm')
+    .argument('[swarmId]', 'Optional specific swarm ID to check')
+    .option('--detailed', 'Show detailed agent information')
+    .action(async (swarmId, options) => {
+      return trace.command(
+        'ralph-swarm-status',
+        { swarmId, ...options },
+        async () => {
+          try {
+            await swarmCoordinator.initialize();
+
+            if (swarmId) {
+              // Show status for specific swarm
+              const status = swarmCoordinator.getSwarmStatus(swarmId);
+              if (!status) {
+                console.log(`❌ Swarm ${swarmId} not found`);
+                return;
+              }
+
+              console.log(`🦾 Swarm Status: ${swarmId}`);
+              console.log(`   Status: ${status.state}`);
+              console.log(`   Agents: ${status.activeAgents} active`);
+              console.log(
+                `   Started: ${new Date(status.startTime).toLocaleString()}`
+              );
+
+              if (options.detailed && status.agents) {
+                console.log('\n👥 Agent Details:');
+                status.agents.forEach((agent: any) => {
+                  console.log(
+                    `   - ${agent.role}: ${agent.status} (${agent.task})`
+                  );
+                });
+              }
+            } else {
+              // Show all active swarms
+              const activeSwarms = swarmCoordinator.getAllActiveSwarms();
+
+              if (activeSwarms.length === 0) {
+                console.log('📊 No active swarms');
+                return;
+              }
+
+              console.log(`📊 Active Swarms: ${activeSwarms.length}`);
+              activeSwarms.forEach((swarm: any) => {
+                console.log(`\n🆔 ${swarm.id}`);
+                console.log(
+                  `   Description: ${swarm.description?.substring(0, 60)}...`
+                );
+                console.log(`   Agents: ${swarm.agentCount}`);
+                console.log(`   Status: ${swarm.status}`);
+                console.log(
+                  `   Running for: ${Math.round((Date.now() - swarm.startTime) / 1000)}s`
+                );
+              });
+
+              console.log('\nCommands:');
+              console.log(
+                '  stackmemory ralph swarm-status <id>  # Check specific swarm'
+              );
+              console.log(
+                '  stackmemory ralph swarm-killall      # Stop all swarms'
+              );
+            }
+          } catch (error: unknown) {
+            logger.error('Failed to get swarm status', error as Error);
+            console.error('❌ Status check failed:', (error as Error).message);
+          }
+        }
+      );
+    });
+
+  // Swarm killall command
+  ralph
+    .command('swarm-killall')
+    .description('Stop all active swarms and cleanup resources')
+    .option('--force', 'Force kill without saving state')
+    .action(async (options) => {
+      return trace.command('ralph-swarm-killall', options, async () => {
+        try {
+          await swarmCoordinator.initialize();
+
+          const activeSwarms = swarmCoordinator.getAllActiveSwarms();
+
+          if (activeSwarms.length === 0) {
+            console.log('📊 No active swarms to stop');
+            return;
+          }
+
+          console.log(`🛑 Stopping ${activeSwarms.length} active swarm(s)...`);
+
+          let stoppedCount = 0;
+          let failedCount = 0;
+
+          for (const swarm of activeSwarms) {
+            try {
+              console.log(`   Stopping ${swarm.id}...`);
+
+              if (options.force) {
+                await swarmCoordinator.forceStopSwarm(swarm.id);
+              } else {
+                await swarmCoordinator.stopSwarm(swarm.id);
+              }
+
+              stoppedCount++;
+              console.log(`   ✅ Stopped ${swarm.id}`);
+            } catch (error: unknown) {
+              failedCount++;
+              console.error(
+                `   ❌ Failed to stop ${swarm.id}: ${(error as Error).message}`
+              );
+            }
+          }
+
+          // Cleanup git branches if any
+          try {
+            const { execSync } = await import('child_process');
+            const branches = execSync('git branch | grep "swarm/"', {
+              encoding: 'utf8',
+            })
+              .split('\n')
+              .filter(Boolean)
+              .map((b) => b.trim());
+
+            if (branches.length > 0) {
+              console.log(
+                `\n🔀 Cleaning up ${branches.length} swarm branches...`
+              );
+              for (const branch of branches) {
+                try {
+                  execSync(`git branch -D ${branch}`, { stdio: 'ignore' });
+                  console.log(`   Deleted ${branch}`);
+                } catch {
+                  // Ignore branch deletion errors
+                }
+              }
+            }
+          } catch {
+            // No swarm branches to clean
+          }
+
+          console.log(`\n📊 Summary:`);
+          console.log(`   ✅ Stopped: ${stoppedCount} swarms`);
+          if (failedCount > 0) {
+            console.log(`   ❌ Failed: ${failedCount} swarms`);
+          }
+
+          // Final cleanup
+          await swarmCoordinator.cleanup();
+          console.log('🧹 Cleanup completed');
+        } catch (error: unknown) {
+          logger.error('Swarm killall failed', error as Error);
+          console.error('❌ Killall failed:', (error as Error).message);
+        }
+      });
+    });
+
   // Multi-loop orchestration for complex tasks
   ralph
     .command('orchestrate')
