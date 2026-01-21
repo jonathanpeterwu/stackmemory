@@ -1,3 +1,4 @@
-- All tests pass
-- Code works correctly
-- No lint errors
+- All methods implemented
+- Tests pass
+- Build succeeds
+- Storage strategy optimized for VMs

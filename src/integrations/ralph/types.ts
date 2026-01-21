@@ -86,7 +86,7 @@ export interface RalphStackMemoryConfig {
     compressionEnabled: boolean;
     adaptiveBudgeting: boolean; // Adjust based on iteration complexity
   };
-  
+
   // State reconciliation configuration
   stateReconciliation: {
     precedence: ('git' | 'files' | 'memory')[];
@@ -94,7 +94,7 @@ export interface RalphStackMemoryConfig {
     syncInterval: number; // ms between sync checks
     validateConsistency: boolean;
   };
-  
+
   // Lifecycle configuration
   lifecycle: {
     hooks: {
@@ -110,7 +110,7 @@ export interface RalphStackMemoryConfig {
       retentionDays: number;
     };
   };
-  
+
   // Performance configuration
   performance: {
     asyncSaves: boolean;
@@ -299,7 +299,11 @@ export interface ContextBudgetManager {
   estimateTokens(text: string): number;
   allocateBudget(context: IterationContext): IterationContext;
   compressContext(context: IterationContext): IterationContext;
-  getUsage(): { used: number; available: number; categories: Record<string, number> };
+  getUsage(): {
+    used: number;
+    available: number;
+    categories: Record<string, number>;
+  };
 }
 
 export interface StateReconciler {
@@ -350,7 +354,11 @@ export interface RalphContextResponse {
 }
 
 export interface ContextSource {
-  type: 'similar_tasks' | 'historical_patterns' | 'recent_decisions' | 'project_context';
+  type:
+    | 'similar_tasks'
+    | 'historical_patterns'
+    | 'recent_decisions'
+    | 'project_context';
   weight: number;
   content: string;
   tokens: number;
@@ -387,9 +395,9 @@ export interface LearnedPattern {
   metadata: Record<string, any>;
 }
 
-export type PatternType = 
+export type PatternType =
   | 'iteration_strategy'
-  | 'success_strategy' 
+  | 'success_strategy'
   | 'failure_avoidance'
   | 'iteration_sequence'
   | 'task_specific';
@@ -516,7 +524,7 @@ export interface Agent {
   coordination: AgentCoordination;
 }
 
-export type AgentRole = 
+export type AgentRole =
   | 'architect'
   | 'planner'
   | 'developer'
@@ -560,7 +568,7 @@ export interface SwarmTask {
 
 export interface SwarmState {
   id: string;
-  status: 'idle' | 'active' | 'completed' | 'failed' | 'stopped';
+  status: 'idle' | 'active' | 'completed' | 'failed' | 'stopped' | 'stopping';
   startTime: number;
   endTime?: number;
   activeTaskCount: number;
@@ -584,7 +592,12 @@ export interface SwarmState {
 export interface CoordinationEvent {
   id: string;
   timestamp: number;
-  type: 'task_assigned' | 'task_completed' | 'conflict_detected' | 'agent_started' | 'agent_stopped';
+  type:
+    | 'task_assigned'
+    | 'task_completed'
+    | 'conflict_detected'
+    | 'agent_started'
+    | 'agent_stopped';
   agentId?: string;
   taskId?: string;
   data: Record<string, any>;
