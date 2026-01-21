@@ -15,62 +15,79 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { trace } from '../../core/trace/index.js';
 
 export function createRalphCommand(): Command {
-  const ralph = new Command('ralph')
-    .description('Ralph Wiggum Loop integration with StackMemory');
+  const ralph = new Command('ralph').description(
+    'Ralph Wiggum Loop integration with StackMemory'
+  );
 
   // Initialize a new Ralph loop
   ralph
     .command('init')
     .description('Initialize a new Ralph Wiggum loop')
     .argument('<task>', 'Task description')
-    .option('-c, --criteria <criteria>', 'Completion criteria (comma separated)')
+    .option(
+      '-c, --criteria <criteria>',
+      'Completion criteria (comma separated)'
+    )
     .option('--max-iterations <n>', 'Maximum iterations', '50')
     .option('--use-context', 'Load relevant context from StackMemory')
-    .option('--learn-from-similar', 'Apply patterns from similar completed tasks')
+    .option(
+      '--learn-from-similar',
+      'Apply patterns from similar completed tasks'
+    )
     .action(async (task, options) => {
       return trace.command('ralph-init', { task, ...options }, async () => {
         try {
           console.log('🎭 Initializing Ralph Wiggum loop...');
-          
+
           // Use basic Ralph loop for now (StackMemory integration requires DB setup)
           const loop = new RalphLoop({
             baseDir: '.ralph',
             maxIterations: parseInt(options.maxIterations),
-            verbose: true
+            verbose: true,
           });
 
           // Parse criteria
-          const criteria = options.criteria 
-            ? options.criteria.split(',').map((c: string) => `- ${c.trim()}`).join('\n')
+          const criteria = options.criteria
+            ? options.criteria
+                .split(',')
+                .map((c: string) => `- ${c.trim()}`)
+                .join('\n')
             : '- All tests pass\n- Code works correctly\n- No lint errors';
 
           // Load StackMemory context if requested
           let enhancedTask = task;
-          
+
           if (options.useContext || options.learnFromSimilar) {
             try {
               await stackMemoryContextLoader.initialize();
-              
-              const contextResponse = await stackMemoryContextLoader.loadInitialContext({
-                task,
-                usePatterns: true,
-                useSimilarTasks: options.learnFromSimilar,
-                maxTokens: 3000
-              });
-              
+
+              const contextResponse =
+                await stackMemoryContextLoader.loadInitialContext({
+                  task,
+                  usePatterns: true,
+                  useSimilarTasks: options.learnFromSimilar,
+                  maxTokens: 3000,
+                });
+
               if (contextResponse.context) {
                 enhancedTask = `${task}\n\n${contextResponse.context}`;
-                console.log(`📚 Loaded context from ${contextResponse.sources.length} sources`);
-                console.log(`🎯 Context tokens: ${contextResponse.metadata.totalTokens}`);
+                console.log(
+                  `📚 Loaded context from ${contextResponse.sources.length} sources`
+                );
+                console.log(
+                  `🎯 Context tokens: ${contextResponse.metadata.totalTokens}`
+                );
               }
             } catch (error: unknown) {
-              console.log(`⚠️  Context loading failed: ${(error as Error).message}`);
+              console.log(
+                `⚠️  Context loading failed: ${(error as Error).message}`
+              );
               console.log('Proceeding without context...');
             }
           }
 
           await loop.initialize(enhancedTask, criteria);
-          
+
           console.log('✅ Ralph loop initialized!');
           console.log(`📋 Task: ${task}`);
           console.log(`🎯 Max iterations: ${options.maxIterations}`);
@@ -78,7 +95,6 @@ export function createRalphCommand(): Command {
           console.log('\nNext steps:');
           console.log('  stackmemory ralph run     # Start the loop');
           console.log('  stackmemory ralph status  # Check status');
-
         } catch (error: unknown) {
           logger.error('Failed to initialize Ralph loop', error as Error);
           console.error('❌ Initialization failed:', (error as Error).message);
@@ -97,19 +113,20 @@ export function createRalphCommand(): Command {
       return trace.command('ralph-run', options, async () => {
         try {
           if (!existsSync('.ralph')) {
-            console.error('❌ No Ralph loop found. Run "stackmemory ralph init" first.');
+            console.error(
+              '❌ No Ralph loop found. Run "stackmemory ralph init" first.'
+            );
             return;
           }
 
           console.log('🎭 Starting Ralph Wiggum loop...');
-          
+
           const loop = new RalphLoop({
             baseDir: '.ralph',
-            verbose: options.verbose
+            verbose: options.verbose,
           });
 
           await loop.run();
-          
         } catch (error: unknown) {
           logger.error('Failed to run Ralph loop', error as Error);
           console.error('❌ Loop execution failed:', (error as Error).message);
@@ -132,18 +149,24 @@ export function createRalphCommand(): Command {
           }
 
           // Get basic status from files
-          
+
           // Read status from files
           const task = readFileSync('.ralph/task.md', 'utf8');
-          const iteration = parseInt(readFileSync('.ralph/iteration.txt', 'utf8') || '0');
+          const iteration = parseInt(
+            readFileSync('.ralph/iteration.txt', 'utf8') || '0'
+          );
           const isComplete = existsSync('.ralph/work-complete.txt');
-          const feedback = existsSync('.ralph/feedback.txt') ? readFileSync('.ralph/feedback.txt', 'utf8') : '';
-          
+          const feedback = existsSync('.ralph/feedback.txt')
+            ? readFileSync('.ralph/feedback.txt', 'utf8')
+            : '';
+
           console.log('🎭 Ralph Loop Status:');
           console.log(`   Task: ${task.substring(0, 80)}...`);
           console.log(`   Iteration: ${iteration}`);
-          console.log(`   Status: ${isComplete ? '✅ COMPLETE' : '🔄 IN PROGRESS'}`);
-          
+          console.log(
+            `   Status: ${isComplete ? '✅ COMPLETE' : '🔄 IN PROGRESS'}`
+          );
+
           if (feedback) {
             console.log(`   Last feedback: ${feedback.substring(0, 100)}...`);
           }
@@ -153,17 +176,23 @@ export function createRalphCommand(): Command {
             const progressLines = readFileSync('.ralph/progress.jsonl', 'utf8')
               .split('\n')
               .filter(Boolean)
-              .map(line => JSON.parse(line));
-            
+              .map((line) => JSON.parse(line));
+
             progressLines.forEach((p: any) => {
-              const progress = p as { iteration: number; validation?: { testsPass: boolean }; changes: number; errors: number };
+              const progress = p as {
+                iteration: number;
+                validation?: { testsPass: boolean };
+                changes: number;
+                errors: number;
+              };
               const status = progress.validation?.testsPass ? '✅' : '❌';
-              console.log(`     ${progress.iteration}: ${status} ${progress.changes} changes, ${progress.errors} errors`);
+              console.log(
+                `     ${progress.iteration}: ${status} ${progress.changes} changes, ${progress.errors} errors`
+              );
             });
           }
 
           // TODO: Show StackMemory integration status when available
-
         } catch (error: unknown) {
           logger.error('Failed to get Ralph status', error as Error);
           console.error('❌ Status check failed:', (error as Error).message);
@@ -180,15 +209,14 @@ export function createRalphCommand(): Command {
       return trace.command('ralph-resume', options, async () => {
         try {
           console.log('🔄 Resuming Ralph loop...');
-          
+
           const loop = new RalphLoop({ baseDir: '.ralph', verbose: true });
-          
+
           if (options.fromStackmemory) {
             console.log('📚 StackMemory restore feature coming soon...');
           }
 
           await loop.run(); // Resume by continuing the loop
-          
         } catch (error: unknown) {
           logger.error('Failed to resume Ralph loop', error as Error);
           console.error('❌ Resume failed:', (error as Error).message);
@@ -211,7 +239,7 @@ export function createRalphCommand(): Command {
           }
 
           console.log('🛑 Stopping Ralph loop...');
-          
+
           if (options.saveProgress) {
             console.log('💾 StackMemory progress save feature coming soon...');
           }
@@ -219,7 +247,6 @@ export function createRalphCommand(): Command {
           // Create stop signal file
           writeFileSync('.ralph/stop-signal.txt', new Date().toISOString());
           console.log('✅ Stop signal sent');
-          
         } catch (error: unknown) {
           logger.error('Failed to stop Ralph loop', error as Error);
           console.error('❌ Stop failed:', (error as Error).message);
@@ -240,15 +267,14 @@ export function createRalphCommand(): Command {
             const { execSync } = await import('child_process');
             execSync('rm -rf .ralph/history');
           }
-          
+
           // Remove working files but keep task definition
           if (existsSync('.ralph/work-complete.txt')) {
             const fs = await import('fs');
             fs.unlinkSync('.ralph/work-complete.txt');
           }
-          
+
           console.log('🧹 Ralph loop artifacts cleaned');
-          
         } catch (error: unknown) {
           logger.error('Failed to clean Ralph artifacts', error as Error);
           console.error('❌ Cleanup failed:', (error as Error).message);
@@ -266,7 +292,7 @@ export function createRalphCommand(): Command {
       return trace.command('ralph-debug', options, async () => {
         try {
           console.log('🔍 Ralph Loop Debug Information:');
-          
+
           if (options.reconcile) {
             console.log('🔧 State reconciliation feature coming soon...');
           }
@@ -280,13 +306,14 @@ export function createRalphCommand(): Command {
             console.log('\n📁 Ralph directory structure:');
             const { execSync } = await import('child_process');
             try {
-              const tree = execSync('find .ralph -type f | head -20', { encoding: 'utf8' });
+              const tree = execSync('find .ralph -type f | head -20', {
+                encoding: 'utf8',
+              });
               console.log(tree);
             } catch {
               console.log('   (Unable to show directory tree)');
             }
           }
-          
         } catch (error: unknown) {
           logger.error('Ralph debug failed', error as Error);
           console.error('❌ Debug failed:', (error as Error).message);
@@ -299,33 +326,450 @@ export function createRalphCommand(): Command {
     .command('swarm')
     .description('Launch a swarm of specialized agents')
     .argument('<project>', 'Project description')
-    .option('--agents <agents>', 'Comma-separated list of agent roles (architect,developer,tester,etc)', 'developer,tester')
+    .option(
+      '--agents <agents>',
+      'Comma-separated list of agent roles (architect,developer,tester,etc)',
+      'developer,tester'
+    )
     .option('--max-agents <n>', 'Maximum number of agents', '5')
     .action(async (project, options) => {
       return trace.command('ralph-swarm', { project, ...options }, async () => {
         try {
           console.log('🦾 Launching Ralph swarm...');
-          
+
           await swarmCoordinator.initialize();
-          
-          const agentRoles = options.agents.split(',').map((r: string) => r.trim());
+
+          const agentRoles = options.agents
+            .split(',')
+            .map((r: string) => r.trim());
           const agentSpecs = agentRoles.map((role: string) => ({
             role: role as any,
             conflictResolution: 'defer_to_expertise',
-            collaborationPreferences: []
+            collaborationPreferences: [],
           }));
-          
-          const swarmId = await swarmCoordinator.launchSwarm(project, agentSpecs);
-          
+
+          const swarmId = await swarmCoordinator.launchSwarm(
+            project,
+            agentSpecs
+          );
+
           console.log(`✅ Swarm launched with ID: ${swarmId}`);
           console.log(`👥 ${agentSpecs.length} agents working on: ${project}`);
           console.log('\nNext steps:');
-          console.log('  stackmemory ralph swarm-status <swarmId>  # Check progress');
-          console.log('  stackmemory ralph swarm-stop <swarmId>    # Stop swarm');
-          
+          console.log(
+            '  stackmemory ralph swarm-status <swarmId>  # Check progress'
+          );
+          console.log(
+            '  stackmemory ralph swarm-stop <swarmId>    # Stop swarm'
+          );
         } catch (error: unknown) {
           logger.error('Swarm launch failed', error as Error);
           console.error('❌ Swarm launch failed:', (error as Error).message);
+        }
+      });
+    });
+
+  // Swarm status command
+  ralph
+    .command('swarm-status')
+    .description('Check status of all active swarms or a specific swarm')
+    .argument('[swarmId]', 'Optional specific swarm ID to check')
+    .option('--detailed', 'Show detailed agent information')
+    .action(async (swarmId, options) => {
+      return trace.command(
+        'ralph-swarm-status',
+        { swarmId, ...options },
+        async () => {
+          try {
+            await swarmCoordinator.initialize();
+
+            if (swarmId) {
+              // Show status for specific swarm
+              const status = swarmCoordinator.getSwarmStatus(swarmId);
+              if (!status) {
+                console.log(`❌ Swarm ${swarmId} not found`);
+                return;
+              }
+
+              console.log(`🦾 Swarm Status: ${swarmId}`);
+              console.log(`   Status: ${status.state}`);
+              console.log(`   Agents: ${status.activeAgents} active`);
+              console.log(
+                `   Started: ${new Date(status.startTime).toLocaleString()}`
+              );
+
+              if (options.detailed && status.agents) {
+                console.log('\n👥 Agent Details:');
+                status.agents.forEach((agent: any) => {
+                  console.log(
+                    `   - ${agent.role}: ${agent.status} (${agent.task})`
+                  );
+                });
+              }
+            } else {
+              // Show all active swarms
+              const activeSwarms = swarmCoordinator.getAllActiveSwarms();
+
+              if (activeSwarms.length === 0) {
+                console.log('📊 No active swarms');
+                return;
+              }
+
+              console.log(`📊 Active Swarms: ${activeSwarms.length}`);
+              activeSwarms.forEach((swarm: any) => {
+                console.log(`\n🆔 ${swarm.id}`);
+                console.log(
+                  `   Description: ${swarm.description?.substring(0, 60)}...`
+                );
+                console.log(`   Agents: ${swarm.agentCount}`);
+                console.log(`   Status: ${swarm.status}`);
+                console.log(
+                  `   Running for: ${Math.round((Date.now() - swarm.startTime) / 1000)}s`
+                );
+              });
+
+              console.log('\nCommands:');
+              console.log(
+                '  stackmemory ralph swarm-status <id>  # Check specific swarm'
+              );
+              console.log(
+                '  stackmemory ralph swarm-killall      # Stop all swarms'
+              );
+            }
+          } catch (error: unknown) {
+            logger.error('Failed to get swarm status', error as Error);
+            console.error('❌ Status check failed:', (error as Error).message);
+          }
+        }
+      );
+    });
+
+  // Oracle/Worker pattern command
+  ralph
+    .command('oracle-worker')
+    .description(
+      'Launch Oracle/Worker pattern swarm for cost-effective execution'
+    )
+    .argument('<project>', 'Project description for Oracle planning')
+    .option(
+      '--oracle <model>',
+      'Oracle model (default: claude-3-opus)',
+      'claude-3-opus-20240229'
+    )
+    .option(
+      '--workers <models>',
+      'Comma-separated worker models',
+      'claude-3-haiku-20240307'
+    )
+    .option('--budget <amount>', 'Cost budget in USD', '10.0')
+    .option('--max-workers <count>', 'Maximum worker agents', '5')
+    .option('--hints <hints>', 'Comma-separated planning hints')
+    .action(async (project: string, options: any) => {
+      return trace.command(
+        'ralph-oracle-worker',
+        { project, ...options },
+        async () => {
+          try {
+            console.log('🧠 Launching Oracle/Worker swarm...');
+            console.log(`📋 Project: ${project}`);
+            console.log(`💰 Budget: $${options.budget}`);
+
+            // Import Oracle/Worker pattern
+            const { OracleWorkerCoordinator, defaultModelConfigs } =
+              await import('../../../integrations/ralph/patterns/oracle-worker-pattern.js');
+
+            // Parse worker models
+            const workerModels = options.workers
+              .split(',')
+              .map((model: string) => {
+                const found = defaultModelConfigs.worker.find((w: any) =>
+                  w.model.includes(model.trim())
+                );
+                return found || defaultModelConfigs.worker[0];
+              });
+
+            // Configure Oracle/Worker coordinator
+            const coordinator = new OracleWorkerCoordinator({
+              oracle: defaultModelConfigs.oracle[0],
+              workers: workerModels,
+              reviewers: defaultModelConfigs.reviewer,
+              maxWorkers: parseInt(options.maxWorkers),
+              coordinationInterval: 30000,
+              costBudget: parseFloat(options.budget),
+            });
+
+            await coordinator.initialize();
+
+            // Parse hints if provided
+            const hints = options.hints
+              ? options.hints.split(',').map((h: string) => h.trim())
+              : undefined;
+
+            // Launch Oracle/Worker swarm
+            const swarmId = await coordinator.launchOracleWorkerSwarm(
+              project,
+              hints
+            );
+
+            console.log(`✅ Oracle/Worker swarm launched: ${swarmId}`);
+            console.log('\n📊 Pattern Benefits:');
+            console.log('  • Oracle handles strategic planning & review');
+            console.log('  • Workers execute parallelizable tasks');
+            console.log('  • Cost-optimized model selection');
+            console.log('  • Scalable multi-agent coordination');
+
+            console.log('\nNext steps:');
+            console.log(
+              `  stackmemory ralph swarm-status ${swarmId}  # Check progress`
+            );
+            console.log(
+              `  stackmemory ralph swarm-stop ${swarmId}    # Stop swarm`
+            );
+          } catch (error: any) {
+            logger.error('Oracle/Worker swarm failed', error);
+            console.error(`❌ Oracle/Worker failed: ${error.message}`);
+            throw error;
+          }
+        }
+      );
+    });
+
+  // Claude Code Agent integration command
+  ralph
+    .command('claude-swarm')
+    .description('Launch swarm using Claude Code specialized agents')
+    .argument('<project>', 'Project description for Claude Code agents')
+    .option(
+      '--oracle <agent>',
+      'Oracle agent (default: staff-architect)',
+      'staff-architect'
+    )
+    .option(
+      '--workers <agents>',
+      'Comma-separated worker agents',
+      'general-purpose,code-reviewer'
+    )
+    .option(
+      '--reviewers <agents>',
+      'Comma-separated reviewer agents',
+      'code-reviewer'
+    )
+    .option('--budget <amount>', 'Cost budget in USD', '10.0')
+    .option(
+      '--complexity <level>',
+      'Project complexity (low|medium|high|very_high)',
+      'medium'
+    )
+    .option('--list-agents', 'List available Claude Code agents')
+    .action(async (project: string, options: any) => {
+      return trace.command(
+        'ralph-claude-swarm',
+        { project, ...options },
+        async () => {
+          try {
+            // Import Claude Code bridge
+            const { ClaudeCodeAgentBridge, CLAUDE_CODE_AGENTS } =
+              await import('../../integrations/claude-code/agent-bridge.js');
+
+            // Handle list agents option
+            if (options.listAgents) {
+              console.log('\n🤖 Available Claude Code Agents:\n');
+
+              const oracles = Object.values(CLAUDE_CODE_AGENTS).filter(
+                (a) => a.type === 'oracle'
+              );
+              const workers = Object.values(CLAUDE_CODE_AGENTS).filter(
+                (a) => a.type === 'worker'
+              );
+              const reviewers = Object.values(CLAUDE_CODE_AGENTS).filter(
+                (a) => a.type === 'reviewer'
+              );
+
+              console.log('🧠 ORACLE AGENTS (Strategic Planning):');
+              oracles.forEach((agent) => {
+                console.log(`  ${agent.name}: ${agent.description}`);
+                console.log(
+                  `    Capabilities: ${agent.capabilities.slice(0, 3).join(', ')}...`
+                );
+              });
+
+              console.log('\n⚡ WORKER AGENTS (Task Execution):');
+              workers.forEach((agent) => {
+                console.log(`  ${agent.name}: ${agent.description}`);
+                console.log(
+                  `    Capabilities: ${agent.capabilities.slice(0, 3).join(', ')}...`
+                );
+              });
+
+              console.log('\n🔍 REVIEWER AGENTS (Quality Assurance):');
+              reviewers.forEach((agent) => {
+                console.log(`  ${agent.name}: ${agent.description}`);
+                console.log(
+                  `    Capabilities: ${agent.capabilities.slice(0, 3).join(', ')}...`
+                );
+              });
+
+              console.log('\nUsage Examples:');
+              console.log(
+                '  stackmemory ralph claude-swarm "Build REST API" --oracle staff-architect --workers general-purpose,debugger'
+              );
+              console.log(
+                '  stackmemory ralph claude-swarm "Add user auth" --complexity high --workers general-purpose,qa-workflow-validator'
+              );
+              return;
+            }
+
+            console.log('🧠 Launching Claude Code Agent Swarm...');
+            console.log(`📋 Project: ${project}`);
+            console.log(`🎯 Oracle: ${options.oracle}`);
+            console.log(`⚡ Workers: ${options.workers}`);
+            console.log(`🔍 Reviewers: ${options.reviewers}`);
+            console.log(`💰 Budget: $${options.budget}`);
+            console.log(`📊 Complexity: ${options.complexity}`);
+
+            // Initialize Claude Code bridge
+            const bridge = new ClaudeCodeAgentBridge();
+            await bridge.initialize();
+
+            // Parse agent lists
+            const workerAgents = options.workers
+              .split(',')
+              .map((s: string) => s.trim());
+            const reviewerAgents = options.reviewers
+              .split(',')
+              .map((s: string) => s.trim());
+
+            // Launch Claude Code swarm
+            const swarmId = await bridge.launchClaudeCodeSwarm(project, {
+              oracleAgent: options.oracle,
+              workerAgents,
+              reviewerAgents,
+              budget: parseFloat(options.budget),
+              complexity: options.complexity as any,
+            });
+
+            console.log(`✅ Claude Code swarm launched: ${swarmId}`);
+            console.log('\n📊 Claude Code Benefits:');
+            console.log('  • Specialized agents with proven capabilities');
+            console.log('  • Seamless integration with Claude Code tools');
+            console.log('  • Optimal agent selection for each task type');
+            console.log('  • Built-in quality assurance and review processes');
+
+            console.log('\nActive Agents:');
+            console.log(`  🧠 Oracle: ${options.oracle} (strategic planning)`);
+            workerAgents.forEach((agent: string) => {
+              const agentConfig = CLAUDE_CODE_AGENTS[agent];
+              console.log(
+                `  ⚡ Worker: ${agent} (${agentConfig?.specializations.join(', ') || 'execution'})`
+              );
+            });
+            reviewerAgents.forEach((agent: string) => {
+              const agentConfig = CLAUDE_CODE_AGENTS[agent];
+              console.log(
+                `  🔍 Reviewer: ${agent} (${agentConfig?.specializations.join(', ') || 'review'})`
+              );
+            });
+
+            console.log('\nNext steps:');
+            console.log(
+              `  stackmemory ralph swarm-status ${swarmId}     # Check progress`
+            );
+            console.log(
+              `  stackmemory ralph swarm-stop ${swarmId}       # Stop swarm`
+            );
+            console.log(
+              '  stackmemory ralph claude-swarm --list-agents  # See all available agents'
+            );
+          } catch (error: any) {
+            logger.error('Claude Code swarm failed', error);
+            console.error(`❌ Claude Code swarm failed: ${error.message}`);
+            throw error;
+          }
+        }
+      );
+    });
+
+  // Swarm killall command
+  ralph
+    .command('swarm-killall')
+    .description('Stop all active swarms and cleanup resources')
+    .option('--force', 'Force kill without saving state')
+    .action(async (options) => {
+      return trace.command('ralph-swarm-killall', options, async () => {
+        try {
+          await swarmCoordinator.initialize();
+
+          const activeSwarms = swarmCoordinator.getAllActiveSwarms();
+
+          if (activeSwarms.length === 0) {
+            console.log('📊 No active swarms to stop');
+            return;
+          }
+
+          console.log(`🛑 Stopping ${activeSwarms.length} active swarm(s)...`);
+
+          let stoppedCount = 0;
+          let failedCount = 0;
+
+          for (const swarm of activeSwarms) {
+            try {
+              console.log(`   Stopping ${swarm.id}...`);
+
+              if (options.force) {
+                await swarmCoordinator.forceStopSwarm(swarm.id);
+              } else {
+                await swarmCoordinator.stopSwarm(swarm.id);
+              }
+
+              stoppedCount++;
+              console.log(`   ✅ Stopped ${swarm.id}`);
+            } catch (error: unknown) {
+              failedCount++;
+              console.error(
+                `   ❌ Failed to stop ${swarm.id}: ${(error as Error).message}`
+              );
+            }
+          }
+
+          // Cleanup git branches if any
+          try {
+            const { execSync } = await import('child_process');
+            const branches = execSync('git branch | grep "swarm/"', {
+              encoding: 'utf8',
+            })
+              .split('\n')
+              .filter(Boolean)
+              .map((b) => b.trim());
+
+            if (branches.length > 0) {
+              console.log(
+                `\n🔀 Cleaning up ${branches.length} swarm branches...`
+              );
+              for (const branch of branches) {
+                try {
+                  execSync(`git branch -D ${branch}`, { stdio: 'ignore' });
+                  console.log(`   Deleted ${branch}`);
+                } catch {
+                  // Ignore branch deletion errors
+                }
+              }
+            }
+          } catch {
+            // No swarm branches to clean
+          }
+
+          console.log(`\n📊 Summary:`);
+          console.log(`   ✅ Stopped: ${stoppedCount} swarms`);
+          if (failedCount > 0) {
+            console.log(`   ❌ Failed: ${failedCount} swarms`);
+          }
+
+          // Final cleanup
+          await swarmCoordinator.cleanup();
+          console.log('🧹 Cleanup completed');
+        } catch (error: unknown) {
+          logger.error('Swarm killall failed', error as Error);
+          console.error('❌ Killall failed:', (error as Error).message);
         }
       });
     });
@@ -339,39 +783,52 @@ export function createRalphCommand(): Command {
     .option('--max-loops <n>', 'Maximum parallel loops', '3')
     .option('--sequential', 'Force sequential execution')
     .action(async (description, options) => {
-      return trace.command('ralph-orchestrate', { description, ...options }, async () => {
-        try {
-          console.log('🎭 Orchestrating complex task...');
-          
-          await multiLoopOrchestrator.initialize();
-          
-          const criteria = options.criteria ? 
-            options.criteria.split(',').map((c: string) => c.trim()) :
-            ['Task completed successfully', 'All components working', 'Tests pass'];
-          
-          const result = await multiLoopOrchestrator.orchestrateComplexTask(
-            description,
-            criteria,
-            {
-              maxLoops: parseInt(options.maxLoops),
-              forceSequential: options.sequential
+      return trace.command(
+        'ralph-orchestrate',
+        { description, ...options },
+        async () => {
+          try {
+            console.log('🎭 Orchestrating complex task...');
+
+            await multiLoopOrchestrator.initialize();
+
+            const criteria = options.criteria
+              ? options.criteria.split(',').map((c: string) => c.trim())
+              : [
+                  'Task completed successfully',
+                  'All components working',
+                  'Tests pass',
+                ];
+
+            const result = await multiLoopOrchestrator.orchestrateComplexTask(
+              description,
+              criteria,
+              {
+                maxLoops: parseInt(options.maxLoops),
+                forceSequential: options.sequential,
+              }
+            );
+
+            console.log('✅ Orchestration completed!');
+            console.log(
+              `📊 Results: ${result.completedLoops.length} successful, ${result.failedLoops.length} failed`
+            );
+            console.log(
+              `⏱️  Total duration: ${Math.round(result.totalDuration / 1000)}s`
+            );
+
+            if (result.insights.length > 0) {
+              console.log('\n💡 Insights:');
+              result.insights.forEach((insight) =>
+                console.log(`   • ${insight}`)
+              );
             }
-          );
-          
-          console.log('✅ Orchestration completed!');
-          console.log(`📊 Results: ${result.completedLoops.length} successful, ${result.failedLoops.length} failed`);
-          console.log(`⏱️  Total duration: ${Math.round(result.totalDuration / 1000)}s`);
-          
-          if (result.insights.length > 0) {
-            console.log('\n💡 Insights:');
-            result.insights.forEach(insight => console.log(`   • ${insight}`));
+          } catch (error: unknown) {
+            logger.error('Orchestration failed', error as Error);
+            console.error('❌ Orchestration failed:', (error as Error).message);
           }
-          
-        } catch (error: unknown) {
-          logger.error('Orchestration failed', error as Error);
-          console.error('❌ Orchestration failed:', (error as Error).message);
         }
-      });
+      );
     });
 
   // Pattern learning command
@@ -383,25 +840,29 @@ export function createRalphCommand(): Command {
       return trace.command('ralph-learn', options, async () => {
         try {
           console.log('🧠 Learning patterns from completed loops...');
-          
+
           await patternLearner.initialize();
-          
-          const patterns = options.taskType ?
-            await patternLearner.learnForTaskType(options.taskType) :
-            await patternLearner.learnFromCompletedLoops();
-          
+
+          const patterns = options.taskType
+            ? await patternLearner.learnForTaskType(options.taskType)
+            : await patternLearner.learnFromCompletedLoops();
+
           console.log(`✅ Learned ${patterns.length} patterns`);
-          
+
           if (patterns.length > 0) {
             console.log('\n📊 Top patterns:');
-            patterns.slice(0, 5).forEach(pattern => {
-              console.log(`   • ${pattern.pattern} (${Math.round(pattern.confidence * 100)}% confidence)`);
+            patterns.slice(0, 5).forEach((pattern) => {
+              console.log(
+                `   • ${pattern.pattern} (${Math.round(pattern.confidence * 100)}% confidence)`
+              );
             });
           }
-          
         } catch (error: unknown) {
           logger.error('Pattern learning failed', error as Error);
-          console.error('❌ Pattern learning failed:', (error as Error).message);
+          console.error(
+            '❌ Pattern learning failed:',
+            (error as Error).message
+          );
         }
       });
     });
@@ -417,29 +878,35 @@ export function createRalphCommand(): Command {
       return trace.command('ralph-debug-enhanced', options, async () => {
         try {
           if (!existsSync('.ralph') && !options.loopId) {
-            console.log('❌ No Ralph loop found. Run a loop first or specify --loop-id');
+            console.log(
+              '❌ No Ralph loop found. Run a loop first or specify --loop-id'
+            );
             return;
           }
-          
+
           console.log('🔍 Starting enhanced debugging...');
-          
+
           await ralphDebugger.initialize();
-          
+
           const loopId = options.loopId || 'current';
           await ralphDebugger.startDebugSession(loopId, '.ralph');
+<<<<<<< HEAD
           
+=======
+
+>>>>>>> swarm/developer-implement-core-feature
           if (options.generateReport) {
             const report = await ralphDebugger.generateDebugReport(loopId);
             console.log(`📋 Debug report generated: ${report.exportPath}`);
           }
-          
+
           if (options.timeline) {
-            const timelinePath = await ralphDebugger.generateLoopTimeline(loopId);
+            const timelinePath =
+              await ralphDebugger.generateLoopTimeline(loopId);
             console.log(`📊 Timeline visualization: ${timelinePath}`);
           }
-          
+
           console.log('🔍 Debug analysis complete');
-          
         } catch (error: unknown) {
           logger.error('Enhanced debugging failed', error as Error);
           console.error('❌ Debug failed:', (error as Error).message);
@@ -447,6 +914,7 @@ export function createRalphCommand(): Command {
       });
     });
 
+<<<<<<< HEAD
   // Swarm testing and validation command
   ralph
     .command('swarm-test')
@@ -646,6 +1114,61 @@ export function createRalphCommand(): Command {
           process.exit(1);
         }
       });
+=======
+  // TUI command for real-time monitoring
+  ralph
+    .command('tui')
+    .description('Launch TUI monitor for active swarms')
+    .option('--swarm-id <id>', 'Monitor specific swarm ID')
+    .option('--simple', 'Use simple text mode instead of full TUI')
+    .option('--force-tui', 'Force full TUI even with compatibility issues')
+    .action(async (options) => {
+      try {
+        // Detect terminal compatibility
+        const isGhostty =
+          process.env.TERM_PROGRAM === 'ghostty' ||
+          process.env.TERM?.includes('ghostty');
+        const isBasicTerm =
+          process.env.TERM === 'dumb' || process.env.TERM === 'unknown';
+        const hasCompatibilityIssues = isGhostty || isBasicTerm;
+
+        // Default behavior: use simple mode for problematic terminals unless forced
+        const useSimpleMode =
+          options.simple || (hasCompatibilityIssues && !options.forceTui);
+
+        if (useSimpleMode) {
+          console.log('🦾 Starting Simple Swarm Monitor (Text Mode)');
+          if (hasCompatibilityIssues && !options.simple) {
+            console.log(
+              `⚠️  Detected ${isGhostty ? 'Ghostty' : 'basic'} terminal - using text mode for compatibility`
+            );
+            console.log(
+              '   Use --force-tui to override, or --simple to explicitly use text mode'
+            );
+          }
+
+          const { SimpleSwarmMonitor } =
+            await import('../../features/tui/simple-monitor.js');
+          const monitor = new SimpleSwarmMonitor();
+          monitor.start();
+        } else {
+          console.log('🦾 Starting Full TUI Monitor');
+          const { SwarmTUI } =
+            await import('../../features/tui/swarm-monitor.js');
+
+          const tui = new SwarmTUI();
+
+          // Initialize with optional swarm ID
+          await tui.initialize(undefined, options.swarmId);
+          tui.start();
+        }
+      } catch (error: unknown) {
+        logger.error('TUI launch failed', error as Error);
+        console.error('❌ TUI failed:', (error as Error).message);
+        console.log('💡 Try: stackmemory ralph tui --simple');
+        process.exit(1);
+      }
+>>>>>>> swarm/developer-implement-core-feature
     });
 
   return ralph;
