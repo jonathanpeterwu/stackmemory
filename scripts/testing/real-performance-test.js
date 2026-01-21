@@ -365,7 +365,7 @@ class RealPerformanceTest {
     }
     
     // Save results to file
-    const resultsPath = path.join(process.cwd(), 'test-results', 'real-performance-results.json');
+    const resultsPath = path.join(process.cwd(), 'scripts', 'testing', 'results', 'real-performance-results.json');
     const resultsDir = path.dirname(resultsPath);
     
     if (!fs.existsSync(resultsDir)) {

@@ -444,6 +444,69 @@ export function createRalphCommand(): Command {
       );
     });
 
+  // Oracle/Worker pattern command
+  ralph
+    .command('oracle-worker')
+    .description('Launch Oracle/Worker pattern swarm for cost-effective execution')
+    .argument('<project>', 'Project description for Oracle planning')
+    .option('--oracle <model>', 'Oracle model (default: claude-3-opus)', 'claude-3-opus-20240229')
+    .option('--workers <models>', 'Comma-separated worker models', 'claude-3-haiku-20240307')
+    .option('--budget <amount>', 'Cost budget in USD', '10.0')
+    .option('--max-workers <count>', 'Maximum worker agents', '5')
+    .option('--hints <hints>', 'Comma-separated planning hints')
+    .action(async (project: string, options: any) => {
+      return trace.command('ralph-oracle-worker', { project, ...options }, async () => {
+        try {
+          console.log('🧠 Launching Oracle/Worker swarm...');
+          console.log(`📋 Project: ${project}`);
+          console.log(`💰 Budget: $${options.budget}`);
+          
+          // Import Oracle/Worker pattern
+          const { OracleWorkerCoordinator, defaultModelConfigs } = await import('../../../integrations/ralph/patterns/oracle-worker-pattern.js');
+          
+          // Parse worker models
+          const workerModels = options.workers.split(',').map((model: string) => {
+            const found = defaultModelConfigs.worker.find((w: any) => w.model.includes(model.trim()));
+            return found || defaultModelConfigs.worker[0];
+          });
+
+          // Configure Oracle/Worker coordinator
+          const coordinator = new OracleWorkerCoordinator({
+            oracle: defaultModelConfigs.oracle[0],
+            workers: workerModels,
+            reviewers: defaultModelConfigs.reviewer,
+            maxWorkers: parseInt(options.maxWorkers),
+            coordinationInterval: 30000,
+            costBudget: parseFloat(options.budget),
+          });
+
+          await coordinator.initialize();
+
+          // Parse hints if provided
+          const hints = options.hints ? options.hints.split(',').map((h: string) => h.trim()) : undefined;
+
+          // Launch Oracle/Worker swarm
+          const swarmId = await coordinator.launchOracleWorkerSwarm(project, hints);
+
+          console.log(`✅ Oracle/Worker swarm launched: ${swarmId}`);
+          console.log('\n📊 Pattern Benefits:');
+          console.log('  • Oracle handles strategic planning & review');
+          console.log('  • Workers execute parallelizable tasks');
+          console.log('  • Cost-optimized model selection');
+          console.log('  • Scalable multi-agent coordination');
+          
+          console.log('\nNext steps:');
+          console.log(`  stackmemory ralph swarm-status ${swarmId}  # Check progress`);
+          console.log(`  stackmemory ralph swarm-stop ${swarmId}    # Stop swarm`);
+          
+        } catch (error: any) {
+          logger.error('Oracle/Worker swarm failed', error);
+          console.error(`❌ Oracle/Worker failed: ${error.message}`);
+          throw error;
+        }
+      });
+    });
+
   // Swarm killall command
   ralph
     .command('swarm-killall')

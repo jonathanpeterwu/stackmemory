@@ -1,1 +1,0 @@
-Add a new CLI command 'stackmemory ping' that tests Redis connectivity

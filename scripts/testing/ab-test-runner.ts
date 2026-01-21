@@ -428,11 +428,13 @@ export class ABTestRunner {
     }
 
     // Generate detailed report
-    await this.collector.generateReport('./test-results/ab-test-report.md');
+    await this.collector.generateReport(
+      './scripts/testing/results/ab-test-report.md'
+    );
   }
 
   private async saveRun(run: TestRun): Promise<void> {
-    const outputDir = './test-results/runs';
+    const outputDir = './scripts/testing/results/runs';
     await fs.mkdir(outputDir, { recursive: true });
 
     const filename = path.join(outputDir, `${run.id}.json`);
