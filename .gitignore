@@ -114,3 +114,4 @@ service-account.json
 
 # Claude settings with secrets
 .claude/settings.local.json
+external/
