@@ -45,6 +45,14 @@ export class SwarmCoordinator {
   private gitWorkflowManager: GitWorkflowManager;
   private registeredSwarmId?: string;
 
+  get swarmId(): string | undefined {
+    return this.registeredSwarmId;
+  }
+
+  get agents(): Agent[] {
+    return Array.from(this.activeAgents.values());
+  }
+
   constructor(config?: Partial<SwarmCoordinatorConfig>) {
     this.config = {
       maxAgents: 10,
@@ -1144,131 +1152,6 @@ You are a PROJECT COORDINATOR. Your role is to:
 
     this.swarmState.performance.efficiency =
       activeCount > 0 ? this.swarmState.completedTaskCount / activeCount : 0;
-  }
-
-  /**
-   * Stop the swarm and clean up all resources
-   */
-  async stopSwarm(): Promise<void> {
-    logger.info('Stopping swarm coordinator', { swarmId: this.swarmState.id });
-
-    try {
-      // 1. Update swarm state
-      const previousStatus = this.swarmState.status;
-      this.swarmState.status = 'stopping';
-
-      // 2. Stop coordination timer
-      if (this.coordinationTimer) {
-        clearInterval(this.coordinationTimer);
-        this.coordinationTimer = undefined;
-        logger.debug('Stopped coordination timer');
-      }
-
-      // 3. Stop all active agents
-      const stopPromises: Promise<void>[] = [];
-      for (const [agentId, agent] of this.activeAgents) {
-        if (agent.status === 'active') {
-          logger.info(`Stopping agent ${agent.role} (${agentId})`);
-          agent.status = 'stopping';
-
-          // Commit any pending work
-          if (agent.currentTask && this.swarmState.tasks) {
-            const task = this.swarmState.tasks.find(
-              (t) => t.id === agent.currentTask
-            );
-            if (task) {
-              stopPromises.push(
-                this.gitWorkflowManager
-                  .commitAgentWork(
-                    agent,
-                    task,
-                    '[Agent] Final commit before shutdown'
-                  )
-                  .catch((err) =>
-                    logger.error(
-                      `Failed to commit agent ${agent.role} work:`,
-                      err
-                    )
-                  )
-              );
-            }
-          }
-        }
-      }
-
-      // Wait for all agent commits
-      await Promise.allSettled(stopPromises);
-
-      // 4. Merge all agent work if possible
-      if (this.config.enableDynamicPlanning && previousStatus === 'active') {
-        try {
-          await this.gitWorkflowManager.coordinateMerges(
-            Array.from(this.activeAgents.values())
-          );
-          logger.info('Successfully merged all agent work before shutdown');
-        } catch (error) {
-          logger.warn('Could not merge all agent work during shutdown:', error);
-        }
-      }
-
-      // 5. Clear planner wakeup queue
-      this.plannerWakeupQueue.clear();
-
-      // 6. Save final swarm state
-      if (this.frameManager && this.swarmState.project) {
-        try {
-          await this.frameManager.pushFrame({
-            type: 'task' as any,
-            name: `swarm-shutdown-${this.swarmState.id}`,
-            inputs: {
-              swarmId: this.swarmState.id,
-              project: this.swarmState.project,
-              completedTasks: this.swarmState.completedTaskCount,
-              activeTasks: this.swarmState.activeTaskCount,
-            },
-            outputs: {
-              status: 'shutdown',
-              performance: this.swarmState.performance,
-            },
-            digest_json: {
-              type: 'swarm_shutdown',
-              agents: Array.from(this.activeAgents.values()).map((a) => ({
-                id: a.id,
-                role: a.role,
-                status: a.status,
-                performance: a.performance,
-              })),
-            },
-          } as any);
-        } catch (error) {
-          logger.error('Failed to save shutdown frame:', error);
-        }
-      }
-
-      // 7. Unregister from global registry
-      if (this.registeredSwarmId) {
-        const registry = SwarmRegistry.getInstance();
-        registry.unregisterSwarm(this.registeredSwarmId);
-        this.registeredSwarmId = undefined;
-      }
-
-      // 8. Clear all agents
-      this.activeAgents.clear();
-
-      // 9. Update final state
-      this.swarmState.status = 'stopped';
-      this.swarmState.endTime = Date.now();
-
-      logger.info('Swarm coordinator stopped successfully', {
-        swarmId: this.swarmState.id,
-        duration: this.swarmState.endTime - this.swarmState.startTime,
-        tasksCompleted: this.swarmState.completedTaskCount,
-      });
-    } catch (error) {
-      logger.error('Error during swarm shutdown:', error);
-      this.swarmState.status = 'error';
-      throw error;
-    }
   }
 
   [Symbol.toStringTag] = 'SwarmCoordinator';
