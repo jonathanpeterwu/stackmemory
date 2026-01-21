@@ -38,10 +38,14 @@ export class RalphStackMemoryBridge {
   private sessionManager: SessionManager;
   private recoveryState?: RecoveryState;
   private readonly ralphDir = '.ralph';
+  private readonly requiresDatabase: boolean;
 
-  constructor(options?: BridgeOptions) {
+  constructor(options?: BridgeOptions & { useStackMemory?: boolean }) {
     // Initialize configuration
     this.config = this.mergeConfig(options?.config);
+
+    // Check if database/StackMemory features are required
+    this.requiresDatabase = options?.useStackMemory !== false;
 
     // Initialize managers
     this.state = {
@@ -87,18 +91,26 @@ export class RalphStackMemoryBridge {
 
       this.state.currentSession = session;
 
-      // Initialize frame manager with session database
-      if (session.database && session.projectId) {
-        this.frameManager = new FrameManager(
-          session.database,
-          session.projectId,
-          {
-            skipContextBridge: true,
-          }
-        );
+      // Initialize frame manager with session database if required
+      if (this.requiresDatabase) {
+        if (session.database && session.projectId) {
+          this.frameManager = new FrameManager(
+            session.database,
+            session.projectId,
+            {
+              skipContextBridge: true,
+            }
+          );
+        } else {
+          throw new Error(
+            'Session database not available for FrameManager initialization. ' +
+              'If StackMemory features are not needed, set useStackMemory: false in options'
+          );
+        }
       } else {
-        throw new Error(
-          'Session database not available for FrameManager initialization'
+        // Database not required, skip frame manager initialization
+        logger.info(
+          'Running without StackMemory database (useStackMemory: false)'
         );
       }
 
@@ -580,6 +592,21 @@ export class RalphStackMemoryBridge {
    * Create root frame for Ralph loop
    */
   private async createRootFrame(state: RalphLoopState): Promise<Frame> {
+    if (!this.requiresDatabase) {
+      // Return a mock frame when database is not required
+      return {
+        frame_id: `mock-${state.loopId}`,
+        type: 'task' as FrameType,
+        name: `ralph-${state.loopId}`,
+        inputs: {
+          task: state.task,
+          criteria: state.criteria,
+          loopId: state.loopId,
+        },
+        created_at: Date.now(),
+      } as Frame;
+    }
+
     if (!this.frameManager) {
       throw new Error('Frame manager not initialized');
     }
@@ -926,7 +953,8 @@ export class RalphStackMemoryBridge {
    * Save iteration frame to StackMemory
    */
   private async saveIterationFrame(iteration: RalphIteration): Promise<void> {
-    if (!this.frameManager || !this.state.activeLoop) return;
+    if (!this.requiresDatabase || !this.frameManager || !this.state.activeLoop)
+      return;
 
     const frame: Partial<Frame> = {
       type: 'subtask' as FrameType,

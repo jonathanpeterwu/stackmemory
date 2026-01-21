@@ -56,17 +56,19 @@ async function runSimpleSwarm() {
     console.log('🆔 Swarm registered:', swarmId);
 
     // Launch with minimal configuration
-    const result = await coordinator.launchSwarm({
-      agents: [
+    const result = await coordinator.launchSwarm(
+      task.description,
+      [
         {
-          role: 'demonstrator',
+          role: 'developer',
           specialization: 'basic-functionality',
-          task: 'Show basic swarm operations',
         },
       ],
-      task: task.description,
-      enableRalphBridge: false, // Disable Ralph bridge to avoid database issues
-    });
+      {
+        enableRalphBridge: false, // Disable Ralph bridge to avoid database issues
+        enableGitWorkflow: false, // Already disabled in coordinator init
+      }
+    );
 
     console.log('🚀 Swarm launched successfully!');
     console.log('📊 Result:', {
