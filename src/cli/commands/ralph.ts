@@ -447,64 +447,246 @@ export function createRalphCommand(): Command {
   // Oracle/Worker pattern command
   ralph
     .command('oracle-worker')
-    .description('Launch Oracle/Worker pattern swarm for cost-effective execution')
+    .description(
+      'Launch Oracle/Worker pattern swarm for cost-effective execution'
+    )
     .argument('<project>', 'Project description for Oracle planning')
-    .option('--oracle <model>', 'Oracle model (default: claude-3-opus)', 'claude-3-opus-20240229')
-    .option('--workers <models>', 'Comma-separated worker models', 'claude-3-haiku-20240307')
+    .option(
+      '--oracle <model>',
+      'Oracle model (default: claude-3-opus)',
+      'claude-3-opus-20240229'
+    )
+    .option(
+      '--workers <models>',
+      'Comma-separated worker models',
+      'claude-3-haiku-20240307'
+    )
     .option('--budget <amount>', 'Cost budget in USD', '10.0')
     .option('--max-workers <count>', 'Maximum worker agents', '5')
     .option('--hints <hints>', 'Comma-separated planning hints')
     .action(async (project: string, options: any) => {
-      return trace.command('ralph-oracle-worker', { project, ...options }, async () => {
-        try {
-          console.log('🧠 Launching Oracle/Worker swarm...');
-          console.log(`📋 Project: ${project}`);
-          console.log(`💰 Budget: $${options.budget}`);
-          
-          // Import Oracle/Worker pattern
-          const { OracleWorkerCoordinator, defaultModelConfigs } = await import('../../../integrations/ralph/patterns/oracle-worker-pattern.js');
-          
-          // Parse worker models
-          const workerModels = options.workers.split(',').map((model: string) => {
-            const found = defaultModelConfigs.worker.find((w: any) => w.model.includes(model.trim()));
-            return found || defaultModelConfigs.worker[0];
-          });
+      return trace.command(
+        'ralph-oracle-worker',
+        { project, ...options },
+        async () => {
+          try {
+            console.log('🧠 Launching Oracle/Worker swarm...');
+            console.log(`📋 Project: ${project}`);
+            console.log(`💰 Budget: $${options.budget}`);
 
-          // Configure Oracle/Worker coordinator
-          const coordinator = new OracleWorkerCoordinator({
-            oracle: defaultModelConfigs.oracle[0],
-            workers: workerModels,
-            reviewers: defaultModelConfigs.reviewer,
-            maxWorkers: parseInt(options.maxWorkers),
-            coordinationInterval: 30000,
-            costBudget: parseFloat(options.budget),
-          });
+            // Import Oracle/Worker pattern
+            const { OracleWorkerCoordinator, defaultModelConfigs } =
+              await import('../../../integrations/ralph/patterns/oracle-worker-pattern.js');
 
-          await coordinator.initialize();
+            // Parse worker models
+            const workerModels = options.workers
+              .split(',')
+              .map((model: string) => {
+                const found = defaultModelConfigs.worker.find((w: any) =>
+                  w.model.includes(model.trim())
+                );
+                return found || defaultModelConfigs.worker[0];
+              });
 
-          // Parse hints if provided
-          const hints = options.hints ? options.hints.split(',').map((h: string) => h.trim()) : undefined;
+            // Configure Oracle/Worker coordinator
+            const coordinator = new OracleWorkerCoordinator({
+              oracle: defaultModelConfigs.oracle[0],
+              workers: workerModels,
+              reviewers: defaultModelConfigs.reviewer,
+              maxWorkers: parseInt(options.maxWorkers),
+              coordinationInterval: 30000,
+              costBudget: parseFloat(options.budget),
+            });
 
-          // Launch Oracle/Worker swarm
-          const swarmId = await coordinator.launchOracleWorkerSwarm(project, hints);
+            await coordinator.initialize();
 
-          console.log(`✅ Oracle/Worker swarm launched: ${swarmId}`);
-          console.log('\n📊 Pattern Benefits:');
-          console.log('  • Oracle handles strategic planning & review');
-          console.log('  • Workers execute parallelizable tasks');
-          console.log('  • Cost-optimized model selection');
-          console.log('  • Scalable multi-agent coordination');
-          
-          console.log('\nNext steps:');
-          console.log(`  stackmemory ralph swarm-status ${swarmId}  # Check progress`);
-          console.log(`  stackmemory ralph swarm-stop ${swarmId}    # Stop swarm`);
-          
-        } catch (error: any) {
-          logger.error('Oracle/Worker swarm failed', error);
-          console.error(`❌ Oracle/Worker failed: ${error.message}`);
-          throw error;
+            // Parse hints if provided
+            const hints = options.hints
+              ? options.hints.split(',').map((h: string) => h.trim())
+              : undefined;
+
+            // Launch Oracle/Worker swarm
+            const swarmId = await coordinator.launchOracleWorkerSwarm(
+              project,
+              hints
+            );
+
+            console.log(`✅ Oracle/Worker swarm launched: ${swarmId}`);
+            console.log('\n📊 Pattern Benefits:');
+            console.log('  • Oracle handles strategic planning & review');
+            console.log('  • Workers execute parallelizable tasks');
+            console.log('  • Cost-optimized model selection');
+            console.log('  • Scalable multi-agent coordination');
+
+            console.log('\nNext steps:');
+            console.log(
+              `  stackmemory ralph swarm-status ${swarmId}  # Check progress`
+            );
+            console.log(
+              `  stackmemory ralph swarm-stop ${swarmId}    # Stop swarm`
+            );
+          } catch (error: any) {
+            logger.error('Oracle/Worker swarm failed', error);
+            console.error(`❌ Oracle/Worker failed: ${error.message}`);
+            throw error;
+          }
         }
-      });
+      );
+    });
+
+  // Claude Code Agent integration command
+  ralph
+    .command('claude-swarm')
+    .description('Launch swarm using Claude Code specialized agents')
+    .argument('<project>', 'Project description for Claude Code agents')
+    .option(
+      '--oracle <agent>',
+      'Oracle agent (default: staff-architect)',
+      'staff-architect'
+    )
+    .option(
+      '--workers <agents>',
+      'Comma-separated worker agents',
+      'general-purpose,code-reviewer'
+    )
+    .option(
+      '--reviewers <agents>',
+      'Comma-separated reviewer agents',
+      'code-reviewer'
+    )
+    .option('--budget <amount>', 'Cost budget in USD', '10.0')
+    .option(
+      '--complexity <level>',
+      'Project complexity (low|medium|high|very_high)',
+      'medium'
+    )
+    .option('--list-agents', 'List available Claude Code agents')
+    .action(async (project: string, options: any) => {
+      return trace.command(
+        'ralph-claude-swarm',
+        { project, ...options },
+        async () => {
+          try {
+            // Import Claude Code bridge
+            const { ClaudeCodeAgentBridge, CLAUDE_CODE_AGENTS } =
+              await import('../../integrations/claude-code/agent-bridge.js');
+
+            // Handle list agents option
+            if (options.listAgents) {
+              console.log('\n🤖 Available Claude Code Agents:\n');
+
+              const oracles = Object.values(CLAUDE_CODE_AGENTS).filter(
+                (a) => a.type === 'oracle'
+              );
+              const workers = Object.values(CLAUDE_CODE_AGENTS).filter(
+                (a) => a.type === 'worker'
+              );
+              const reviewers = Object.values(CLAUDE_CODE_AGENTS).filter(
+                (a) => a.type === 'reviewer'
+              );
+
+              console.log('🧠 ORACLE AGENTS (Strategic Planning):');
+              oracles.forEach((agent) => {
+                console.log(`  ${agent.name}: ${agent.description}`);
+                console.log(
+                  `    Capabilities: ${agent.capabilities.slice(0, 3).join(', ')}...`
+                );
+              });
+
+              console.log('\n⚡ WORKER AGENTS (Task Execution):');
+              workers.forEach((agent) => {
+                console.log(`  ${agent.name}: ${agent.description}`);
+                console.log(
+                  `    Capabilities: ${agent.capabilities.slice(0, 3).join(', ')}...`
+                );
+              });
+
+              console.log('\n🔍 REVIEWER AGENTS (Quality Assurance):');
+              reviewers.forEach((agent) => {
+                console.log(`  ${agent.name}: ${agent.description}`);
+                console.log(
+                  `    Capabilities: ${agent.capabilities.slice(0, 3).join(', ')}...`
+                );
+              });
+
+              console.log('\nUsage Examples:');
+              console.log(
+                '  stackmemory ralph claude-swarm "Build REST API" --oracle staff-architect --workers general-purpose,debugger'
+              );
+              console.log(
+                '  stackmemory ralph claude-swarm "Add user auth" --complexity high --workers general-purpose,qa-workflow-validator'
+              );
+              return;
+            }
+
+            console.log('🧠 Launching Claude Code Agent Swarm...');
+            console.log(`📋 Project: ${project}`);
+            console.log(`🎯 Oracle: ${options.oracle}`);
+            console.log(`⚡ Workers: ${options.workers}`);
+            console.log(`🔍 Reviewers: ${options.reviewers}`);
+            console.log(`💰 Budget: $${options.budget}`);
+            console.log(`📊 Complexity: ${options.complexity}`);
+
+            // Initialize Claude Code bridge
+            const bridge = new ClaudeCodeAgentBridge();
+            await bridge.initialize();
+
+            // Parse agent lists
+            const workerAgents = options.workers
+              .split(',')
+              .map((s: string) => s.trim());
+            const reviewerAgents = options.reviewers
+              .split(',')
+              .map((s: string) => s.trim());
+
+            // Launch Claude Code swarm
+            const swarmId = await bridge.launchClaudeCodeSwarm(project, {
+              oracleAgent: options.oracle,
+              workerAgents,
+              reviewerAgents,
+              budget: parseFloat(options.budget),
+              complexity: options.complexity as any,
+            });
+
+            console.log(`✅ Claude Code swarm launched: ${swarmId}`);
+            console.log('\n📊 Claude Code Benefits:');
+            console.log('  • Specialized agents with proven capabilities');
+            console.log('  • Seamless integration with Claude Code tools');
+            console.log('  • Optimal agent selection for each task type');
+            console.log('  • Built-in quality assurance and review processes');
+
+            console.log('\nActive Agents:');
+            console.log(`  🧠 Oracle: ${options.oracle} (strategic planning)`);
+            workerAgents.forEach((agent: string) => {
+              const agentConfig = CLAUDE_CODE_AGENTS[agent];
+              console.log(
+                `  ⚡ Worker: ${agent} (${agentConfig?.specializations.join(', ') || 'execution'})`
+              );
+            });
+            reviewerAgents.forEach((agent: string) => {
+              const agentConfig = CLAUDE_CODE_AGENTS[agent];
+              console.log(
+                `  🔍 Reviewer: ${agent} (${agentConfig?.specializations.join(', ') || 'review'})`
+              );
+            });
+
+            console.log('\nNext steps:');
+            console.log(
+              `  stackmemory ralph swarm-status ${swarmId}     # Check progress`
+            );
+            console.log(
+              `  stackmemory ralph swarm-stop ${swarmId}       # Stop swarm`
+            );
+            console.log(
+              '  stackmemory ralph claude-swarm --list-agents  # See all available agents'
+            );
+          } catch (error: any) {
+            logger.error('Claude Code swarm failed', error);
+            console.error(`❌ Claude Code swarm failed: ${error.message}`);
+            throw error;
+          }
+        }
+      );
     });
 
   // Swarm killall command
