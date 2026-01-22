@@ -8,8 +8,16 @@
  */
 
 import { Command } from 'commander';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join } from 'path';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  readdirSync,
+} from 'fs';
+import { join, basename } from 'path';
+import { homedir } from 'os';
+import { createHash } from 'crypto';
 
 interface Decision {
   id: string;
@@ -27,6 +35,94 @@ interface DecisionStore {
 
 function getDecisionStorePath(projectRoot: string): string {
   return join(projectRoot, '.stackmemory', 'session-decisions.json');
+}
+
+function getProjectId(projectRoot: string): string {
+  const hash = createHash('sha256').update(projectRoot).digest('hex');
+  return hash.slice(0, 12);
+}
+
+function getHistoryDir(): string {
+  return join(homedir(), '.stackmemory', 'decision-history');
+}
+
+function archiveDecisions(projectRoot: string, decisions: Decision[]): void {
+  if (decisions.length === 0) return;
+
+  const historyDir = getHistoryDir();
+  const projectId = getProjectId(projectRoot);
+  const projectDir = join(historyDir, projectId);
+
+  if (!existsSync(projectDir)) {
+    mkdirSync(projectDir, { recursive: true });
+  }
+
+  // Save with timestamp
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const archivePath = join(projectDir, `${timestamp}.json`);
+
+  const archive = {
+    projectRoot,
+    projectName: basename(projectRoot),
+    archivedAt: new Date().toISOString(),
+    decisions,
+  };
+
+  writeFileSync(archivePath, JSON.stringify(archive, null, 2));
+}
+
+interface HistoricalDecision extends Decision {
+  projectName: string;
+  archivedAt: string;
+}
+
+function loadDecisionHistory(projectRoot?: string): HistoricalDecision[] {
+  const historyDir = getHistoryDir();
+  if (!existsSync(historyDir)) return [];
+
+  const allDecisions: HistoricalDecision[] = [];
+
+  try {
+    const projectDirs = projectRoot
+      ? [getProjectId(projectRoot)]
+      : readdirSync(historyDir);
+
+    for (const projectId of projectDirs) {
+      const projectDir = join(historyDir, projectId);
+      if (!existsSync(projectDir)) continue;
+
+      try {
+        const files = readdirSync(projectDir).filter((f) =>
+          f.endsWith('.json')
+        );
+        for (const file of files) {
+          try {
+            const content = JSON.parse(
+              readFileSync(join(projectDir, file), 'utf-8')
+            );
+            for (const d of content.decisions || []) {
+              allDecisions.push({
+                ...d,
+                projectName: content.projectName || 'unknown',
+                archivedAt: content.archivedAt,
+              });
+            }
+          } catch {
+            // Skip invalid files
+          }
+        }
+      } catch {
+        // Skip unreadable directories
+      }
+    }
+  } catch {
+    // History dir unreadable
+  }
+
+  // Sort by timestamp descending
+  return allDecisions.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
 }
 
 function loadDecisions(projectRoot: string): DecisionStore {
@@ -104,9 +200,41 @@ export function createDecisionCommand(): Command {
     .command('list')
     .description('List all decisions from this session')
     .option('--json', 'Output as JSON')
+    .option('--history', 'Include historical decisions')
+    .option('--all', 'Show all projects (with --history)')
     .action((options) => {
       const projectRoot = process.cwd();
       const store = loadDecisions(projectRoot);
+
+      if (options.history) {
+        const history = loadDecisionHistory(
+          options.all ? undefined : projectRoot
+        );
+
+        if (options.json) {
+          console.log(JSON.stringify(history, null, 2));
+          return;
+        }
+
+        if (history.length === 0) {
+          console.log('No decision history found.');
+          return;
+        }
+
+        console.log(`Decision History (${history.length}):\n`);
+        for (const d of history.slice(0, 50)) {
+          const category = d.category ? `[${d.category}] ` : '';
+          const project = options.all ? `(${d.projectName}) ` : '';
+          console.log(`${project}${category}${d.what}`);
+          if (d.why) {
+            console.log(`  Rationale: ${d.why}`);
+          }
+          const date = new Date(d.timestamp).toLocaleDateString();
+          console.log(`  Date: ${date}`);
+          console.log('');
+        }
+        return;
+      }
 
       if (options.json) {
         console.log(JSON.stringify(store.decisions, null, 2));
@@ -137,8 +265,9 @@ export function createDecisionCommand(): Command {
   // Clear decisions (for new session)
   cmd
     .command('clear')
-    .description('Clear all decisions (start fresh session)')
+    .description('Clear all decisions (archives to history first)')
     .option('--force', 'Skip confirmation')
+    .option('--no-archive', 'Do not archive decisions')
     .action((options) => {
       const projectRoot = process.cwd();
       const store = loadDecisions(projectRoot);
@@ -150,8 +279,15 @@ export function createDecisionCommand(): Command {
 
       if (!options.force) {
         console.log(`This will clear ${store.decisions.length} decisions.`);
+        console.log('Decisions will be archived to history.');
         console.log('Use --force to confirm.');
         return;
+      }
+
+      // Archive before clearing (unless --no-archive)
+      if (options.archive !== false) {
+        archiveDecisions(projectRoot, store.decisions);
+        console.log(`Archived ${store.decisions.length} decisions to history.`);
       }
 
       const newStore: DecisionStore = {

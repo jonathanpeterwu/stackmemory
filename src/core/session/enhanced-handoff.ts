@@ -17,6 +17,17 @@ import { join, basename } from 'path';
 import { homedir, tmpdir } from 'os';
 import { globSync } from 'glob';
 
+// Token counting - use Anthropic's tokenizer for accurate counts
+let countTokens: (text: string) => number;
+try {
+  // Dynamic import for CommonJS compatibility
+  const tokenizer = await import('@anthropic-ai/tokenizer');
+  countTokens = tokenizer.countTokens;
+} catch {
+  // Fallback to estimation if tokenizer not available
+  countTokens = (text: string) => Math.ceil(text.length / 3.5);
+}
+
 // Load session decisions if available
 interface SessionDecision {
   id: string;
@@ -256,7 +267,7 @@ export class EnhancedHandoffGenerator {
 
     // Calculate estimated tokens
     const markdown = this.toMarkdown(handoff);
-    handoff.estimatedTokens = Math.ceil(markdown.length / 3.5);
+    handoff.estimatedTokens = countTokens(markdown);
 
     return handoff;
   }
