@@ -61,7 +61,7 @@ import {
   getStorageModeDescription,
 } from '../core/config/storage-config.js';
 
-const VERSION = '0.5.2';
+const VERSION = '0.5.3';
 
 // Check for updates on CLI startup
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
