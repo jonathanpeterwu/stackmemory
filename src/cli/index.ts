@@ -32,7 +32,10 @@ import { createLogCommand } from './commands/log.js';
 import { createContextCommands } from './commands/context.js';
 import { createConfigCommand } from './commands/config.js';
 import { createHandoffCommand } from './commands/handoff.js';
-import { createDecisionCommand } from './commands/decision.js';
+import {
+  createDecisionCommand,
+  createMemoryCommand,
+} from './commands/decision.js';
 import { createStorageCommand } from './commands/storage.js';
 import { createSkillsCommand } from './commands/skills.js';
 import { createTestCommand } from './commands/test.js';
@@ -561,6 +564,7 @@ program.addCommand(createContextCommands());
 program.addCommand(createConfigCommand());
 program.addCommand(createHandoffCommand());
 program.addCommand(createDecisionCommand());
+program.addCommand(createMemoryCommand());
 program.addCommand(createStorageCommand());
 program.addCommand(createSkillsCommand());
 program.addCommand(createTestCommand());

@@ -351,3 +351,26 @@ export function getSessionDecisions(projectRoot: string): Decision[] {
   const store = loadDecisions(projectRoot);
   return store.decisions;
 }
+
+// Alias: "memory" command (same as decision)
+export function createMemoryCommand(): Command {
+  const cmd = createDecisionCommand();
+  // Change command name to "memory" but keep all subcommands
+  return new Command('memory')
+    .description('Store memories for session context (alias for decision)')
+    .addCommand(
+      cmd.commands.find((c) => c.name() === 'add')!.copyInheritedSettings(cmd)
+    )
+    .addCommand(
+      cmd.commands.find((c) => c.name() === 'list')!.copyInheritedSettings(cmd)
+    )
+    .addCommand(
+      cmd.commands.find((c) => c.name() === 'clear')!.copyInheritedSettings(cmd)
+    )
+    .addCommand(
+      cmd.commands.find((c) => c.name() === 'arch')!.copyInheritedSettings(cmd)
+    )
+    .addCommand(
+      cmd.commands.find((c) => c.name() === 'tool')!.copyInheritedSettings(cmd)
+    );
+}
