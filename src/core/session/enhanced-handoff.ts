@@ -5,9 +5,17 @@
  */
 
 import { execSync } from 'child_process';
-import { existsSync, readFileSync, readdirSync, statSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  readdirSync,
+  statSync,
+  writeFileSync,
+  mkdirSync,
+} from 'fs';
 import { join, basename } from 'path';
-import { homedir } from 'os';
+import { homedir, tmpdir } from 'os';
+import { globSync } from 'glob';
 
 // Load session decisions if available
 interface SessionDecision {
@@ -17,6 +25,20 @@ interface SessionDecision {
   alternatives?: string[];
   timestamp: string;
   category?: string;
+}
+
+// Review feedback persistence
+interface StoredReviewFeedback {
+  timestamp: string;
+  source: string;
+  keyPoints: string[];
+  actionItems: string[];
+  sourceFile?: string;
+}
+
+interface ReviewFeedbackStore {
+  feedbacks: StoredReviewFeedback[];
+  lastUpdated: string;
 }
 
 function loadSessionDecisions(projectRoot: string): SessionDecision[] {
@@ -30,6 +52,124 @@ function loadSessionDecisions(projectRoot: string): SessionDecision[] {
     }
   }
   return [];
+}
+
+function loadReviewFeedback(projectRoot: string): StoredReviewFeedback[] {
+  const storePath = join(projectRoot, '.stackmemory', 'review-feedback.json');
+  if (existsSync(storePath)) {
+    try {
+      const store: ReviewFeedbackStore = JSON.parse(
+        readFileSync(storePath, 'utf-8')
+      );
+      // Return feedbacks from last 24 hours
+      const cutoff = Date.now() - 24 * 60 * 60 * 1000;
+      return store.feedbacks.filter(
+        (f) => new Date(f.timestamp).getTime() > cutoff
+      );
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function saveReviewFeedback(
+  projectRoot: string,
+  feedbacks: StoredReviewFeedback[]
+): void {
+  const dir = join(projectRoot, '.stackmemory');
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+
+  const storePath = join(dir, 'review-feedback.json');
+
+  // Load existing and merge
+  let existing: StoredReviewFeedback[] = [];
+  if (existsSync(storePath)) {
+    try {
+      const store: ReviewFeedbackStore = JSON.parse(
+        readFileSync(storePath, 'utf-8')
+      );
+      existing = store.feedbacks || [];
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // Deduplicate by source + first key point
+  const seen = new Set<string>();
+  const merged: StoredReviewFeedback[] = [];
+
+  for (const f of [...feedbacks, ...existing]) {
+    const key = `${f.source}:${f.keyPoints[0] || ''}`;
+    if (!seen.has(key)) {
+      seen.add(key);
+      merged.push(f);
+    }
+  }
+
+  // Keep only last 20 feedbacks
+  const store: ReviewFeedbackStore = {
+    feedbacks: merged.slice(0, 20),
+    lastUpdated: new Date().toISOString(),
+  };
+
+  writeFileSync(storePath, JSON.stringify(store, null, 2));
+}
+
+/**
+ * Find Claude agent output directories dynamically
+ */
+function findAgentOutputDirs(projectRoot: string): string[] {
+  const dirs: string[] = [];
+
+  // Try multiple locations where agent outputs might be stored
+  const tmpBase = process.env['TMPDIR'] || tmpdir() || '/tmp';
+
+  // Pattern 1: /tmp/claude/-path-to-project/tasks
+  const projectPathEncoded = projectRoot.replace(/\//g, '-').replace(/^-/, '');
+  const pattern1 = join(tmpBase, 'claude', `*${projectPathEncoded}*`, 'tasks');
+  try {
+    const matches = globSync(pattern1);
+    dirs.push(...matches);
+  } catch {
+    // Glob failed
+  }
+
+  // Pattern 2: /private/tmp/claude/... (macOS specific)
+  if (tmpBase !== '/private/tmp') {
+    const pattern2 = join(
+      '/private/tmp',
+      'claude',
+      `*${projectPathEncoded}*`,
+      'tasks'
+    );
+    try {
+      const matches = globSync(pattern2);
+      dirs.push(...matches);
+    } catch {
+      // Glob failed
+    }
+  }
+
+  // Pattern 3: ~/.claude/projects/*/tasks (if exists)
+  const homeClaudeDir = join(homedir(), '.claude', 'projects');
+  if (existsSync(homeClaudeDir)) {
+    try {
+      const projectDirs = readdirSync(homeClaudeDir);
+      for (const d of projectDirs) {
+        const tasksDir = join(homeClaudeDir, d, 'tasks');
+        if (existsSync(tasksDir)) {
+          dirs.push(tasksDir);
+        }
+      }
+    } catch {
+      // Failed to read
+    }
+  }
+
+  return [...new Set(dirs)]; // Deduplicate
 }
 
 export interface EnhancedHandoff {
@@ -387,16 +527,20 @@ export class EnhancedHandoffGenerator {
   }
 
   /**
-   * Extract review feedback from agent output files
+   * Extract review feedback from agent output files and persisted storage
    */
   private async extractReviewFeedback(): Promise<
     EnhancedHandoff['reviewFeedback']
   > {
     const feedback: EnhancedHandoff['reviewFeedback'] = [];
+    const newFeedbacks: StoredReviewFeedback[] = [];
 
-    // Look for agent output files in temp directory
-    const tmpDir = '/private/tmp/claude/-Users-jwu-Dev-stackmemory/tasks';
-    if (existsSync(tmpDir)) {
+    // Find agent output directories dynamically
+    const outputDirs = findAgentOutputDirs(this.projectRoot);
+
+    for (const tmpDir of outputDirs) {
+      if (!existsSync(tmpDir)) continue;
+
       try {
         const files = readdirSync(tmpDir).filter((f) => f.endsWith('.output'));
         const recentFiles = files
@@ -414,10 +558,36 @@ export class EnhancedHandoffGenerator {
           const extracted = this.extractKeyPointsFromReview(content);
           if (extracted.keyPoints.length > 0) {
             feedback.push(extracted);
+
+            // Also store for persistence
+            newFeedbacks.push({
+              timestamp: new Date().toISOString(),
+              source: extracted.source,
+              keyPoints: extracted.keyPoints,
+              actionItems: extracted.actionItems,
+              sourceFile: file.name,
+            });
           }
         }
       } catch {
-        // Failed to read agent outputs
+        // Failed to read agent outputs from this directory
+      }
+    }
+
+    // Save new feedback to persistent storage
+    if (newFeedbacks.length > 0) {
+      saveReviewFeedback(this.projectRoot, newFeedbacks);
+    }
+
+    // Load persisted feedback if no new feedback found
+    if (feedback.length === 0) {
+      const stored = loadReviewFeedback(this.projectRoot);
+      for (const s of stored.slice(0, 3)) {
+        feedback.push({
+          source: s.source,
+          keyPoints: s.keyPoints,
+          actionItems: s.actionItems,
+        });
       }
     }
 
