@@ -48,6 +48,7 @@ export default [
       'templates/',
       'archive/',
       'external/',
+      'packages/',
       '*.js',
       '*.min.js',
       '*.bundle.js',

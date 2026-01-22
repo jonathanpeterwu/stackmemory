@@ -48,6 +48,7 @@ import serviceCommand from './commands/service.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerSignupCommand } from './commands/signup.js';
 import { registerLogoutCommand, registerDbCommands } from './commands/db.js';
+import { createSweepCommand } from './commands/sweep.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -574,6 +575,7 @@ program.addCommand(monitorCommand);
 program.addCommand(qualityCommand);
 program.addCommand(createRalphCommand());
 program.addCommand(serviceCommand);
+program.addCommand(createSweepCommand());
 
 // Register dashboard command
 program

@@ -1,0 +1,44 @@
+{
+  "name": "@stackmemoryai/sweep-addon",
+  "version": "0.1.0",
+  "description": "Sweep 1.5B next-edit prediction addon for StackMemory",
+  "type": "module",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "bin": {
+    "sweep-setup": "./scripts/setup.sh"
+  },
+  "scripts": {
+    "build": "tsc",
+    "setup": "./scripts/setup.sh",
+    "test": "node dist/test.js"
+  },
+  "dependencies": {},
+  "peerDependencies": {
+    "@stackmemoryai/stackmemory": ">=0.5.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.0.0"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "files": [
+    "dist",
+    "scripts",
+    "python"
+  ],
+  "keywords": [
+    "stackmemory",
+    "sweep",
+    "next-edit",
+    "autocomplete",
+    "ai"
+  ],
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/stackmemoryai/stackmemory.git",
+    "directory": "packages/sweep-addon"
+  }
+}
