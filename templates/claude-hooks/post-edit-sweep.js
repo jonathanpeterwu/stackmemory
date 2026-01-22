@@ -20,6 +20,32 @@ const CONFIG = {
   maxRecentDiffs: 5,
   predictionTimeout: 30000,
   minEditSize: 10,
+  debounceMs: 2000,
+  minDiffsForPrediction: 2,
+  cooldownMs: 10000,
+  codeExtensions: [
+    '.ts',
+    '.tsx',
+    '.js',
+    '.jsx',
+    '.py',
+    '.go',
+    '.rs',
+    '.java',
+    '.c',
+    '.cpp',
+    '.h',
+    '.hpp',
+    '.cs',
+    '.rb',
+    '.php',
+    '.swift',
+    '.kt',
+    '.scala',
+    '.vue',
+    '.svelte',
+    '.astro',
+  ],
   stateFile: path.join(
     process.env.HOME || '/tmp',
     '.stackmemory',
@@ -75,7 +101,12 @@ function loadState() {
   } catch {
     // Ignore errors
   }
-  return { recentDiffs: [], lastPrediction: null, fileContents: {} };
+  return {
+    recentDiffs: [],
+    lastPrediction: null,
+    pendingPrediction: null,
+    fileContents: {},
+  };
 }
 
 function saveState(state) {
@@ -169,13 +200,44 @@ async function readInput() {
   return JSON.parse(input);
 }
 
+function isCodeFile(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  return CONFIG.codeExtensions.includes(ext);
+}
+
+function shouldRunPrediction(state, filePath) {
+  if (state.recentDiffs.length < CONFIG.minDiffsForPrediction) {
+    return false;
+  }
+
+  if (state.lastPrediction) {
+    const timeSince = Date.now() - state.lastPrediction.timestamp;
+    if (timeSince < CONFIG.cooldownMs) {
+      return false;
+    }
+  }
+
+  if (state.pendingPrediction) {
+    const timeSince = Date.now() - state.pendingPrediction;
+    if (timeSince < CONFIG.debounceMs) {
+      return false;
+    }
+  }
+
+  return true;
+}
+
 async function handleEdit(toolInput, toolResult) {
   if (!CONFIG.enabled) return;
 
   const { file_path, old_string, new_string } = toolInput;
   if (!file_path || !old_string || !new_string) return;
 
-  // Skip tiny edits
+  if (!isCodeFile(file_path)) {
+    log('Skipping non-code file', { file_path });
+    return;
+  }
+
   if (
     new_string.length < CONFIG.minEditSize &&
     old_string.length < CONFIG.minEditSize
@@ -185,7 +247,6 @@ async function handleEdit(toolInput, toolResult) {
 
   const state = loadState();
 
-  // Record the diff
   const diff = {
     file_path,
     original: old_string,
@@ -196,7 +257,6 @@ async function handleEdit(toolInput, toolResult) {
   state.recentDiffs.unshift(diff);
   state.recentDiffs = state.recentDiffs.slice(0, CONFIG.maxRecentDiffs);
 
-  // Update file content cache
   try {
     if (fs.existsSync(file_path)) {
       state.fileContents[file_path] = fs.readFileSync(file_path, 'utf-8');
@@ -208,22 +268,32 @@ async function handleEdit(toolInput, toolResult) {
   saveState(state);
   log('Edit recorded', { file_path, diffSize: new_string.length });
 
-  // Run prediction in background (don't block)
-  if (state.recentDiffs.length >= 2) {
-    runPredictionAsync(file_path, state);
+  if (shouldRunPrediction(state, file_path)) {
+    state.pendingPrediction = Date.now();
+    saveState(state);
+
+    setTimeout(() => {
+      runPredictionAsync(file_path, loadState());
+    }, CONFIG.debounceMs);
   }
 }
 
 async function runPredictionAsync(filePath, state) {
   try {
     const currentContent = state.fileContents[filePath] || '';
-    if (!currentContent) return;
+    if (!currentContent) {
+      state.pendingPrediction = null;
+      saveState(state);
+      return;
+    }
 
     const result = await runPrediction(
       filePath,
       currentContent,
       state.recentDiffs
     );
+
+    state.pendingPrediction = null;
 
     if (result && result.success && result.predicted_content) {
       state.lastPrediction = {
@@ -240,13 +310,16 @@ async function runPredictionAsync(filePath, state) {
         tokens: result.tokens_generated,
       });
 
-      // Output prediction hint (will be shown in Claude Code)
       const hint = formatPredictionHint(result);
       if (hint) {
         console.error(hint);
       }
+    } else {
+      saveState(state);
     }
   } catch (error) {
+    state.pendingPrediction = null;
+    saveState(state);
     log('Prediction error', { error: error.message });
   }
 }
@@ -275,9 +348,11 @@ async function handleWrite(toolInput, toolResult) {
   const { file_path, content } = toolInput;
   if (!file_path || !content) return;
 
-  const state = loadState();
+  if (!isCodeFile(file_path)) {
+    return;
+  }
 
-  // Cache file content
+  const state = loadState();
   state.fileContents[file_path] = content;
   saveState(state);
 

@@ -11,9 +11,20 @@
 import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
-import { existsSync, readFileSync } from 'fs';
-import { join } from 'path';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  copyFileSync,
+  chmodSync,
+} from 'fs';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { spawn, execSync } from 'child_process';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
 
 interface SweepStatus {
   installed: boolean;
@@ -45,12 +56,40 @@ function findPythonScript(): string | null {
     join(
       process.cwd(),
       'node_modules',
-      '@stackmemory',
+      '@stackmemoryai',
       'sweep-addon',
       'python',
       'sweep_predict.py'
     ),
     join(process.env.HOME || '', '.stackmemory', 'sweep', 'sweep_predict.py'),
+  ];
+
+  for (const loc of locations) {
+    if (existsSync(loc)) {
+      return loc;
+    }
+  }
+  return null;
+}
+
+function findHookSource(): string | null {
+  const locations = [
+    join(process.cwd(), 'templates', 'claude-hooks', 'post-edit-sweep.js'),
+    join(
+      process.cwd(),
+      'node_modules',
+      '@stackmemoryai',
+      'stackmemory',
+      'templates',
+      'claude-hooks',
+      'post-edit-sweep.js'
+    ),
+    join(
+      dirname(dirname(dirname(__dirname))),
+      'templates',
+      'claude-hooks',
+      'post-edit-sweep.js'
+    ),
   ];
 
   for (const loc of locations) {
@@ -372,6 +411,175 @@ hf_hub_download(
         const { writeFileSync } = await import('fs');
         writeFileSync(options.output, result.predicted_content || '');
         console.log(chalk.green(`\nWritten to: ${options.output}`));
+      }
+    });
+
+  const hookCmd = cmd
+    .command('hook')
+    .description('Manage Claude Code integration hook');
+
+  hookCmd
+    .command('install')
+    .description('Install Sweep prediction hook for Claude Code')
+    .action(async () => {
+      const spinner = ora('Installing Sweep hook...').start();
+
+      const homeDir = process.env.HOME || '';
+      const hookDir = join(homeDir, '.claude', 'hooks');
+      const sweepDir = join(homeDir, '.stackmemory', 'sweep');
+      const hooksJsonPath = join(homeDir, '.claude', 'hooks.json');
+
+      try {
+        mkdirSync(hookDir, { recursive: true });
+        mkdirSync(sweepDir, { recursive: true });
+
+        const hookSource = findHookSource();
+        if (!hookSource) {
+          spinner.fail(chalk.red('Hook template not found'));
+          console.log(
+            chalk.gray('Ensure stackmemory is installed from the repository')
+          );
+          process.exit(1);
+        }
+
+        const hookDest = join(hookDir, 'post-edit-sweep.js');
+        copyFileSync(hookSource, hookDest);
+        chmodSync(hookDest, '755');
+
+        const pythonScriptSource = findPythonScript();
+        if (pythonScriptSource) {
+          const pythonDest = join(sweepDir, 'sweep_predict.py');
+          copyFileSync(pythonScriptSource, pythonDest);
+        }
+
+        if (existsSync(hooksJsonPath)) {
+          const hooks = JSON.parse(readFileSync(hooksJsonPath, 'utf-8'));
+          if (!hooks['post-tool-use']) {
+            hooks['post-tool-use'] = hookDest;
+            writeFileSync(hooksJsonPath, JSON.stringify(hooks, null, 2));
+          } else if (!hooks['post-tool-use'].includes('sweep')) {
+            spinner.warn(chalk.yellow('post-tool-use hook already configured'));
+            console.log(chalk.gray(`Existing: ${hooks['post-tool-use']}`));
+            console.log(chalk.gray(`Hook installed at: ${hookDest}`));
+            console.log(
+              chalk.gray('You may need to manually configure the hook chain')
+            );
+            return;
+          }
+        } else {
+          const hooks = { 'post-tool-use': hookDest };
+          writeFileSync(hooksJsonPath, JSON.stringify(hooks, null, 2));
+        }
+
+        spinner.succeed(chalk.green('Sweep hook installed'));
+        console.log(chalk.gray(`Hook: ${hookDest}`));
+        console.log(chalk.gray(`Config: ${hooksJsonPath}`));
+        console.log('');
+        console.log(chalk.bold('Usage:'));
+        console.log('  Hook runs automatically after Edit/Write operations');
+        console.log('  Predictions appear after 2+ edits in session');
+        console.log('  Disable: export SWEEP_ENABLED=false');
+      } catch (error) {
+        spinner.fail(chalk.red('Installation failed'));
+        console.log(chalk.gray((error as Error).message));
+        process.exit(1);
+      }
+    });
+
+  hookCmd
+    .command('status')
+    .description('Check hook installation status')
+    .action(async () => {
+      const homeDir = process.env.HOME || '';
+      const hookPath = join(homeDir, '.claude', 'hooks', 'post-edit-sweep.js');
+      const hooksJsonPath = join(homeDir, '.claude', 'hooks.json');
+      const statePath = join(homeDir, '.stackmemory', 'sweep-state.json');
+
+      console.log(chalk.bold('\nSweep Hook Status\n'));
+
+      const hookInstalled = existsSync(hookPath);
+      console.log(
+        `Hook installed: ${hookInstalled ? chalk.green('Yes') : chalk.yellow('No')}`
+      );
+
+      if (existsSync(hooksJsonPath)) {
+        const hooks = JSON.parse(readFileSync(hooksJsonPath, 'utf-8'));
+        const configured =
+          hooks['post-tool-use'] && hooks['post-tool-use'].includes('sweep');
+        console.log(
+          `Hook configured: ${configured ? chalk.green('Yes') : chalk.yellow('No')}`
+        );
+      } else {
+        console.log(`Hook configured: ${chalk.yellow('No hooks.json')}`);
+      }
+
+      const enabled = process.env.SWEEP_ENABLED !== 'false';
+      console.log(
+        `Enabled: ${enabled ? chalk.green('Yes') : chalk.yellow('Disabled (SWEEP_ENABLED=false)')}`
+      );
+
+      if (existsSync(statePath)) {
+        try {
+          const state = JSON.parse(readFileSync(statePath, 'utf-8'));
+          console.log(
+            chalk.gray(
+              `\nRecent diffs tracked: ${state.recentDiffs?.length || 0}`
+            )
+          );
+          if (state.lastPrediction) {
+            const age = Date.now() - state.lastPrediction.timestamp;
+            const ageStr =
+              age < 60000
+                ? `${Math.round(age / 1000)}s ago`
+                : `${Math.round(age / 60000)}m ago`;
+            console.log(chalk.gray(`Last prediction: ${ageStr}`));
+          }
+        } catch {
+          // Ignore parse errors
+        }
+      }
+
+      if (!hookInstalled) {
+        console.log(chalk.bold('\nTo install: stackmemory sweep hook install'));
+      }
+    });
+
+  hookCmd
+    .command('disable')
+    .description('Disable the Sweep hook')
+    .action(() => {
+      console.log(chalk.bold('\nTo disable Sweep predictions:\n'));
+      console.log('  Temporarily: export SWEEP_ENABLED=false');
+      console.log('  Permanently: Add to ~/.zshrc or ~/.bashrc');
+      console.log('');
+      console.log('Or remove the hook:');
+      console.log('  rm ~/.claude/hooks/post-edit-sweep.js');
+    });
+
+  hookCmd
+    .command('clear')
+    .description('Clear hook state (recent diffs and predictions)')
+    .action(() => {
+      const homeDir = process.env.HOME || '';
+      const statePath = join(homeDir, '.stackmemory', 'sweep-state.json');
+
+      if (existsSync(statePath)) {
+        writeFileSync(
+          statePath,
+          JSON.stringify(
+            {
+              recentDiffs: [],
+              lastPrediction: null,
+              pendingPrediction: null,
+              fileContents: {},
+            },
+            null,
+            2
+          )
+        );
+        console.log(chalk.green('Sweep state cleared'));
+      } else {
+        console.log(chalk.gray('No state file found'));
       }
     });
 
