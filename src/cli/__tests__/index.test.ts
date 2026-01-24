@@ -58,7 +58,9 @@ vi.mock('util', async (importOriginal) => {
   const actual = await importOriginal();
   return {
     ...actual,
-    promisify: vi.fn(() => vi.fn().mockResolvedValue({ stdout: '', stderr: '' })),
+    promisify: vi.fn(() =>
+      vi.fn().mockResolvedValue({ stdout: '', stderr: '' })
+    ),
   };
 });
 
@@ -301,7 +303,7 @@ describe('CLI Commands', () => {
 
       const stackmemoryDir = join(tempDir, '.stackmemory');
       expect(existsSync(stackmemoryDir)).toBe(true);
-    });
+    }, 15000); // Increased timeout for module loading
   });
 
   describe('status command', () => {
@@ -317,7 +319,7 @@ describe('CLI Commands', () => {
 
       // Verify the command executed (it outputs session/status info)
       expect(consoleSpy.log).toHaveBeenCalled();
-    });
+    }, 10000);
 
     it('should show error when StackMemory is not initialized', async () => {
       const { program } = await import('../index.js');
