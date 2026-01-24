@@ -21,6 +21,7 @@ import {
   RecursiveAgentOrchestrator,
   type RLMOptions,
 } from './recursive-agent-orchestrator.js';
+import { getAPISkill, type APISkill } from './api-skill.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -848,11 +849,13 @@ export class ClaudeSkillsManager {
   private dashboardLauncher: DashboardLauncherSkill;
   private repoIngestionSkill: RepoIngestionSkill | null = null;
   private rlmOrchestrator: RecursiveAgentOrchestrator | null = null;
+  private apiSkill: APISkill;
 
   constructor(private context: SkillContext) {
     this.handoffSkill = new HandoffSkill(context);
     this.checkpointSkill = new CheckpointSkill(context);
     this.archaeologistSkill = new ArchaeologistSkill(context);
+    this.apiSkill = getAPISkill();
 
     // Initialize dashboard launcher (lazy import to avoid circular deps)
     import('./dashboard-launcher.js').then((module) => {
@@ -1138,6 +1141,55 @@ export class ClaudeSkillsManager {
           };
         }
 
+      case 'api':
+        const apiCmd = args[0];
+        switch (apiCmd) {
+          case 'add':
+            return this.apiSkill.add(args[1], args[2], {
+              spec: options?.spec as string,
+              authType: options?.authType as
+                | 'none'
+                | 'api-key'
+                | 'oauth2'
+                | 'basic',
+              headerName: options?.headerName as string,
+              envVar: options?.envVar as string,
+            });
+          case 'list':
+            return this.apiSkill.list();
+          case 'describe':
+            return this.apiSkill.describe(args[1], args[2]);
+          case 'exec':
+            const execParams: Record<string, unknown> = {};
+            // Parse remaining args as params
+            for (let i = 3; i < args.length; i += 2) {
+              if (args[i] && args[i + 1]) {
+                execParams[args[i].replace('--', '')] = args[i + 1];
+              }
+            }
+            return this.apiSkill.exec(args[1], args[2], execParams, {
+              raw: options?.raw as boolean,
+              filter: options?.filter as string,
+            });
+          case 'auth':
+            return this.apiSkill.auth(args[1], {
+              token: options?.token as string,
+              envVar: options?.envVar as string,
+              oauth: options?.oauth as boolean,
+              scopes: (options?.scopes as string)?.split(','),
+            });
+          case 'sync':
+            return this.apiSkill.sync(args[1]);
+          case 'remove':
+            return this.apiSkill.remove(args[1]);
+          case 'help':
+          default:
+            return {
+              success: true,
+              message: this.apiSkill.getHelp(),
+            };
+        }
+
       default:
         return {
           success: false,
@@ -1147,7 +1199,7 @@ export class ClaudeSkillsManager {
   }
 
   getAvailableSkills(): string[] {
-    const skills = ['handoff', 'checkpoint', 'dig', 'dashboard'];
+    const skills = ['handoff', 'checkpoint', 'dig', 'dashboard', 'api'];
     if (this.repoIngestionSkill) {
       skills.push('repo');
     }
@@ -1294,6 +1346,9 @@ Examples:
 /rlm "Generate comprehensive tests for the API endpoints" --test-mode integration
 /rlm "Review and improve code quality" --review-stages 5 --quality-threshold 0.95
 `;
+
+      case 'api':
+        return this.apiSkill.getHelp();
 
       default:
         return `Unknown skill: ${skillName}`;
