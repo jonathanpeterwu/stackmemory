@@ -28,9 +28,23 @@ import {
   cleanupOldActions,
 } from './sms-action-runner.js';
 import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
+import {
+  logWebhookRequest,
+  logRateLimit,
+  logSignatureInvalid,
+  logBodyTooLarge,
+  logContentTypeInvalid,
+  logActionAllowed,
+  logActionBlocked,
+  logCleanup,
+} from './security-logger.js';
 
 // Cleanup interval (5 minutes)
 const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
+
+// Input validation constants
+const MAX_SMS_BODY_LENGTH = 1000;
+const MAX_PHONE_LENGTH = 20;
 
 // Security constants
 const MAX_BODY_SIZE = 50 * 1024; // 50KB max body
@@ -132,6 +146,17 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
 } {
   const { From, Body } = payload;
 
+  // Input length validation
+  if (Body && Body.length > MAX_SMS_BODY_LENGTH) {
+    console.log(`[sms-webhook] Body too long: ${Body.length} chars`);
+    return { response: 'Message too long. Max 1000 characters.' };
+  }
+
+  if (From && From.length > MAX_PHONE_LENGTH) {
+    console.log(`[sms-webhook] Invalid phone number length`);
+    return { response: 'Invalid phone number.' };
+  }
+
   console.log(`[sms-webhook] Received from ${From}: ${Body}`);
 
   const result = processIncomingResponse(From, Body);
@@ -165,6 +190,7 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
     );
 
     if (actionResult.success) {
+      logActionAllowed('sms-webhook', result.action);
       console.log(
         `[sms-webhook] Action completed: ${(actionResult.output || '').substring(0, 200)}`
       );
@@ -175,6 +201,11 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
         queued: false,
       };
     } else {
+      logActionBlocked(
+        'sms-webhook',
+        result.action,
+        actionResult.error || 'unknown'
+      );
       console.log(`[sms-webhook] Action failed: ${actionResult.error}`);
 
       // Queue for retry
@@ -281,9 +312,19 @@ export function startWebhookServer(port: number = 3456): void {
           url.pathname === '/webhook') &&
         req.method === 'POST'
       ) {
-        // Rate limiting
         const clientIp = req.socket.remoteAddress || 'unknown';
+
+        // Log webhook request
+        logWebhookRequest(
+          'sms-webhook',
+          req.method || 'POST',
+          url.pathname || '/sms',
+          clientIp
+        );
+
+        // Rate limiting
         if (!checkRateLimit(clientIp)) {
+          logRateLimit('sms-webhook', clientIp);
           res.writeHead(429, {
             'Content-Type': 'text/xml',
             'Retry-After': '60',
@@ -295,6 +336,7 @@ export function startWebhookServer(port: number = 3456): void {
         // Content-type validation
         const contentType = req.headers['content-type'] || '';
         if (!contentType.includes('application/x-www-form-urlencoded')) {
+          logContentTypeInvalid('sms-webhook', contentType, clientIp);
           res.writeHead(400, { 'Content-Type': 'text/xml' });
           res.end(twimlResponse('Invalid content type'));
           return;
@@ -308,6 +350,7 @@ export function startWebhookServer(port: number = 3456): void {
           // Body size limit
           if (body.length > MAX_BODY_SIZE) {
             bodyTooLarge = true;
+            logBodyTooLarge('sms-webhook', body.length, clientIp);
             req.destroy();
           }
         });
@@ -336,6 +379,7 @@ export function startWebhookServer(port: number = 3456): void {
                 twilioSignature
               )
             ) {
+              logSignatureInvalid('sms-webhook', clientIp);
               console.error('[sms-webhook] Invalid Twilio signature');
               res.writeHead(401, { 'Content-Type': 'text/xml' });
               res.end(twimlResponse('Unauthorized'));
@@ -426,6 +470,7 @@ export function startWebhookServer(port: number = 3456): void {
         const expiredPrompts = cleanupExpiredPrompts();
         const oldActions = cleanupOldActions();
         if (expiredPrompts > 0 || oldActions > 0) {
+          logCleanup('sms-webhook', expiredPrompts, oldActions);
           console.log(
             `[sms-webhook] Cleanup: ${expiredPrompts} expired prompts, ${oldActions} old actions`
           );

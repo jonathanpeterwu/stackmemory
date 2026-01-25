@@ -4,6 +4,7 @@
  */
 
 import { z } from 'zod';
+import { logConfigInvalid } from './security-logger.js';
 
 // SMS/WhatsApp notification schemas
 export const PromptOptionSchema = z.object({
@@ -111,11 +112,10 @@ export function parseConfigSafe<T>(
   if (result.success) {
     return result.data;
   }
-  console.error(
-    `[hooks] Invalid ${configName} config:`,
-    result.error.issues
-      .map((i) => `${i.path.join('.')}: ${i.message}`)
-      .join(', ')
+  const errors = result.error.issues.map(
+    (i) => `${i.path.join('.')}: ${i.message}`
   );
+  logConfigInvalid(configName, errors);
+  console.error(`[hooks] Invalid ${configName} config:`, errors.join(', '));
   return defaultValue;
 }
