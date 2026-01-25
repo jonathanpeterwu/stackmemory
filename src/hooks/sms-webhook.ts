@@ -17,9 +17,20 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { createHmac } from 'crypto';
 import { execFileSync } from 'child_process';
-import { processIncomingResponse, loadSMSConfig } from './sms-notify.js';
-import { queueAction, executeActionSafe } from './sms-action-runner.js';
+import {
+  processIncomingResponse,
+  loadSMSConfig,
+  cleanupExpiredPrompts,
+} from './sms-notify.js';
+import {
+  queueAction,
+  executeActionSafe,
+  cleanupOldActions,
+} from './sms-action-runner.js';
 import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
+
+// Cleanup interval (5 minutes)
+const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 // Security constants
 const MAX_BODY_SIZE = 50 * 1024; // 50KB max body
@@ -408,6 +419,24 @@ export function startWebhookServer(port: number = 3456): void {
       `[sms-webhook] Status callback:   http://localhost:${port}/sms/status`
     );
     console.log(`[sms-webhook] Configure these URLs in Twilio console`);
+
+    // Start timed cleanup of expired prompts and old actions
+    setInterval(() => {
+      try {
+        const expiredPrompts = cleanupExpiredPrompts();
+        const oldActions = cleanupOldActions();
+        if (expiredPrompts > 0 || oldActions > 0) {
+          console.log(
+            `[sms-webhook] Cleanup: ${expiredPrompts} expired prompts, ${oldActions} old actions`
+          );
+        }
+      } catch {
+        // Ignore cleanup errors
+      }
+    }, CLEANUP_INTERVAL_MS);
+    console.log(
+      `[sms-webhook] Cleanup interval: every ${CLEANUP_INTERVAL_MS / 1000}s`
+    );
   });
 }
 

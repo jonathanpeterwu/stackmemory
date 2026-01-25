@@ -11,6 +11,7 @@ import { homedir } from 'os';
 import { execSync, execFileSync } from 'child_process';
 import { randomBytes } from 'crypto';
 import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
+import { ActionQueueSchema, parseConfigSafe } from './schemas.js';
 
 // Allowlist of safe action patterns
 const SAFE_ACTION_PATTERNS: Array<{
@@ -65,15 +66,26 @@ export interface ActionQueue {
 
 const QUEUE_PATH = join(homedir(), '.stackmemory', 'sms-action-queue.json');
 
+const DEFAULT_QUEUE: ActionQueue = {
+  actions: [],
+  lastChecked: new Date().toISOString(),
+};
+
 export function loadActionQueue(): ActionQueue {
   try {
     if (existsSync(QUEUE_PATH)) {
-      return JSON.parse(readFileSync(QUEUE_PATH, 'utf8'));
+      const data = JSON.parse(readFileSync(QUEUE_PATH, 'utf8'));
+      return parseConfigSafe(
+        ActionQueueSchema,
+        data,
+        DEFAULT_QUEUE,
+        'action-queue'
+      );
     }
   } catch {
     // Use defaults
   }
-  return { actions: [], lastChecked: new Date().toISOString() };
+  return { ...DEFAULT_QUEUE, lastChecked: new Date().toISOString() };
 }
 
 export function saveActionQueue(queue: ActionQueue): void {

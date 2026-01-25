@@ -11,6 +11,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { config as loadDotenv } from 'dotenv';
 import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
+import { SMSConfigSchema, parseConfigSafe } from './schemas.js';
 
 export type MessageChannel = 'whatsapp' | 'sms';
 
@@ -109,11 +110,16 @@ export function loadSMSConfig(): SMSConfig {
   try {
     if (existsSync(CONFIG_PATH)) {
       const data = readFileSync(CONFIG_PATH, 'utf8');
-      const saved = JSON.parse(data);
-      // Merge with defaults, then apply env vars
-      const config = { ...DEFAULT_CONFIG, ...saved };
-      applyEnvVars(config);
-      return config;
+      const parsed = JSON.parse(data);
+      // Validate with zod schema, fall back to defaults on invalid config
+      const validated = parseConfigSafe(
+        SMSConfigSchema,
+        { ...DEFAULT_CONFIG, ...parsed },
+        DEFAULT_CONFIG,
+        'sms-notify'
+      );
+      applyEnvVars(validated);
+      return validated;
     }
   } catch {
     // Use defaults
