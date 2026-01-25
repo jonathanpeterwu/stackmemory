@@ -277,6 +277,11 @@ function sendNotification(notification) {
     }
   }
 
+  // Add session link if available
+  if (notification.sessionId) {
+    message += `\n\nSession: https://claude.ai/share/${notification.sessionId}`;
+  }
+
   const postData = new URLSearchParams({
     From: numbers.from,
     To: numbers.to,
@@ -341,6 +346,7 @@ process.stdin.on('end', () => {
     const notification = shouldNotify(tool_name, tool_input, tool_output);
 
     if (notification) {
+      notification.sessionId = hookData.session_id;
       sendNotification(notification);
     }
 

@@ -270,18 +270,15 @@ export class GitWorkflowManager {
 
   // Private helper methods
   private getCurrentBranch(): string {
-<<<<<<< HEAD
     try {
       return execSync('git rev-parse --abbrev-ref HEAD', { encoding: 'utf8' }).trim();
     } catch (error: unknown) {
       logger.warn('Failed to get current branch', error as Error);
       return 'main';
     }
-=======
     return execSync('git rev-parse --abbrev-ref HEAD', {
       encoding: 'utf8',
     }).trim();
->>>>>>> swarm/developer-implement-core-feature
   }
 
   private getMainBranch(): string {
