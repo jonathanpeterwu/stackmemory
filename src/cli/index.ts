@@ -32,6 +32,10 @@ import { createLogCommand } from './commands/log.js';
 import { createContextCommands } from './commands/context.js';
 import { createConfigCommand } from './commands/config.js';
 import { createHandoffCommand } from './commands/handoff.js';
+import {
+  createDecisionCommand,
+  createMemoryCommand,
+} from './commands/decision.js';
 import { createStorageCommand } from './commands/storage.js';
 import { createSkillsCommand } from './commands/skills.js';
 import { createTestCommand } from './commands/test.js';
@@ -40,20 +44,120 @@ import createWorkflowCommand from './commands/workflow.js';
 import monitorCommand from './commands/monitor.js';
 import qualityCommand from './commands/quality.js';
 import createRalphCommand from './commands/ralph.js';
+import serviceCommand from './commands/service.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerSignupCommand } from './commands/signup.js';
 import { registerLogoutCommand, registerDbCommands } from './commands/db.js';
+import { createSweepCommand } from './commands/sweep.js';
+import { createHooksCommand } from './commands/hooks.js';
+import { createShellCommand } from './commands/shell.js';
+import { createAPICommand } from './commands/api.js';
+import { createCleanupProcessesCommand } from './commands/cleanup-processes.js';
+import { createAutoBackgroundCommand } from './commands/auto-background.js';
+import { createSMSNotifyCommand } from './commands/sms-notify.js';
+import { createSettingsCommand } from './commands/settings.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
+import inquirer from 'inquirer';
+import chalk from 'chalk';
+import {
+  loadStorageConfig,
+  enableChromaDB,
+  getStorageModeDescription,
+} from '../core/config/storage-config.js';
+import { loadSMSConfig } from '../hooks/sms-notify.js';
+import { spawn } from 'child_process';
+import { homedir } from 'os';
 
-const VERSION = '0.4.2';
+// Read version from package.json
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pkg = require('../../package.json');
+const VERSION = pkg.version;
 
 // Check for updates on CLI startup
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
   // Silently ignore errors
 });
+
+// Auto-start webhook and ngrok if notifications are enabled
+async function startNotificationServices(): Promise<void> {
+  try {
+    const config = loadSMSConfig();
+    if (!config.enabled) return;
+
+    const WEBHOOK_PORT = 3456;
+    let webhookStarted = false;
+    let ngrokStarted = false;
+
+    // Check if webhook is already running
+    const webhookRunning = await fetch(
+      `http://localhost:${WEBHOOK_PORT}/health`
+    )
+      .then((r) => r.ok)
+      .catch(() => false);
+
+    if (!webhookRunning) {
+      // Start webhook in background using the dist path
+      const webhookPath = join(__dirname, '../hooks/sms-webhook.js');
+      const webhookProcess = spawn('node', [webhookPath], {
+        detached: true,
+        stdio: 'ignore',
+        env: { ...process.env, SMS_WEBHOOK_PORT: String(WEBHOOK_PORT) },
+      });
+      webhookProcess.unref();
+      webhookStarted = true;
+    }
+
+    // Check if ngrok is running
+    const ngrokRunning = await fetch('http://localhost:4040/api/tunnels')
+      .then((r) => r.ok)
+      .catch(() => false);
+
+    if (!ngrokRunning) {
+      // Start ngrok in background
+      const ngrokProcess = spawn('ngrok', ['http', String(WEBHOOK_PORT)], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      ngrokProcess.unref();
+      ngrokStarted = true;
+    }
+
+    // Save ngrok URL after startup
+    if (webhookStarted || ngrokStarted) {
+      setTimeout(async () => {
+        try {
+          const tunnels = await fetch('http://localhost:4040/api/tunnels').then(
+            (r) =>
+              r.json() as Promise<{ tunnels: Array<{ public_url: string }> }>
+          );
+          const publicUrl = tunnels?.tunnels?.[0]?.public_url;
+          if (publicUrl) {
+            const configDir = join(homedir(), '.stackmemory');
+            const configPath = join(configDir, 'ngrok-url.txt');
+            const { writeFileSync, mkdirSync, existsSync } = await import('fs');
+            if (!existsSync(configDir)) {
+              mkdirSync(configDir, { recursive: true });
+            }
+            writeFileSync(configPath, publicUrl);
+            console.log(
+              chalk.gray(`[notify] Webhook: ${publicUrl}/sms/incoming`)
+            );
+          }
+        } catch {
+          // Ignore errors
+        }
+      }, 4000);
+    }
+  } catch {
+    // Silently ignore - notifications are optional
+  }
+}
+
+startNotificationServices();
 
 program
   .name('stackmemory')
@@ -64,8 +168,20 @@ program
 
 program
   .command('init')
-  .description('Initialize StackMemory in current project')
-  .action(async () => {
+  .description(
+    `Initialize StackMemory in current project
+
+Storage Modes:
+  SQLite (default): Local only, fast, no setup required
+  ChromaDB (hybrid): Adds semantic search and cloud backup, requires API key`
+  )
+  .option('--sqlite', 'Use SQLite-only storage (default, skip prompts)')
+  .option(
+    '--chromadb',
+    'Enable ChromaDB for semantic search (prompts for API key)'
+  )
+  .option('--skip-storage-prompt', 'Skip storage configuration prompt')
+  .action(async (options) => {
     try {
       const projectRoot = process.cwd();
       const dbDir = join(projectRoot, '.stackmemory');
@@ -74,20 +190,107 @@ program
         mkdirSync(dbDir, { recursive: true });
       }
 
+      // Handle storage configuration
+      let storageConfig = loadStorageConfig();
+      const isFirstTimeSetup =
+        !storageConfig.chromadb.enabled && storageConfig.mode === 'sqlite';
+
+      // Skip prompts if --sqlite flag or --skip-storage-prompt
+      if (options.sqlite || options.skipStoragePrompt) {
+        // Use SQLite-only (default)
+        console.log(chalk.gray('Using SQLite-only storage mode.'));
+      } else if (options.chromadb) {
+        // User explicitly requested ChromaDB, prompt for API key
+        await promptAndEnableChromaDB();
+      } else if (isFirstTimeSetup && process.stdin.isTTY) {
+        // Interactive mode - ask user about ChromaDB
+        console.log(chalk.cyan('\nStorage Configuration'));
+        console.log(chalk.gray('StackMemory supports two storage modes:\n'));
+        console.log(chalk.white('  SQLite (default):'));
+        console.log(chalk.gray('    - Local storage only'));
+        console.log(chalk.gray('    - Fast and simple'));
+        console.log(chalk.gray('    - No external dependencies\n'));
+        console.log(chalk.white('  ChromaDB (hybrid):'));
+        console.log(chalk.gray('    - Semantic search across your context'));
+        console.log(chalk.gray('    - Cloud backup capability'));
+        console.log(chalk.gray('    - Requires ChromaDB API key\n'));
+
+        const { enableChroma } = await inquirer.prompt([
+          {
+            type: 'confirm',
+            name: 'enableChroma',
+            message: 'Enable ChromaDB for semantic search? (requires API key)',
+            default: false,
+          },
+        ]);
+
+        if (enableChroma) {
+          await promptAndEnableChromaDB();
+        } else {
+          console.log(chalk.gray('Using SQLite-only storage mode.'));
+        }
+      }
+
+      // Initialize SQLite database
       const dbPath = join(dbDir, 'context.db');
       const db = new Database(dbPath);
       new FrameManager(db, 'cli-project');
 
       logger.info('StackMemory initialized successfully', { projectRoot });
-      console.log('✅ StackMemory initialized in', projectRoot);
+      console.log(
+        chalk.green('\n[OK] StackMemory initialized in'),
+        projectRoot
+      );
+
+      // Show current storage mode
+      storageConfig = loadStorageConfig();
+      console.log(chalk.gray(`Storage mode: ${getStorageModeDescription()}`));
 
       db.close();
     } catch (error: unknown) {
       logger.error('Failed to initialize StackMemory', error as Error);
-      console.error('❌ Initialization failed:', (error as Error).message);
+      console.error(
+        chalk.red('[ERROR] Initialization failed:'),
+        (error as Error).message
+      );
       process.exit(1);
     }
   });
+
+/**
+ * Prompt user for ChromaDB configuration and enable it
+ */
+async function promptAndEnableChromaDB(): Promise<void> {
+  const answers = await inquirer.prompt([
+    {
+      type: 'password',
+      name: 'apiKey',
+      message: 'Enter your ChromaDB API key:',
+      validate: (input: string) => {
+        if (!input || input.trim().length === 0) {
+          return 'API key is required for ChromaDB';
+        }
+        return true;
+      },
+    },
+    {
+      type: 'input',
+      name: 'apiUrl',
+      message: 'ChromaDB API URL (press Enter for default):',
+      default: 'https://api.trychroma.com',
+    },
+  ]);
+
+  enableChromaDB({
+    apiKey: answers.apiKey,
+    apiUrl: answers.apiUrl,
+  });
+
+  console.log(chalk.green('[OK] ChromaDB enabled for semantic search.'));
+  console.log(
+    chalk.gray('API key saved to ~/.stackmemory/storage-config.json')
+  );
+}
 
 program
   .command('status')
@@ -452,6 +655,8 @@ program.addCommand(createLogCommand());
 program.addCommand(createContextCommands());
 program.addCommand(createConfigCommand());
 program.addCommand(createHandoffCommand());
+program.addCommand(createDecisionCommand());
+program.addCommand(createMemoryCommand());
 program.addCommand(createStorageCommand());
 program.addCommand(createSkillsCommand());
 program.addCommand(createTestCommand());
@@ -460,6 +665,15 @@ program.addCommand(createWorkflowCommand());
 program.addCommand(monitorCommand);
 program.addCommand(qualityCommand);
 program.addCommand(createRalphCommand());
+program.addCommand(serviceCommand);
+program.addCommand(createSweepCommand());
+program.addCommand(createHooksCommand());
+program.addCommand(createShellCommand());
+program.addCommand(createAPICommand());
+program.addCommand(createCleanupProcessesCommand());
+program.addCommand(createAutoBackgroundCommand());
+program.addCommand(createSMSNotifyCommand());
+program.addCommand(createSettingsCommand());
 
 // Register dashboard command
 program

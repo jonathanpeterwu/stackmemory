@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  StackMemory Guardian Service - macOS launchd configuration
+
+  This plist is generated dynamically during `stackmemory service install`.
+  Edit this template to customize the service behavior.
+
+  Installation location: ~/Library/LaunchAgents/com.stackmemory.guardian.plist
+-->
+<plist version="1.0">
+<dict>
+    <!-- Service identifier -->
+    <key>Label</key>
+    <string>com.stackmemory.guardian</string>
+
+    <!-- Command to execute -->
+    <key>ProgramArguments</key>
+    <array>
+        <string>/usr/local/bin/node</string>
+        <string>$HOME/.stackmemory/guardian.js</string>
+    </array>
+
+    <!-- Start automatically on login -->
+    <key>RunAtLoad</key>
+    <true/>
+
+    <!-- Restart on failure -->
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <!-- Working directory -->
+    <key>WorkingDirectory</key>
+    <string>$HOME/.stackmemory</string>
+
+    <!-- Log output -->
+    <key>StandardOutPath</key>
+    <string>$HOME/.stackmemory/logs/guardian.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>$HOME/.stackmemory/logs/guardian.error.log</string>
+
+    <!-- Environment variables -->
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>$HOME</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/usr/bin:/bin</string>
+    </dict>
+
+    <!-- Minimum time between restarts (seconds) -->
+    <key>ThrottleInterval</key>
+    <integer>30</integer>
+</dict>
+</plist>

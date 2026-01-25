@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.5.0",
+  "version": "0.5.15",
   "description": "Lossless memory runtime for AI coding tools - organizes context as a call stack instead of linear chat logs, with team collaboration and infinite retention",
   "engines": {
     "node": ">=20.0.0",
@@ -10,7 +10,9 @@
   "main": "dist/index.js",
   "bin": {
     "stackmemory": "dist/cli/index.js",
-    "codex-sm": "dist/cli/codex-sm.js"
+    "codex-sm": "dist/cli/codex-sm.js",
+    "claude-sm": "bin/claude-sm",
+    "claude-smd": "bin/claude-smd"
   },
   "types": "dist/src/index.d.ts",
   "files": [
@@ -74,23 +76,24 @@
     "daemons:start": "node scripts/claude-sm-autostart.js",
     "daemons:status": "node scripts/claude-sm-autostart.js status",
     "daemons:stop": "node scripts/claude-sm-autostart.js stop",
+    "daemon:session": "node dist/daemon/session-daemon.js",
+    "daemon:session:start": "node dist/daemon/session-daemon.js --session-id",
     "sync:start": "node scripts/background-sync-manager.js",
     "sync:setup": "./scripts/setup-background-sync.sh",
     "prepare": "echo 'Prepare step completed'"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",
+    "@anthropic-ai/tokenizer": "^0.0.4",
     "@aws-sdk/client-s3": "^3.958.0",
     "@browsermcp/mcp": "^0.1.3",
     "@google-cloud/storage": "^7.18.0",
     "@linear/sdk": "^68.1.0",
     "@modelcontextprotocol/sdk": "^0.5.0",
     "@stackmemoryai/stackmemory": "^0.3.19",
-    "@types/bcryptjs": "^2.4.6",
     "@types/blessed": "^0.1.27",
     "@types/inquirer": "^9.0.9",
     "@types/pg": "^8.16.0",
-    "bcryptjs": "^3.0.3",
     "better-sqlite3": "^9.2.2",
     "chalk": "^5.3.0",
     "chromadb": "^3.2.2",
@@ -105,17 +108,12 @@
     "helmet": "^8.1.0",
     "ignore": "^7.0.5",
     "inquirer": "^9.3.8",
-    "ioredis": "^5.8.2",
-    "jsonwebtoken": "^9.0.3",
-    "jwks-rsa": "^3.2.0",
     "msgpackr": "^1.10.1",
     "ngrok": "^5.0.0-beta.2",
     "open": "^11.0.0",
     "ora": "^9.0.0",
     "pg": "^8.17.1",
-    "puppeteer": "^24.34.0",
     "rate-limiter-flexible": "^9.0.1",
-    "redis": "^5.10.0",
     "shell-escape": "^0.2.0",
     "socket.io": "^4.6.0",
     "socket.io-client": "^4.6.0",

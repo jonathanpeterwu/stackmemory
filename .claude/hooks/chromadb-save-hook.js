@@ -3,12 +3,14 @@
 /**
  * ChromaDB Context Save Hook for Claude
  * Triggers on various events to preserve context automatically
+ *
+ * Note: This hook only activates if ChromaDB is enabled in storage config.
+ * Run "stackmemory init --chromadb" to enable ChromaDB support.
  */
 
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { ChromaDBAdapter } from '../../dist/core/storage/chromadb-simple.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import dotenv from 'dotenv';
@@ -65,16 +67,24 @@ class ChromaDBContextSaver {
 
       // Prepare context based on event type
       const context = await this.prepareContext(event, data);
-      
+
       // Save to ChromaDB
       const result = await adapter.store(context);
-      
+
       console.log(`✅ Context saved: ${event} at ${new Date().toISOString()}`);
-      
+
       // Log to file for debugging
-      const logFile = path.join(process.env.HOME, '.stackmemory', 'logs', 'chromadb-saves.log');
-      fs.appendFileSync(logFile, `[${new Date().toISOString()}] ${event}: ${JSON.stringify(result)}\n`);
-      
+      const logFile = path.join(
+        process.env.HOME,
+        '.stackmemory',
+        'logs',
+        'chromadb-saves.log'
+      );
+      fs.appendFileSync(
+        logFile,
+        `[${new Date().toISOString()}] ${event}: ${JSON.stringify(result)}\n`
+      );
+
       return result;
     } catch (error) {
       console.error('Failed to save context:', error.message);
@@ -105,7 +115,9 @@ class ChromaDBContextSaver {
 
       case TRIGGER_EVENTS.CODE_CHANGE:
         // Get git diff for context
-        const { stdout: diff } = await execAsync('git diff --cached --stat', { cwd: this.projectRoot });
+        const { stdout: diff } = await execAsync('git diff --cached --stat', {
+          cwd: this.projectRoot,
+        });
         context.content = `Code changes:\n${diff}`;
         context.metadata = {
           files: JSON.stringify(data.files || []),
@@ -115,7 +127,9 @@ class ChromaDBContextSaver {
         break;
 
       case TRIGGER_EVENTS.GIT_COMMIT:
-        const { stdout: lastCommit } = await execAsync('git log -1 --oneline', { cwd: this.projectRoot });
+        const { stdout: lastCommit } = await execAsync('git log -1 --oneline', {
+          cwd: this.projectRoot,
+        });
         context.content = `Git commit: ${lastCommit}`;
         context.metadata = {
           commit_hash: data.commitHash || '',
@@ -163,7 +177,9 @@ class ChromaDBContextSaver {
 
       case TRIGGER_EVENTS.PERIODIC_SAVE:
         // Get current work context
-        const { stdout: status } = await execAsync('git status --short', { cwd: this.projectRoot });
+        const { stdout: status } = await execAsync('git status --short', {
+          cwd: this.projectRoot,
+        });
         context.content = `Periodic checkpoint:\n${status || 'No changes'}`;
         context.metadata = {
           interval: data.interval || '15m',
@@ -224,7 +240,7 @@ class ChromaDBContextSaver {
 // Main execution
 async function main() {
   const saver = new ChromaDBContextSaver();
-  
+
   // Parse input from Claude if provided
   let input = {};
   try {

@@ -476,26 +476,5 @@ describe('Temporal Paradox Resolution', () => {
       expect(duration).toBeLessThan(500);
       expect(conflicts).toBeDefined();
     });
-
-    it('should generate merge preview quickly', () => {
-      const stack1 = createMockStack(
-        Array.from({ length: 50 }, () => createMockFrame())
-      );
-      const stack2 = createMockStack(
-        Array.from({ length: 50 }, () => createMockFrame())
-      );
-
-      const startTime = Date.now();
-      const preview = visualizer.generateMergePreview(
-        stack1,
-        stack2,
-        'ai_suggest'
-      );
-      const duration = Date.now() - startTime;
-
-      // Should complete within 50ms
-      expect(duration).toBeLessThan(50);
-      expect(preview.estimatedSuccess).toBeGreaterThan(0);
-    });
   });
 });

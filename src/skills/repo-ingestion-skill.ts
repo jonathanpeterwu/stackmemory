@@ -6,6 +6,10 @@
 
 import { ChromaDBAdapter } from '../core/storage/chromadb-adapter.js';
 import { Logger } from '../core/monitoring/logger.js';
+import {
+  isChromaDBEnabled,
+  getChromaDBConfig,
+} from '../core/config/storage-config.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as crypto from 'crypto';
@@ -47,33 +51,63 @@ export interface FileChunk {
 
 export class RepoIngestionSkill {
   private logger: Logger;
-  private adapter: ChromaDBAdapter;
+  private adapter: ChromaDBAdapter | null = null;
   private metadataCache: Map<string, RepoMetadata> = new Map();
   private fileHashCache: Map<string, string> = new Map();
+  private chromaEnabled: boolean = false;
 
   constructor(
     private config: {
-      apiKey: string;
-      tenant: string;
-      database: string;
+      apiKey?: string;
+      tenant?: string;
+      database?: string;
       collectionName?: string;
-    },
+    } | null,
     private userId: string,
     private teamId?: string
   ) {
     this.logger = new Logger('RepoIngestionSkill');
-    this.adapter = new ChromaDBAdapter(
-      {
-        ...config,
-        collectionName: config.collectionName || 'stackmemory_repos',
-      },
-      userId,
-      teamId
-    );
+
+    // Check if ChromaDB is enabled via storage config
+    this.chromaEnabled = isChromaDBEnabled();
+
+    if (this.chromaEnabled) {
+      const chromaConfig = getChromaDBConfig();
+      if (chromaConfig && chromaConfig.apiKey) {
+        this.adapter = new ChromaDBAdapter(
+          {
+            apiKey: config?.apiKey || chromaConfig.apiKey,
+            tenant: config?.tenant || chromaConfig.tenant || 'default_tenant',
+            database:
+              config?.database || chromaConfig.database || 'default_database',
+            collectionName: config?.collectionName || 'stackmemory_repos',
+          },
+          userId,
+          teamId
+        );
+      }
+    }
+  }
+
+  /**
+   * Check if ChromaDB is available for use
+   */
+  isAvailable(): boolean {
+    return this.chromaEnabled && this.adapter !== null;
   }
 
   async initialize(): Promise<void> {
-    await this.adapter.initialize();
+    if (!this.isAvailable()) {
+      this.logger.warn(
+        'ChromaDB not enabled. Repository ingestion features are unavailable.'
+      );
+      this.logger.warn('Run "stackmemory init --chromadb" to enable ChromaDB.');
+      return;
+    }
+
+    if (this.adapter) {
+      await this.adapter.initialize();
+    }
     await this.loadMetadataCache();
   }
 
@@ -94,6 +128,14 @@ export class RepoIngestionSkill {
       totalSize: number;
     };
   }> {
+    if (!this.isAvailable()) {
+      return {
+        success: false,
+        message:
+          'ChromaDB not enabled. Run "stackmemory init --chromadb" to enable semantic search features.',
+      };
+    }
+
     const startTime = Date.now();
 
     try {
@@ -330,6 +372,11 @@ export class RepoIngestionSkill {
       repoName: string;
     }>
   > {
+    if (!this.isAvailable() || !this.adapter) {
+      this.logger.warn('ChromaDB not enabled. Code search unavailable.');
+      return [];
+    }
+
     try {
       const filters: Record<string, unknown> = {
         type: ['code_chunk'],
@@ -634,12 +681,19 @@ export class RepoIngestionSkill {
     chunk: FileChunk,
     metadata: RepoMetadata
   ): Promise<void> {
+    if (!this.adapter) {
+      throw new Error('ChromaDB adapter not available');
+    }
+
     const documentContent = `File: ${chunk.filePath} (Lines ${chunk.startLine}-${chunk.endLine})
 Language: ${chunk.language}
 Repository: ${metadata.repoName}/${metadata.branch}
 
 ${chunk.content}`;
 
+    if (!this.adapter) {
+      throw new Error('ChromaDB adapter not initialized');
+    }
     await this.adapter.storeContext('observation', documentContent, {
       type: 'code_chunk',
       repo_id: metadata.repoId,

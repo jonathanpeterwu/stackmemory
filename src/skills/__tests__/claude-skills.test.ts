@@ -63,7 +63,7 @@ describe('Claude Skills', () => {
             outputs: [{ type: 'error', content: 'Test error' }],
           },
         ]),
-        getFrame: vi.fn().mockImplementation(id => {
+        getFrame: vi.fn().mockImplementation((id) => {
           if (id === 'frame1') {
             return {
               frameId: 'frame1',
@@ -171,7 +171,9 @@ describe('Claude Skills', () => {
       const result = await skill.execute('teammate', 'Review needed');
 
       expect(result.data?.actionItems).toBeDefined();
-      expect(result.data?.actionItems).toContain('Resolve error in Test Frame 2');
+      expect(result.data?.actionItems).toContain(
+        'Resolve error in Test Frame 2'
+      );
       // Frame 2 is type 'implementation' so should trigger test writing action
       expect(result.data?.actionItems.length).toBeGreaterThanOrEqual(1);
     });
@@ -210,7 +212,7 @@ describe('Claude Skills', () => {
 
       // Verify file was created
       const files = fs.readdirSync(tempDir);
-      expect(files.some(f => f.endsWith('.json'))).toBe(true);
+      expect(files.some((f) => f.endsWith('.json'))).toBe(true);
     });
 
     it('should create checkpoint with file backups', async () => {
@@ -223,7 +225,7 @@ describe('Claude Skills', () => {
       });
 
       expect(result.success).toBe(true);
-      
+
       // Verify file backup exists
       const checkpointId = result.data?.checkpointId;
       const filesDir = path.join(tempDir, checkpointId, 'files');
@@ -248,14 +250,14 @@ describe('Claude Skills', () => {
       });
 
       expect(result.success).toBe(true);
-      
+
       // Load checkpoint and verify metadata
       const files = fs.readdirSync(tempDir);
       const checkpointFile = files.find((f: any) => f.endsWith('.json'));
       const checkpoint = JSON.parse(
         fs.readFileSync(path.join(tempDir, checkpointFile!), 'utf-8')
       );
-      
+
       expect(checkpoint.metadata.riskyOperation).toBe(true);
       expect(checkpoint.metadata.autoCheckpoint).toBe(true);
     });
@@ -289,7 +291,7 @@ describe('Claude Skills', () => {
     it('should diff two checkpoints', async () => {
       // Create first checkpoint
       const cp1 = await checkpointSkill.create('First');
-      
+
       // Modify mock to return different frames
       mockDualStackManager.getActiveStack = vi.fn().mockReturnValue({
         getAllFrames: vi.fn().mockResolvedValue([
@@ -379,13 +381,15 @@ describe('Claude Skills', () => {
           frameId: 'f1',
           score: 0.9,
           timestamp: new Date().toISOString(),
-          content: 'We decided to use JWT for authentication. This provides better security.',
+          content:
+            'We decided to use JWT for authentication. This provides better security.',
         },
         {
           frameId: 'f2',
           score: 0.8,
           timestamp: new Date().toISOString(),
-          content: 'The team chose PostgreSQL over MongoDB for better ACID compliance.',
+          content:
+            'The team chose PostgreSQL over MongoDB for better ACID compliance.',
         },
       ]);
 
@@ -395,7 +399,9 @@ describe('Claude Skills', () => {
       });
 
       expect(result.data?.decisions).toHaveLength(2);
-      expect(result.data?.decisions[0].decision).toContain('decided to use JWT');
+      expect(result.data?.decisions[0].decision).toContain(
+        'decided to use JWT'
+      );
       expect(result.data?.decisions[1].decision).toContain('chose PostgreSQL');
     });
 
@@ -431,7 +437,7 @@ describe('Claude Skills', () => {
 
     it('should parse different depth formats', async () => {
       const skill = new ArchaeologistSkill(context);
-      
+
       await skill.dig('test', { depth: '7days' });
       await skill.dig('test', { depth: '2weeks' });
       await skill.dig('test', { depth: '3months' });
@@ -444,9 +450,13 @@ describe('Claude Skills', () => {
   describe('ClaudeSkillsManager', () => {
     it('should execute handoff skill', async () => {
       const manager = new ClaudeSkillsManager(context);
-      const result = await manager.executeSkill('handoff', ['user2', 'Test message'], {
-        priority: 'high',
-      });
+      const result = await manager.executeSkill(
+        'handoff',
+        ['user2', 'Test message'],
+        {
+          priority: 'high',
+        }
+      );
 
       expect(result.success).toBe(true);
       expect(result.data?.handoffId).toBe('handoff-test-123');
@@ -456,8 +466,11 @@ describe('Claude Skills', () => {
       const manager = new ClaudeSkillsManager(context);
       // Override checkpoint dir
       (manager as any).checkpointSkill.checkpointDir = tempDir;
-      
-      const result = await manager.executeSkill('checkpoint', ['create', 'Test checkpoint']);
+
+      const result = await manager.executeSkill('checkpoint', [
+        'create',
+        'Test checkpoint',
+      ]);
 
       expect(result.success).toBe(true);
       expect(result.data?.checkpointId).toBeDefined();
@@ -485,18 +498,24 @@ describe('Claude Skills', () => {
       const manager = new ClaudeSkillsManager(context);
       const skills = manager.getAvailableSkills();
 
-      expect(skills).toEqual(['handoff', 'checkpoint', 'dig', 'dashboard']);
+      expect(skills).toEqual([
+        'handoff',
+        'checkpoint',
+        'dig',
+        'dashboard',
+        'api',
+      ]);
     });
 
     it('should get skill help', () => {
       const manager = new ClaudeSkillsManager(context);
-      
+
       const handoffHelp = manager.getSkillHelp('handoff');
       expect(handoffHelp).toContain('/handoff @user');
-      
+
       const checkpointHelp = manager.getSkillHelp('checkpoint');
       expect(checkpointHelp).toContain('/checkpoint create');
-      
+
       const digHelp = manager.getSkillHelp('dig');
       expect(digHelp).toContain('/dig "query"');
     });

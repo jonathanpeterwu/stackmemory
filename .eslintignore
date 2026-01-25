@@ -1,6 +1,0 @@
-dist/
-node_modules/
-templates/
-archive/
-*.min.js
-*.bundle.js
