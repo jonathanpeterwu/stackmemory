@@ -5,8 +5,11 @@
 
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { parse as parseUrl } from 'url';
+import { existsSync, writeFileSync, mkdirSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
 import { processIncomingResponse, loadSMSConfig } from './sms-notify.js';
-import { execSync } from 'child_process';
+import { queueAction } from './sms-action-runner.js';
 
 interface TwilioWebhookPayload {
   From: string;
@@ -24,9 +27,32 @@ function parseFormData(body: string): Record<string, string> {
   return result;
 }
 
+// Store response for Claude hook to pick up
+function storeLatestResponse(
+  promptId: string,
+  response: string,
+  action?: string
+): void {
+  const dir = join(homedir(), '.stackmemory');
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  const responsePath = join(dir, 'sms-latest-response.json');
+  writeFileSync(
+    responsePath,
+    JSON.stringify({
+      promptId,
+      response,
+      action,
+      timestamp: new Date().toISOString(),
+    })
+  );
+}
+
 export function handleSMSWebhook(payload: TwilioWebhookPayload): {
   response: string;
   action?: string;
+  queued?: boolean;
 } {
   const { From, Body } = payload;
 
@@ -43,25 +69,31 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
     return { response: 'No pending prompt found.' };
   }
 
-  // Execute action if specified
+  // Store response for Claude hook
+  storeLatestResponse(
+    result.prompt?.id || 'unknown',
+    result.response || Body,
+    result.action
+  );
+
+  // Queue action for execution (instead of immediate execution)
   if (result.action) {
-    try {
-      console.log(`[sms-webhook] Executing action: ${result.action}`);
-      execSync(result.action, { stdio: 'inherit' });
-      return {
-        response: `Got it! Executing: ${result.action}`,
-        action: result.action,
-      };
-    } catch {
-      return {
-        response: `Received "${result.response}" but action failed.`,
-        action: result.action,
-      };
-    }
+    const actionId = queueAction(
+      result.prompt?.id || 'unknown',
+      result.response || Body,
+      result.action
+    );
+    console.log(`[sms-webhook] Queued action ${actionId}: ${result.action}`);
+
+    return {
+      response: `Got it! Queued action: ${result.action.substring(0, 30)}...`,
+      action: result.action,
+      queued: true,
+    };
   }
 
   return {
-    response: `Received: ${result.response}`,
+    response: `Received: ${result.response}. Next action will be triggered.`,
   };
 }
 

@@ -4,6 +4,8 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
+import { execSync } from 'child_process';
+import { join } from 'path';
 import {
   loadSMSConfig,
   saveSMSConfig,
@@ -13,6 +15,14 @@ import {
   notifyTaskComplete,
   cleanupExpiredPrompts,
 } from '../../hooks/sms-notify.js';
+import {
+  loadActionQueue,
+  processAllPendingActions,
+  cleanupOldActions,
+  startActionWatcher,
+} from '../../hooks/sms-action-runner.js';
+
+// __dirname provided by esbuild banner
 
 export function createSMSNotifyCommand(): Command {
   const cmd = new Command('notify')
@@ -372,6 +382,131 @@ Examples:
       config.responseTimeout = timeout;
       saveSMSConfig(config);
       console.log(chalk.green(`Response timeout set to ${timeout} seconds`));
+    });
+
+  // Action queue commands
+  cmd
+    .command('actions')
+    .description('List queued actions from SMS responses')
+    .action(() => {
+      const queue = loadActionQueue();
+
+      if (queue.actions.length === 0) {
+        console.log(chalk.gray('No actions in queue'));
+        return;
+      }
+
+      console.log(chalk.blue('Action Queue:'));
+      queue.actions.forEach((a) => {
+        const statusColor =
+          a.status === 'completed'
+            ? chalk.green
+            : a.status === 'failed'
+              ? chalk.red
+              : a.status === 'running'
+                ? chalk.yellow
+                : chalk.gray;
+
+        console.log();
+        console.log(`  ${chalk.gray('ID:')} ${a.id}`);
+        console.log(`  ${chalk.gray('Status:')} ${statusColor(a.status)}`);
+        console.log(
+          `  ${chalk.gray('Action:')} ${a.action.substring(0, 60)}...`
+        );
+        console.log(`  ${chalk.gray('Response:')} ${a.response}`);
+        if (a.error) {
+          console.log(`  ${chalk.gray('Error:')} ${chalk.red(a.error)}`);
+        }
+      });
+    });
+
+  cmd
+    .command('run-actions')
+    .description('Execute all pending actions from SMS responses')
+    .action(() => {
+      console.log(chalk.blue('Processing pending actions...'));
+      const result = processAllPendingActions();
+
+      console.log(
+        chalk.green(
+          `Processed ${result.processed} action(s): ${result.succeeded} succeeded, ${result.failed} failed`
+        )
+      );
+    });
+
+  cmd
+    .command('watch')
+    .description('Watch for and execute SMS response actions')
+    .option('-i, --interval <ms>', 'Check interval in milliseconds', '5000')
+    .action((options: { interval: string }) => {
+      const interval = parseInt(options.interval, 10);
+      console.log(chalk.blue(`Watching for actions (interval: ${interval}ms)`));
+      console.log(chalk.gray('Press Ctrl+C to stop'));
+
+      startActionWatcher(interval);
+    });
+
+  cmd
+    .command('cleanup-actions')
+    .description('Remove old completed actions')
+    .action(() => {
+      const removed = cleanupOldActions();
+      console.log(chalk.green(`Removed ${removed} old action(s)`));
+    });
+
+  // Hook installation commands
+  cmd
+    .command('install-hook')
+    .description('Install Claude Code notification hook')
+    .action(() => {
+      try {
+        const scriptPath = join(
+          __dirname,
+          '../../../scripts/install-notify-hook.sh'
+        );
+        execSync(`bash "${scriptPath}"`, { stdio: 'inherit' });
+      } catch {
+        console.error(chalk.red('Failed to install hook'));
+      }
+    });
+
+  cmd
+    .command('install-response-hook')
+    .description('Install Claude Code response handler hook')
+    .action(() => {
+      try {
+        // Create install script inline
+        const hooksDir = join(process.env['HOME'] || '~', '.claude', 'hooks');
+        const hookSrc = join(
+          __dirname,
+          '../../../templates/claude-hooks/sms-response-handler.js'
+        );
+        const hookDest = join(hooksDir, 'sms-response-handler.js');
+
+        execSync(`mkdir -p "${hooksDir}"`, { stdio: 'inherit' });
+        execSync(`cp "${hookSrc}" "${hookDest}"`, { stdio: 'inherit' });
+        execSync(`chmod +x "${hookDest}"`, { stdio: 'inherit' });
+
+        console.log(chalk.green('Response handler hook installed!'));
+        console.log(chalk.gray(`Location: ${hookDest}`));
+        console.log();
+        console.log(chalk.blue('Add to ~/.claude/settings.json:'));
+        console.log(
+          chalk.gray(`  "hooks": { "pre_tool_use": ["node ${hookDest}"] }`)
+        );
+      } catch {
+        console.error(chalk.red('Failed to install response hook'));
+      }
+    });
+
+  cmd
+    .command('webhook')
+    .description('Start SMS webhook server for receiving responses')
+    .option('-p, --port <port>', 'Port to listen on', '3456')
+    .action(async (options: { port: string }) => {
+      const { startWebhookServer } = await import('../../hooks/sms-webhook.js');
+      const port = parseInt(options.port, 10);
+      startWebhookServer(port);
     });
 
   return cmd;
