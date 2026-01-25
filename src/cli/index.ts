@@ -66,6 +66,9 @@ import {
   enableChromaDB,
   getStorageModeDescription,
 } from '../core/config/storage-config.js';
+import { loadSMSConfig } from '../hooks/sms-notify.js';
+import { spawn } from 'child_process';
+import { homedir } from 'os';
 
 const VERSION = '0.5.5';
 
@@ -73,6 +76,83 @@ const VERSION = '0.5.5';
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
   // Silently ignore errors
 });
+
+// Auto-start webhook and ngrok if notifications are enabled
+async function startNotificationServices(): Promise<void> {
+  try {
+    const config = loadSMSConfig();
+    if (!config.enabled) return;
+
+    const WEBHOOK_PORT = 3456;
+    let webhookStarted = false;
+    let ngrokStarted = false;
+
+    // Check if webhook is already running
+    const webhookRunning = await fetch(
+      `http://localhost:${WEBHOOK_PORT}/health`
+    )
+      .then((r) => r.ok)
+      .catch(() => false);
+
+    if (!webhookRunning) {
+      // Start webhook in background using the dist path
+      const webhookPath = join(__dirname, '../hooks/sms-webhook.js');
+      const webhookProcess = spawn('node', [webhookPath], {
+        detached: true,
+        stdio: 'ignore',
+        env: { ...process.env, SMS_WEBHOOK_PORT: String(WEBHOOK_PORT) },
+      });
+      webhookProcess.unref();
+      webhookStarted = true;
+    }
+
+    // Check if ngrok is running
+    const ngrokRunning = await fetch('http://localhost:4040/api/tunnels')
+      .then((r) => r.ok)
+      .catch(() => false);
+
+    if (!ngrokRunning) {
+      // Start ngrok in background
+      const ngrokProcess = spawn('ngrok', ['http', String(WEBHOOK_PORT)], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      ngrokProcess.unref();
+      ngrokStarted = true;
+    }
+
+    // Save ngrok URL after startup
+    if (webhookStarted || ngrokStarted) {
+      setTimeout(async () => {
+        try {
+          const tunnels = await fetch('http://localhost:4040/api/tunnels').then(
+            (r) =>
+              r.json() as Promise<{ tunnels: Array<{ public_url: string }> }>
+          );
+          const publicUrl = tunnels?.tunnels?.[0]?.public_url;
+          if (publicUrl) {
+            const configDir = join(homedir(), '.stackmemory');
+            const configPath = join(configDir, 'ngrok-url.txt');
+            const { writeFileSync, mkdirSync, existsSync } = await import('fs');
+            if (!existsSync(configDir)) {
+              mkdirSync(configDir, { recursive: true });
+            }
+            writeFileSync(configPath, publicUrl);
+            console.log(
+              chalk.gray(`[notify] Webhook: ${publicUrl}/sms/incoming`)
+            );
+          }
+        } catch {
+          // Ignore errors
+        }
+      }, 4000);
+    }
+  } catch {
+    // Silently ignore - notifications are optional
+  }
+}
+
+startNotificationServices();
 
 program
   .name('stackmemory')
