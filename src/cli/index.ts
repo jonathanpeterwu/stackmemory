@@ -55,6 +55,7 @@ import { createAPICommand } from './commands/api.js';
 import { createCleanupProcessesCommand } from './commands/cleanup-processes.js';
 import { createAutoBackgroundCommand } from './commands/auto-background.js';
 import { createSMSNotifyCommand } from './commands/sms-notify.js';
+import { createSettingsCommand } from './commands/settings.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -668,6 +669,7 @@ program.addCommand(createAPICommand());
 program.addCommand(createCleanupProcessesCommand());
 program.addCommand(createAutoBackgroundCommand());
 program.addCommand(createSMSNotifyCommand());
+program.addCommand(createSettingsCommand());
 
 // Register dashboard command
 program

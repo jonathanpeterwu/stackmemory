@@ -9,6 +9,7 @@
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { config as loadDotenv } from 'dotenv';
 
 export type MessageChannel = 'whatsapp' | 'sms';
 
@@ -98,6 +99,12 @@ const DEFAULT_CONFIG: SMSConfig = {
 };
 
 export function loadSMSConfig(): SMSConfig {
+  // Load .env files (project, home, global)
+  loadDotenv({ path: join(process.cwd(), '.env') });
+  loadDotenv({ path: join(process.cwd(), '.env.local') });
+  loadDotenv({ path: join(homedir(), '.env') });
+  loadDotenv({ path: join(homedir(), '.stackmemory', '.env') });
+
   try {
     if (existsSync(CONFIG_PATH)) {
       const data = readFileSync(CONFIG_PATH, 'utf8');
@@ -115,6 +122,71 @@ export function loadSMSConfig(): SMSConfig {
   const config = { ...DEFAULT_CONFIG };
   applyEnvVars(config);
   return config;
+}
+
+// Check what's missing for notifications to work
+export function getMissingConfig(): {
+  missing: string[];
+  configured: string[];
+  ready: boolean;
+} {
+  const config = loadSMSConfig();
+  const missing: string[] = [];
+  const configured: string[] = [];
+
+  // Check credentials
+  if (config.accountSid) {
+    configured.push('TWILIO_ACCOUNT_SID');
+  } else {
+    missing.push('TWILIO_ACCOUNT_SID');
+  }
+
+  if (config.authToken) {
+    configured.push('TWILIO_AUTH_TOKEN');
+  } else {
+    missing.push('TWILIO_AUTH_TOKEN');
+  }
+
+  // Check channel-specific numbers
+  const channel = config.channel || 'whatsapp';
+
+  if (channel === 'whatsapp') {
+    const from = config.whatsappFromNumber || config.fromNumber;
+    const to = config.whatsappToNumber || config.toNumber;
+
+    if (from) {
+      configured.push('TWILIO_WHATSAPP_FROM');
+    } else {
+      missing.push('TWILIO_WHATSAPP_FROM');
+    }
+
+    if (to) {
+      configured.push('TWILIO_WHATSAPP_TO');
+    } else {
+      missing.push('TWILIO_WHATSAPP_TO');
+    }
+  } else {
+    const from = config.smsFromNumber || config.fromNumber;
+    const to = config.smsToNumber || config.toNumber;
+
+    if (from) {
+      configured.push('TWILIO_SMS_FROM');
+    } else {
+      missing.push('TWILIO_SMS_FROM');
+    }
+
+    if (to) {
+      configured.push('TWILIO_SMS_TO');
+    } else {
+      missing.push('TWILIO_SMS_TO');
+    }
+  }
+
+  return {
+    missing,
+    configured,
+    ready: missing.length === 0,
+  };
 }
 
 function applyEnvVars(config: SMSConfig): void {
