@@ -6,6 +6,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import { execSync } from 'child_process';
 import { join } from 'path';
+import { existsSync, readFileSync, unlinkSync } from 'fs';
 import {
   loadSMSConfig,
   saveSMSConfig,
@@ -438,6 +439,42 @@ Examples:
     });
 
   cmd
+    .command('check')
+    .description(
+      'Check for new SMS/WhatsApp responses (use in Claude sessions)'
+    )
+    .action(() => {
+      const responsePath = join(
+        process.env['HOME'] || '~',
+        '.stackmemory',
+        'sms-latest-response.json'
+      );
+
+      try {
+        if (existsSync(responsePath)) {
+          const data = JSON.parse(readFileSync(responsePath, 'utf8'));
+          const age = Date.now() - new Date(data.timestamp).getTime();
+
+          if (age < 5 * 60 * 1000) {
+            // Less than 5 minutes old
+            console.log(chalk.green.bold('\n*** NEW SMS RESPONSE ***'));
+            console.log(`  Response: "${data.response}"`);
+            console.log(`  Prompt ID: ${data.promptId}`);
+            console.log(`  Received: ${Math.round(age / 1000)}s ago\n`);
+
+            // Clear it after reading
+            unlinkSync(responsePath);
+            return;
+          }
+        }
+      } catch {
+        // Ignore errors
+      }
+
+      console.log(chalk.gray('No new responses'));
+    });
+
+  cmd
     .command('pending')
     .description('List pending prompts awaiting response')
     .action(() => {
@@ -558,6 +595,17 @@ Examples:
     .action(() => {
       const removed = cleanupOldActions();
       console.log(chalk.green(`Removed ${removed} old action(s)`));
+    });
+
+  cmd
+    .command('watch-responses')
+    .description('Watch for incoming SMS/WhatsApp responses and notify')
+    .option('-i, --interval <ms>', 'Check interval in milliseconds', '2000')
+    .action(async (options: { interval: string }) => {
+      const { startResponseWatcher } =
+        await import('../../hooks/sms-watcher.js');
+      const interval = parseInt(options.interval, 10);
+      startResponseWatcher(interval);
     });
 
   // Hook installation commands

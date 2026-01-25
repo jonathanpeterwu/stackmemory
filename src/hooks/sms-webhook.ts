@@ -10,6 +10,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { processIncomingResponse, loadSMSConfig } from './sms-notify.js';
 import { queueAction } from './sms-action-runner.js';
+import { execSync } from 'child_process';
 
 interface TwilioWebhookPayload {
   From: string;
@@ -76,25 +77,83 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
     result.action
   );
 
-  // Queue action for execution (instead of immediate execution)
-  if (result.action) {
-    const actionId = queueAction(
-      result.prompt?.id || 'unknown',
-      result.response || Body,
-      result.action
-    );
-    console.log(`[sms-webhook] Queued action ${actionId}: ${result.action}`);
+  // Trigger notification to alert user/Claude
+  triggerResponseNotification(result.response || Body);
 
-    return {
-      response: `Got it! Queued action: ${result.action.substring(0, 30)}...`,
-      action: result.action,
-      queued: true,
-    };
+  // Execute action immediately if present
+  if (result.action) {
+    console.log(`[sms-webhook] Executing action: ${result.action}`);
+
+    try {
+      const output = execSync(result.action, {
+        encoding: 'utf8',
+        timeout: 60000,
+        stdio: ['pipe', 'pipe', 'pipe'],
+      });
+      console.log(
+        `[sms-webhook] Action completed: ${output.substring(0, 200)}`
+      );
+
+      return {
+        response: `Done! Action executed successfully.`,
+        action: result.action,
+        queued: false,
+      };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      console.log(`[sms-webhook] Action failed: ${error}`);
+
+      // Queue for retry
+      queueAction(
+        result.prompt?.id || 'unknown',
+        result.response || Body,
+        result.action
+      );
+
+      return {
+        response: `Action failed, queued for retry: ${error.substring(0, 50)}`,
+        action: result.action,
+        queued: true,
+      };
+    }
   }
 
   return {
     response: `Received: ${result.response}. Next action will be triggered.`,
   };
+}
+
+// Trigger notification when response received
+function triggerResponseNotification(response: string): void {
+  const message = `SMS Response: ${response}`;
+
+  // macOS notification
+  try {
+    execSync(
+      `osascript -e 'display notification "${message}" with title "StackMemory" sound name "Glass"'`,
+      { stdio: 'ignore', timeout: 5000 }
+    );
+  } catch {
+    // Ignore if not on macOS
+  }
+
+  // Write signal file for other processes
+  try {
+    const signalPath = join(homedir(), '.stackmemory', 'sms-signal.txt');
+    writeFileSync(
+      signalPath,
+      JSON.stringify({
+        type: 'sms_response',
+        response,
+        timestamp: new Date().toISOString(),
+      })
+    );
+  } catch {
+    // Ignore
+  }
+
+  console.log(`\n*** SMS RESPONSE RECEIVED: "${response}" ***`);
+  console.log(`*** Run: stackmemory notify run-actions ***\n`);
 }
 
 // TwiML response helper
