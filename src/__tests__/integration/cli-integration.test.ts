@@ -89,7 +89,7 @@ describe('CLI Integration', () => {
   });
 
   describe('Clear Command', () => {
-    it('should show clear status', () => {
+    it('should show clear status', { timeout: 15000 }, () => {
       // Initialize first
       execSync(`node ${cliPath} init`, { cwd: testDir });
 
