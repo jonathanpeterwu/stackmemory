@@ -7,6 +7,7 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
+import { AutoBackgroundConfigSchema, parseConfigSafe } from './schemas.js';
 
 export interface AutoBackgroundConfig {
   enabled: boolean;
@@ -92,7 +93,13 @@ export function loadConfig(): AutoBackgroundConfig {
   try {
     if (existsSync(CONFIG_PATH)) {
       const data = readFileSync(CONFIG_PATH, 'utf8');
-      return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+      const parsed = JSON.parse(data);
+      return parseConfigSafe(
+        AutoBackgroundConfigSchema,
+        { ...DEFAULT_CONFIG, ...parsed },
+        DEFAULT_CONFIG,
+        'auto-background'
+      );
     }
   } catch {
     // Use defaults
