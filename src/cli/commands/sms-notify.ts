@@ -9,11 +9,13 @@ import { join } from 'path';
 import {
   loadSMSConfig,
   saveSMSConfig,
+  sendNotification,
   sendSMSNotification,
   notifyReviewReady,
   notifyWithYesNo,
   notifyTaskComplete,
   cleanupExpiredPrompts,
+  type MessageChannel,
 } from '../../hooks/sms-notify.js';
 import {
   loadActionQueue,
@@ -34,17 +36,32 @@ export function createSMSNotifyCommand(): Command {
       `
 Setup (optional):
   1. Create Twilio account at https://twilio.com
-  2. Get Account SID, Auth Token, and phone number
+  2. Get Account SID, Auth Token, and phone numbers
   3. Set environment variables:
      export TWILIO_ACCOUNT_SID=your_sid
      export TWILIO_AUTH_TOKEN=your_token
+
+     For WhatsApp (recommended - cheaper for conversations):
+     export TWILIO_WHATSAPP_FROM=+1234567890
+     export TWILIO_WHATSAPP_TO=+1234567890
+     export TWILIO_CHANNEL=whatsapp
+
+     For SMS:
+     export TWILIO_SMS_FROM=+1234567890
+     export TWILIO_SMS_TO=+1234567890
+     export TWILIO_CHANNEL=sms
+
+     Legacy (works for both, defaults to WhatsApp):
      export TWILIO_FROM_NUMBER=+1234567890
      export TWILIO_TO_NUMBER=+1234567890
+
   4. Enable: stackmemory notify enable
 
 Examples:
   stackmemory notify status              Check configuration
   stackmemory notify enable              Enable notifications
+  stackmemory notify channel whatsapp    Switch to WhatsApp
+  stackmemory notify channel sms         Switch to SMS
   stackmemory notify test                Send test message
   stackmemory notify send "PR ready"     Send custom message
   stackmemory notify review "PR #123"    Send review notification with options
@@ -58,28 +75,57 @@ Examples:
     .action(() => {
       const config = loadSMSConfig();
 
-      console.log(chalk.blue('SMS Notification Status:'));
+      console.log(chalk.blue('Notification Status:'));
       console.log();
 
-      // Check if configured
-      const hasCreds =
-        config.accountSid &&
-        config.authToken &&
-        config.fromNumber &&
+      // Check credentials
+      const hasCreds = config.accountSid && config.authToken;
+
+      // Check channel-specific numbers
+      const channel = config.channel || 'whatsapp';
+      const hasWhatsApp =
+        config.whatsappFromNumber ||
+        config.fromNumber ||
+        config.whatsappToNumber ||
         config.toNumber;
+      const hasSMS =
+        config.smsFromNumber ||
+        config.fromNumber ||
+        config.smsToNumber ||
+        config.toNumber;
+      const hasNumbers = channel === 'whatsapp' ? hasWhatsApp : hasSMS;
 
       console.log(
         `  ${chalk.gray('Enabled:')} ${config.enabled ? chalk.green('yes') : chalk.red('no')}`
       );
       console.log(
-        `  ${chalk.gray('Configured:')} ${hasCreds ? chalk.green('yes') : chalk.yellow('no (set env vars)')}`
+        `  ${chalk.gray('Channel:')} ${channel === 'whatsapp' ? chalk.cyan('WhatsApp') : chalk.blue('SMS')}`
+      );
+      console.log(
+        `  ${chalk.gray('Configured:')} ${hasCreds && hasNumbers ? chalk.green('yes') : chalk.yellow('no (set env vars)')}`
       );
 
-      if (config.fromNumber) {
-        console.log(`  ${chalk.gray('From:')} ${maskPhone(config.fromNumber)}`);
-      }
-      if (config.toNumber) {
-        console.log(`  ${chalk.gray('To:')} ${maskPhone(config.toNumber)}`);
+      // Show channel-specific numbers
+      console.log();
+      console.log(chalk.blue('Numbers:'));
+      if (channel === 'whatsapp') {
+        const from = config.whatsappFromNumber || config.fromNumber;
+        const to = config.whatsappToNumber || config.toNumber;
+        if (from) {
+          console.log(`  ${chalk.gray('WhatsApp From:')} ${maskPhone(from)}`);
+        }
+        if (to) {
+          console.log(`  ${chalk.gray('WhatsApp To:')} ${maskPhone(to)}`);
+        }
+      } else {
+        const from = config.smsFromNumber || config.fromNumber;
+        const to = config.smsToNumber || config.toNumber;
+        if (from) {
+          console.log(`  ${chalk.gray('SMS From:')} ${maskPhone(from)}`);
+        }
+        if (to) {
+          console.log(`  ${chalk.gray('SMS To:')} ${maskPhone(to)}`);
+        }
       }
 
       console.log();
@@ -111,15 +157,21 @@ Examples:
         `  ${chalk.gray('Response Timeout:')} ${config.responseTimeout}s`
       );
 
-      if (!hasCreds) {
+      if (!hasCreds || !hasNumbers) {
         console.log();
         console.log(
           chalk.yellow('To configure, set these environment variables:')
         );
         console.log(chalk.gray('  export TWILIO_ACCOUNT_SID=your_sid'));
         console.log(chalk.gray('  export TWILIO_AUTH_TOKEN=your_token'));
-        console.log(chalk.gray('  export TWILIO_FROM_NUMBER=+1234567890'));
-        console.log(chalk.gray('  export TWILIO_TO_NUMBER=+1234567890'));
+        console.log();
+        console.log(chalk.gray('  For WhatsApp (recommended):'));
+        console.log(chalk.gray('  export TWILIO_WHATSAPP_FROM=+1234567890'));
+        console.log(chalk.gray('  export TWILIO_WHATSAPP_TO=+1234567890'));
+        console.log();
+        console.log(chalk.gray('  For SMS:'));
+        console.log(chalk.gray('  export TWILIO_SMS_FROM=+1234567890'));
+        console.log(chalk.gray('  export TWILIO_SMS_TO=+1234567890'));
       }
     });
 
@@ -157,19 +209,73 @@ Examples:
     });
 
   cmd
+    .command('channel <type>')
+    .description('Set notification channel (whatsapp|sms)')
+    .action((type: string) => {
+      const validChannels: MessageChannel[] = ['whatsapp', 'sms'];
+      const channel = type.toLowerCase() as MessageChannel;
+
+      if (!validChannels.includes(channel)) {
+        console.log(
+          chalk.red(`Invalid channel. Use: ${validChannels.join(', ')}`)
+        );
+        return;
+      }
+
+      const config = loadSMSConfig();
+      config.channel = channel;
+      saveSMSConfig(config);
+
+      const label = channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
+      console.log(chalk.green(`Notification channel set to ${label}`));
+
+      // Show relevant env vars
+      if (channel === 'whatsapp') {
+        const hasNumbers = config.whatsappFromNumber || config.fromNumber;
+        if (!hasNumbers) {
+          console.log(
+            chalk.yellow('Set TWILIO_WHATSAPP_FROM and TWILIO_WHATSAPP_TO')
+          );
+        }
+      } else {
+        const hasNumbers = config.smsFromNumber || config.fromNumber;
+        if (!hasNumbers) {
+          console.log(chalk.yellow('Set TWILIO_SMS_FROM and TWILIO_SMS_TO'));
+        }
+      }
+    });
+
+  cmd
     .command('test')
     .description('Send a test notification')
-    .action(async () => {
-      console.log(chalk.blue('Sending test notification...'));
+    .option('--sms', 'Force SMS channel')
+    .option('--whatsapp', 'Force WhatsApp channel')
+    .action(async (options: { sms?: boolean; whatsapp?: boolean }) => {
+      const config = loadSMSConfig();
+      const channelOverride: MessageChannel | undefined = options.sms
+        ? 'sms'
+        : options.whatsapp
+          ? 'whatsapp'
+          : undefined;
+      const channelLabel =
+        channelOverride || config.channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
 
-      const result = await sendSMSNotification({
-        type: 'custom',
-        title: 'StackMemory Test',
-        message: 'This is a test notification from StackMemory.',
-      });
+      console.log(
+        chalk.blue(`Sending test notification via ${channelLabel}...`)
+      );
+
+      const result = await sendNotification(
+        {
+          type: 'custom',
+          title: 'StackMemory Test',
+          message: 'This is a test notification from StackMemory.',
+        },
+        channelOverride
+      );
 
       if (result.success) {
-        console.log(chalk.green('Test message sent successfully!'));
+        const usedChannel = result.channel === 'whatsapp' ? 'WhatsApp' : 'SMS';
+        console.log(chalk.green(`Test message sent via ${usedChannel}!`));
       } else {
         console.log(chalk.red(`Failed: ${result.error}`));
       }

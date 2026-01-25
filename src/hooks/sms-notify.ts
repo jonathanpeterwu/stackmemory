@@ -10,11 +10,22 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
+export type MessageChannel = 'whatsapp' | 'sms';
+
 export interface SMSConfig {
   enabled: boolean;
+  // Preferred channel: whatsapp is cheaper for back-and-forth conversations
+  channel: MessageChannel;
   // Twilio credentials (from env or config)
   accountSid?: string;
   authToken?: string;
+  // SMS numbers
+  smsFromNumber?: string;
+  smsToNumber?: string;
+  // WhatsApp numbers (Twilio prefixes with 'whatsapp:' automatically)
+  whatsappFromNumber?: string;
+  whatsappToNumber?: string;
+  // Legacy fields (backwards compatibility)
   fromNumber?: string;
   toNumber?: string;
   // Webhook URL for receiving responses
@@ -70,6 +81,7 @@ const CONFIG_PATH = join(homedir(), '.stackmemory', 'sms-notify.json');
 
 const DEFAULT_CONFIG: SMSConfig = {
   enabled: false,
+  channel: 'whatsapp', // WhatsApp is cheaper for conversations
   notifyOn: {
     taskComplete: true,
     reviewReady: true,
@@ -89,7 +101,11 @@ export function loadSMSConfig(): SMSConfig {
   try {
     if (existsSync(CONFIG_PATH)) {
       const data = readFileSync(CONFIG_PATH, 'utf8');
-      return { ...DEFAULT_CONFIG, ...JSON.parse(data) };
+      const saved = JSON.parse(data);
+      // Merge with defaults, then apply env vars
+      const config = { ...DEFAULT_CONFIG, ...saved };
+      applyEnvVars(config);
+      return config;
     }
   } catch {
     // Use defaults
@@ -97,12 +113,38 @@ export function loadSMSConfig(): SMSConfig {
 
   // Check environment variables
   const config = { ...DEFAULT_CONFIG };
+  applyEnvVars(config);
+  return config;
+}
+
+function applyEnvVars(config: SMSConfig): void {
+  // Twilio credentials
   if (process.env['TWILIO_ACCOUNT_SID']) {
     config.accountSid = process.env['TWILIO_ACCOUNT_SID'];
   }
   if (process.env['TWILIO_AUTH_TOKEN']) {
     config.authToken = process.env['TWILIO_AUTH_TOKEN'];
   }
+
+  // SMS numbers
+  if (process.env['TWILIO_SMS_FROM'] || process.env['TWILIO_FROM_NUMBER']) {
+    config.smsFromNumber =
+      process.env['TWILIO_SMS_FROM'] || process.env['TWILIO_FROM_NUMBER'];
+  }
+  if (process.env['TWILIO_SMS_TO'] || process.env['TWILIO_TO_NUMBER']) {
+    config.smsToNumber =
+      process.env['TWILIO_SMS_TO'] || process.env['TWILIO_TO_NUMBER'];
+  }
+
+  // WhatsApp numbers
+  if (process.env['TWILIO_WHATSAPP_FROM']) {
+    config.whatsappFromNumber = process.env['TWILIO_WHATSAPP_FROM'];
+  }
+  if (process.env['TWILIO_WHATSAPP_TO']) {
+    config.whatsappToNumber = process.env['TWILIO_WHATSAPP_TO'];
+  }
+
+  // Legacy support
   if (process.env['TWILIO_FROM_NUMBER']) {
     config.fromNumber = process.env['TWILIO_FROM_NUMBER'];
   }
@@ -110,7 +152,10 @@ export function loadSMSConfig(): SMSConfig {
     config.toNumber = process.env['TWILIO_TO_NUMBER'];
   }
 
-  return config;
+  // Channel preference
+  if (process.env['TWILIO_CHANNEL']) {
+    config.channel = process.env['TWILIO_CHANNEL'] as MessageChannel;
+  }
 }
 
 export function saveSMSConfig(config: SMSConfig): void {
@@ -178,13 +223,50 @@ function formatPromptMessage(payload: NotificationPayload): string {
   return message;
 }
 
-export async function sendSMSNotification(
-  payload: NotificationPayload
-): Promise<{ success: boolean; promptId?: string; error?: string }> {
+function getChannelNumbers(config: SMSConfig): {
+  from: string;
+  to: string;
+  channel: MessageChannel;
+} | null {
+  const channel = config.channel || 'whatsapp';
+
+  if (channel === 'whatsapp') {
+    // Try WhatsApp first
+    const from = config.whatsappFromNumber || config.fromNumber;
+    const to = config.whatsappToNumber || config.toNumber;
+    if (from && to) {
+      // Twilio requires 'whatsapp:' prefix for WhatsApp numbers
+      return {
+        from: from.startsWith('whatsapp:') ? from : `whatsapp:${from}`,
+        to: to.startsWith('whatsapp:') ? to : `whatsapp:${to}`,
+        channel: 'whatsapp',
+      };
+    }
+  }
+
+  // Fall back to SMS
+  const from = config.smsFromNumber || config.fromNumber;
+  const to = config.smsToNumber || config.toNumber;
+  if (from && to) {
+    return { from, to, channel: 'sms' };
+  }
+
+  return null;
+}
+
+export async function sendNotification(
+  payload: NotificationPayload,
+  channelOverride?: MessageChannel
+): Promise<{
+  success: boolean;
+  promptId?: string;
+  channel?: MessageChannel;
+  error?: string;
+}> {
   const config = loadSMSConfig();
 
   if (!config.enabled) {
-    return { success: false, error: 'SMS notifications disabled' };
+    return { success: false, error: 'Notifications disabled' };
   }
 
   // Check notification type is enabled
@@ -208,16 +290,30 @@ export async function sendSMSNotification(
   }
 
   // Validate credentials
-  if (
-    !config.accountSid ||
-    !config.authToken ||
-    !config.fromNumber ||
-    !config.toNumber
-  ) {
+  if (!config.accountSid || !config.authToken) {
     return {
       success: false,
       error:
-        'Missing Twilio credentials. Set TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN, TWILIO_FROM_NUMBER, TWILIO_TO_NUMBER',
+        'Missing Twilio credentials. Set TWILIO_ACCOUNT_SID and TWILIO_AUTH_TOKEN',
+    };
+  }
+
+  // Get channel numbers (prefer WhatsApp)
+  const originalChannel = config.channel;
+  if (channelOverride) {
+    config.channel = channelOverride;
+  }
+
+  const numbers = getChannelNumbers(config);
+  config.channel = originalChannel; // Restore
+
+  if (!numbers) {
+    return {
+      success: false,
+      error:
+        config.channel === 'whatsapp'
+          ? 'Missing WhatsApp numbers. Set TWILIO_WHATSAPP_FROM and TWILIO_WHATSAPP_TO'
+          : 'Missing SMS numbers. Set TWILIO_SMS_FROM and TWILIO_SMS_TO',
     };
   }
 
@@ -245,7 +341,7 @@ export async function sendSMSNotification(
   }
 
   try {
-    // Use Twilio API
+    // Use Twilio API (same endpoint for SMS and WhatsApp)
     const twilioUrl = `https://api.twilio.com/2010-04-01/Accounts/${config.accountSid}/Messages.json`;
 
     const response = await fetch(twilioUrl, {
@@ -259,24 +355,36 @@ export async function sendSMSNotification(
         'Content-Type': 'application/x-www-form-urlencoded',
       },
       body: new URLSearchParams({
-        From: config.fromNumber,
-        To: config.toNumber,
+        From: numbers.from,
+        To: numbers.to,
         Body: message,
       }),
     });
 
     if (!response.ok) {
       const errorData = await response.text();
-      return { success: false, error: `Twilio error: ${errorData}` };
+      return {
+        success: false,
+        channel: numbers.channel,
+        error: `Twilio error: ${errorData}`,
+      };
     }
 
-    return { success: true, promptId };
+    return { success: true, promptId, channel: numbers.channel };
   } catch (err) {
     return {
       success: false,
-      error: `Failed to send SMS: ${err instanceof Error ? err.message : String(err)}`,
+      channel: numbers.channel,
+      error: `Failed to send ${numbers.channel}: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
+}
+
+// Backwards compatible alias
+export async function sendSMSNotification(
+  payload: NotificationPayload
+): Promise<{ success: boolean; promptId?: string; error?: string }> {
+  return sendNotification(payload);
 }
 
 export function processIncomingResponse(
