@@ -53,6 +53,7 @@ import { createHooksCommand } from './commands/hooks.js';
 import { createShellCommand } from './commands/shell.js';
 import { createAPICommand } from './commands/api.js';
 import { createCleanupProcessesCommand } from './commands/cleanup-processes.js';
+import { createAutoBackgroundCommand } from './commands/auto-background.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -584,6 +585,7 @@ program.addCommand(createHooksCommand());
 program.addCommand(createShellCommand());
 program.addCommand(createAPICommand());
 program.addCommand(createCleanupProcessesCommand());
+program.addCommand(createAutoBackgroundCommand());
 
 // Register dashboard command
 program
