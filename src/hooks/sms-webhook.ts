@@ -5,7 +5,7 @@
 
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { parse as parseUrl } from 'url';
-import { existsSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, writeFileSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { processIncomingResponse, loadSMSConfig } from './sms-notify.js';
@@ -127,8 +127,13 @@ export function startWebhookServer(port: number = 3456): void {
         return;
       }
 
-      // SMS webhook endpoint
-      if (url.pathname === '/sms' && req.method === 'POST') {
+      // SMS webhook endpoint (incoming messages)
+      if (
+        (url.pathname === '/sms' ||
+          url.pathname === '/sms/incoming' ||
+          url.pathname === '/webhook') &&
+        req.method === 'POST'
+      ) {
         let body = '';
         req.on('data', (chunk) => {
           body += chunk;
@@ -152,7 +157,44 @@ export function startWebhookServer(port: number = 3456): void {
         return;
       }
 
-      // Status endpoint
+      // Status callback endpoint (delivery status updates)
+      if (url.pathname === '/sms/status' && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+          body += chunk;
+        });
+
+        req.on('end', () => {
+          try {
+            const payload = parseFormData(body);
+            console.log(
+              `[sms-webhook] Status update: ${payload['MessageSid']} -> ${payload['MessageStatus']}`
+            );
+
+            // Store status for tracking
+            const statusPath = join(
+              homedir(),
+              '.stackmemory',
+              'sms-status.json'
+            );
+            const statuses: Record<string, string> = existsSync(statusPath)
+              ? JSON.parse(readFileSync(statusPath, 'utf8'))
+              : {};
+            statuses[payload['MessageSid']] = payload['MessageStatus'];
+            writeFileSync(statusPath, JSON.stringify(statuses, null, 2));
+
+            res.writeHead(200, { 'Content-Type': 'text/plain' });
+            res.end('OK');
+          } catch (err) {
+            console.error('[sms-webhook] Status error:', err);
+            res.writeHead(500);
+            res.end('Error');
+          }
+        });
+        return;
+      }
+
+      // Server status endpoint
       if (url.pathname === '/status') {
         const config = loadSMSConfig();
         res.writeHead(200, { 'Content-Type': 'application/json' });
@@ -172,8 +214,13 @@ export function startWebhookServer(port: number = 3456): void {
 
   server.listen(port, () => {
     console.log(`[sms-webhook] Server listening on port ${port}`);
-    console.log(`[sms-webhook] Webhook URL: http://localhost:${port}/sms`);
-    console.log(`[sms-webhook] Configure this URL in Twilio console`);
+    console.log(
+      `[sms-webhook] Incoming messages: http://localhost:${port}/sms/incoming`
+    );
+    console.log(
+      `[sms-webhook] Status callback:   http://localhost:${port}/sms/status`
+    );
+    console.log(`[sms-webhook] Configure these URLs in Twilio console`);
   });
 }
 
