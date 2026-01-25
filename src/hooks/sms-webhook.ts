@@ -1,6 +1,13 @@
 /**
  * SMS Webhook Handler for receiving Twilio responses
  * Can run as standalone server or integrate with existing Express app
+ *
+ * Security features:
+ * - Twilio signature verification
+ * - Rate limiting per IP
+ * - Body size limits
+ * - Content-type validation
+ * - Safe action execution (no shell injection)
  */
 
 import { createServer, IncomingMessage, ServerResponse } from 'http';
@@ -8,9 +15,64 @@ import { parse as parseUrl } from 'url';
 import { existsSync, writeFileSync, mkdirSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { createHmac } from 'crypto';
+import { execFileSync } from 'child_process';
 import { processIncomingResponse, loadSMSConfig } from './sms-notify.js';
-import { queueAction } from './sms-action-runner.js';
-import { execSync } from 'child_process';
+import { queueAction, executeActionSafe } from './sms-action-runner.js';
+
+// Security constants
+const MAX_BODY_SIZE = 50 * 1024; // 50KB max body
+const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
+const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per IP
+
+// Rate limiting store (in production, use Redis)
+const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const record = rateLimitStore.get(ip);
+
+  if (!record || now > record.resetTime) {
+    rateLimitStore.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    return true;
+  }
+
+  if (record.count >= RATE_LIMIT_MAX_REQUESTS) {
+    return false;
+  }
+
+  record.count++;
+  return true;
+}
+
+// Twilio signature verification
+function verifyTwilioSignature(
+  url: string,
+  params: Record<string, string>,
+  signature: string
+): boolean {
+  const authToken = process.env['TWILIO_AUTH_TOKEN'];
+  if (!authToken) {
+    console.warn(
+      '[sms-webhook] TWILIO_AUTH_TOKEN not set, skipping signature verification'
+    );
+    return true; // Allow in development, but log warning
+  }
+
+  // Build the data string (URL + sorted params)
+  const sortedKeys = Object.keys(params).sort();
+  let data = url;
+  for (const key of sortedKeys) {
+    data += key + params[key];
+  }
+
+  // Calculate expected signature
+  const hmac = createHmac('sha1', authToken);
+  hmac.update(data);
+  const expectedSignature = hmac.digest('base64');
+
+  return signature === expectedSignature;
+}
 
 interface TwilioWebhookPayload {
   From: string;
@@ -80,18 +142,18 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
   // Trigger notification to alert user/Claude
   triggerResponseNotification(result.response || Body);
 
-  // Execute action immediately if present
+  // Execute action safely if present (no shell injection)
   if (result.action) {
     console.log(`[sms-webhook] Executing action: ${result.action}`);
 
-    try {
-      const output = execSync(result.action, {
-        encoding: 'utf8',
-        timeout: 60000,
-        stdio: ['pipe', 'pipe', 'pipe'],
-      });
+    const actionResult = executeActionSafe(
+      result.action,
+      result.response || Body
+    );
+
+    if (actionResult.success) {
       console.log(
-        `[sms-webhook] Action completed: ${output.substring(0, 200)}`
+        `[sms-webhook] Action completed: ${(actionResult.output || '').substring(0, 200)}`
       );
 
       return {
@@ -99,9 +161,8 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
         action: result.action,
         queued: false,
       };
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      console.log(`[sms-webhook] Action failed: ${error}`);
+    } else {
+      console.log(`[sms-webhook] Action failed: ${actionResult.error}`);
 
       // Queue for retry
       queueAction(
@@ -111,7 +172,7 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
       );
 
       return {
-        response: `Action failed, queued for retry: ${error.substring(0, 50)}`,
+        response: `Action failed, queued for retry: ${(actionResult.error || '').substring(0, 50)}`,
         action: result.action,
         queued: true,
       };
@@ -123,14 +184,28 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
   };
 }
 
+// Escape string for AppleScript (prevent injection)
+function escapeAppleScript(str: string): string {
+  return str
+    .replace(/\\/g, '\\\\')
+    .replace(/"/g, '\\"')
+    .replace(/\n/g, '\\n')
+    .replace(/\r/g, '\\r')
+    .substring(0, 200); // Limit length
+}
+
 // Trigger notification when response received
 function triggerResponseNotification(response: string): void {
-  const message = `SMS Response: ${response}`;
+  const safeMessage = escapeAppleScript(`SMS Response: ${response}`);
 
-  // macOS notification
+  // macOS notification using execFile (safer than execSync with shell)
   try {
-    execSync(
-      `osascript -e 'display notification "${message}" with title "StackMemory" sound name "Glass"'`,
+    execFileSync(
+      'osascript',
+      [
+        '-e',
+        `display notification "${safeMessage}" with title "StackMemory" sound name "Glass"`,
+      ],
       { stdio: 'ignore', timeout: 5000 }
     );
   } catch {
@@ -193,16 +268,67 @@ export function startWebhookServer(port: number = 3456): void {
           url.pathname === '/webhook') &&
         req.method === 'POST'
       ) {
+        // Rate limiting
+        const clientIp = req.socket.remoteAddress || 'unknown';
+        if (!checkRateLimit(clientIp)) {
+          res.writeHead(429, {
+            'Content-Type': 'text/xml',
+            'Retry-After': '60',
+          });
+          res.end(twimlResponse('Too many requests. Please try again later.'));
+          return;
+        }
+
+        // Content-type validation
+        const contentType = req.headers['content-type'] || '';
+        if (!contentType.includes('application/x-www-form-urlencoded')) {
+          res.writeHead(400, { 'Content-Type': 'text/xml' });
+          res.end(twimlResponse('Invalid content type'));
+          return;
+        }
+
         let body = '';
+        let bodyTooLarge = false;
+
         req.on('data', (chunk) => {
           body += chunk;
+          // Body size limit
+          if (body.length > MAX_BODY_SIZE) {
+            bodyTooLarge = true;
+            req.destroy();
+          }
         });
 
         req.on('end', () => {
+          if (bodyTooLarge) {
+            res.writeHead(413, { 'Content-Type': 'text/xml' });
+            res.end(twimlResponse('Request too large'));
+            return;
+          }
+
           try {
             const payload = parseFormData(
               body
             ) as unknown as TwilioWebhookPayload;
+
+            // Verify Twilio signature
+            const twilioSignature = req.headers['x-twilio-signature'] as string;
+            const webhookUrl = `${req.headers['x-forwarded-proto'] || 'http'}://${req.headers.host}${req.url}`;
+
+            if (
+              twilioSignature &&
+              !verifyTwilioSignature(
+                webhookUrl,
+                payload as unknown as Record<string, string>,
+                twilioSignature
+              )
+            ) {
+              console.error('[sms-webhook] Invalid Twilio signature');
+              res.writeHead(401, { 'Content-Type': 'text/xml' });
+              res.end(twimlResponse('Unauthorized'));
+              return;
+            }
+
             const result = handleSMSWebhook(payload);
 
             res.writeHead(200, { 'Content-Type': 'text/xml' });
