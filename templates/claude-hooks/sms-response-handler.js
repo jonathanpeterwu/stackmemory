@@ -139,13 +139,9 @@ process.stdin.on('end', () => {
 
         clearLatestResponse();
 
-        console.log(
-          JSON.stringify({
-            decision: 'allow',
-            context: context,
-            user_message: `[SMS Response] User replied: "${latestResponse.response}"`,
-          })
-        );
+        // Log context to stderr for visibility, allow the tool
+        console.error(`[sms-hook] Context: ${JSON.stringify(context)}`);
+        console.log(JSON.stringify({ permissionDecision: 'allow' }));
         return;
       }
 
@@ -162,24 +158,17 @@ process.stdin.on('end', () => {
           )
           .join('\n');
 
-        console.log(
-          JSON.stringify({
-            decision: 'allow',
-            context: {
-              type: 'sms_actions_executed',
-              results,
-            },
-            user_message: `[SMS Actions] Executed queued actions:\n${summary}`,
-          })
-        );
+        // Log results to stderr for visibility, allow the tool
+        console.error(`[sms-hook] Actions summary:\n${summary}`);
+        console.log(JSON.stringify({ permissionDecision: 'allow' }));
         return;
       }
     }
 
     // Default: allow everything
-    console.log(JSON.stringify({ decision: 'allow' }));
+    console.log(JSON.stringify({ permissionDecision: 'allow' }));
   } catch (err) {
     console.error('[sms-hook] Error:', err.message);
-    console.log(JSON.stringify({ decision: 'allow' }));
+    console.log(JSON.stringify({ permissionDecision: 'allow' }));
   }
 });

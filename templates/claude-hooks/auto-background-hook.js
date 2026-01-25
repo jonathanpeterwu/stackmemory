@@ -110,19 +110,19 @@ process.stdin.on('end', () => {
     // Only process Bash tool
     if (tool_name !== 'Bash') {
       // Allow other tools through unchanged
-      console.log(JSON.stringify({ decision: 'allow' }));
+      console.log(JSON.stringify({ permissionDecision: 'allow' }));
       return;
     }
 
     const command = tool_input?.command;
     if (!command) {
-      console.log(JSON.stringify({ decision: 'allow' }));
+      console.log(JSON.stringify({ permissionDecision: 'allow' }));
       return;
     }
 
     // Already backgrounded
     if (tool_input.run_in_background === true) {
-      console.log(JSON.stringify({ decision: 'allow' }));
+      console.log(JSON.stringify({ permissionDecision: 'allow' }));
       return;
     }
 
@@ -135,22 +135,23 @@ process.stdin.on('end', () => {
         );
       }
 
-      // Modify the tool input to add run_in_background
+      // Modify the tool input to add run_in_background using correct schema
       console.log(
         JSON.stringify({
-          decision: 'modify',
-          tool_input: {
+          hookEventName: 'PreToolUse',
+          permissionDecision: 'allow',
+          updatedInput: {
             ...tool_input,
             run_in_background: true,
           },
         })
       );
     } else {
-      console.log(JSON.stringify({ decision: 'allow' }));
+      console.log(JSON.stringify({ permissionDecision: 'allow' }));
     }
   } catch (err) {
     // On error, allow the command through unchanged
     console.error('[auto-bg] Error:', err.message);
-    console.log(JSON.stringify({ decision: 'allow' }));
+    console.log(JSON.stringify({ permissionDecision: 'allow' }));
   }
 });
