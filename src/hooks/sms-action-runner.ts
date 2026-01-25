@@ -1,12 +1,50 @@
 /**
  * SMS Action Runner - Executes actions based on SMS responses
  * Bridges SMS responses to Claude Code actions
+ *
+ * Security: Uses allowlist-based action execution to prevent command injection
  */
 
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { execSync } from 'child_process';
+import { execSync, execFileSync } from 'child_process';
+import { randomBytes } from 'crypto';
+
+// Allowlist of safe action patterns
+const SAFE_ACTION_PATTERNS: Array<{
+  pattern: RegExp;
+  validate?: (match: RegExpMatchArray) => boolean;
+}> = [
+  // Git/GitHub CLI commands (limited to safe operations)
+  { pattern: /^gh pr (view|list|status|checks) (\d+)$/ },
+  { pattern: /^gh pr review (\d+) --approve$/ },
+  { pattern: /^gh pr merge (\d+) --squash$/ },
+  { pattern: /^gh issue (view|list) (\d+)?$/ },
+
+  // NPM commands (limited to safe operations)
+  { pattern: /^npm run (build|test|lint|lint:fix|test:run)$/ },
+  { pattern: /^npm (test|run build)$/ },
+
+  // StackMemory commands
+  { pattern: /^stackmemory (status|notify check|context list)$/ },
+
+  // Simple echo/confirmation (no variables)
+  { pattern: /^echo "?(Done|OK|Confirmed|Acknowledged)"?$/ },
+];
+
+/**
+ * Check if an action is in the allowlist
+ */
+function isActionAllowed(action: string): boolean {
+  const trimmed = action.trim();
+  return SAFE_ACTION_PATTERNS.some(({ pattern, validate }) => {
+    const match = trimmed.match(pattern);
+    if (!match) return false;
+    if (validate && !validate(match)) return false;
+    return true;
+  });
+}
 
 export interface PendingAction {
   id: string;
@@ -55,7 +93,8 @@ export function queueAction(
   action: string
 ): string {
   const queue = loadActionQueue();
-  const id = Math.random().toString(36).substring(2, 10);
+  // Use cryptographically secure random ID
+  const id = randomBytes(8).toString('hex');
 
   queue.actions.push({
     id,
@@ -68,6 +107,47 @@ export function queueAction(
 
   saveActionQueue(queue);
   return id;
+}
+
+/**
+ * Execute an action safely using allowlist validation
+ * This prevents command injection by only allowing pre-approved commands
+ */
+export function executeActionSafe(
+  action: string,
+  _response: string
+): { success: boolean; output?: string; error?: string } {
+  // Check if action is in allowlist
+  if (!isActionAllowed(action)) {
+    console.error(`[sms-action] Action not in allowlist: ${action}`);
+    return {
+      success: false,
+      error: `Action not allowed. Only pre-approved commands can be executed via SMS.`,
+    };
+  }
+
+  try {
+    console.log(`[sms-action] Executing safe action: ${action}`);
+
+    // Parse the action into command and args
+    const parts = action.split(' ');
+    const cmd = parts[0];
+    const args = parts.slice(1);
+
+    // Use execFileSync for commands without shell interpretation
+    // This prevents shell injection even if the allowlist is somehow bypassed
+    const output = execFileSync(cmd, args, {
+      encoding: 'utf8',
+      timeout: 60000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+      shell: false, // Explicitly disable shell
+    });
+
+    return { success: true, output };
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    return { success: false, error };
+  }
 }
 
 export function getPendingActions(): PendingAction[] {
@@ -167,31 +247,49 @@ export function cleanupOldActions(): number {
 
 /**
  * Action Templates - Common actions for SMS responses
+ *
+ * SECURITY NOTE: These templates return command strings that must be
+ * validated against SAFE_ACTION_PATTERNS before execution.
+ * Templates that accept user input are removed to prevent injection.
  */
 export const ACTION_TEMPLATES = {
-  // Git/PR actions
-  approvePR: (prNumber: string) =>
-    `gh pr review ${prNumber} --approve && gh pr merge ${prNumber} --auto`,
-  requestChanges: (prNumber: string) =>
-    `gh pr review ${prNumber} --request-changes -b "Changes requested via SMS"`,
-  mergePR: (prNumber: string) => `gh pr merge ${prNumber} --squash`,
-  closePR: (prNumber: string) => `gh pr close ${prNumber}`,
+  // Git/PR actions (PR numbers must be validated as integers)
+  approvePR: (prNumber: string) => {
+    // Validate PR number is numeric only
+    if (!/^\d+$/.test(prNumber)) {
+      throw new Error('Invalid PR number');
+    }
+    return `gh pr review ${prNumber} --approve`;
+  },
+  mergePR: (prNumber: string) => {
+    if (!/^\d+$/.test(prNumber)) {
+      throw new Error('Invalid PR number');
+    }
+    return `gh pr merge ${prNumber} --squash`;
+  },
+  viewPR: (prNumber: string) => {
+    if (!/^\d+$/.test(prNumber)) {
+      throw new Error('Invalid PR number');
+    }
+    return `gh pr view ${prNumber}`;
+  },
 
-  // Deployment actions
-  deploy: (env: string = 'production') => `npm run deploy:${env}`,
-  rollback: (env: string = 'production') => `npm run rollback:${env}`,
-  verifyDeployment: (url: string) => `curl -sf ${url}/health || exit 1`,
-
-  // Build actions
+  // Build actions (no user input)
   rebuild: () => `npm run build`,
-  retest: () => `npm test`,
+  retest: () => `npm run test:run`,
   lint: () => `npm run lint:fix`,
 
-  // Notification actions
-  notifySlack: (message: string) =>
-    `curl -X POST $SLACK_WEBHOOK -d '{"text":"${message}"}'`,
-  notifyTeam: (message: string) =>
-    `stackmemory notify send "${message}" --title "Team Alert"`,
+  // Status actions (no user input)
+  status: () => `stackmemory status`,
+  checkNotifications: () => `stackmemory notify check`,
+
+  // REMOVED for security - these templates allowed arbitrary user input:
+  // - requestChanges (allowed arbitrary message)
+  // - closePR (could be used maliciously)
+  // - deploy/rollback (too dangerous for SMS)
+  // - verifyDeployment (allowed arbitrary URL)
+  // - notifySlack (allowed arbitrary message - command injection)
+  // - notifyTeam (allowed arbitrary message - command injection)
 };
 
 /**
