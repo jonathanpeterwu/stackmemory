@@ -92,14 +92,12 @@ export class RalphStackMemoryBridge {
 
       this.state.currentSession = session;
 
-<<<<<<< HEAD
       // Initialize frame manager with database
       const dbAdapter = await this.getDatabaseAdapter();
       await dbAdapter.connect();
       const db = (dbAdapter as any).db; // Get the actual Database instance
       const projectId = path.basename(this.ralphDir);
       this.frameManager = new FrameManager(db, projectId, { skipContextBridge: true });
-=======
       // Initialize frame manager with session database if required
       if (this.requiresDatabase) {
         if (session.database && session.projectId) {
@@ -122,7 +120,6 @@ export class RalphStackMemoryBridge {
           'Running without StackMemory database (useStackMemory: false)'
         );
       }
->>>>>>> swarm/developer-implement-core-feature
 
       // Check for existing loop or create new
       if (options?.loopId) {

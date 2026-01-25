@@ -890,11 +890,7 @@ export function createRalphCommand(): Command {
 
           const loopId = options.loopId || 'current';
           await ralphDebugger.startDebugSession(loopId, '.ralph');
-<<<<<<< HEAD
-          
-=======
 
->>>>>>> swarm/developer-implement-core-feature
           if (options.generateReport) {
             const report = await ralphDebugger.generateDebugReport(loopId);
             console.log(`📋 Debug report generated: ${report.exportPath}`);
@@ -914,7 +910,6 @@ export function createRalphCommand(): Command {
       });
     });
 
-<<<<<<< HEAD
   // Swarm testing and validation command
   ralph
     .command('swarm-test')
@@ -1114,7 +1109,8 @@ export function createRalphCommand(): Command {
           process.exit(1);
         }
       });
-=======
+    });
+
   // TUI command for real-time monitoring
   ralph
     .command('tui')
@@ -1168,7 +1164,6 @@ export function createRalphCommand(): Command {
         console.log('💡 Try: stackmemory ralph tui --simple');
         process.exit(1);
       }
->>>>>>> swarm/developer-implement-core-feature
     });
 
   return ralph;
