@@ -16,12 +16,21 @@ import { initializeTracing, trace } from '../core/trace/index.js';
 
 // __filename and __dirname are provided by esbuild banner for ESM compatibility
 
+interface ClaudeSMConfig {
+  defaultWorktree: boolean;
+  defaultSandbox: boolean;
+  defaultChrome: boolean;
+  defaultTracing: boolean;
+  defaultRemote: boolean;
+}
+
 interface ClaudeConfig {
   instanceId: string;
   worktreePath?: string;
   useSandbox: boolean;
   useChrome: boolean;
   useWorktree: boolean;
+  useRemote: boolean;
   contextEnabled: boolean;
   branch?: string;
   task?: string;
@@ -30,20 +39,59 @@ interface ClaudeConfig {
   claudeBin?: string;
 }
 
+const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
+  defaultWorktree: false,
+  defaultSandbox: false,
+  defaultChrome: false,
+  defaultTracing: true,
+  defaultRemote: false,
+};
+
+function getConfigPath(): string {
+  return path.join(os.homedir(), '.stackmemory', 'claude-sm.json');
+}
+
+function loadSMConfig(): ClaudeSMConfig {
+  try {
+    const configPath = getConfigPath();
+    if (fs.existsSync(configPath)) {
+      const content = fs.readFileSync(configPath, 'utf8');
+      return { ...DEFAULT_SM_CONFIG, ...JSON.parse(content) };
+    }
+  } catch {
+    // Ignore errors, use defaults
+  }
+  return { ...DEFAULT_SM_CONFIG };
+}
+
+function saveSMConfig(config: ClaudeSMConfig): void {
+  const configPath = getConfigPath();
+  const dir = path.dirname(configPath);
+  if (!fs.existsSync(dir)) {
+    fs.mkdirSync(dir, { recursive: true });
+  }
+  fs.writeFileSync(configPath, JSON.stringify(config, null, 2));
+}
+
 class ClaudeSM {
   private config: ClaudeConfig;
   private stackmemoryPath: string;
   private worktreeScriptPath: string;
   private claudeConfigDir: string;
+  private smConfig: ClaudeSMConfig;
 
   constructor() {
+    // Load persistent defaults
+    this.smConfig = loadSMConfig();
+
     this.config = {
       instanceId: this.generateInstanceId(),
-      useSandbox: false,
-      useChrome: false,
-      useWorktree: false,
+      useSandbox: this.smConfig.defaultSandbox,
+      useChrome: this.smConfig.defaultChrome,
+      useWorktree: this.smConfig.defaultWorktree,
+      useRemote: this.smConfig.defaultRemote,
       contextEnabled: true,
-      tracingEnabled: true, // Enable tracing by default for claude-sm
+      tracingEnabled: this.smConfig.defaultTracing,
       verboseTracing: false,
     };
 
@@ -288,6 +336,17 @@ class ClaudeSM {
         case '-w':
           this.config.useWorktree = true;
           break;
+        case '--no-worktree':
+        case '-W':
+          this.config.useWorktree = false;
+          break;
+        case '--remote':
+        case '-r':
+          this.config.useRemote = true;
+          break;
+        case '--no-remote':
+          this.config.useRemote = false;
+          break;
         case '--sandbox':
         case '-s':
           this.config.useSandbox = true;
@@ -413,12 +472,20 @@ class ClaudeSM {
     if (this.config.worktreePath) {
       process.env['CLAUDE_WORKTREE_PATH'] = this.config.worktreePath;
     }
+    if (this.config.useRemote) {
+      process.env['CLAUDE_REMOTE'] = '1';
+    }
 
     console.log(chalk.gray(`🤖 Instance ID: ${this.config.instanceId}`));
     console.log(chalk.gray(`📁 Working in: ${process.cwd()}`));
 
     if (this.config.useSandbox) {
       console.log(chalk.yellow('🔒 Sandbox mode enabled'));
+    }
+    if (this.config.useRemote) {
+      console.log(
+        chalk.cyan('📱 Remote mode: WhatsApp notifications for all questions')
+      );
     }
     if (this.config.useChrome) {
       console.log(chalk.yellow('🌐 Chrome automation enabled'));
@@ -529,8 +596,112 @@ class ClaudeSM {
 program
   .name('claude-sm')
   .description('Claude with StackMemory context and worktree isolation')
-  .version('1.0.0')
+  .version('1.0.0');
+
+// Config subcommand
+const configCmd = program
+  .command('config')
+  .description('Manage claude-sm defaults');
+
+configCmd
+  .command('show')
+  .description('Show current default settings')
+  .action(() => {
+    const config = loadSMConfig();
+    console.log(chalk.blue('claude-sm defaults:'));
+    console.log(
+      `  defaultWorktree: ${config.defaultWorktree ? chalk.green('true') : chalk.gray('false')}`
+    );
+    console.log(
+      `  defaultSandbox:  ${config.defaultSandbox ? chalk.green('true') : chalk.gray('false')}`
+    );
+    console.log(
+      `  defaultChrome:   ${config.defaultChrome ? chalk.green('true') : chalk.gray('false')}`
+    );
+    console.log(
+      `  defaultTracing:  ${config.defaultTracing ? chalk.green('true') : chalk.gray('false')}`
+    );
+    console.log(
+      `  defaultRemote:   ${config.defaultRemote ? chalk.green('true') : chalk.gray('false')}`
+    );
+    console.log(chalk.gray(`\nConfig: ${getConfigPath()}`));
+  });
+
+configCmd
+  .command('set <key> <value>')
+  .description('Set a default (e.g., set worktree true)')
+  .action((key: string, value: string) => {
+    const config = loadSMConfig();
+    const boolValue = value === 'true' || value === '1' || value === 'on';
+
+    const keyMap: Record<string, keyof ClaudeSMConfig> = {
+      worktree: 'defaultWorktree',
+      sandbox: 'defaultSandbox',
+      chrome: 'defaultChrome',
+      tracing: 'defaultTracing',
+      remote: 'defaultRemote',
+    };
+
+    const configKey = keyMap[key];
+    if (!configKey) {
+      console.log(chalk.red(`Unknown key: ${key}`));
+      console.log(
+        chalk.gray('Valid keys: worktree, sandbox, chrome, tracing, remote')
+      );
+      process.exit(1);
+    }
+
+    config[configKey] = boolValue;
+    saveSMConfig(config);
+    console.log(chalk.green(`Set ${key} = ${boolValue}`));
+  });
+
+configCmd
+  .command('worktree-on')
+  .description('Enable worktree mode by default')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultWorktree = true;
+    saveSMConfig(config);
+    console.log(chalk.green('Worktree mode enabled by default'));
+  });
+
+configCmd
+  .command('worktree-off')
+  .description('Disable worktree mode by default')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultWorktree = false;
+    saveSMConfig(config);
+    console.log(chalk.green('Worktree mode disabled by default'));
+  });
+
+configCmd
+  .command('remote-on')
+  .description('Enable remote mode by default (WhatsApp for all questions)')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultRemote = true;
+    saveSMConfig(config);
+    console.log(chalk.green('Remote mode enabled by default'));
+  });
+
+configCmd
+  .command('remote-off')
+  .description('Disable remote mode by default')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultRemote = false;
+    saveSMConfig(config);
+    console.log(chalk.green('Remote mode disabled by default'));
+  });
+
+// Main command (default action when no subcommand)
+program
   .option('-w, --worktree', 'Create isolated worktree for this instance')
+  .option('-W, --no-worktree', 'Disable worktree (override default)')
+  .option('-r, --remote', 'Enable remote mode (WhatsApp for all questions)')
+  .option('--no-remote', 'Disable remote mode (override default)')
   .option('-s, --sandbox', 'Enable sandbox mode (file/network restrictions)')
   .option('-c, --chrome', 'Enable Chrome automation')
   .option('-a, --auto', 'Automatically detect and apply best settings')
