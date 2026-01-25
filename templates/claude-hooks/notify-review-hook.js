@@ -40,10 +40,10 @@ for (const envPath of envPaths) {
 }
 
 const CONFIG_PATH = path.join(os.homedir(), '.stackmemory', 'sms-notify.json');
-const PENDING_PATH = path.join(
+const DEBUG_LOG = path.join(
   os.homedir(),
   '.stackmemory',
-  'sms-pending-prompts.json'
+  'claude-session-debug.log'
 );
 
 function loadConfig() {
@@ -52,25 +52,44 @@ function loadConfig() {
       return JSON.parse(fs.readFileSync(CONFIG_PATH, 'utf8'));
     }
   } catch {}
-  return { enabled: false };
+  return { enabled: false, pendingPrompts: [] };
 }
 
-function savePendingPrompt(prompt) {
+function saveConfig(config) {
   try {
     const dir = path.join(os.homedir(), '.stackmemory');
     if (!fs.existsSync(dir)) {
       fs.mkdirSync(dir, { recursive: true });
     }
-    let pending = { prompts: [] };
-    if (fs.existsSync(PENDING_PATH)) {
-      pending = JSON.parse(fs.readFileSync(PENDING_PATH, 'utf8'));
+    fs.writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+  } catch (err) {
+    console.error('[notify-hook] Failed to save config:', err.message);
+  }
+}
+
+function logDebug(event, data) {
+  try {
+    const entry = `[${new Date().toISOString()}] ${event}: ${typeof data === 'string' ? data : JSON.stringify(data)}\n`;
+    fs.appendFileSync(DEBUG_LOG, entry);
+  } catch {}
+}
+
+function savePendingPrompt(prompt) {
+  try {
+    const config = loadConfig();
+    if (!config.pendingPrompts) {
+      config.pendingPrompts = [];
     }
-    pending.prompts.push(prompt);
+    config.pendingPrompts.push(prompt);
     // Keep only last 10 prompts
-    if (pending.prompts.length > 10) {
-      pending.prompts = pending.prompts.slice(-10);
+    if (config.pendingPrompts.length > 10) {
+      config.pendingPrompts = config.pendingPrompts.slice(-10);
     }
-    fs.writeFileSync(PENDING_PATH, JSON.stringify(pending, null, 2));
+    saveConfig(config);
+    logDebug('PENDING_PROMPT', {
+      id: prompt.id,
+      options: prompt.options.length,
+    });
   } catch (err) {
     console.error('[notify-hook] Failed to save pending prompt:', err.message);
   }
@@ -85,40 +104,46 @@ function shouldNotify(toolName, toolInput, output) {
     const questions = toolInput?.questions || [];
     if (questions.length === 0) return null;
 
-    // Format questions for WhatsApp
-    const formattedQuestions = questions.map((q, qIdx) => {
-      let text = q.question;
-      if (q.options && q.options.length > 0) {
-        text += '\n';
-        q.options.forEach((opt, i) => {
-          text += `${i + 1}. ${opt.label}`;
-          if (opt.description) {
-            text += ` - ${opt.description}`;
-          }
-          text += '\n';
-        });
-        text += `${q.options.length + 1}. Other (type your answer)`;
-      }
-      return { index: qIdx, text, options: q.options, header: q.header };
-    });
-
-    // Store pending prompt for response matching
+    // Take first question (most common case)
+    const q = questions[0];
     const promptId = Math.random().toString(36).substring(2, 10);
+
+    // Build message text
+    let messageText = q.question;
+    const options = [];
+
+    if (q.options && q.options.length > 0) {
+      messageText += '\n';
+      q.options.forEach((opt, i) => {
+        const key = String(i + 1);
+        messageText += `${key}. ${opt.label}`;
+        if (opt.description) {
+          messageText += ` - ${opt.description}`;
+        }
+        messageText += '\n';
+        options.push({ key, label: opt.label });
+      });
+      // Add "Other" option
+      const otherKey = String(q.options.length + 1);
+      messageText += `${otherKey}. Other (type your answer)`;
+      options.push({ key: otherKey, label: 'Other' });
+    }
+
+    // Store pending prompt in format webhook expects
     const pendingPrompt = {
       id: promptId,
       timestamp: new Date().toISOString(),
-      questions: formattedQuestions,
-      expiresAt: new Date(Date.now() + 10 * 60 * 1000).toISOString(), // 10 min
+      message: q.question,
+      options: options,
+      type: options.length > 0 ? 'options' : 'freeform',
+      expiresAt: new Date(Date.now() + 60 * 60 * 1000).toISOString(), // 1 hour
     };
     savePendingPrompt(pendingPrompt);
-
-    // Build message
-    const message = formattedQuestions.map((q) => q.text).join('\n\n');
 
     return {
       type: 'custom',
       title: 'Claude needs your input',
-      message: message,
+      message: messageText,
       promptId: promptId,
       isQuestion: true,
     };
@@ -282,8 +307,14 @@ function sendNotification(notification) {
         console.error(
           `[notify-hook] Sent via ${numbers.channel}: ${notification.title}`
         );
+        logDebug('MESSAGE_SENT', {
+          channel: numbers.channel,
+          title: notification.title,
+          promptId: notification.promptId,
+        });
       } else {
         console.error(`[notify-hook] Failed (${res.statusCode}): ${body}`);
+        logDebug('MESSAGE_FAILED', { status: res.statusCode, error: body });
       }
     });
   });
@@ -305,6 +336,8 @@ process.stdin.on('end', () => {
     const hookData = JSON.parse(input);
     const { tool_name, tool_input, tool_output } = hookData;
 
+    logDebug('PostToolUse', { tool: tool_name, session: hookData.session_id });
+
     const notification = shouldNotify(tool_name, tool_input, tool_output);
 
     if (notification) {
@@ -314,6 +347,7 @@ process.stdin.on('end', () => {
     // Always allow (post-tool hooks don't block)
     console.log(JSON.stringify({ status: 'ok' }));
   } catch (err) {
+    logDebug('ERROR', err.message);
     console.error('[notify-hook] Error:', err.message);
     console.log(JSON.stringify({ status: 'ok' }));
   }
