@@ -71,7 +71,11 @@ import { loadSMSConfig } from '../hooks/sms-notify.js';
 import { spawn } from 'child_process';
 import { homedir } from 'os';
 
-const VERSION = '0.5.5';
+// Read version from package.json
+import { createRequire } from 'module';
+const require = createRequire(import.meta.url);
+const pkg = require('../../package.json');
+const VERSION = pkg.version;
 
 // Check for updates on CLI startup
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
