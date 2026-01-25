@@ -52,6 +52,7 @@ import { createSweepCommand } from './commands/sweep.js';
 import { createHooksCommand } from './commands/hooks.js';
 import { createShellCommand } from './commands/shell.js';
 import { createAPICommand } from './commands/api.js';
+import { createCleanupProcessesCommand } from './commands/cleanup-processes.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -64,7 +65,7 @@ import {
   getStorageModeDescription,
 } from '../core/config/storage-config.js';
 
-const VERSION = '0.5.3';
+const VERSION = '0.5.5';
 
 // Check for updates on CLI startup
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
@@ -582,6 +583,7 @@ program.addCommand(createSweepCommand());
 program.addCommand(createHooksCommand());
 program.addCommand(createShellCommand());
 program.addCommand(createAPICommand());
+program.addCommand(createCleanupProcessesCommand());
 
 // Register dashboard command
 program
