@@ -5,11 +5,12 @@
  * Security: Uses allowlist-based action execution to prevent command injection
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { execSync, execFileSync } from 'child_process';
 import { randomBytes } from 'crypto';
+import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
 
 // Allowlist of safe action patterns
 const SAFE_ACTION_PATTERNS: Array<{
@@ -77,11 +78,8 @@ export function loadActionQueue(): ActionQueue {
 
 export function saveActionQueue(queue: ActionQueue): void {
   try {
-    const dir = join(homedir(), '.stackmemory');
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
-    writeFileSync(QUEUE_PATH, JSON.stringify(queue, null, 2));
+    ensureSecureDir(join(homedir(), '.stackmemory'));
+    writeFileSecure(QUEUE_PATH, JSON.stringify(queue, null, 2));
   } catch {
     // Silently fail
   }

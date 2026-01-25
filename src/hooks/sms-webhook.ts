@@ -12,13 +12,14 @@
 
 import { createServer, IncomingMessage, ServerResponse } from 'http';
 import { parse as parseUrl } from 'url';
-import { existsSync, writeFileSync, mkdirSync, readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { createHmac } from 'crypto';
 import { execFileSync } from 'child_process';
 import { processIncomingResponse, loadSMSConfig } from './sms-notify.js';
 import { queueAction, executeActionSafe } from './sms-action-runner.js';
+import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
 
 // Security constants
 const MAX_BODY_SIZE = 50 * 1024; // 50KB max body
@@ -96,12 +97,13 @@ function storeLatestResponse(
   response: string,
   action?: string
 ): void {
-  const dir = join(homedir(), '.stackmemory');
-  if (!existsSync(dir)) {
-    mkdirSync(dir, { recursive: true });
-  }
-  const responsePath = join(dir, 'sms-latest-response.json');
-  writeFileSync(
+  ensureSecureDir(join(homedir(), '.stackmemory'));
+  const responsePath = join(
+    homedir(),
+    '.stackmemory',
+    'sms-latest-response.json'
+  );
+  writeFileSecure(
     responsePath,
     JSON.stringify({
       promptId,
@@ -215,7 +217,7 @@ function triggerResponseNotification(response: string): void {
   // Write signal file for other processes
   try {
     const signalPath = join(homedir(), '.stackmemory', 'sms-signal.txt');
-    writeFileSync(
+    writeFileSecure(
       signalPath,
       JSON.stringify({
         type: 'sms_response',
@@ -366,7 +368,7 @@ export function startWebhookServer(port: number = 3456): void {
               ? JSON.parse(readFileSync(statusPath, 'utf8'))
               : {};
             statuses[payload['MessageSid']] = payload['MessageStatus'];
-            writeFileSync(statusPath, JSON.stringify(statuses, null, 2));
+            writeFileSecure(statusPath, JSON.stringify(statuses, null, 2));
 
             res.writeHead(200, { 'Content-Type': 'text/plain' });
             res.end('OK');
