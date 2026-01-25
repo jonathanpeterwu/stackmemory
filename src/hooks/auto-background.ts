@@ -3,9 +3,10 @@
  * Automatically backgrounds long-running or specific commands
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
 
 export interface AutoBackgroundConfig {
   enabled: boolean;
@@ -101,11 +102,8 @@ export function loadConfig(): AutoBackgroundConfig {
 
 export function saveConfig(config: AutoBackgroundConfig): void {
   try {
-    const dir = join(homedir(), '.stackmemory');
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
-    writeFileSync(CONFIG_PATH, JSON.stringify(config, null, 2));
+    ensureSecureDir(join(homedir(), '.stackmemory'));
+    writeFileSecure(CONFIG_PATH, JSON.stringify(config, null, 2));
   } catch {
     // Silently fail
   }

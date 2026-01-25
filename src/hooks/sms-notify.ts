@@ -6,10 +6,11 @@
  * Optional feature - requires Twilio setup
  */
 
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { config as loadDotenv } from 'dotenv';
+import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
 
 export type MessageChannel = 'whatsapp' | 'sms';
 
@@ -232,15 +233,12 @@ function applyEnvVars(config: SMSConfig): void {
 
 export function saveSMSConfig(config: SMSConfig): void {
   try {
-    const dir = join(homedir(), '.stackmemory');
-    if (!existsSync(dir)) {
-      mkdirSync(dir, { recursive: true });
-    }
+    ensureSecureDir(join(homedir(), '.stackmemory'));
     // Don't save sensitive credentials to file
     const safeConfig = { ...config };
     delete safeConfig.accountSid;
     delete safeConfig.authToken;
-    writeFileSync(CONFIG_PATH, JSON.stringify(safeConfig, null, 2));
+    writeFileSecure(CONFIG_PATH, JSON.stringify(safeConfig, null, 2));
   } catch {
     // Silently fail
   }
