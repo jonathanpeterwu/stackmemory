@@ -1,10 +1,5 @@
 {
-  "passed": 9,
-  "failed": 1,
-  "errors": [
-    {
-      "test": "validateImports",
-      "error": "Failed to import ../dist/integrations/ralph/swarm/swarm-coordinator.js: Cannot find module '/Users/jwu/Dev/dist/integrations/ralph/swarm/swarm-coordinator.js' imported from /Users/jwu/Dev/stackmemory/scripts/validate-swarm-implementation.js"
-    }
-  ]
+  "passed": 10,
+  "failed": 0,
+  "errors": []
 }

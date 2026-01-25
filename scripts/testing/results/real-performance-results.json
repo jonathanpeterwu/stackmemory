@@ -1,0 +1,90 @@
+{
+  "timestamp": "2026-01-06T15:16:51.046Z",
+  "tests": [
+    {
+      "test": "status_command",
+      "iterations": 3,
+      "measurements": [
+        393.8040000000001,
+        396.434667,
+        393.71524999999997
+      ],
+      "average": 394.6513056666667,
+      "unit": "ms"
+    },
+    {
+      "test": "context_operations",
+      "operations": [
+        {
+          "operation": "version_check",
+          "duration": 398.65762500000005,
+          "success": true
+        },
+        {
+          "operation": "tasks_list",
+          "duration": 518.715792,
+          "success": true
+        }
+      ],
+      "totalTime": 917.373417,
+      "unit": "ms"
+    },
+    {
+      "test": "task_operations",
+      "operations": [
+        {
+          "operation": "add_task",
+          "duration": 518.383875,
+          "success": true,
+          "outputSize": 245
+        },
+        {
+          "operation": "list_tasks",
+          "duration": 526.2628340000001,
+          "success": true,
+          "outputSize": 2751
+        },
+        {
+          "operation": "show_task",
+          "duration": 395.6398339999996,
+          "success": true,
+          "outputSize": 92
+        }
+      ],
+      "unit": "ms"
+    },
+    {
+      "test": "storage_performance",
+      "results": {
+        "database": {
+          "exists": true,
+          "size": 602112,
+          "sizeFormatted": "588.00 KB",
+          "modified": "2026-01-06T15:16:54.814Z"
+        },
+        "tasks": {
+          "exists": true,
+          "size": 219410,
+          "sizeFormatted": "214.27 KB",
+          "lineCount": 249,
+          "modified": "2026-01-06T15:16:54.286Z"
+        }
+      }
+    },
+    {
+      "test": "baseline_comparison",
+      "baseline": {
+        "taskListing": {
+          "withStackMemory": 501.72233400000005,
+          "withoutStackMemory": 5000,
+          "unit": "ms"
+        },
+        "taskCreation": {
+          "withStackMemory": 500.09279100000003,
+          "withoutStackMemory": 30000,
+          "unit": "ms"
+        }
+      }
+    }
+  ]
+}

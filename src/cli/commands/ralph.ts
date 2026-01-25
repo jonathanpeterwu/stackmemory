@@ -890,7 +890,11 @@ export function createRalphCommand(): Command {
 
           const loopId = options.loopId || 'current';
           await ralphDebugger.startDebugSession(loopId, '.ralph');
+<<<<<<< HEAD
+          
+=======
 
+>>>>>>> swarm/developer-implement-core-feature
           if (options.generateReport) {
             const report = await ralphDebugger.generateDebugReport(loopId);
             console.log(`📋 Debug report generated: ${report.exportPath}`);
@@ -910,6 +914,207 @@ export function createRalphCommand(): Command {
       });
     });
 
+<<<<<<< HEAD
+  // Swarm testing and validation command
+  ralph
+    .command('swarm-test')
+    .description('Comprehensive testing and validation for swarm functionality')
+    .option('--quick', 'Run quick validation tests only')
+    .option('--stress', 'Run stress tests with multiple parallel swarms')
+    .option('--error-injection', 'Test error handling with deliberate failures')
+    .option('--cleanup-test', 'Test cleanup mechanisms')
+    .option('--git-test', 'Test git workflow integration')
+    .option('--report', 'Generate detailed test report')
+    .action(async (options) => {
+      return trace.command('ralph-swarm-test', options, async () => {
+        try {
+          console.log('🧪 Starting swarm testing and validation...');
+          
+          await swarmCoordinator.initialize();
+          
+          const testResults: any[] = [];
+          let passedTests = 0;
+          let totalTests = 0;
+
+          // Quick validation tests
+          if (options.quick || !options.stress) {
+            console.log('\n⚡ Running quick validation tests...');
+            
+            // Test 1: Basic swarm initialization
+            totalTests++;
+            try {
+              await swarmCoordinator.launchSwarm(
+                'Test: Basic functionality validation',
+                [{ role: 'developer' as any }]
+              );
+              
+              // Immediately cleanup
+              await swarmCoordinator.forceCleanup();
+              
+              console.log('  ✅ Basic swarm initialization');
+              passedTests++;
+              testResults.push({ test: 'basic_init', status: 'passed', duration: 0 });
+            } catch (error) {
+              console.log('  ❌ Basic swarm initialization failed:', (error as Error).message);
+              testResults.push({ test: 'basic_init', status: 'failed', error: (error as Error).message });
+            }
+
+            // Test 2: Resource usage monitoring
+            totalTests++;
+            try {
+              const usage = swarmCoordinator.getResourceUsage();
+              console.log(`  ✅ Resource monitoring: ${usage.activeAgents} agents, ${usage.memoryEstimate}MB`);
+              passedTests++;
+              testResults.push({ test: 'resource_monitoring', status: 'passed', data: usage });
+            } catch (error) {
+              console.log('  ❌ Resource monitoring failed:', (error as Error).message);
+              testResults.push({ test: 'resource_monitoring', status: 'failed', error: (error as Error).message });
+            }
+          }
+
+          // Stress tests
+          if (options.stress) {
+            console.log('\n🔥 Running stress tests...');
+            
+            totalTests++;
+            try {
+              const stressPromises = [];
+              for (let i = 0; i < 3; i++) {
+                stressPromises.push(
+                  swarmCoordinator.launchSwarm(
+                    `Stress test swarm ${i}`,
+                    [{ role: 'developer' as any }, { role: 'tester' as any }]
+                  )
+                );
+              }
+              
+              await Promise.all(stressPromises);
+              await swarmCoordinator.forceCleanup();
+              
+              console.log('  ✅ Parallel swarm stress test');
+              passedTests++;
+              testResults.push({ test: 'stress_parallel', status: 'passed' });
+            } catch (error) {
+              console.log('  ❌ Stress test failed:', (error as Error).message);
+              testResults.push({ test: 'stress_parallel', status: 'failed', error: (error as Error).message });
+            }
+          }
+
+          // Error injection tests
+          if (options.errorInjection) {
+            console.log('\n💥 Testing error handling...');
+            
+            totalTests++;
+            try {
+              // Test with invalid agent configuration
+              try {
+                await swarmCoordinator.launchSwarm(
+                  'Error test: Invalid agents',
+                  [] // Empty agents array
+                );
+              } catch {
+                console.log('  ✅ Properly handled empty agents array');
+                passedTests++;
+                testResults.push({ test: 'error_handling', status: 'passed' });
+              }
+            } catch (error) {
+              console.log('  ❌ Error handling test failed:', (error as Error).message);
+              testResults.push({ test: 'error_handling', status: 'failed', error: (error as Error).message });
+            }
+          }
+
+          // Cleanup tests
+          if (options.cleanupTest) {
+            console.log('\n🧹 Testing cleanup mechanisms...');
+            
+            totalTests++;
+            try {
+              // Create a swarm and test cleanup
+              await swarmCoordinator.launchSwarm(
+                'Cleanup test swarm',
+                [{ role: 'developer' as any }]
+              );
+              
+              // Force cleanup
+              await swarmCoordinator.forceCleanup();
+              
+              // Check if resources were cleaned
+              const usage = swarmCoordinator.getResourceUsage();
+              if (usage.activeAgents === 0) {
+                console.log('  ✅ Cleanup mechanism works correctly');
+                passedTests++;
+                testResults.push({ test: 'cleanup', status: 'passed' });
+              } else {
+                throw new Error(`Cleanup failed: ${usage.activeAgents} agents still active`);
+              }
+            } catch (error) {
+              console.log('  ❌ Cleanup test failed:', (error as Error).message);
+              testResults.push({ test: 'cleanup', status: 'failed', error: (error as Error).message });
+            }
+          }
+
+          // Git workflow tests
+          if (options.gitTest) {
+            console.log('\n🔀 Testing git workflow integration...');
+            
+            totalTests++;
+            try {
+              // Test git workflow status
+              const gitStatus = swarmCoordinator['gitWorkflowManager'].getGitStatus();
+              console.log(`  ✅ Git workflow status: ${gitStatus.enabled ? 'enabled' : 'disabled'}`);
+              passedTests++;
+              testResults.push({ test: 'git_workflow', status: 'passed', data: gitStatus });
+            } catch (error) {
+              console.log('  ❌ Git workflow test failed:', (error as Error).message);
+              testResults.push({ test: 'git_workflow', status: 'failed', error: (error as Error).message });
+            }
+          }
+
+          // Display results
+          console.log('\n📊 Test Results Summary:');
+          console.log(`   Total tests: ${totalTests}`);
+          console.log(`   Passed: ${passedTests} ✅`);
+          console.log(`   Failed: ${totalTests - passedTests} ❌`);
+          console.log(`   Success rate: ${Math.round((passedTests / totalTests) * 100)}%`);
+
+          // Generate report
+          if (options.report) {
+            const reportPath = '.swarm/test-report.json';
+            const fs = await import('fs');
+            const reportData = {
+              timestamp: new Date().toISOString(),
+              summary: {
+                totalTests,
+                passedTests,
+                failedTests: totalTests - passedTests,
+                successRate: (passedTests / totalTests) * 100
+              },
+              testResults,
+              systemInfo: {
+                nodeVersion: process.version,
+                platform: process.platform,
+                arch: process.arch
+              }
+            };
+            
+            fs.writeFileSync(reportPath, JSON.stringify(reportData, null, 2));
+            console.log(`📋 Detailed report saved to: ${reportPath}`);
+          }
+
+          if (passedTests === totalTests) {
+            console.log('\n🎉 All tests passed! Swarm functionality is working correctly.');
+          } else {
+            console.log('\n⚠️  Some tests failed. Check the errors above for details.');
+            process.exit(1);
+          }
+          
+        } catch (error: unknown) {
+          logger.error('Swarm testing failed', error as Error);
+          console.error('❌ Test suite failed:', (error as Error).message);
+          process.exit(1);
+        }
+      });
+=======
   // TUI command for real-time monitoring
   ralph
     .command('tui')
@@ -963,6 +1168,7 @@ export function createRalphCommand(): Command {
         console.log('💡 Try: stackmemory ralph tui --simple');
         process.exit(1);
       }
+>>>>>>> swarm/developer-implement-core-feature
     });
 
   return ralph;

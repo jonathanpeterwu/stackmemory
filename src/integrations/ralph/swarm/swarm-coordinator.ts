@@ -25,6 +25,27 @@ import {
   AgentSpecialization,
 } from '../types.js';
 
+export class SwarmCoordinationError extends Error {
+  constructor(message: string, public context?: Record<string, unknown>) {
+    super(message);
+    this.name = 'SwarmCoordinationError';
+  }
+}
+
+export class AgentExecutionError extends Error {
+  constructor(message: string, public agentId: string, public taskId: string, public context?: Record<string, unknown>) {
+    super(message);
+    this.name = 'AgentExecutionError';
+  }
+}
+
+export class TaskAllocationError extends Error {
+  constructor(message: string, public taskId: string, public context?: Record<string, unknown>) {
+    super(message);
+    this.name = 'TaskAllocationError';
+  }
+}
+
 export interface SwarmCoordinatorConfig {
   maxAgents: number;
   coordinationInterval: number;
@@ -401,7 +422,7 @@ export class SwarmCoordinator {
   private async executeAgentTask(
     agent: Agent,
     task: SwarmTask,
-    assignment: any
+    assignment: TaskAllocation['assignments'] extends Map<string, infer T> ? T : any
   ): Promise<void> {
     logger.info(`Agent ${agent.role} starting task: ${task.title}`);
 
@@ -432,8 +453,26 @@ export class SwarmCoordinator {
       // Set up coordination hooks
       this.setupAgentCoordination(agent, ralph, assignment);
 
-      // Run the task
-      await ralph.run();
+      // Run the task using worker iterations
+      let iteration = 1;
+      const maxIterations = this.calculateMaxIterations(task);
+      
+      while (iteration <= maxIterations) {
+        try {
+          const result = await ralph.runWorkerIteration();
+          if (result.isComplete) {
+            logger.info(`Task completed in ${iteration} iterations`);
+            break;
+          }
+          iteration++;
+        } catch (error: unknown) {
+          logger.error(`Iteration ${iteration} failed:`, error as Error);
+          if (iteration >= maxIterations) {
+            throw error;
+          }
+          iteration++;
+        }
+      }
 
       // Commit agent's work
       await this.gitWorkflowManager.commitAgentWork(agent, task);
@@ -1152,6 +1191,130 @@ You are a PROJECT COORDINATOR. Your role is to:
 
     this.swarmState.performance.efficiency =
       activeCount > 0 ? this.swarmState.completedTaskCount / activeCount : 0;
+  }
+
+  /**
+   * Cleanup completed swarms and their resources
+   */
+  async cleanupCompletedSwarms(): Promise<void> {
+    if (this.swarmState.status !== 'completed') {
+      return;
+    }
+
+    try {
+      logger.info('Cleaning up completed swarm resources');
+
+      // Clear coordination timer
+      if (this.coordinationTimer) {
+        clearInterval(this.coordinationTimer);
+        this.coordinationTimer = undefined;
+      }
+
+      // Clean up agent working directories
+      for (const agent of this.activeAgents.values()) {
+        try {
+          await fs.rmdir(agent.workingDirectory, { recursive: true });
+          logger.debug(`Cleaned up working directory for agent ${agent.id}`);
+        } catch (error: unknown) {
+          logger.warn(`Could not clean up directory for agent ${agent.id}`, error as Error);
+        }
+      }
+
+      // Clean up git branches
+      await this.gitWorkflowManager.coordinateMerges(Array.from(this.activeAgents.values()));
+
+      // Clear active agents
+      this.activeAgents.clear();
+
+      // Reset state
+      this.swarmState = {
+        id: uuidv4(),
+        status: 'idle',
+        startTime: Date.now(),
+        activeTaskCount: 0,
+        completedTaskCount: 0,
+        coordination: {
+          events: [],
+          conflicts: [],
+          resolutions: []
+        },
+        performance: {
+          throughput: 0,
+          efficiency: 0,
+          coordination_overhead: 0
+        }
+      };
+
+      logger.info('Swarm cleanup completed successfully');
+    } catch (error: unknown) {
+      logger.error('Failed to cleanup completed swarm', error as Error);
+      throw new SwarmCoordinationError('Cleanup failed', { swarmId: this.swarmState.id, error });
+    }
+  }
+
+  /**
+   * Force cleanup of a swarm (for emergency situations)
+   */
+  async forceCleanup(): Promise<void> {
+    logger.warn('Force cleanup initiated');
+    
+    try {
+      if (this.coordinationTimer) {
+        clearInterval(this.coordinationTimer);
+        this.coordinationTimer = undefined;
+      }
+
+      // Force stop all agents
+      for (const agent of this.activeAgents.values()) {
+        agent.status = 'stopped';
+      }
+
+      this.swarmState.status = 'stopped';
+      await this.cleanupCompletedSwarms();
+    } catch (error: unknown) {
+      logger.error('Force cleanup failed', error as Error);
+    }
+  }
+
+  /**
+   * Get swarm resource usage and cleanup recommendations
+   */
+  getResourceUsage(): {
+    activeAgents: number;
+    workingDirectories: string[];
+    memoryEstimate: number;
+    cleanupRecommended: boolean;
+    recommendations: string[];
+  } {
+    const workingDirs = Array.from(this.activeAgents.values()).map(a => a.workingDirectory);
+    const memoryEstimate = this.activeAgents.size * 50; // 50MB per agent estimate
+    const isStale = (Date.now() - this.swarmState.startTime) > 3600000; // 1 hour
+    const hasCompletedTasks = this.swarmState.completedTaskCount > 0 && this.swarmState.activeTaskCount === 0;
+    
+    const recommendations: string[] = [];
+    let cleanupRecommended = false;
+
+    if (isStale) {
+      recommendations.push('Swarm has been running for over 1 hour - consider cleanup');
+      cleanupRecommended = true;
+    }
+
+    if (hasCompletedTasks) {
+      recommendations.push('All tasks completed - cleanup is recommended');
+      cleanupRecommended = true;
+    }
+
+    if (this.activeAgents.size > 5) {
+      recommendations.push('High agent count - monitor resource usage');
+    }
+
+    return {
+      activeAgents: this.activeAgents.size,
+      workingDirectories: workingDirs,
+      memoryEstimate,
+      cleanupRecommended,
+      recommendations
+    };
   }
 
   [Symbol.toStringTag] = 'SwarmCoordinator';

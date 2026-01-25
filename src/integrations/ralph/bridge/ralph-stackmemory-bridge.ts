@@ -10,6 +10,7 @@ import { execSync } from 'child_process';
 import { logger } from '../../../core/monitoring/logger.js';
 import { FrameManager } from '../../../core/context/frame-manager.js';
 import { SessionManager } from '../../../core/session/session-manager.js';
+import { SQLiteAdapter } from '../../../core/database/sqlite-adapter.js';
 import { ContextBudgetManager } from '../context/context-budget-manager.js';
 import { StateReconciler } from '../state/state-reconciler.js';
 import {
@@ -91,6 +92,14 @@ export class RalphStackMemoryBridge {
 
       this.state.currentSession = session;
 
+<<<<<<< HEAD
+      // Initialize frame manager with database
+      const dbAdapter = await this.getDatabaseAdapter();
+      await dbAdapter.connect();
+      const db = (dbAdapter as any).db; // Get the actual Database instance
+      const projectId = path.basename(this.ralphDir);
+      this.frameManager = new FrameManager(db, projectId, { skipContextBridge: true });
+=======
       // Initialize frame manager with session database if required
       if (this.requiresDatabase) {
         if (session.database && session.projectId) {
@@ -113,6 +122,7 @@ export class RalphStackMemoryBridge {
           'Running without StackMemory database (useStackMemory: false)'
         );
       }
+>>>>>>> swarm/developer-implement-core-feature
 
       // Check for existing loop or create new
       if (options?.loopId) {
@@ -625,7 +635,12 @@ export class RalphStackMemoryBridge {
       },
     };
 
-    return await this.frameManager.pushFrame(frame as any);
+    return await this.frameManager.createFrame({
+      name: frame.name,
+      type: frame.type,
+      content: frame.content || '',
+      metadata: frame.metadata
+    });
   }
 
   /**
@@ -971,6 +986,15 @@ export class RalphStackMemoryBridge {
     };
 
     await this.state.performanceOptimizer!.saveFrame(frame as Frame);
+  }
+
+  /**
+   * Get database adapter for FrameManager
+   */
+  private async getDatabaseAdapter(): Promise<SQLiteAdapter> {
+    const dbPath = path.join(this.ralphDir, 'stackmemory.db');
+    const projectId = path.basename(this.ralphDir);
+    return new SQLiteAdapter(projectId, { dbPath });
   }
 
   /**
