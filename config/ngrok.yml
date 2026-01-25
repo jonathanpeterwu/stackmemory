@@ -1,0 +1,14 @@
+# StackMemory ngrok configuration
+# Copy your authtoken from https://dashboard.ngrok.com/get-started/your-authtoken
+
+version: "3"
+agent:
+  # Your authtoken (required for stable tunnels)
+  # authtoken: YOUR_AUTHTOKEN_HERE
+
+tunnels:
+  stackmemory-webhook:
+    proto: http
+    addr: 3456
+    # Uncomment for paid ngrok plans with reserved domains:
+    # domain: your-domain.ngrok.io

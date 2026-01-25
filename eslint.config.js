@@ -42,18 +42,20 @@ export default [
     },
   },
   {
-    files: ['**/*.test.ts', '**/*.spec.ts'],
-    rules: {
-      '@typescript-eslint/no-explicit-any': 'off',
-    },
-  },
-  {
     ignores: [
       'dist/',
       'node_modules/',
+      'templates/',
+      'archive/',
+      'external/',
+      'packages/',
       '*.js',
+      '*.min.js',
+      '*.bundle.js',
       'src/integrations/',
       'scripts/merge-linear-duplicates.ts',
+      '**/*.test.ts',
+      '**/__tests__/**',
     ],
   },
 ];

@@ -161,9 +161,9 @@ class DuplicateChecker {
               },
             ],
             recommendation:
-              duplicateCheck.similarity! > 0.95
+              (duplicateCheck.similarity ?? 0) > 0.95
                 ? 'merge'
-                : duplicateCheck.similarity! > 0.85
+                : (duplicateCheck.similarity ?? 0) > 0.85
                   ? 'review'
                   : 'skip',
           });

@@ -4,36 +4,83 @@
 
 import { Command } from 'commander';
 import { execSync, execFileSync } from 'child_process';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import {
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  readdirSync,
+  unlinkSync,
+} from 'fs';
 import { join } from 'path';
 import Database from 'better-sqlite3';
-import shellEscape from 'shell-escape';
 import { z } from 'zod';
 import { FrameManager } from '../../core/context/frame-manager.js';
 import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { logger } from '../../core/monitoring/logger.js';
+import { EnhancedHandoffGenerator } from '../../core/session/enhanced-handoff.js';
 
-// Input validation schemas  
-const CommitMessageSchema = z.string()
+// Handoff versioning - keep last N handoffs
+const MAX_HANDOFF_VERSIONS = 10;
+
+function saveVersionedHandoff(
+  projectRoot: string,
+  branch: string,
+  content: string
+): string {
+  const handoffsDir = join(projectRoot, '.stackmemory', 'handoffs');
+  if (!existsSync(handoffsDir)) {
+    mkdirSync(handoffsDir, { recursive: true });
+  }
+
+  // Generate versioned filename: YYYY-MM-DD-HH-mm-branch.md
+  const now = new Date();
+  const timestamp = now.toISOString().slice(0, 16).replace(/[T:]/g, '-');
+  const safeBranch = branch.replace(/[^a-zA-Z0-9-]/g, '-').slice(0, 30);
+  const filename = `${timestamp}-${safeBranch}.md`;
+  const versionedPath = join(handoffsDir, filename);
+
+  // Save versioned handoff
+  writeFileSync(versionedPath, content);
+
+  // Clean up old handoffs (keep last N)
+  try {
+    const files = readdirSync(handoffsDir)
+      .filter((f) => f.endsWith('.md'))
+      .sort()
+      .reverse();
+
+    for (const oldFile of files.slice(MAX_HANDOFF_VERSIONS)) {
+      unlinkSync(join(handoffsDir, oldFile));
+    }
+  } catch {
+    // Cleanup failed, not critical
+  }
+
+  return versionedPath;
+}
+
+// Input validation schemas
+const CommitMessageSchema = z
+  .string()
   .min(1, 'Commit message cannot be empty')
   .max(200, 'Commit message too long')
-  .regex(/^[a-zA-Z0-9\s\-_.,:()\/\[\]]+$/, 'Commit message contains invalid characters')
-  .refine(msg => !msg.includes('\n'), 'Commit message cannot contain newlines')
-  .refine(msg => !msg.includes('"'), 'Commit message cannot contain double quotes')
-  .refine(msg => !msg.includes('`'), 'Commit message cannot contain backticks');
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
-
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
+  .regex(
+    /^[a-zA-Z0-9\s\-_.,:()\/\[\]]+$/,
+    'Commit message contains invalid characters'
+  )
+  .refine(
+    (msg) => !msg.includes('\n'),
+    'Commit message cannot contain newlines'
+  )
+  .refine(
+    (msg) => !msg.includes('"'),
+    'Commit message cannot contain double quotes'
+  )
+  .refine(
+    (msg) => !msg.includes('`'),
+    'Commit message cannot contain backticks'
+  );
 
 export function createHandoffCommand(): Command {
   const cmd = new Command('handoff');
@@ -47,6 +94,7 @@ export function createHandoffCommand(): Command {
     .option('-m, --message <message>', 'Custom commit message')
     .option('--no-commit', 'Skip git commit')
     .option('--copy', 'Copy the handoff prompt to clipboard')
+    .option('--basic', 'Use basic handoff format instead of enhanced')
     .action(async (options) => {
       try {
         const projectRoot = process.cwd();
@@ -62,7 +110,7 @@ export function createHandoffCommand(): Command {
             cwd: projectRoot,
           });
           hasChanges = gitStatus.trim().length > 0;
-        } catch (err: unknown) {
+        } catch {
           console.log('⚠️  Not in a git repository');
         }
 
@@ -82,19 +130,22 @@ export function createHandoffCommand(): Command {
             let commitMessage =
               options.message ||
               `chore: handoff checkpoint on ${currentBranch}`;
-            
+
             // Validate commit message
             try {
               commitMessage = CommitMessageSchema.parse(commitMessage);
             } catch (validationError) {
-              console.error('❌ Invalid commit message:', (validationError as Error).message);
+              console.error(
+                '❌ Invalid commit message:',
+                (validationError as Error).message
+              );
               return;
             }
 
             // Commit using execFileSync for safety
-            execFileSync('git', ['commit', '-m', commitMessage], { 
+            execFileSync('git', ['commit', '-m', commitMessage], {
               cwd: projectRoot,
-              stdio: 'inherit'
+              stdio: 'inherit',
             });
 
             console.log(`✅ Committed changes: "${commitMessage}"`);
@@ -210,7 +261,7 @@ export function createHandoffCommand(): Command {
           }).trim();
 
           gitInfo = `\nGit Status:\n  Branch: ${branch}\n  Last commit: ${lastCommit}\n`;
-        } catch (err: unknown) {
+        } catch {
           // Ignore git errors
         }
 
@@ -225,8 +276,12 @@ export function createHandoffCommand(): Command {
         }
 
         // 6. Generate the handoff prompt
-        const timestamp = new Date().toISOString();
-        const handoffPrompt = `# Session Handoff - ${timestamp}
+        let handoffPrompt: string;
+
+        if (options.basic) {
+          // Use basic handoff format
+          const timestamp = new Date().toISOString();
+          handoffPrompt = `# Session Handoff - ${timestamp}
 
 ## Project: ${projectRoot.split('/').pop()}
 
@@ -252,14 +307,40 @@ ${notes}
 ---
 Generated by stackmemory handoff at ${timestamp}
 `;
+        } else {
+          // Use high-efficacy enhanced handoff generator (default)
+          const enhancedGenerator = new EnhancedHandoffGenerator(projectRoot);
+          const enhancedHandoff = await enhancedGenerator.generate();
+          handoffPrompt = enhancedGenerator.toMarkdown(enhancedHandoff);
+          console.log(`Estimated tokens: ~${enhancedHandoff.estimatedTokens}`);
+        }
 
-        // 7. Save handoff prompt
+        // 7. Save handoff prompt (both latest and versioned)
         const handoffPath = join(
           projectRoot,
           '.stackmemory',
           'last-handoff.md'
         );
         writeFileSync(handoffPath, handoffPrompt);
+
+        // Save versioned copy
+        let branch = 'unknown';
+        try {
+          branch = execSync('git rev-parse --abbrev-ref HEAD', {
+            encoding: 'utf-8',
+            cwd: projectRoot,
+          }).trim();
+        } catch {
+          // Not a git repo
+        }
+        const versionedPath = saveVersionedHandoff(
+          projectRoot,
+          branch,
+          handoffPrompt
+        );
+        console.log(
+          `Versioned: ${versionedPath.split('/').slice(-2).join('/')}`
+        );
 
         // 8. Display the prompt
         console.log('\n' + '='.repeat(60));
@@ -288,7 +369,7 @@ Generated by stackmemory handoff at ${timestamp}
             }
 
             console.log('\n✅ Handoff prompt copied to clipboard!');
-          } catch (err: unknown) {
+          } catch {
             console.log('\n⚠️  Could not copy to clipboard');
           }
         }
@@ -357,7 +438,7 @@ Generated by stackmemory handoff at ${timestamp}
             console.log('\n⚠️  Current uncommitted changes:');
             console.log(gitStatus);
           }
-        } catch (err: unknown) {
+        } catch {
           // Not a git repo
         }
 
@@ -383,7 +464,7 @@ Generated by stackmemory handoff at ${timestamp}
             }
 
             console.log('\n✅ Handoff prompt copied to clipboard!');
-          } catch (err: unknown) {
+          } catch {
             console.log('\n⚠️  Could not copy to clipboard');
           }
         }
@@ -421,17 +502,21 @@ Generated by stackmemory handoff at ${timestamp}
       console.log('─'.repeat(50));
 
       if (options.command) {
-        // Validate and wrap specific command 
-        const commandSchema = z.string()
+        // Validate and wrap specific command
+        const commandSchema = z
+          .string()
           .min(1, 'Command cannot be empty')
           .max(200, 'Command too long')
-          .regex(/^[a-zA-Z0-9\s\-_./:]+$/, 'Command contains invalid characters')
-          .refine(cmd => !cmd.includes(';'), 'Command cannot contain ";"')
-          .refine(cmd => !cmd.includes('&'), 'Command cannot contain "&"')
-          .refine(cmd => !cmd.includes('|'), 'Command cannot contain "|"')
-          .refine(cmd => !cmd.includes('$'), 'Command cannot contain "$"')
-          .refine(cmd => !cmd.includes('`'), 'Command cannot contain "`"');
-        
+          .regex(
+            /^[a-zA-Z0-9\s\-_./:]+$/,
+            'Command contains invalid characters'
+          )
+          .refine((cmd) => !cmd.includes(';'), 'Command cannot contain ";"')
+          .refine((cmd) => !cmd.includes('&'), 'Command cannot contain "&"')
+          .refine((cmd) => !cmd.includes('|'), 'Command cannot contain "|"')
+          .refine((cmd) => !cmd.includes('$'), 'Command cannot contain "$"')
+          .refine((cmd) => !cmd.includes('`'), 'Command cannot contain "`"');
+
         try {
           const validatedCommand = commandSchema.parse(options.command);
           console.log(`Wrapping command: ${validatedCommand}`);
@@ -442,11 +527,14 @@ Generated by stackmemory handoff at ${timestamp}
         } catch (validationError) {
           if (validationError instanceof z.ZodError) {
             console.error('❌ Invalid command:');
-            validationError.errors.forEach(err => {
+            validationError.errors.forEach((err) => {
               console.error(`  ${err.message}`);
             });
           } else {
-            console.error('❌ Failed to execute command:', (validationError as Error).message);
+            console.error(
+              '❌ Failed to execute command:',
+              (validationError as Error).message
+            );
           }
           return;
         }

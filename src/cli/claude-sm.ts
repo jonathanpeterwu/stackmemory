@@ -14,6 +14,8 @@ import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
 import { initializeTracing, trace } from '../core/trace/index.js';
 
+// __filename and __dirname are provided by esbuild banner for ESM compatibility
+
 interface ClaudeConfig {
   instanceId: string;
   worktreePath?: string;

@@ -4,8 +4,14 @@ import { glob } from 'glob';
 
 // Get all TypeScript files except tests
 const entryPoints = glob.sync('src/**/*.ts', {
-  ignore: ['**/*.test.ts', '**/*.spec.ts', '**/__tests__/**']
+  ignore: ['**/*.test.ts', '**/*.spec.ts', '**/__tests__/**'],
 });
+
+// ESM polyfill for __dirname and __filename
+const esmBanner = `import { fileURLToPath as __fileURLToPath } from 'url';
+import { dirname as __pathDirname } from 'path';
+const __filename = __fileURLToPath(import.meta.url);
+const __dirname = __pathDirname(__filename);`;
 
 // Build configuration
 const buildConfig = {
@@ -19,6 +25,9 @@ const buildConfig = {
   logLevel: 'info',
   preserveSymlinks: false,
   splitting: false,
+  banner: {
+    js: esmBanner,
+  },
 };
 
 // Build function
