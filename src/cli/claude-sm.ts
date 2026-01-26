@@ -429,28 +429,39 @@ class ClaudeSM {
       };
 
       const summary = await generateSessionSummary(context);
-      const message = formatSummaryMessage(summary);
+      const message = formatSummaryMessage(summary, this.config.instanceId);
 
       console.log(chalk.cyan('\nSending session summary via WhatsApp...'));
 
-      // Build options from suggestions for interactive response
-      const options = summary.suggestions.slice(0, 4).map((s) => ({
+      // Build options from suggestions for interactive response (always min 2)
+      let options = summary.suggestions.slice(0, 4).map((s) => ({
         key: s.key,
         label: s.label,
         action: s.action,
       }));
 
+      // Ensure minimum 2 options
+      if (options.length < 2) {
+        const defaults = [
+          { key: '1', label: 'Start new session', action: 'claude-sm' },
+          {
+            key: '2',
+            label: 'View logs',
+            action: 'tail -30 ~/.claude/logs/*.log',
+          },
+        ];
+        options = defaults.slice(0, 2 - options.length).concat(options);
+        options.forEach((o, i) => (o.key = String(i + 1)));
+      }
+
       const result = await sendNotification({
         type: 'task_complete',
-        title: 'Claude Session Complete',
+        title: `Claude Session ${this.config.instanceId}`,
         message,
-        prompt:
-          options.length > 0
-            ? {
-                type: 'options',
-                options,
-              }
-            : undefined,
+        prompt: {
+          type: 'options',
+          options,
+        },
       });
 
       if (result.success) {

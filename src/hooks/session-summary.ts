@@ -207,6 +207,28 @@ async function generateSuggestions(
 
   // Sort by priority (highest first) and re-key
   suggestions.sort((a, b) => b.priority - a.priority);
+
+  // Ensure minimum 2 options always
+  if (suggestions.length < 2) {
+    // Add default options if not enough suggestions
+    if (suggestions.length === 0) {
+      suggestions.push({
+        key: '1',
+        label: 'Start new Claude session',
+        action: 'claude-sm',
+        priority: 50,
+      });
+    }
+    if (suggestions.length < 2) {
+      suggestions.push({
+        key: '2',
+        label: 'View session logs',
+        action: 'cat ~/.claude/logs/claude-*.log | tail -30',
+        priority: 40,
+      });
+    }
+  }
+
   suggestions.forEach((s, i) => {
     s.key = String(i + 1);
   });
@@ -252,13 +274,18 @@ export async function generateSessionSummary(
 /**
  * Format session summary as WhatsApp message
  */
-export function formatSummaryMessage(summary: SessionSummary): string {
+export function formatSummaryMessage(
+  summary: SessionSummary,
+  sessionId?: string
+): string {
   const statusEmoji = summary.status === 'success' ? '' : '';
   const exitInfo =
     summary.exitCode !== null ? ` | Exit: ${summary.exitCode}` : '';
+  const sessionInfo = sessionId ? ` | Session: ${sessionId}` : '';
 
   let message = `Claude session complete ${statusEmoji}\n`;
-  message += `Duration: ${summary.duration}${exitInfo} | Branch: ${summary.branch}\n\n`;
+  message += `Duration: ${summary.duration}${exitInfo}${sessionInfo}\n`;
+  message += `Branch: ${summary.branch}\n\n`;
 
   if (summary.suggestions.length > 0) {
     message += `What to do next:\n`;
