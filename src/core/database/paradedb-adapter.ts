@@ -3,7 +3,7 @@
  * Advanced PostgreSQL with built-in search (BM25) and analytics capabilities
  */
 
-import { Pool, PoolClient, QueryResult } from 'pg';
+import { Pool, PoolClient } from 'pg';
 import {
   FeatureAwareDatabaseAdapter,
   DatabaseFeatures,
@@ -15,7 +15,7 @@ import {
 } from './database-adapter.js';
 import type { Frame, Event, Anchor } from '../context/frame-manager.js';
 import { logger } from '../monitoring/logger.js';
-import * as fs from 'fs/promises';
+import { DatabaseError, ErrorCode, ValidationError } from '../errors/index.js';
 
 export interface ParadeDBConfig {
   connectionString?: string;
@@ -1033,7 +1033,11 @@ export class ParadeDBAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async commitTransaction(): Promise<void> {
-    if (!this.activeClient) throw new Error('No active transaction');
+    if (!this.activeClient)
+      throw new DatabaseError(
+        'No active transaction',
+        ErrorCode.DB_TRANSACTION_FAILED
+      );
 
     await this.activeClient.query('COMMIT');
     this.activeClient.release();
@@ -1041,7 +1045,11 @@ export class ParadeDBAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async rollbackTransaction(): Promise<void> {
-    if (!this.activeClient) throw new Error('No active transaction');
+    if (!this.activeClient)
+      throw new DatabaseError(
+        'No active transaction',
+        ErrorCode.DB_TRANSACTION_FAILED
+      );
 
     await this.activeClient.query('ROLLBACK');
     this.activeClient.release();
@@ -1101,8 +1109,10 @@ export class ParadeDBAdapter extends FeatureAwareDatabaseAdapter {
 
         return Buffer.from(chunks.join('\n\n'));
       } else {
-        throw new Error(
-          `Format ${format} not yet implemented for ParadeDB export`
+        throw new ValidationError(
+          `Format ${format} not yet implemented for ParadeDB export`,
+          ErrorCode.VALIDATION_FAILED,
+          { format, supportedFormats: ['json'] }
         );
       }
     } finally {
@@ -1151,8 +1161,10 @@ export class ParadeDBAdapter extends FeatureAwareDatabaseAdapter {
 
         await client.query('COMMIT');
       } else {
-        throw new Error(
-          `Format ${format} not yet implemented for ParadeDB import`
+        throw new ValidationError(
+          `Format ${format} not yet implemented for ParadeDB import`,
+          ErrorCode.VALIDATION_FAILED,
+          { format, supportedFormats: ['json'] }
         );
       }
     } catch (error: unknown) {
@@ -1170,7 +1182,10 @@ export class ParadeDBAdapter extends FeatureAwareDatabaseAdapter {
     }
 
     if (!this.pool) {
-      throw new Error('Database not connected');
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
     }
 
     return await this.pool.connect();

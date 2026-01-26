@@ -3,18 +3,10 @@
  * Routes database queries to appropriate storage tier based on data age, query type, and performance requirements
  */
 
-import {
-  DatabaseAdapter,
-  SearchOptions,
-  QueryOptions,
-  AggregationOptions,
-  BulkOperation,
-} from './database-adapter.js';
-import { SQLiteAdapter } from './sqlite-adapter.js';
-import { ParadeDBAdapter } from './paradedb-adapter.js';
-import { ConnectionPool } from './connection-pool.js';
-import type { Frame, Event, Anchor } from '../context/frame-manager.js';
+import { DatabaseAdapter } from './database-adapter.js';
+import type { Frame } from '../context/frame-manager.js';
 import { logger } from '../monitoring/logger.js';
+import { DatabaseError, ErrorCode } from '../errors/index.js';
 import { EventEmitter } from 'events';
 
 export interface StorageTier {
@@ -210,7 +202,7 @@ export class QueryRouter extends EventEmitter {
       rationale: string;
     }> = [];
 
-    for (const [name, tier] of this.tiers) {
+    for (const tier of this.tiers.values()) {
       const score = await this.evaluateTier(tier, operation, context);
       const rationale = this.generateRationale(tier, operation, context, score);
       evaluations.push({ tier, score, rationale });
@@ -220,7 +212,11 @@ export class QueryRouter extends EventEmitter {
     evaluations.sort((a, b) => b.score - a.score);
 
     if (evaluations.length === 0) {
-      throw new Error('No storage tiers available for routing');
+      throw new DatabaseError(
+        'No storage tiers available for routing',
+        ErrorCode.DB_CONNECTION_FAILED,
+        { query: context.query, tiersConfigured: this.tiers.length }
+      );
     }
 
     const primaryEval = evaluations[0];
@@ -316,9 +312,9 @@ export class QueryRouter extends EventEmitter {
    */
   private evaluateRule(
     rule: RoutingRule,
-    operation: string,
+    _operation: string,
     context: QueryContext,
-    tier: StorageTier
+    _tier: StorageTier
   ): boolean {
     let actualValue: any;
 

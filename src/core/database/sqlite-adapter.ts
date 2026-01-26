@@ -15,11 +15,10 @@ import {
   CountResult,
   VersionResult,
   FrameRow,
-  EventRow,
-  AnchorRow,
 } from './database-adapter.js';
 import type { Frame, Event, Anchor } from '../context/frame-manager.js';
 import { logger } from '../monitoring/logger.js';
+import { DatabaseError, ErrorCode, ValidationError } from '../errors/index.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -119,7 +118,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async initializeSchema(): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     this.db.exec(`
       CREATE TABLE IF NOT EXISTS frames (
@@ -197,9 +200,15 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     if (!this.db) return;
 
     const needsCascade = (table: string): boolean => {
-      const rows = this.db!.prepare(`PRAGMA foreign_key_list(${table})`).all() as any[];
+      const rows = this.db!.prepare(
+        `PRAGMA foreign_key_list(${table})`
+      ).all() as any[];
       // If any FK points to frames without cascade, we need migration
-      return rows.some((r) => r.table === 'frames' && String(r.on_delete).toUpperCase() !== 'CASCADE');
+      return rows.some(
+        (r) =>
+          r.table === 'frames' &&
+          String(r.on_delete).toUpperCase() !== 'CASCADE'
+      );
     };
 
     const migrateTable = (table: 'events' | 'anchors') => {
@@ -227,23 +236,27 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
               FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
             );`;
 
-      const cols = table === 'events'
-        ? 'event_id, run_id, frame_id, seq, event_type, payload, ts'
-        : 'anchor_id, frame_id, project_id, type, text, priority, created_at, metadata';
+      const cols =
+        table === 'events'
+          ? 'event_id, run_id, frame_id, seq, event_type, payload, ts'
+          : 'anchor_id, frame_id, project_id, type, text, priority, created_at, metadata';
 
-      const idxSql = table === 'events'
-        ? [
-            'CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);',
-            'CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);',
-          ]
-        : [
-            'CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);',
-          ];
+      const idxSql =
+        table === 'events'
+          ? [
+              'CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);',
+              'CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);',
+            ]
+          : [
+              'CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);',
+            ];
 
       this.db!.exec('PRAGMA foreign_keys = OFF;');
       this.db!.exec('BEGIN;');
       this.db!.exec(createSql);
-      this.db!.prepare(`INSERT INTO ${table === 'events' ? 'events_new' : 'anchors_new'} (${cols}) SELECT ${cols} FROM ${table}`).run();
+      this.db!.prepare(
+        `INSERT INTO ${table === 'events' ? 'events_new' : 'anchors_new'} (${cols}) SELECT ${cols} FROM ${table}`
+      ).run();
       this.db!.exec(`DROP TABLE ${table};`);
       this.db!.exec(`ALTER TABLE ${table}_new RENAME TO ${table};`);
       for (const stmt of idxSql) this.db!.exec(stmt);
@@ -257,7 +270,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async migrateSchema(targetVersion: number): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     const currentVersion = await this.getSchemaVersion();
 
@@ -278,7 +295,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async getSchemaVersion(): Promise<number> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     try {
       const result = this.db
@@ -292,7 +313,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
   // Frame operations
   async createFrame(frame: Partial<Frame>): Promise<string> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     const frameId = frame.frame_id || this.generateId();
 
@@ -324,7 +349,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async getFrame(frameId: string): Promise<Frame | null> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     const row = this.db
       .prepare('SELECT * FROM frames WHERE frame_id = ?')
@@ -341,7 +370,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async updateFrame(frameId: string, updates: Partial<Frame>): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     const fields = [];
     const values = [];
@@ -385,7 +418,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async deleteFrame(frameId: string): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     // Delete in order due to foreign keys
     await this.deleteFrameAnchors(frameId);
@@ -395,7 +432,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async getActiveFrames(runId?: string): Promise<Frame[]> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     let query = "SELECT * FROM frames WHERE state = 'active'";
     const params = [];
@@ -427,7 +468,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
   // Event operations
   async createEvent(event: Partial<Event>): Promise<string> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     const eventId = event.event_id || this.generateId();
 
@@ -455,7 +500,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     frameId: string,
     options?: QueryOptions
   ): Promise<Event[]> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     let query = 'SELECT * FROM events WHERE frame_id = ?';
     query += this.buildOrderByClause(
@@ -473,14 +522,22 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async deleteFrameEvents(frameId: string): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     this.db.prepare('DELETE FROM events WHERE frame_id = ?').run(frameId);
   }
 
   // Anchor operations
   async createAnchor(anchor: Partial<Anchor>): Promise<string> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     const anchorId = anchor.anchor_id || this.generateId();
 
@@ -505,7 +562,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async getFrameAnchors(frameId: string): Promise<Anchor[]> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     const rows = this.db
       .prepare(
@@ -523,7 +584,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async deleteFrameAnchors(frameId: string): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     this.db.prepare('DELETE FROM anchors WHERE frame_id = ?').run(frameId);
   }
@@ -532,7 +597,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   async search(
     options: SearchOptions
   ): Promise<Array<Frame & { score: number }>> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     // SQLite doesn't support HAVING on non-aggregate queries, so we filter in application
     const sql = `
@@ -573,8 +642,8 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async searchByVector(
-    embedding: number[],
-    options?: QueryOptions
+    _embedding: number[],
+    _options?: QueryOptions
   ): Promise<Array<Frame & { similarity: number }>> {
     // Not supported in SQLite
     logger.warn('Vector search not supported in SQLite adapter');
@@ -583,7 +652,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
   async searchHybrid(
     textQuery: string,
-    embedding: number[],
+    _embedding: number[],
     weights?: { text: number; vector: number }
   ): Promise<Array<Frame & { score: number }>> {
     // Fall back to text search only
@@ -595,7 +664,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     table: string,
     options: AggregationOptions
   ): Promise<Record<string, any>[]> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     const metrics = options.metrics
       .map(
@@ -629,7 +702,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
       lastSeen: Date;
     }>
   > {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     let sql = `
       SELECT type as pattern, type, COUNT(*) as frequency, MAX(created_at) as last_seen
@@ -659,7 +736,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
   // Bulk operations
   async executeBulk(operations: BulkOperation[]): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     await this.inTransaction(async () => {
       for (const op of operations) {
@@ -695,14 +776,22 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async vacuum(): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     this.db.pragma('vacuum');
     logger.info('SQLite database vacuumed');
   }
 
   async analyze(): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     this.db.pragma('analyze');
     logger.info('SQLite database analyzed');
@@ -710,7 +799,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
   // Statistics
   async getStats(): Promise<DatabaseStats> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     const stats = {
       totalFrames: (
@@ -762,21 +855,33 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
   // Transaction support
   async beginTransaction(): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     this.db.prepare('BEGIN').run();
     this.inTransactionFlag = true;
   }
 
   async commitTransaction(): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     this.db.prepare('COMMIT').run();
     this.inTransactionFlag = false;
   }
 
   async rollbackTransaction(): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     this.db.prepare('ROLLBACK').run();
     this.inTransactionFlag = false;
@@ -801,10 +906,18 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     tables: string[],
     format: 'json' | 'parquet' | 'csv'
   ): Promise<Buffer> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     if (format !== 'json') {
-      throw new Error(`Format ${format} not supported for SQLite export`);
+      throw new ValidationError(
+        `Format ${format} not supported for SQLite export`,
+        ErrorCode.VALIDATION_FAILED,
+        { format, supportedFormats: ['json'] }
+      );
     }
 
     const data: Record<string, any[]> = {};
@@ -821,10 +934,18 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     format: 'json' | 'parquet' | 'csv',
     options?: { truncate?: boolean; upsert?: boolean }
   ): Promise<void> {
-    if (!this.db) throw new Error('Database not connected');
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
 
     if (format !== 'json') {
-      throw new Error(`Format ${format} not supported for SQLite import`);
+      throw new ValidationError(
+        `Format ${format} not supported for SQLite import`,
+        ErrorCode.VALIDATION_FAILED,
+        { format, supportedFormats: ['json'] }
+      );
     }
 
     const parsed = JSON.parse(data.toString());
