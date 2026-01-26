@@ -139,11 +139,11 @@ function storeLatestResponse(
   );
 }
 
-export function handleSMSWebhook(payload: TwilioWebhookPayload): {
+export async function handleSMSWebhook(payload: TwilioWebhookPayload): Promise<{
   response: string;
   action?: string;
   queued?: boolean;
-} {
+}> {
   const { From, Body } = payload;
 
   // Input length validation
@@ -184,7 +184,7 @@ export function handleSMSWebhook(payload: TwilioWebhookPayload): {
   if (result.action) {
     console.log(`[sms-webhook] Executing action: ${result.action}`);
 
-    const actionResult = executeActionSafe(
+    const actionResult = await executeActionSafe(
       result.action,
       result.response || Body
     );
@@ -355,7 +355,7 @@ export function startWebhookServer(port: number = 3456): void {
           }
         });
 
-        req.on('end', () => {
+        req.on('end', async () => {
           if (bodyTooLarge) {
             res.writeHead(413, { 'Content-Type': 'text/xml' });
             res.end(twimlResponse('Request too large'));
@@ -386,7 +386,7 @@ export function startWebhookServer(port: number = 3456): void {
               return;
             }
 
-            const result = handleSMSWebhook(payload);
+            const result = await handleSMSWebhook(payload);
 
             res.writeHead(200, { 'Content-Type': 'text/xml' });
             res.end(twimlResponse(result.response));
@@ -486,11 +486,11 @@ export function startWebhookServer(port: number = 3456): void {
 }
 
 // Express middleware for integration
-export function smsWebhookMiddleware(
+export async function smsWebhookMiddleware(
   req: { body: TwilioWebhookPayload },
   res: { type: (t: string) => void; send: (s: string) => void }
-): void {
-  const result = handleSMSWebhook(req.body);
+): Promise<void> {
+  const result = await handleSMSWebhook(req.body);
   res.type('text/xml');
   res.send(twimlResponse(result.response));
 }

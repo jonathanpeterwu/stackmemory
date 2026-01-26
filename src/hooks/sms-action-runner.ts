@@ -8,10 +8,12 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { execSync, execFileSync } from 'child_process';
+import { execFileSync } from 'child_process';
 import { randomBytes } from 'crypto';
 import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
 import { ActionQueueSchema, parseConfigSafe } from './schemas.js';
+import { LinearClient } from '../integrations/linear/client.js';
+import { LinearAuthManager } from '../integrations/linear/auth.js';
 
 // Allowlist of safe action patterns
 const SAFE_ACTION_PATTERNS: Array<{
@@ -30,9 +32,24 @@ const SAFE_ACTION_PATTERNS: Array<{
 
   // StackMemory commands
   { pattern: /^stackmemory (status|notify check|context list)$/ },
+  // Task start with optional --assign-me flag (Linear task ID is UUID format)
+  {
+    pattern: /^stackmemory task start ([a-f0-9-]{36})( --assign-me)?$/,
+  },
+
+  // Git commands
+  { pattern: /^git (status|diff|log|branch)( --[a-z-]+)*$/ },
+  { pattern: /^git add -A && git commit$/ },
+  { pattern: /^gh pr create --fill$/ },
+
+  // Custom aliases (cwm = claude worktree merge)
+  { pattern: /^cwm$/ },
 
   // Simple echo/confirmation (no variables)
-  { pattern: /^echo "?(Done|OK|Confirmed|Acknowledged)"?$/ },
+  {
+    pattern:
+      /^echo "?(Done|OK|Confirmed|Acknowledged|Great work! Time for a coffee break\.)"?$/,
+  },
 ];
 
 /**
@@ -120,19 +137,103 @@ export function queueAction(
 }
 
 /**
+ * Get Linear client if available
+ */
+function getLinearClient(): LinearClient | null {
+  const apiKey = process.env['LINEAR_API_KEY'];
+  if (apiKey) {
+    return new LinearClient({ apiKey });
+  }
+
+  try {
+    const authManager = new LinearAuthManager();
+    const tokens = authManager.loadTokens();
+    if (tokens?.accessToken) {
+      return new LinearClient({ accessToken: tokens.accessToken });
+    }
+  } catch {
+    // Auth not available
+  }
+
+  return null;
+}
+
+/**
+ * Handle special actions that require API calls instead of shell commands
+ */
+async function handleSpecialAction(action: string): Promise<{
+  handled: boolean;
+  success?: boolean;
+  output?: string;
+  error?: string;
+}> {
+  // Handle stackmemory task start command
+  const taskStartMatch = action.match(
+    /^stackmemory task start ([a-f0-9-]{36})( --assign-me)?$/
+  );
+  if (taskStartMatch) {
+    const issueId = taskStartMatch[1];
+    const client = getLinearClient();
+
+    if (!client) {
+      return {
+        handled: true,
+        success: false,
+        error:
+          'Linear not configured. Set LINEAR_API_KEY or run stackmemory linear setup.',
+      };
+    }
+
+    try {
+      const result = await client.startIssue(issueId);
+      if (result.success && result.issue) {
+        return {
+          handled: true,
+          success: true,
+          output: `Started: ${result.issue.identifier} - ${result.issue.title}`,
+        };
+      }
+      return {
+        handled: true,
+        success: false,
+        error: result.error || 'Failed to start issue',
+      };
+    } catch (err) {
+      return {
+        handled: true,
+        success: false,
+        error: err instanceof Error ? err.message : 'Unknown error',
+      };
+    }
+  }
+
+  return { handled: false };
+}
+
+/**
  * Execute an action safely using allowlist validation
  * This prevents command injection by only allowing pre-approved commands
  */
-export function executeActionSafe(
+export async function executeActionSafe(
   action: string,
   _response: string
-): { success: boolean; output?: string; error?: string } {
+): Promise<{ success: boolean; output?: string; error?: string }> {
   // Check if action is in allowlist
   if (!isActionAllowed(action)) {
     console.error(`[sms-action] Action not in allowlist: ${action}`);
     return {
       success: false,
       error: `Action not allowed. Only pre-approved commands can be executed via SMS.`,
+    };
+  }
+
+  // Check for special actions that need API calls
+  const specialResult = await handleSpecialAction(action);
+  if (specialResult.handled) {
+    return {
+      success: specialResult.success || false,
+      output: specialResult.output,
+      error: specialResult.error,
     };
   }
 
@@ -189,43 +290,36 @@ export function markActionCompleted(
   }
 }
 
-export function executeAction(action: PendingAction): {
+export async function executeAction(action: PendingAction): Promise<{
   success: boolean;
   output?: string;
   error?: string;
-} {
+}> {
   markActionRunning(action.id);
 
-  try {
-    console.log(`[sms-action] Executing: ${action.action}`);
+  // Use the safe execution path to prevent command injection
+  const result = await executeActionSafe(action.action, action.response);
 
-    // Execute the action
-    const output = execSync(action.action, {
-      encoding: 'utf8',
-      timeout: 60000, // 1 minute timeout
-      stdio: ['pipe', 'pipe', 'pipe'],
-    });
-
-    markActionCompleted(action.id, output);
-    return { success: true, output };
-  } catch (err) {
-    const error = err instanceof Error ? err.message : String(err);
-    markActionCompleted(action.id, undefined, error);
-    return { success: false, error };
+  if (result.success) {
+    markActionCompleted(action.id, result.output);
+  } else {
+    markActionCompleted(action.id, undefined, result.error);
   }
+
+  return result;
 }
 
-export function processAllPendingActions(): {
+export async function processAllPendingActions(): Promise<{
   processed: number;
   succeeded: number;
   failed: number;
-} {
+}> {
   const pending = getPendingActions();
   let succeeded = 0;
   let failed = 0;
 
   for (const action of pending) {
-    const result = executeAction(action);
+    const result = await executeAction(action);
     if (result.success) {
       succeeded++;
     } else {
