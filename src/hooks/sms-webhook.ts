@@ -45,7 +45,7 @@ const CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
 // Input validation constants
 const MAX_SMS_BODY_LENGTH = 1000;
-const MAX_PHONE_LENGTH = 20;
+const MAX_PHONE_LENGTH = 50; // WhatsApp format: whatsapp:+12345678901
 
 // Security constants
 const MAX_BODY_SIZE = 50 * 1024; // 50KB max body
