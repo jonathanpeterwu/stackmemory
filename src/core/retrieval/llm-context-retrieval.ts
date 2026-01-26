@@ -27,11 +27,17 @@ import {
 import { logger } from '../monitoring/logger.js';
 import { LazyContextLoader } from '../performance/lazy-context-loader.js';
 import { ContextCache } from '../performance/context-cache.js';
+import { LLMProvider, createLLMProvider } from './llm-provider.js';
+import { RetrievalAuditStore } from './retrieval-audit.js';
+
+// Re-export LLMProvider for external use
+export { LLMProvider } from './llm-provider.js';
 
 /**
  * LLM provider interface for context analysis
+ * @deprecated Use import from './llm-provider.js' instead
  */
-export interface LLMProvider {
+export interface LLMProviderInterface {
   analyze(prompt: string, maxTokens: number): Promise<string>;
 }
 
@@ -259,6 +265,8 @@ export class LLMContextRetrieval {
   private projectId: string;
   private lazyLoader: LazyContextLoader;
   private contextCache: ContextCache<RetrievedContext>;
+  private auditStore: RetrievalAuditStore;
+  private enableAudit: boolean;
 
   constructor(
     db: Database.Database,
@@ -271,7 +279,16 @@ export class LLMContextRetrieval {
     this.frameManager = frameManager;
     this.projectId = projectId;
     this.config = { ...DEFAULT_RETRIEVAL_CONFIG, ...config };
-    this.llmProvider = llmProvider;
+
+    // Auto-create LLM provider if not provided and API key is available
+    this.llmProvider = llmProvider ?? createLLMProvider();
+    if (this.llmProvider) {
+      logger.info('LLM provider configured for context retrieval', {
+        projectId,
+        provider: this.config.llmConfig.provider,
+      });
+    }
+
     this.summaryGenerator = new CompressedSummaryGenerator(
       db,
       frameManager,
@@ -280,6 +297,10 @@ export class LLMContextRetrieval {
     );
     this.queryParser = new QueryParser();
     this.heuristicAnalyzer = new HeuristicAnalyzer();
+
+    // Initialize audit store
+    this.auditStore = new RetrievalAuditStore(db, projectId);
+    this.enableAudit = true; // Can be made configurable
 
     // Initialize performance optimizations
     this.lazyLoader = new LazyContextLoader(db, projectId);
@@ -291,6 +312,20 @@ export class LLMContextRetrieval {
 
     // Start cache cleanup
     this.contextCache.startCleanup(60000);
+  }
+
+  /**
+   * Get the audit store for external access
+   */
+  getAuditStore(): RetrievalAuditStore {
+    return this.auditStore;
+  }
+
+  /**
+   * Check if LLM provider is available
+   */
+  hasLLMProvider(): boolean {
+    return !!this.llmProvider;
   }
 
   /**
@@ -381,6 +416,20 @@ export class LLMContextRetrieval {
       },
       metadata,
     };
+
+    // Record audit entry
+    if (this.enableAudit) {
+      const provider = analysis.metadata.fallbackUsed
+        ? 'heuristic'
+        : this.llmProvider
+          ? 'anthropic'
+          : 'heuristic';
+      this.auditStore.record(query, analysis, {
+        tokensUsed,
+        tokenBudget,
+        provider,
+      });
+    }
 
     // Cache the result
     if (!options.forceRefresh) {
