@@ -32,6 +32,7 @@ interface ClaudeSMConfig {
   defaultTracing: boolean;
   defaultRemote: boolean;
   defaultNotifyOnDone: boolean;
+  defaultWhatsApp: boolean;
 }
 
 interface ClaudeConfig {
@@ -42,6 +43,7 @@ interface ClaudeConfig {
   useWorktree: boolean;
   useRemote: boolean;
   notifyOnDone: boolean;
+  useWhatsApp: boolean;
   contextEnabled: boolean;
   branch?: string;
   task?: string;
@@ -58,6 +60,7 @@ const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
   defaultTracing: true,
   defaultRemote: false,
   defaultNotifyOnDone: true,
+  defaultWhatsApp: false,
 };
 
 function getConfigPath(): string {
@@ -104,6 +107,7 @@ class ClaudeSM {
       useWorktree: this.smConfig.defaultWorktree,
       useRemote: this.smConfig.defaultRemote,
       notifyOnDone: this.smConfig.defaultNotifyOnDone,
+      useWhatsApp: this.smConfig.defaultWhatsApp,
       contextEnabled: true,
       tracingEnabled: this.smConfig.defaultTracing,
       verboseTracing: false,
@@ -340,6 +344,79 @@ class ClaudeSM {
     }
   }
 
+  private async startWhatsAppServices(): Promise<void> {
+    const WEBHOOK_PORT = 3456;
+
+    console.log(chalk.cyan('Starting WhatsApp services...'));
+
+    // Check if webhook is already running
+    const webhookRunning = await fetch(
+      `http://localhost:${WEBHOOK_PORT}/health`
+    )
+      .then((r) => r.ok)
+      .catch(() => false);
+
+    if (!webhookRunning) {
+      // Start webhook in background
+      const webhookPath = path.join(__dirname, '../hooks/sms-webhook.js');
+      const webhookProcess = spawn('node', [webhookPath], {
+        detached: true,
+        stdio: 'ignore',
+        env: { ...process.env, SMS_WEBHOOK_PORT: String(WEBHOOK_PORT) },
+      });
+      webhookProcess.unref();
+      console.log(
+        chalk.gray(`  Webhook server starting on port ${WEBHOOK_PORT}`)
+      );
+    } else {
+      console.log(
+        chalk.gray(`  Webhook already running on port ${WEBHOOK_PORT}`)
+      );
+    }
+
+    // Check if ngrok is running
+    const ngrokRunning = await fetch('http://localhost:4040/api/tunnels')
+      .then((r) => r.ok)
+      .catch(() => false);
+
+    if (!ngrokRunning) {
+      // Start ngrok in background
+      const ngrokProcess = spawn('ngrok', ['http', String(WEBHOOK_PORT)], {
+        detached: true,
+        stdio: 'ignore',
+      });
+      ngrokProcess.unref();
+      console.log(chalk.gray('  ngrok tunnel starting...'));
+
+      // Wait for ngrok to start and get URL
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+    }
+
+    // Get and display ngrok URL
+    try {
+      const tunnels = await fetch('http://localhost:4040/api/tunnels').then(
+        (r) => r.json() as Promise<{ tunnels: Array<{ public_url: string }> }>
+      );
+      const publicUrl = tunnels?.tunnels?.[0]?.public_url;
+      if (publicUrl) {
+        // Save URL for other processes
+        const configDir = path.join(os.homedir(), '.stackmemory');
+        const configPath = path.join(configDir, 'ngrok-url.txt');
+        if (!fs.existsSync(configDir)) {
+          fs.mkdirSync(configDir, { recursive: true });
+        }
+        fs.writeFileSync(configPath, publicUrl);
+        console.log(
+          chalk.green(`  WhatsApp webhook: ${publicUrl}/sms/incoming`)
+        );
+      }
+    } catch {
+      console.log(
+        chalk.yellow('  Waiting for ngrok... URL will be available shortly')
+      );
+    }
+  }
+
   private async sendDoneNotification(exitCode: number | null): Promise<void> {
     try {
       const context: SessionContext = {
@@ -422,6 +499,13 @@ class ClaudeSM {
           break;
         case '--no-notify-done':
           this.config.notifyOnDone = false;
+          break;
+        case '--whatsapp':
+          this.config.useWhatsApp = true;
+          this.config.notifyOnDone = true; // Auto-enable notifications
+          break;
+        case '--no-whatsapp':
+          this.config.useWhatsApp = false;
           break;
         case '--sandbox':
         case '-s':
@@ -577,6 +661,14 @@ class ClaudeSM {
       }
     }
 
+    // Start WhatsApp services if enabled
+    if (this.config.useWhatsApp) {
+      console.log(
+        chalk.cyan('📱 WhatsApp mode: notifications + webhook enabled')
+      );
+      await this.startWhatsAppServices();
+    }
+
     console.log();
     console.log(chalk.gray('Starting Claude...'));
     console.log(chalk.gray('─'.repeat(42)));
@@ -708,6 +800,9 @@ configCmd
     console.log(
       `  defaultNotifyOnDone: ${config.defaultNotifyOnDone ? chalk.green('true') : chalk.gray('false')}`
     );
+    console.log(
+      `  defaultWhatsApp: ${config.defaultWhatsApp ? chalk.green('true') : chalk.gray('false')}`
+    );
     console.log(chalk.gray(`\nConfig: ${getConfigPath()}`));
   });
 
@@ -726,6 +821,7 @@ configCmd
       remote: 'defaultRemote',
       'notify-done': 'defaultNotifyOnDone',
       notifyondone: 'defaultNotifyOnDone',
+      whatsapp: 'defaultWhatsApp',
     };
 
     const configKey = keyMap[key];
@@ -733,7 +829,7 @@ configCmd
       console.log(chalk.red(`Unknown key: ${key}`));
       console.log(
         chalk.gray(
-          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done'
+          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done, whatsapp'
         )
       );
       process.exit(1);
@@ -804,6 +900,28 @@ configCmd
     console.log(chalk.green('Notify-on-done disabled by default'));
   });
 
+configCmd
+  .command('whatsapp-on')
+  .description('Enable WhatsApp mode by default (auto-starts webhook + ngrok)')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultWhatsApp = true;
+    config.defaultNotifyOnDone = true; // Also enable notifications
+    saveSMConfig(config);
+    console.log(chalk.green('WhatsApp mode enabled by default'));
+    console.log(chalk.gray('Sessions will auto-start webhook and ngrok'));
+  });
+
+configCmd
+  .command('whatsapp-off')
+  .description('Disable WhatsApp mode by default')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultWhatsApp = false;
+    saveSMConfig(config);
+    console.log(chalk.green('WhatsApp mode disabled by default'));
+  });
+
 // Main command (default action when no subcommand)
 program
   .option('-w, --worktree', 'Create isolated worktree for this instance')
@@ -812,6 +930,11 @@ program
   .option('--no-remote', 'Disable remote mode (override default)')
   .option('-n, --notify-done', 'Send WhatsApp notification when session ends')
   .option('--no-notify-done', 'Disable notification when session ends')
+  .option(
+    '--whatsapp',
+    'Enable WhatsApp mode (auto-start webhook + ngrok + notifications)'
+  )
+  .option('--no-whatsapp', 'Disable WhatsApp mode (override default)')
   .option('-s, --sandbox', 'Enable sandbox mode (file/network restrictions)')
   .option('-c, --chrome', 'Enable Chrome automation')
   .option('-a, --auto', 'Automatically detect and apply best settings')
