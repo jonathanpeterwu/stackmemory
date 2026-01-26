@@ -24,6 +24,14 @@ export { FrameDatabase } from './frame-database.js';
 export { FrameStack } from './frame-stack.js';
 export { FrameDigestGenerator } from './frame-digest.js';
 
+// Export lifecycle hooks for external integrations
+export {
+  frameLifecycleHooks,
+  type FrameCloseData,
+  type FrameCloseHook,
+  type FrameCreateHook,
+} from './frame-lifecycle-hooks.js';
+
 // Re-export from old frame-manager for backwards compatibility
 // This allows existing code to continue working without changes
 export { FrameManager as LegacyFrameManager } from './frame-manager.js';

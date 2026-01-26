@@ -18,28 +18,7 @@ import {
 import { retry, withTimeout } from '../errors/recovery.js';
 import { sessionManager, FrameQueryMode } from '../session/index.js';
 import { contextBridge } from './context-bridge.js';
-
-// WhatsApp sync integration - lazy loaded to avoid breaking if module has issues
-let whatsappSync: {
-  onFrameClosed: (data: any) => Promise<any>;
-  createFrameDigestData: (frame: any, events: any[], anchors: any[]) => any;
-} | null = null;
-
-async function loadWhatsAppSync() {
-  if (whatsappSync !== null) return whatsappSync;
-  try {
-    const mod = await import('../../hooks/whatsapp-sync.js');
-    whatsappSync = {
-      onFrameClosed: mod.onFrameClosed,
-      createFrameDigestData: mod.createFrameDigestData,
-    };
-    return whatsappSync;
-  } catch {
-    // Module not available or has errors - disable integration
-    whatsappSync = null;
-    return null;
-  }
-}
+import { frameLifecycleHooks } from './frame-lifecycle-hooks.js';
 
 // Constants for frame validation
 const MAX_FRAME_DEPTH = 100; // Maximum allowed frame depth
@@ -721,10 +700,14 @@ export class FrameManager {
     // Close all child frames recursively
     this.closeChildFrames(targetFrameId);
 
-    // Trigger WhatsApp auto-sync if enabled (fire and forget)
-    this.triggerWhatsAppSync(frame, targetFrameId).catch(() => {
-      // Silently ignore errors - sync is non-critical
-    });
+    // Trigger lifecycle hooks (fire and forget)
+    const events = this.getFrameEvents(targetFrameId);
+    const anchors = this.getFrameAnchors(targetFrameId);
+    frameLifecycleHooks
+      .triggerClose({ frame: { ...frame, state: 'closed' }, events, anchors })
+      .catch(() => {
+        // Silently ignore errors - hooks are non-critical
+      });
 
     logger.info('Closed frame', {
       frameId: targetFrameId,
@@ -733,26 +716,6 @@ export class FrameManager {
       digestLength: digest.text.length,
       stackDepth: this.activeStack.length,
     });
-  }
-
-  /**
-   * Trigger WhatsApp sync for closed frame (non-blocking)
-   */
-  private async triggerWhatsAppSync(
-    frame: Frame,
-    frameId: string
-  ): Promise<void> {
-    const sync = await loadWhatsAppSync();
-    if (!sync) return;
-
-    try {
-      const events = this.getFrameEvents(frameId);
-      const anchors = this.getFrameAnchors(frameId);
-      const digestData = sync.createFrameDigestData(frame, events, anchors);
-      await sync.onFrameClosed(digestData);
-    } catch {
-      // Silently ignore - WhatsApp sync is optional
-    }
   }
 
   /**
