@@ -1,19 +1,19 @@
 # StackMemory
 
-**Lossless, project-scoped memory for AI tools** • v0.5.29
+**Lossless, project-scoped memory for AI tools** • v0.5.30
 
 StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions. With **Phases 1-4 complete**, it delivers:
 
-- ✅ **89-98% faster** task operations than manual tracking
-- ✅ **10,000+ frame depth** support with hierarchical organization
-- ✅ **Full Linear integration** with bidirectional sync
-- ✅ **20+ MCP tools** for Claude Code
-- ✅ **Context persistence** that survives /clear operations
-- ✅ **Two-tier storage system** with local tiers and infinite remote storage
-- ✅ **Smart compression** (LZ4/ZSTD) with 2.5-3.5x ratios
-- ✅ **Background migration** with configurable triggers
-- ✅ **396 tests passing** with standardized error handling
-- ✅ **npm v0.5.29** published with WhatsApp notifications and improved integrations
+- **89-98% faster** task operations than manual tracking
+- **10,000+ frame depth** support with hierarchical organization
+- **Full Linear integration** with bidirectional sync
+- **20+ MCP tools** for Claude Code
+- **Context persistence** that survives /clear operations
+- **Two-tier storage system** with local tiers and infinite remote storage
+- **Smart compression** (LZ4/ZSTD) with 2.5-3.5x ratios
+- **Background migration** with configurable triggers
+- **396 tests passing** with standardized error handling
+- **npm v0.5.30** published with WhatsApp notifications and improved integrations
 
 Instead of a linear chat log, StackMemory organizes memory as a **call stack** of scoped work (frames), with intelligent LLM-driven retrieval and team collaboration features.
 
@@ -96,16 +96,16 @@ The editor never manages memory directly; it asks StackMemory for the **context 
 
 ## Product Health Metrics
 
-### Current Status (v0.5.29)
+### Current Status (v0.5.30)
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
-| **Test Coverage** | 85% | 90% | 🟡 |
-| **Performance (p50)** | TBD | <50ms | 🔄 |
-| **Documentation** | 70% | 100% | 🟡 |
-| **Active Issues** | 5 high | 0 high | 🟡 |
-| **Code Quality** | 396 tests | 400+ | ✅ |
-| **npm Downloads** | Growing | 1K+/week | 🚀 |
+| **Test Coverage** | 85% | 90% | In Progress |
+| **Performance (p50)** | TBD | <50ms | Pending |
+| **Documentation** | 70% | 100% | In Progress |
+| **Active Issues** | 5 high | 0 high | In Progress |
+| **Code Quality** | 396 tests | 400+ | Done |
+| **npm Downloads** | Growing | 1K+/week | On Track |
 
 ### Quality Score: 78/100
 
@@ -136,7 +136,7 @@ This creates a **project-scoped memory space** tied to the repo.
 ### Step 2: Install StackMemory
 
 ```bash
-npm install -g @stackmemoryai/stackmemory@0.5.29
+npm install -g @stackmemoryai/stackmemory@0.5.30
 # or latest
 npm install -g @stackmemoryai/stackmemory@latest
 ```
@@ -455,7 +455,7 @@ stackmemory mcp-server [--port 3001]
 - Hosted: **Private beta**
 - OSS mirror: **Production ready**
 - MCP integration: **Stable**
-- CLI: **v0.5.29** - Full task, context, Linear, and storage management
+- CLI: **v0.5.30** - Full task, context, Linear, and storage management
 - Two-tier storage: **Complete**
 - Test Suite: **396 tests passing**
 
@@ -463,40 +463,40 @@ stackmemory mcp-server [--port 3001]
 
 ## Changelog
 
-### v0.5.29 (2026-01-26)
-- ✅ Standardized error handling with `IntegrationError`, `DatabaseError`, `ValidationError`
-- ✅ Adopted error classes across Linear integration (12 files)
-- ✅ Adopted error classes across database layer (6 files)
-- ✅ WhatsApp notifications with session ID and interactive options
-- ✅ 396 tests passing with improved code quality
+### v0.5.30 (2026-01-26)
+- Standardized error handling with `IntegrationError`, `DatabaseError`, `ValidationError`
+- Adopted error classes across Linear integration (12 files)
+- Adopted error classes across database layer (6 files)
+- WhatsApp notifications with session ID and interactive options
+- 396 tests passing with improved code quality
 
 ### v0.5.28 (2026-01-25)
-- ✅ WhatsApp flag for claude-sm automatic notifications
-- ✅ Incoming request queue for WhatsApp triggers
-- ✅ SMS webhook /send endpoint for outgoing notifications
+- WhatsApp flag for claude-sm automatic notifications
+- Incoming request queue for WhatsApp triggers
+- SMS webhook /send endpoint for outgoing notifications
 
 ### v0.5.26 (2026-01-24)
-- ✅ OpenCode wrapper (opencode-sm) with context integration
-- ✅ Discovery CLI and MCP tools
-- ✅ Real LLM provider and retrieval audit system
-- ✅ Linear issue management and task picker
+- OpenCode wrapper (opencode-sm) with context integration
+- Discovery CLI and MCP tools
+- Real LLM provider and retrieval audit system
+- Linear issue management and task picker
 
 ### v0.5.21 (2026-01-23)
-- ✅ Claude-sm remote mode and configurable defaults
-- ✅ Context loading command improvements
-- ✅ Session summary features
+- Claude-sm remote mode and configurable defaults
+- Context loading command improvements
+- Session summary features
 
 ### v0.3.16 (2026-01-15)
-- ✅ Fixed critical error handling - getFrame() returns undefined instead of throwing
-- ✅ Improved test coverage and fixed StackMemoryError constructor usage
-- ✅ Removed dangerous secret-cleaning scripts from repository
-- ✅ All tests passing, lint clean, build successful
+- Fixed critical error handling - getFrame() returns undefined instead of throwing
+- Improved test coverage and fixed StackMemoryError constructor usage
+- Removed dangerous secret-cleaning scripts from repository
+- All tests passing, lint clean, build successful
 
 ### v0.3.15 (2026-01-14)
-- ✅ Two-tier storage system implementation complete
-- ✅ Smart compression with LZ4/ZSTD support
-- ✅ Background migration with configurable triggers
-- ✅ Improved Linear integration with bidirectional sync
+- Two-tier storage system implementation complete
+- Smart compression with LZ4/ZSTD support
+- Background migration with configurable triggers
+- Improved Linear integration with bidirectional sync
 
 ---
 
