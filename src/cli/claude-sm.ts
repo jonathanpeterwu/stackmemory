@@ -21,7 +21,16 @@ import {
   formatSummaryMessage,
   SessionContext,
 } from '../hooks/session-summary.js';
-import { sendNotification } from '../hooks/sms-notify.js';
+import { sendNotification, loadSMSConfig } from '../hooks/sms-notify.js';
+import { enableAutoSync } from '../hooks/whatsapp-sync.js';
+import { enableCommands } from '../hooks/whatsapp-commands.js';
+import { startScheduler, listSchedules } from '../hooks/whatsapp-scheduler.js';
+import {
+  getModelRouter,
+  loadModelRouterConfig,
+  type ModelProvider,
+} from '../core/models/model-router.js';
+import { FallbackMonitor } from '../core/models/fallback-monitor.js';
 
 // __filename and __dirname are provided by esbuild banner for ESM compatibility
 
@@ -33,6 +42,7 @@ interface ClaudeSMConfig {
   defaultRemote: boolean;
   defaultNotifyOnDone: boolean;
   defaultWhatsApp: boolean;
+  defaultModelRouting: boolean;
 }
 
 interface ClaudeConfig {
@@ -51,6 +61,10 @@ interface ClaudeConfig {
   verboseTracing: boolean;
   claudeBin?: string;
   sessionStartTime: number;
+  // Model routing
+  useModelRouting: boolean;
+  forceProvider?: ModelProvider;
+  useThinkingMode: boolean;
 }
 
 const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
@@ -61,6 +75,7 @@ const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
   defaultRemote: false,
   defaultNotifyOnDone: true,
   defaultWhatsApp: false,
+  defaultModelRouting: false,
 };
 
 function getConfigPath(): string {
@@ -112,6 +127,8 @@ class ClaudeSM {
       tracingEnabled: this.smConfig.defaultTracing,
       verboseTracing: false,
       sessionStartTime: Date.now(),
+      useModelRouting: this.smConfig.defaultModelRouting,
+      useThinkingMode: false,
     };
 
     this.stackmemoryPath = this.findStackMemory();
@@ -347,9 +364,52 @@ class ClaudeSM {
   private async startWhatsAppServices(): Promise<void> {
     const WEBHOOK_PORT = 3456;
 
-    console.log(chalk.cyan('Starting WhatsApp services...'));
+    console.log(chalk.cyan('\n📱 WhatsApp Mode - Full Integration'));
+    console.log(chalk.gray('─'.repeat(42)));
 
-    // Check if webhook is already running
+    // 1. Check SMS config
+    const smsConfig = loadSMSConfig();
+    if (!smsConfig.enabled) {
+      console.log(
+        chalk.yellow('  Notifications disabled. Run: stackmemory notify enable')
+      );
+    }
+
+    // 2. Enable auto-sync on frame close
+    try {
+      enableAutoSync();
+      console.log(
+        chalk.green('  ✓ Auto-sync enabled (digests on frame close)')
+      );
+    } catch {
+      console.log(chalk.gray('  Auto-sync: skipped'));
+    }
+
+    // 3. Enable inbound command processing
+    try {
+      enableCommands();
+      console.log(chalk.green('  ✓ Command processing enabled'));
+      console.log(
+        chalk.gray('    Reply: status, tasks, context, help, build, test, lint')
+      );
+    } catch {
+      console.log(chalk.gray('  Command processing: skipped'));
+    }
+
+    // 4. Start scheduler if schedules exist
+    try {
+      const schedules = listSchedules();
+      if (schedules.length > 0) {
+        startScheduler();
+        console.log(
+          chalk.green(`  ✓ Scheduler started (${schedules.length} schedules)`)
+        );
+      }
+    } catch {
+      // Scheduler optional
+    }
+
+    // 5. Check if webhook is already running
     const webhookRunning = await fetch(
       `http://localhost:${WEBHOOK_PORT}/health`
     )
@@ -366,15 +426,15 @@ class ClaudeSM {
       });
       webhookProcess.unref();
       console.log(
-        chalk.gray(`  Webhook server starting on port ${WEBHOOK_PORT}`)
+        chalk.green(`  ✓ Webhook server started (port ${WEBHOOK_PORT})`)
       );
     } else {
       console.log(
-        chalk.gray(`  Webhook already running on port ${WEBHOOK_PORT}`)
+        chalk.green(`  ✓ Webhook already running (port ${WEBHOOK_PORT})`)
       );
     }
 
-    // Check if ngrok is running
+    // 6. Check if ngrok is running
     const ngrokRunning = await fetch('http://localhost:4040/api/tunnels')
       .then((r) => r.ok)
       .catch(() => false);
@@ -386,13 +446,13 @@ class ClaudeSM {
         stdio: 'ignore',
       });
       ngrokProcess.unref();
-      console.log(chalk.gray('  ngrok tunnel starting...'));
+      console.log(chalk.gray('  Starting ngrok tunnel...'));
 
       // Wait for ngrok to start and get URL
       await new Promise((resolve) => setTimeout(resolve, 3000));
     }
 
-    // Get and display ngrok URL
+    // 7. Get and display ngrok URL
     try {
       const tunnels = await fetch('http://localhost:4040/api/tunnels').then(
         (r) => r.json() as Promise<{ tunnels: Array<{ public_url: string }> }>
@@ -406,15 +466,40 @@ class ClaudeSM {
           fs.mkdirSync(configDir, { recursive: true });
         }
         fs.writeFileSync(configPath, publicUrl);
-        console.log(
-          chalk.green(`  WhatsApp webhook: ${publicUrl}/sms/incoming`)
-        );
+        console.log(chalk.green(`  ✓ ngrok tunnel: ${publicUrl}/sms/incoming`));
       }
     } catch {
-      console.log(
-        chalk.yellow('  Waiting for ngrok... URL will be available shortly')
-      );
+      console.log(chalk.yellow('  ngrok: waiting for tunnel...'));
     }
+
+    // 8. Show pending prompts (sessions waiting for response)
+    if (smsConfig.pendingPrompts.length > 0) {
+      console.log();
+      console.log(
+        chalk.yellow(
+          `  ⏳ ${smsConfig.pendingPrompts.length} pending prompt(s) awaiting response:`
+        )
+      );
+      smsConfig.pendingPrompts.slice(0, 3).forEach((p, i) => {
+        const msg =
+          p.message.length > 40 ? p.message.slice(0, 40) + '...' : p.message;
+        console.log(chalk.gray(`     ${i + 1}. [${p.id}] ${msg}`));
+      });
+      if (smsConfig.pendingPrompts.length > 3) {
+        console.log(
+          chalk.gray(`     ... and ${smsConfig.pendingPrompts.length - 3} more`)
+        );
+      }
+    }
+
+    // 9. Show quick reference
+    console.log();
+    console.log(chalk.gray('  Quick actions from WhatsApp:'));
+    console.log(chalk.gray('    "status"  - session status'));
+    console.log(chalk.gray('    "context" - current frame digest'));
+    console.log(chalk.gray('    "1", "2"  - respond to prompts'));
+
+    console.log(chalk.gray('─'.repeat(42)));
   }
 
   private async sendDoneNotification(exitCode: number | null): Promise<void> {
@@ -560,6 +645,35 @@ class ClaudeSM {
               this.hasUncommittedChanges() || this.detectMultipleInstances();
           }
           break;
+        case '--think':
+        case '--think-hard':
+        case '--ultrathink':
+          // Enable thinking mode with Qwen (if configured)
+          this.config.useThinkingMode = true;
+          this.config.useModelRouting = true;
+          this.config.forceProvider = 'qwen';
+          break;
+        case '--qwen':
+          // Force Qwen provider
+          this.config.useModelRouting = true;
+          this.config.forceProvider = 'qwen';
+          break;
+        case '--openai':
+          // Force OpenAI provider
+          this.config.useModelRouting = true;
+          this.config.forceProvider = 'openai';
+          break;
+        case '--ollama':
+          // Force Ollama provider
+          this.config.useModelRouting = true;
+          this.config.forceProvider = 'ollama';
+          break;
+        case '--model-routing':
+          this.config.useModelRouting = true;
+          break;
+        case '--no-model-routing':
+          this.config.useModelRouting = false;
+          break;
         default:
           claudeArgs.push(arg);
       }
@@ -672,6 +786,56 @@ class ClaudeSM {
       }
     }
 
+    // Apply model routing if enabled
+    if (this.config.useModelRouting) {
+      const routerConfig = loadModelRouterConfig();
+      if (routerConfig.enabled || this.config.forceProvider) {
+        const router = getModelRouter();
+        let routeResult;
+
+        if (this.config.forceProvider) {
+          // Force specific provider
+          const env = router.switchTo(this.config.forceProvider);
+          Object.assign(process.env, env);
+          console.log(
+            chalk.magenta(`🔀 Model: ${this.config.forceProvider} (forced)`)
+          );
+
+          // Show thinking mode info if using Qwen with thinking
+          if (
+            this.config.forceProvider === 'qwen' &&
+            this.config.useThinkingMode
+          ) {
+            const qwenConfig = routerConfig.providers.qwen;
+            if (qwenConfig?.params?.enable_thinking) {
+              console.log(
+                chalk.gray(
+                  `   Thinking mode: budget ${qwenConfig.params.thinking_budget || 10000} tokens`
+                )
+              );
+            }
+          }
+        } else {
+          // Auto-route based on task type
+          const taskType = this.config.useThinkingMode ? 'think' : 'default';
+          routeResult = router.route(taskType, this.config.task);
+          Object.assign(process.env, routeResult.env);
+
+          if (routeResult.switched) {
+            console.log(
+              chalk.magenta(`🔀 Model routed to: ${routeResult.provider}`)
+            );
+          }
+        }
+      } else {
+        console.log(
+          chalk.gray(
+            '   Model routing: disabled (run: stackmemory model enable)'
+          )
+        );
+      }
+    }
+
     // Start WhatsApp services if enabled
     if (this.config.useWhatsApp) {
       console.log(
@@ -699,11 +863,42 @@ class ClaudeSM {
       return;
     }
 
-    // Launch Claude
-    const claude = spawn(claudeBin, claudeArgs, {
-      stdio: 'inherit',
-      env: process.env,
+    // Setup fallback monitor for automatic Qwen switching on Claude failures
+    const fallbackMonitor = new FallbackMonitor({
+      enabled: true,
+      maxRestarts: 2,
+      restartDelayMs: 1500,
+      onFallback: (provider, reason) => {
+        console.log(chalk.yellow(`\n[auto-fallback] Switching to ${provider}`));
+        console.log(chalk.gray(`   Reason: ${reason}`));
+        console.log(chalk.gray(`   Session will continue on ${provider}...`));
+
+        // Send WhatsApp notification about fallback
+        if (this.config.notifyOnDone || this.config.useWhatsApp) {
+          sendNotification({
+            type: 'custom',
+            title: 'Model Fallback',
+            message: `Claude unavailable (${reason}). Switched to ${provider}.`,
+          }).catch(() => {});
+        }
+      },
     });
+
+    // Check if fallback is available
+    const fallbackAvailable = fallbackMonitor.isFallbackAvailable();
+    if (fallbackAvailable) {
+      console.log(
+        chalk.gray(`   Auto-fallback: Qwen ready (on rate limit/error)`)
+      );
+    }
+
+    // Launch Claude with fallback monitoring
+    const wrapper = fallbackMonitor.wrapProcess(claudeBin, claudeArgs, {
+      env: process.env,
+      cwd: process.cwd(),
+    });
+
+    const claude = wrapper.start();
 
     claude.on('error', (err: NodeJS.ErrnoException) => {
       console.error(chalk.red('❌ Failed to launch Claude CLI.'));
@@ -725,6 +920,15 @@ class ClaudeSM {
 
     // Handle exit
     claude.on('exit', async (code) => {
+      // Check if we were in fallback mode
+      const status = fallbackMonitor.getStatus();
+      if (status.inFallback) {
+        console.log(
+          chalk.yellow(
+            `\nSession completed on fallback provider: ${status.currentProvider}`
+          )
+        );
+      }
       // Save final context
       this.saveContext('Claude session ended', {
         action: 'session_end',
@@ -814,6 +1018,9 @@ configCmd
     console.log(
       `  defaultWhatsApp: ${config.defaultWhatsApp ? chalk.green('true') : chalk.gray('false')}`
     );
+    console.log(
+      `  defaultModelRouting: ${config.defaultModelRouting ? chalk.green('true') : chalk.gray('false')}`
+    );
     console.log(chalk.gray(`\nConfig: ${getConfigPath()}`));
   });
 
@@ -833,6 +1040,8 @@ configCmd
       'notify-done': 'defaultNotifyOnDone',
       notifyondone: 'defaultNotifyOnDone',
       whatsapp: 'defaultWhatsApp',
+      'model-routing': 'defaultModelRouting',
+      modelrouting: 'defaultModelRouting',
     };
 
     const configKey = keyMap[key];
@@ -933,6 +1142,29 @@ configCmd
     console.log(chalk.green('WhatsApp mode disabled by default'));
   });
 
+configCmd
+  .command('model-routing-on')
+  .description(
+    'Enable model routing by default (route tasks to Qwen/other models)'
+  )
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultModelRouting = true;
+    saveSMConfig(config);
+    console.log(chalk.green('Model routing enabled by default'));
+    console.log(chalk.gray('Configure with: stackmemory model setup-qwen'));
+  });
+
+configCmd
+  .command('model-routing-off')
+  .description('Disable model routing by default (use Claude only)')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultModelRouting = false;
+    saveSMConfig(config);
+    console.log(chalk.green('Model routing disabled by default'));
+  });
+
 // Main command (default action when no subcommand)
 program
   .option('-w, --worktree', 'Create isolated worktree for this instance')
@@ -955,6 +1187,14 @@ program
   .option('--no-context', 'Disable StackMemory context integration')
   .option('--no-trace', 'Disable debug tracing (enabled by default)')
   .option('--verbose-trace', 'Enable verbose debug tracing with full details')
+  .option('--think', 'Enable thinking mode with Qwen (deep reasoning)')
+  .option('--think-hard', 'Alias for --think')
+  .option('--ultrathink', 'Alias for --think')
+  .option('--qwen', 'Force Qwen provider for this session')
+  .option('--openai', 'Force OpenAI provider for this session')
+  .option('--ollama', 'Force Ollama provider for this session')
+  .option('--model-routing', 'Enable model routing')
+  .option('--no-model-routing', 'Disable model routing')
   .helpOption('-h, --help', 'Display help')
   .allowUnknownOption(true)
   .action(async (_options) => {

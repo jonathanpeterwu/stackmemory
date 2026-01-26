@@ -36,11 +36,23 @@ const SAFE_ACTION_PATTERNS: Array<{
   {
     pattern: /^stackmemory task start ([a-f0-9-]{36})( --assign-me)?$/,
   },
+  // Additional StackMemory commands for mobile/WhatsApp
+  { pattern: /^stackmemory context show$/ },
+  { pattern: /^stackmemory task list$/ },
 
   // Git commands
   { pattern: /^git (status|diff|log|branch)( --[a-z-]+)*$/ },
   { pattern: /^git add -A && git commit$/ },
   { pattern: /^gh pr create --fill$/ },
+  // Git log with line limit for mobile-friendly output
+  { pattern: /^git log --oneline -\d{1,2}$/ },
+
+  // WhatsApp/Mobile quick commands
+  { pattern: /^status$/i },
+  { pattern: /^tasks$/i },
+  { pattern: /^context$/i },
+  { pattern: /^help$/i },
+  { pattern: /^sync$/i },
 
   // Custom aliases (cwm = claude worktree merge)
   { pattern: /^cwm$/ },
@@ -138,10 +150,12 @@ export function queueAction(
 
 /**
  * Get Linear client if available
+ * Returns null if credentials are missing or invalid
  */
 function getLinearClient(): LinearClient | null {
+  // Try API key first - must be valid format (lin_api_*)
   const apiKey = process.env['LINEAR_API_KEY'];
-  if (apiKey) {
+  if (apiKey && apiKey.startsWith('lin_api_')) {
     return new LinearClient({ apiKey });
   }
 

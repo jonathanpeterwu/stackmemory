@@ -84,8 +84,10 @@ export class DualStackManager {
     const rawDb =
       adapter instanceof SQLiteAdapter ? adapter.getRawDatabase() : null;
     if (!rawDb) {
-      throw new Error(
-        'DualStackManager requires SQLiteAdapter with connected database'
+      throw new DatabaseError(
+        'DualStackManager requires SQLiteAdapter with connected database',
+        ErrorCode.DB_CONNECTION_FAILED,
+        { adapter: adapter.constructor.name }
       );
     }
 
@@ -214,8 +216,10 @@ export class DualStackManager {
         throw error;
       }
     } else {
-      throw new Error(
-        'Cannot execute schema query: raw database not available'
+      throw new DatabaseError(
+        'Cannot execute schema query: raw database not available',
+        ErrorCode.DB_CONNECTION_FAILED,
+        { operation: 'executeSchemaQuery' }
       );
     }
   }
@@ -297,7 +301,11 @@ export class DualStackManager {
             ? this.adapter.getRawDatabase()
             : null;
         if (!rawDb) {
-          throw new Error('Failed to get raw database for shared stack');
+          throw new DatabaseError(
+            'Failed to get raw database for shared stack',
+            ErrorCode.DB_CONNECTION_FAILED,
+            { stackId: input.stackId, operation: 'switchToStack' }
+          );
         }
 
         const sharedStack = new FrameManager(
@@ -393,7 +401,11 @@ export class DualStackManager {
           ? this.adapter.getRawDatabase()
           : null;
       if (!rawDb) {
-        throw new Error('Failed to get raw database for new shared stack');
+        throw new DatabaseError(
+          'Failed to get raw database for new shared stack',
+          ErrorCode.DB_CONNECTION_FAILED,
+          { teamId, operation: 'createSharedStack' }
+        );
       }
 
       const sharedStack = new FrameManager(
@@ -841,7 +853,11 @@ export class DualStackManager {
           ? this.adapter.getRawDatabase()
           : null;
       if (!rawDb) {
-        throw new Error('SQLite database not available for stack context save');
+        throw new DatabaseError(
+          'SQLite database not available for stack context save',
+          ErrorCode.DB_CONNECTION_FAILED,
+          { stackId: context.stackId, operation: 'saveStackContext' }
+        );
       }
 
       const query = rawDb.prepare(`

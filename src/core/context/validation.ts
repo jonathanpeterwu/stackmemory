@@ -3,6 +3,7 @@
  */
 
 import { z } from 'zod';
+import { ValidationError, ErrorCode } from '../errors/index.js';
 
 // Permission validation
 export const StackPermissionsSchema = z.object({
@@ -127,7 +128,11 @@ export function validateInput<T>(schema: z.ZodSchema<T>, input: unknown): T {
       const details = error.errors
         .map((e) => `${e.path.join('.')}: ${e.message}`)
         .join(', ');
-      throw new Error(`Validation failed: ${details}`);
+      throw new ValidationError(
+        `Validation failed: ${details}`,
+        ErrorCode.VALIDATION_FAILED,
+        { errors: error.errors }
+      );
     }
     throw error;
   }

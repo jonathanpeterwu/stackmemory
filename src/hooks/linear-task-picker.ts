@@ -129,11 +129,12 @@ function scoreTask(issue: LinearIssue, preferTestTasks: boolean): number {
 
 /**
  * Get Linear client instance
+ * Returns null if credentials are missing or invalid
  */
 function getLinearClient(): LinearClient | null {
-  // Try API key first
+  // Try API key first - must be valid format (lin_api_*)
   const apiKey = process.env['LINEAR_API_KEY'];
-  if (apiKey) {
+  if (apiKey && apiKey.startsWith('lin_api_')) {
     return new LinearClient({ apiKey });
   }
 

@@ -1,6 +1,6 @@
 /**
  * Recursive Context Manager for RLM
- * 
+ *
  * Handles context chunking, decomposition, and distribution
  * for recursive agent execution
  */
@@ -8,6 +8,7 @@
 import { DualStackManager } from './dual-stack-manager.js';
 import { ContextRetriever } from '../retrieval/context-retriever.js';
 import { logger } from '../monitoring/logger.js';
+import { ValidationError, ErrorCode } from '../errors/index.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import type { SubagentType } from '../../skills/recursive-agent-orchestrator.js';
@@ -40,7 +41,7 @@ export interface ChunkingStrategy {
 
 export interface AgentContextConfig {
   agent: SubagentType;
-  maxTokens: number;
+  _maxTokens: number;
   priorityWeights: {
     recent: number;
     relevant: number;
@@ -58,13 +59,13 @@ export interface AgentContextConfig {
 export class RecursiveContextManager {
   private dualStackManager: DualStackManager;
   private contextRetriever: ContextRetriever;
-  
+
   // Context cache for sharing between agents
   private sharedContextCache: Map<string, ContextChunk[]> = new Map();
-  
+
   // Agent-specific configurations
   private agentConfigs: Map<SubagentType, AgentContextConfig>;
-  
+
   constructor(
     dualStackManager: DualStackManager,
     contextRetriever: ContextRetriever
@@ -73,13 +74,13 @@ export class RecursiveContextManager {
     this.contextRetriever = contextRetriever;
     this.agentConfigs = this.initializeAgentConfigs();
   }
-  
+
   /**
    * Initialize agent-specific context configurations
    */
   private initializeAgentConfigs(): Map<SubagentType, AgentContextConfig> {
     const configs = new Map<SubagentType, AgentContextConfig>();
-    
+
     // Planning agent needs broad context
     configs.set('planning', {
       agent: 'planning',
@@ -94,7 +95,7 @@ export class RecursiveContextManager {
       includeTypes: ['frame', 'documentation', 'config'],
       excludeTypes: [],
     });
-    
+
     // Code agent needs implementation context
     configs.set('code', {
       agent: 'code',
@@ -109,7 +110,7 @@ export class RecursiveContextManager {
       includeTypes: ['code', 'frame', 'test'],
       excludeTypes: ['documentation'],
     });
-    
+
     // Testing agent needs code and existing tests
     configs.set('testing', {
       agent: 'testing',
@@ -124,7 +125,7 @@ export class RecursiveContextManager {
       includeTypes: ['code', 'test', 'frame'],
       excludeTypes: ['documentation', 'config'],
     });
-    
+
     // Linting agent needs code and config
     configs.set('linting', {
       agent: 'linting',
@@ -139,7 +140,7 @@ export class RecursiveContextManager {
       includeTypes: ['code', 'config'],
       excludeTypes: ['documentation', 'test'],
     });
-    
+
     // Review agent needs comprehensive context
     configs.set('review', {
       agent: 'review',
@@ -154,7 +155,7 @@ export class RecursiveContextManager {
       includeTypes: ['code', 'test', 'frame', 'documentation'],
       excludeTypes: [],
     });
-    
+
     // Context agent for searching
     configs.set('context', {
       agent: 'context',
@@ -169,7 +170,7 @@ export class RecursiveContextManager {
       includeTypes: ['frame', 'documentation'],
       excludeTypes: [],
     });
-    
+
     // Improvement agent needs review context
     configs.set('improve', {
       agent: 'improve',
@@ -184,7 +185,7 @@ export class RecursiveContextManager {
       includeTypes: ['code', 'test', 'frame'],
       excludeTypes: ['documentation'],
     });
-    
+
     // Publish agent needs build/config context
     configs.set('publish', {
       agent: 'publish',
@@ -199,62 +200,63 @@ export class RecursiveContextManager {
       includeTypes: ['config', 'frame'],
       excludeTypes: ['code', 'test'],
     });
-    
+
     return configs;
   }
-  
+
   /**
    * Prepare context for a specific agent type
    */
   async prepareAgentContext(
     agentType: SubagentType,
     baseContext: Record<string, any>,
-    maxTokens: number
+    _maxTokens: number
   ): Promise<Record<string, any>> {
     const config = this.agentConfigs.get(agentType);
     if (!config) {
-      throw new Error(`Unknown agent type: ${agentType}`);
+      throw new ValidationError(
+        `Unknown agent type: ${agentType}`,
+        ErrorCode.VALIDATION_FAILED,
+        { agentType }
+      );
     }
-    
+
     logger.debug(`Preparing context for ${agentType} agent`, { maxTokens });
-    
+
     // Collect relevant chunks
     const chunks = await this.collectRelevantChunks(
       baseContext,
       config,
       maxTokens
     );
-    
+
     // Sort by priority
     const sortedChunks = this.prioritizeChunks(chunks, config.priorityWeights);
-    
+
     // Fit within token budget
-    const selectedChunks = this.fitChunksToTokenBudget(
-      sortedChunks,
-      maxTokens
-    );
-    
+    const selectedChunks = this.fitChunksToTokenBudget(sortedChunks, maxTokens);
+
     // Build agent context
     const agentContext: Record<string, any> = {
       ...baseContext,
-      chunks: selectedChunks.map(c => ({
+      chunks: selectedChunks.map((c) => ({
         type: c.type,
         content: c.content,
         metadata: c.metadata,
       })),
     };
-    
+
     // Cache for potential reuse
     this.sharedContextCache.set(`${agentType}-${Date.now()}`, selectedChunks);
-    
+
     logger.debug(`Prepared context for ${agentType}`, {
       chunksSelected: selectedChunks.length,
       totalSize: selectedChunks.reduce((sum, c) => sum + c.metadata.size, 0),
     });
-    
+
     return agentContext;
   }
-  
+
   /**
    * Chunk large codebase for processing
    */
@@ -263,34 +265,38 @@ export class RecursiveContextManager {
     strategy: ChunkingStrategy
   ): Promise<ContextChunk[]> {
     const chunks: ContextChunk[] = [];
-    
+
     logger.info('Chunking codebase', { rootPath, strategy: strategy.type });
-    
+
     switch (strategy.type) {
       case 'file':
-        chunks.push(...await this.chunkByFile(rootPath, strategy));
+        chunks.push(...(await this.chunkByFile(rootPath, strategy)));
         break;
-        
+
       case 'semantic':
-        chunks.push(...await this.chunkBySemantic(rootPath, strategy));
+        chunks.push(...(await this.chunkBySemantic(rootPath, strategy)));
         break;
-        
+
       case 'size':
-        chunks.push(...await this.chunkBySize(rootPath, strategy));
+        chunks.push(...(await this.chunkBySize(rootPath, strategy)));
         break;
-        
+
       default:
-        throw new Error(`Unknown chunking strategy: ${strategy.type}`);
+        throw new ValidationError(
+          `Unknown chunking strategy: ${strategy.type}`,
+          ErrorCode.VALIDATION_FAILED,
+          { strategyType: strategy.type }
+        );
     }
-    
+
     logger.info('Codebase chunked', {
       totalChunks: chunks.length,
       totalSize: chunks.reduce((sum, c) => sum + c.metadata.size, 0),
     });
-    
+
     return chunks;
   }
-  
+
   /**
    * Chunk by file boundaries
    */
@@ -300,10 +306,10 @@ export class RecursiveContextManager {
   ): Promise<ContextChunk[]> {
     const chunks: ContextChunk[] = [];
     const files = await this.walkDirectory(rootPath);
-    
+
     for (const file of files) {
       const content = await fs.promises.readFile(file, 'utf-8');
-      
+
       // Skip files larger than max chunk size
       if (content.length > strategy.maxChunkSize) {
         // Split large files
@@ -327,10 +333,10 @@ export class RecursiveContextManager {
         });
       }
     }
-    
+
     return chunks;
   }
-  
+
   /**
    * Chunk by semantic boundaries (classes, functions)
    */
@@ -340,14 +346,14 @@ export class RecursiveContextManager {
   ): Promise<ContextChunk[]> {
     const chunks: ContextChunk[] = [];
     const files = await this.walkDirectory(rootPath);
-    
+
     for (const file of files) {
       const content = await fs.promises.readFile(file, 'utf-8');
       const language = this.detectLanguage(file);
-      
+
       // Extract semantic units based on language
       const semanticUnits = this.extractSemanticUnits(content, language);
-      
+
       for (const unit of semanticUnits) {
         if (unit.content.length <= strategy.maxChunkSize) {
           chunks.push({
@@ -368,10 +374,10 @@ export class RecursiveContextManager {
         }
       }
     }
-    
+
     return chunks;
   }
-  
+
   /**
    * Chunk by fixed size with overlap
    */
@@ -381,17 +387,17 @@ export class RecursiveContextManager {
   ): Promise<ContextChunk[]> {
     const chunks: ContextChunk[] = [];
     const files = await this.walkDirectory(rootPath);
-    
+
     for (const file of files) {
       const content = await fs.promises.readFile(file, 'utf-8');
       const lines = content.split('\n');
-      
+
       let currentChunk = '';
       let startLine = 0;
-      
+
       for (let i = 0; i < lines.length; i++) {
         currentChunk += lines[i] + '\n';
-        
+
         if (currentChunk.length >= strategy.maxChunkSize) {
           chunks.push({
             id: `size-${file}-${startLine}`,
@@ -409,14 +415,14 @@ export class RecursiveContextManager {
               overlap: strategy.overlapSize,
             },
           });
-          
+
           // Move window with overlap
           const overlapLines = Math.floor(strategy.overlapSize / 50); // Estimate lines
           startLine = Math.max(0, i - overlapLines);
           currentChunk = lines.slice(startLine, i + 1).join('\n');
         }
       }
-      
+
       // Add remaining chunk
       if (currentChunk.trim()) {
         chunks.push({
@@ -436,45 +442,45 @@ export class RecursiveContextManager {
         });
       }
     }
-    
+
     return chunks;
   }
-  
+
   /**
    * Collect relevant chunks for agent context
    */
   private async collectRelevantChunks(
     baseContext: Record<string, any>,
     config: AgentContextConfig,
-    maxTokens: number
+    _maxTokens: number
   ): Promise<ContextChunk[]> {
     const chunks: ContextChunk[] = [];
-    
+
     // Get recent frames
     if (config.includeTypes.includes('frame')) {
       const recentFrames = await this.getRecentFrameChunks(10);
       chunks.push(...recentFrames);
     }
-    
+
     // Get relevant code files
     if (config.includeTypes.includes('code') && baseContext.files) {
       const codeChunks = await this.getCodeChunks(baseContext.files);
       chunks.push(...codeChunks);
     }
-    
+
     // Get test files
     if (config.includeTypes.includes('test') && baseContext.testFiles) {
       const testChunks = await this.getTestChunks(baseContext.testFiles);
       chunks.push(...testChunks);
     }
-    
+
     // Search for relevant context
     if (baseContext.query) {
       const searchResults = await this.contextRetriever.retrieve({
         query: baseContext.query,
         limit: 20,
       });
-      
+
       for (const result of searchResults) {
         chunks.push({
           id: `search-${result.frameId}`,
@@ -490,14 +496,14 @@ export class RecursiveContextManager {
         });
       }
     }
-    
+
     // Check shared cache for relevant chunks
     const cachedChunks = this.getRelevantCachedChunks(config.agent);
     chunks.push(...cachedChunks);
-    
+
     return chunks;
   }
-  
+
   /**
    * Prioritize chunks based on agent weights
    */
@@ -506,19 +512,19 @@ export class RecursiveContextManager {
     weights: AgentContextConfig['priorityWeights']
   ): ContextChunk[] {
     return chunks
-      .map(chunk => {
+      .map((chunk) => {
         let priority = 0;
-        
+
         // Recent weight
         if (chunk.metadata.timestamp) {
           const age = Date.now() - chunk.metadata.timestamp.getTime();
           const recentScore = Math.max(0, 1 - age / (24 * 60 * 60 * 1000)); // Decay over 24h
           priority += recentScore * weights.recent;
         }
-        
+
         // Relevance weight
         priority += (chunk.metadata.score || 0.5) * weights.relevant;
-        
+
         // Type-specific weights
         if (chunk.type === 'test') {
           priority += weights.test;
@@ -526,28 +532,28 @@ export class RecursiveContextManager {
         if (chunk.metadata.filePath?.includes('error')) {
           priority += weights.error;
         }
-        
+
         return { ...chunk, priority };
       })
       .sort((a, b) => (b as any).priority - (a as any).priority);
   }
-  
+
   /**
    * Fit chunks within token budget
    */
   private fitChunksToTokenBudget(
     chunks: ContextChunk[],
-    maxTokens: number
+    _maxTokens: number
   ): ContextChunk[] {
     const selected: ContextChunk[] = [];
     let totalTokens = 0;
-    
+
     // Rough token estimation (1 token ≈ 4 chars)
     const estimateTokens = (text: string) => Math.ceil(text.length / 4);
-    
+
     for (const chunk of chunks) {
       const chunkTokens = estimateTokens(chunk.content);
-      
+
       if (totalTokens + chunkTokens <= maxTokens) {
         selected.push(chunk);
         totalTokens += chunkTokens;
@@ -567,25 +573,25 @@ export class RecursiveContextManager {
         break;
       }
     }
-    
+
     return selected;
   }
-  
+
   /**
    * Helper methods
    */
-  
+
   private async walkDirectory(dir: string): Promise<string[]> {
     const files: string[] = [];
     const entries = await fs.promises.readdir(dir, { withFileTypes: true });
-    
+
     for (const entry of entries) {
       const fullPath = path.join(dir, entry.name);
-      
+
       if (entry.isDirectory()) {
         // Skip node_modules, .git, etc
         if (!['node_modules', '.git', 'dist', 'build'].includes(entry.name)) {
-          files.push(...await this.walkDirectory(fullPath));
+          files.push(...(await this.walkDirectory(fullPath)));
         }
       } else if (entry.isFile()) {
         // Include code files
@@ -594,10 +600,10 @@ export class RecursiveContextManager {
         }
       }
     }
-    
+
     return files;
   }
-  
+
   private detectLanguage(filePath: string): string {
     const ext = path.extname(filePath);
     const langMap: Record<string, string> = {
@@ -615,7 +621,7 @@ export class RecursiveContextManager {
     };
     return langMap[ext] || 'unknown';
   }
-  
+
   private splitLargeFile(
     filePath: string,
     content: string,
@@ -624,11 +630,11 @@ export class RecursiveContextManager {
     const chunks: ContextChunk[] = [];
     const lines = content.split('\n');
     const linesPerChunk = Math.ceil(strategy.maxChunkSize / 50); // Estimate
-    
+
     for (let i = 0; i < lines.length; i += linesPerChunk) {
       const chunkLines = lines.slice(i, i + linesPerChunk);
       const chunkContent = chunkLines.join('\n');
-      
+
       chunks.push({
         id: `file-${path.basename(filePath)}-part-${i}`,
         type: 'code',
@@ -646,10 +652,10 @@ export class RecursiveContextManager {
         },
       });
     }
-    
+
     return chunks;
   }
-  
+
   private extractSemanticUnits(
     content: string,
     language: string
@@ -667,7 +673,7 @@ export class RecursiveContextManager {
       end: number;
       importance: number;
     }> = [];
-    
+
     // Simple regex-based extraction (would need proper AST parsing for production)
     if (language === 'typescript' || language === 'javascript') {
       // Extract classes
@@ -682,9 +688,10 @@ export class RecursiveContextManager {
           importance: 0.8,
         });
       }
-      
+
       // Extract functions
-      const funcRegex = /(?:function|const|let)\s+(\w+)\s*=?\s*(?:\([^)]*\)|\w+)\s*(?:=>|{)[^}]+}/g;
+      const funcRegex =
+        /(?:function|const|let)\s+(\w+)\s*=?\s*(?:\([^)]*\)|\w+)\s*(?:=>|{)[^}]+}/g;
       while ((match = funcRegex.exec(content)) !== null) {
         units.push({
           name: match[1],
@@ -695,15 +702,15 @@ export class RecursiveContextManager {
         });
       }
     }
-    
+
     return units;
   }
-  
+
   private async getRecentFrameChunks(limit: number): Promise<ContextChunk[]> {
     const activeStack = this.dualStackManager.getActiveStack();
     const frames = await activeStack.getAllFrames();
-    
-    return frames.slice(-limit).map(frame => ({
+
+    return frames.slice(-limit).map((frame) => ({
       id: `frame-${frame.frameId}`,
       type: 'frame',
       content: JSON.stringify(frame, null, 2),
@@ -716,10 +723,10 @@ export class RecursiveContextManager {
       boundaries: {},
     }));
   }
-  
+
   private async getCodeChunks(files: string[]): Promise<ContextChunk[]> {
     const chunks: ContextChunk[] = [];
-    
+
     for (const file of files) {
       if (fs.existsSync(file)) {
         const content = await fs.promises.readFile(file, 'utf-8');
@@ -737,13 +744,13 @@ export class RecursiveContextManager {
         });
       }
     }
-    
+
     return chunks;
   }
-  
+
   private async getTestChunks(testFiles: string[]): Promise<ContextChunk[]> {
     const chunks: ContextChunk[] = [];
-    
+
     for (const file of testFiles) {
       if (fs.existsSync(file)) {
         const content = await fs.promises.readFile(file, 'utf-8');
@@ -761,30 +768,31 @@ export class RecursiveContextManager {
         });
       }
     }
-    
+
     return chunks;
   }
-  
+
   private getRelevantCachedChunks(agentType: SubagentType): ContextChunk[] {
     const relevantChunks: ContextChunk[] = [];
-    
+
     // Get chunks from cache that might be relevant
     for (const [key, chunks] of this.sharedContextCache.entries()) {
       // Skip very old cache entries
       const timestamp = parseInt(key.split('-').pop() || '0');
-      if (Date.now() - timestamp > 5 * 60 * 1000) { // 5 minutes
+      if (Date.now() - timestamp > 5 * 60 * 1000) {
+        // 5 minutes
         continue;
       }
-      
+
       // Add relevant chunks based on agent type
       if (agentType === 'review' || agentType === 'improve') {
-        relevantChunks.push(...chunks.filter(c => c.type === 'code'));
+        relevantChunks.push(...chunks.filter((c) => c.type === 'code'));
       }
     }
-    
+
     return relevantChunks;
   }
-  
+
   /**
    * Clear context cache
    */
@@ -792,7 +800,7 @@ export class RecursiveContextManager {
     this.sharedContextCache.clear();
     logger.debug('Context cache cleared');
   }
-  
+
   /**
    * Get cache statistics
    */
@@ -802,12 +810,12 @@ export class RecursiveContextManager {
       totalChunks: 0,
       totalBytes: 0,
     };
-    
+
     for (const chunks of this.sharedContextCache.values()) {
       stats.totalChunks += chunks.length;
       stats.totalBytes += chunks.reduce((sum, c) => sum + c.metadata.size, 0);
     }
-    
+
     return stats;
   }
 }

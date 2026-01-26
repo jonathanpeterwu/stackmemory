@@ -28,6 +28,11 @@ import {
   executeActionSafe,
   cleanupOldActions,
 } from './sms-action-runner.js';
+import {
+  isCommand,
+  processCommand,
+  sendCommandResponse,
+} from './whatsapp-commands.js';
 import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
 import {
   logWebhookRequest,
@@ -225,11 +230,34 @@ export async function handleSMSWebhook(payload: TwilioWebhookPayload): Promise<{
   }
 
   if (From && From.length > MAX_PHONE_LENGTH) {
-    console.log(`[sms-webhook] Invalid phone number length`);
+    console.log(
+      `[sms-webhook] Phone number too long: ${From.length} chars (max ${MAX_PHONE_LENGTH}): ${From.substring(0, 30)}...`
+    );
     return { response: 'Invalid phone number.' };
   }
 
   console.log(`[sms-webhook] Received from ${From}: ${Body}`);
+
+  // Check for command prefix before prompt matching
+  if (isCommand(Body)) {
+    console.log(`[sms-webhook] Processing command: ${Body}`);
+    const cmdResult = await processCommand(From, Body);
+
+    if (cmdResult.handled) {
+      // Send response back if we have one
+      if (cmdResult.response) {
+        // Don't await - fire and forget the response notification
+        sendCommandResponse(cmdResult.response).catch(console.error);
+      }
+
+      return {
+        response: cmdResult.response || 'Command processed',
+        action: cmdResult.action,
+        queued: false,
+      };
+    }
+    // If not handled, fall through to regular prompt matching
+  }
 
   const result = processIncomingResponse(From, Body);
 

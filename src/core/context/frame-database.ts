@@ -115,13 +115,21 @@ export class FrameDatabase {
       );
 
       if (result.changes === 0) {
-        throw new Error('Frame insertion failed - no rows affected');
+        throw new DatabaseError(
+          'Frame insertion failed - no rows affected',
+          ErrorCode.DB_INSERT_FAILED,
+          { frameId: frame.frame_id, operation: 'insertFrame' }
+        );
       }
 
       // Return the created frame with timestamp
       const createdFrame = this.getFrame(frame.frame_id);
       if (!createdFrame) {
-        throw new Error('Failed to retrieve created frame');
+        throw new DatabaseError(
+          'Failed to retrieve created frame',
+          ErrorCode.DB_QUERY_FAILED,
+          { frameId: frame.frame_id, operation: 'insertFrame' }
+        );
       }
 
       return createdFrame;
@@ -208,7 +216,11 @@ export class FrameDatabase {
       const result = stmt.run(...values);
 
       if (result.changes === 0) {
-        throw new Error(`Frame not found: ${frameId}`);
+        throw new DatabaseError(
+          `Frame not found: ${frameId}`,
+          ErrorCode.DB_UPDATE_FAILED,
+          { frameId, operation: 'updateFrame' }
+        );
       }
     } catch (error: unknown) {
       throw new DatabaseError(
@@ -268,7 +280,15 @@ export class FrameDatabase {
       );
 
       if (result.changes === 0) {
-        throw new Error('Event insertion failed');
+        throw new DatabaseError(
+          'Event insertion failed - no rows affected',
+          ErrorCode.DB_INSERT_FAILED,
+          {
+            eventId: event.event_id,
+            frameId: event.frame_id,
+            operation: 'insertEvent',
+          }
+        );
       }
 
       // Return the created event with timestamp
@@ -360,7 +380,15 @@ export class FrameDatabase {
       );
 
       if (result.changes === 0) {
-        throw new Error('Anchor insertion failed');
+        throw new DatabaseError(
+          'Anchor insertion failed - no rows affected',
+          ErrorCode.DB_INSERT_FAILED,
+          {
+            anchorId: anchor.anchor_id,
+            frameId: anchor.frame_id,
+            operation: 'insertAnchor',
+          }
+        );
       }
 
       // Return the created anchor with timestamp

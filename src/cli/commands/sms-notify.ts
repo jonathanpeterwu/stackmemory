@@ -24,49 +24,94 @@ import {
   cleanupOldActions,
   startActionWatcher,
 } from '../../hooks/sms-action-runner.js';
+import {
+  syncContext,
+  syncFrame,
+  enableAutoSync,
+  disableAutoSync,
+  isAutoSyncEnabled,
+  loadSyncOptions,
+  saveSyncOptions,
+} from '../../hooks/whatsapp-sync.js';
+import {
+  loadCommandsConfig,
+  enableCommands,
+  disableCommands,
+  getAvailableCommands,
+} from '../../hooks/whatsapp-commands.js';
+import {
+  listSchedules,
+  cancelSchedule,
+  scheduleDailyDigest,
+  scheduleHourlyDigest,
+  scheduleIntervalDigest,
+  startScheduler,
+  stopScheduler,
+  isSchedulerRunning,
+  runScheduledDigest,
+} from '../../hooks/whatsapp-scheduler.js';
 
 // __dirname provided by esbuild banner
 
 export function createSMSNotifyCommand(): Command {
   const cmd = new Command('notify')
     .description(
-      'SMS notification system for review alerts (optional, requires Twilio)'
+      'SMS/WhatsApp notifications with context sync and scheduled digests'
     )
     .addHelpText(
       'after',
       `
-Setup (optional):
+Setup:
   1. Create Twilio account at https://twilio.com
-  2. Get Account SID, Auth Token, and phone numbers
-  3. Set environment variables:
+  2. Set environment variables:
      export TWILIO_ACCOUNT_SID=your_sid
      export TWILIO_AUTH_TOKEN=your_token
-
-     For WhatsApp (recommended - cheaper for conversations):
      export TWILIO_WHATSAPP_FROM=+1234567890
      export TWILIO_WHATSAPP_TO=+1234567890
-     export TWILIO_CHANNEL=whatsapp
+  3. Enable: stackmemory notify enable
 
-     For SMS:
-     export TWILIO_SMS_FROM=+1234567890
-     export TWILIO_SMS_TO=+1234567890
-     export TWILIO_CHANNEL=sms
-
-     Legacy (works for both, defaults to WhatsApp):
-     export TWILIO_FROM_NUMBER=+1234567890
-     export TWILIO_TO_NUMBER=+1234567890
-
-  4. Enable: stackmemory notify enable
-
-Examples:
+Basic Commands:
   stackmemory notify status              Check configuration
   stackmemory notify enable              Enable notifications
-  stackmemory notify channel whatsapp    Switch to WhatsApp
+  stackmemory notify channel whatsapp    Switch to WhatsApp (default)
   stackmemory notify channel sms         Switch to SMS
   stackmemory notify test                Send test message
-  stackmemory notify send "PR ready"     Send custom message
-  stackmemory notify review "PR #123"    Send review notification with options
+  stackmemory notify send "message"      Send custom message
+  stackmemory notify review "PR #123"    Send review notification
   stackmemory notify ask "Deploy?"       Send yes/no prompt
+
+Context Sync:
+  Pushes development context (active frames, decisions, files) to WhatsApp.
+  stackmemory notify sync                Push current context now
+  stackmemory notify sync --frame <id>   Sync specific frame
+  stackmemory notify sync --auto         Enable auto-sync on frame close
+  stackmemory notify sync --no-auto      Disable auto-sync
+  stackmemory notify sync-status         Show sync configuration
+
+Scheduled Digests:
+  Automatically sends context summaries at configured intervals.
+  stackmemory notify schedule list             List all schedules
+  stackmemory notify schedule daily 09:00      Daily digest at 9 AM
+  stackmemory notify schedule hourly           Every hour
+  stackmemory notify schedule interval 30      Every 30 minutes
+  stackmemory notify schedule cancel <id>      Remove a schedule
+  stackmemory notify schedule run <id>         Run schedule now
+  stackmemory notify schedule start            Start scheduler daemon
+  stackmemory notify schedule stop             Stop scheduler daemon
+
+Inbound Commands:
+  Enable command processing to respond to WhatsApp messages.
+  stackmemory notify commands            List available commands
+  stackmemory notify commands --enable   Enable command processing
+  stackmemory notify commands --disable  Disable command processing
+
+  Supported WhatsApp commands:
+    status    - Get current session status
+    frames    - List active frames
+    tasks     - Show pending tasks
+    digest    - Request full context digest
+    pause     - Pause notifications
+    resume    - Resume notifications
 `
     );
 
@@ -661,6 +706,360 @@ Examples:
       const { startWebhookServer } = await import('../../hooks/sms-webhook.js');
       const port = parseInt(options.port, 10);
       startWebhookServer(port);
+    });
+
+  // ===== Context Sync Commands =====
+  cmd
+    .command('sync')
+    .description('Push current context to WhatsApp')
+    .option('--frame <id>', 'Sync specific frame by ID')
+    .option('--auto', 'Enable auto-sync on frame close')
+    .option('--no-auto', 'Disable auto-sync')
+    .action(async (options: { frame?: string; auto?: boolean }) => {
+      if (options.auto === true) {
+        enableAutoSync();
+        console.log(chalk.green('Auto-sync enabled'));
+        return;
+      }
+
+      if (options.auto === false) {
+        disableAutoSync();
+        console.log(chalk.yellow('Auto-sync disabled'));
+        return;
+      }
+
+      console.log(chalk.blue('Syncing context...'));
+
+      const result = options.frame
+        ? await syncFrame(options.frame)
+        : await syncContext();
+
+      if (result.success) {
+        console.log(
+          chalk.green(
+            `Context synced via ${result.channel} (${result.digestLength} chars)`
+          )
+        );
+      } else {
+        console.log(chalk.red(`Sync failed: ${result.error}`));
+      }
+    });
+
+  cmd
+    .command('sync-status')
+    .description('Show sync configuration status')
+    .action(() => {
+      const options = loadSyncOptions();
+      const autoEnabled = isAutoSyncEnabled();
+
+      console.log(chalk.blue('Sync Configuration:'));
+      console.log();
+      console.log(
+        `  ${chalk.gray('Auto-sync on close:')} ${autoEnabled ? chalk.green('enabled') : chalk.yellow('disabled')}`
+      );
+      console.log(
+        `  ${chalk.gray('Min frame duration:')} ${options.minFrameDuration}s`
+      );
+      console.log(
+        `  ${chalk.gray('Max digest length:')} ${options.maxDigestLength} chars`
+      );
+      console.log(
+        `  ${chalk.gray('Include decisions:')} ${options.includeDecisions ? 'yes' : 'no'}`
+      );
+      console.log(
+        `  ${chalk.gray('Include files:')} ${options.includeFiles ? 'yes' : 'no'}`
+      );
+      console.log(
+        `  ${chalk.gray('Include tests:')} ${options.includeTests ? 'yes' : 'no'}`
+      );
+    });
+
+  // ===== Schedule Commands =====
+  cmd
+    .command('schedule')
+    .description('Manage scheduled digests')
+    .argument('[action]', 'Action: daily, hourly, interval, list, cancel, run')
+    .argument(
+      '[value]',
+      'Time (HH:MM) for daily, minutes for interval, or schedule ID'
+    )
+    .action(async (action?: string, value?: string) => {
+      if (!action || action === 'list') {
+        const schedules = listSchedules();
+
+        if (schedules.length === 0) {
+          console.log(chalk.gray('No scheduled digests'));
+          return;
+        }
+
+        console.log(chalk.blue('Scheduled Digests:'));
+        schedules.forEach((s) => {
+          const status = s.enabled
+            ? chalk.green('active')
+            : chalk.yellow('paused');
+          const nextRun = s.nextRun
+            ? new Date(s.nextRun).toLocaleString()
+            : 'N/A';
+
+          console.log();
+          console.log(`  ${chalk.gray('ID:')} ${s.id}`);
+          console.log(`  ${chalk.gray('Type:')} ${s.config.type}`);
+          console.log(`  ${chalk.gray('Status:')} ${status}`);
+          console.log(`  ${chalk.gray('Next run:')} ${nextRun}`);
+          if (s.lastRun) {
+            console.log(
+              `  ${chalk.gray('Last run:')} ${new Date(s.lastRun).toLocaleString()}`
+            );
+          }
+        });
+        return;
+      }
+
+      switch (action) {
+        case 'daily': {
+          const time = value || '09:00';
+          try {
+            const id = scheduleDailyDigest(time);
+            console.log(chalk.green(`Daily digest scheduled at ${time}`));
+            console.log(chalk.gray(`Schedule ID: ${id}`));
+          } catch (err) {
+            console.log(
+              chalk.red(
+                `Error: ${err instanceof Error ? err.message : String(err)}`
+              )
+            );
+          }
+          break;
+        }
+
+        case 'hourly': {
+          const id = scheduleHourlyDigest();
+          console.log(chalk.green('Hourly digest scheduled'));
+          console.log(chalk.gray(`Schedule ID: ${id}`));
+          break;
+        }
+
+        case 'interval': {
+          const minutes = parseInt(value || '60', 10);
+          if (isNaN(minutes) || minutes < 5) {
+            console.log(chalk.red('Interval must be at least 5 minutes'));
+            return;
+          }
+          try {
+            const id = scheduleIntervalDigest(minutes);
+            console.log(
+              chalk.green(`Digest scheduled every ${minutes} minutes`)
+            );
+            console.log(chalk.gray(`Schedule ID: ${id}`));
+          } catch (err) {
+            console.log(
+              chalk.red(
+                `Error: ${err instanceof Error ? err.message : String(err)}`
+              )
+            );
+          }
+          break;
+        }
+
+        case 'cancel': {
+          if (!value) {
+            console.log(chalk.red('Schedule ID required'));
+            return;
+          }
+          const cancelled = cancelSchedule(value);
+          if (cancelled) {
+            console.log(chalk.green(`Schedule ${value} cancelled`));
+          } else {
+            console.log(chalk.red(`Schedule not found: ${value}`));
+          }
+          break;
+        }
+
+        case 'run': {
+          if (!value) {
+            console.log(chalk.red('Schedule ID required'));
+            return;
+          }
+          console.log(chalk.blue(`Running schedule ${value}...`));
+          const result = await runScheduledDigest(value);
+          if (result.success) {
+            if (result.sent) {
+              console.log(chalk.green(result.message));
+            } else {
+              console.log(chalk.yellow(result.message));
+            }
+          } else {
+            console.log(chalk.red(`Error: ${result.error}`));
+          }
+          break;
+        }
+
+        case 'start': {
+          if (isSchedulerRunning()) {
+            console.log(chalk.yellow('Scheduler already running'));
+          } else {
+            startScheduler();
+            console.log(chalk.green('Scheduler started'));
+          }
+          break;
+        }
+
+        case 'stop': {
+          if (!isSchedulerRunning()) {
+            console.log(chalk.yellow('Scheduler not running'));
+          } else {
+            stopScheduler();
+            console.log(chalk.green('Scheduler stopped'));
+          }
+          break;
+        }
+
+        default:
+          console.log(chalk.red(`Unknown action: ${action}`));
+          console.log(
+            chalk.gray(
+              'Available: daily, hourly, interval, list, cancel, run, start, stop'
+            )
+          );
+      }
+    });
+
+  // ===== Commands Management =====
+  cmd
+    .command('commands')
+    .description('Manage inbound WhatsApp command processing')
+    .option('--enable', 'Enable command processing')
+    .option('--disable', 'Disable command processing')
+    .action((options: { enable?: boolean; disable?: boolean }) => {
+      if (options.enable) {
+        enableCommands();
+        console.log(chalk.green('Command processing enabled'));
+        return;
+      }
+
+      if (options.disable) {
+        disableCommands();
+        console.log(chalk.yellow('Command processing disabled'));
+        return;
+      }
+
+      // List available commands
+      const config = loadCommandsConfig();
+      const commands = getAvailableCommands();
+
+      console.log(chalk.blue('WhatsApp Commands:'));
+      console.log();
+      console.log(
+        `  ${chalk.gray('Processing:')} ${config.enabled ? chalk.green('enabled') : chalk.yellow('disabled')}`
+      );
+      console.log();
+      console.log(chalk.gray('Available commands:'));
+
+      commands.forEach((cmd) => {
+        const argHint = cmd.requiresArg ? ' <arg>' : '';
+        console.log(`  ${chalk.cyan(cmd.name)}${argHint} - ${cmd.description}`);
+      });
+
+      console.log();
+      console.log(chalk.gray('Users can send these as WhatsApp messages'));
+    });
+
+  // ===== Claude Code Hook Installation =====
+  cmd
+    .command('install-whatsapp-hook')
+    .description('Install WhatsApp integration hook for Claude Code')
+    .action(async () => {
+      const {
+        writeFileSync,
+        mkdirSync,
+        existsSync: fsExists,
+      } = await import('fs');
+      const { join: pathJoin } = await import('path');
+      const homeDir = process.env['HOME'] || '~';
+
+      // Create settings.json content
+      const claudeDir = pathJoin(homeDir, '.claude');
+      const settingsPath = pathJoin(claudeDir, 'settings.json');
+      const hookPath = pathJoin(
+        __dirname,
+        '../hooks/claude-code-whatsapp-hook.js'
+      );
+
+      console.log(chalk.blue('Installing WhatsApp hook for Claude Code...'));
+
+      // Ensure .claude directory exists
+      if (!fsExists(claudeDir)) {
+        mkdirSync(claudeDir, { recursive: true });
+      }
+
+      // Load existing settings or create new
+      let settings: Record<string, unknown> = {};
+      if (fsExists(settingsPath)) {
+        try {
+          settings = JSON.parse(readFileSync(settingsPath, 'utf8'));
+        } catch {
+          // Start fresh
+        }
+      }
+
+      // Add hooks configuration
+      const hooks = (settings['hooks'] as Record<string, string[]>) || {};
+      hooks['Stop'] = ['node', hookPath, 'stop'];
+
+      settings['hooks'] = hooks;
+
+      console.log();
+      console.log(chalk.yellow('Add to ~/.claude/settings.json:'));
+      console.log(chalk.gray(JSON.stringify({ hooks }, null, 2)));
+      console.log();
+      console.log(chalk.gray('Hook will:'));
+      console.log(
+        chalk.gray('  - Send session digest to WhatsApp when Claude exits')
+      );
+      console.log(
+        chalk.gray('  - Check for incoming WhatsApp messages during session')
+      );
+      console.log();
+      console.log(
+        chalk.green('Manual setup required - copy the hooks config above')
+      );
+    });
+
+  // ===== Auto-Fallback Status =====
+  cmd
+    .command('fallback-status')
+    .description('Show auto-fallback status for Claude -> Qwen')
+    .action(async () => {
+      const { getFallbackStatus } =
+        await import('../../core/models/model-router.js');
+      const status = getFallbackStatus();
+
+      console.log(chalk.blue('Auto-Fallback Status:'));
+      console.log();
+      console.log(
+        `  ${chalk.gray('Enabled:')} ${status.enabled ? chalk.green('yes') : chalk.yellow('no')}`
+      );
+      console.log(
+        `  ${chalk.gray('Fallback provider:')} ${status.provider || 'none'}`
+      );
+      console.log(
+        `  ${chalk.gray('API key ready:')} ${status.hasApiKey ? chalk.green('yes') : chalk.red('no')}`
+      );
+      console.log(
+        `  ${chalk.gray('Currently in fallback:')} ${status.inFallback ? chalk.yellow('YES') : 'no'}`
+      );
+      if (status.reason) {
+        console.log(`  ${chalk.gray('Fallback reason:')} ${status.reason}`);
+      }
+      console.log();
+      console.log(
+        chalk.gray(
+          'When Claude fails (rate limit, errors), Qwen takes over automatically.'
+        )
+      );
+      console.log(
+        chalk.gray('Configure with: stackmemory model fallback --enable')
+      );
     });
 
   return cmd;

@@ -4,10 +4,7 @@
 
 import { Command } from 'commander';
 import chalk from 'chalk';
-import {
-  LinearAuthManager,
-  LinearOAuthSetup,
-} from '../../integrations/linear/auth.js';
+import { LinearAuthManager } from '../../integrations/linear/auth.js';
 import { LinearOAuthServer } from '../../integrations/linear/oauth-server.js';
 import {
   LinearSyncEngine,
@@ -23,23 +20,12 @@ import { LinearClient } from '../../integrations/linear/client.js';
 import { LinearRestClient } from '../../integrations/linear/rest-client.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
-import { existsSync, mkdirSync } from 'fs';
+import { existsSync } from 'fs';
 import { logger } from '../../core/monitoring/logger.js';
 import Table from 'cli-table3';
 import { SyncResult } from '../../integrations/linear/sync.js';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
 
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
+// Type-safe environment variable access
 
 /**
  * Display sync result in a formatted way

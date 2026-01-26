@@ -13,6 +13,7 @@ import { swarmCoordinator } from '../../integrations/ralph/swarm/swarm-coordinat
 import { ralphDebugger } from '../../integrations/ralph/visualization/ralph-debugger.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { trace } from '../../core/trace/index.js';
+import { SystemError, ErrorCode } from '../../core/errors/index.js';
 
 export function createRalphCommand(): Command {
   const ralph = new Command('ralph').description(
@@ -924,9 +925,9 @@ export function createRalphCommand(): Command {
       return trace.command('ralph-swarm-test', options, async () => {
         try {
           console.log('🧪 Starting swarm testing and validation...');
-          
+
           await swarmCoordinator.initialize();
-          
+
           const testResults: any[] = [];
           let passedTests = 0;
           let totalTests = 0;
@@ -934,7 +935,7 @@ export function createRalphCommand(): Command {
           // Quick validation tests
           if (options.quick || !options.stress) {
             console.log('\n⚡ Running quick validation tests...');
-            
+
             // Test 1: Basic swarm initialization
             totalTests++;
             try {
@@ -942,63 +943,91 @@ export function createRalphCommand(): Command {
                 'Test: Basic functionality validation',
                 [{ role: 'developer' as any }]
               );
-              
+
               // Immediately cleanup
               await swarmCoordinator.forceCleanup();
-              
+
               console.log('  ✅ Basic swarm initialization');
               passedTests++;
-              testResults.push({ test: 'basic_init', status: 'passed', duration: 0 });
+              testResults.push({
+                test: 'basic_init',
+                status: 'passed',
+                duration: 0,
+              });
             } catch (error) {
-              console.log('  ❌ Basic swarm initialization failed:', (error as Error).message);
-              testResults.push({ test: 'basic_init', status: 'failed', error: (error as Error).message });
+              console.log(
+                '  ❌ Basic swarm initialization failed:',
+                (error as Error).message
+              );
+              testResults.push({
+                test: 'basic_init',
+                status: 'failed',
+                error: (error as Error).message,
+              });
             }
 
             // Test 2: Resource usage monitoring
             totalTests++;
             try {
               const usage = swarmCoordinator.getResourceUsage();
-              console.log(`  ✅ Resource monitoring: ${usage.activeAgents} agents, ${usage.memoryEstimate}MB`);
+              console.log(
+                `  ✅ Resource monitoring: ${usage.activeAgents} agents, ${usage.memoryEstimate}MB`
+              );
               passedTests++;
-              testResults.push({ test: 'resource_monitoring', status: 'passed', data: usage });
+              testResults.push({
+                test: 'resource_monitoring',
+                status: 'passed',
+                data: usage,
+              });
             } catch (error) {
-              console.log('  ❌ Resource monitoring failed:', (error as Error).message);
-              testResults.push({ test: 'resource_monitoring', status: 'failed', error: (error as Error).message });
+              console.log(
+                '  ❌ Resource monitoring failed:',
+                (error as Error).message
+              );
+              testResults.push({
+                test: 'resource_monitoring',
+                status: 'failed',
+                error: (error as Error).message,
+              });
             }
           }
 
           // Stress tests
           if (options.stress) {
             console.log('\n🔥 Running stress tests...');
-            
+
             totalTests++;
             try {
               const stressPromises = [];
               for (let i = 0; i < 3; i++) {
                 stressPromises.push(
-                  swarmCoordinator.launchSwarm(
-                    `Stress test swarm ${i}`,
-                    [{ role: 'developer' as any }, { role: 'tester' as any }]
-                  )
+                  swarmCoordinator.launchSwarm(`Stress test swarm ${i}`, [
+                    { role: 'developer' as any },
+                    { role: 'tester' as any },
+                  ])
                 );
               }
-              
+
               await Promise.all(stressPromises);
               await swarmCoordinator.forceCleanup();
-              
+
               console.log('  ✅ Parallel swarm stress test');
               passedTests++;
               testResults.push({ test: 'stress_parallel', status: 'passed' });
             } catch (error) {
               console.log('  ❌ Stress test failed:', (error as Error).message);
-              testResults.push({ test: 'stress_parallel', status: 'failed', error: (error as Error).message });
+              testResults.push({
+                test: 'stress_parallel',
+                status: 'failed',
+                error: (error as Error).message,
+              });
             }
           }
 
           // Error injection tests
           if (options.errorInjection) {
             console.log('\n💥 Testing error handling...');
-            
+
             totalTests++;
             try {
               // Test with invalid agent configuration
@@ -1013,26 +1042,32 @@ export function createRalphCommand(): Command {
                 testResults.push({ test: 'error_handling', status: 'passed' });
               }
             } catch (error) {
-              console.log('  ❌ Error handling test failed:', (error as Error).message);
-              testResults.push({ test: 'error_handling', status: 'failed', error: (error as Error).message });
+              console.log(
+                '  ❌ Error handling test failed:',
+                (error as Error).message
+              );
+              testResults.push({
+                test: 'error_handling',
+                status: 'failed',
+                error: (error as Error).message,
+              });
             }
           }
 
           // Cleanup tests
           if (options.cleanupTest) {
             console.log('\n🧹 Testing cleanup mechanisms...');
-            
+
             totalTests++;
             try {
               // Create a swarm and test cleanup
-              await swarmCoordinator.launchSwarm(
-                'Cleanup test swarm',
-                [{ role: 'developer' as any }]
-              );
-              
+              await swarmCoordinator.launchSwarm('Cleanup test swarm', [
+                { role: 'developer' as any },
+              ]);
+
               // Force cleanup
               await swarmCoordinator.forceCleanup();
-              
+
               // Check if resources were cleaned
               const usage = swarmCoordinator.getResourceUsage();
               if (usage.activeAgents === 0) {
@@ -1040,28 +1075,53 @@ export function createRalphCommand(): Command {
                 passedTests++;
                 testResults.push({ test: 'cleanup', status: 'passed' });
               } else {
-                throw new Error(`Cleanup failed: ${usage.activeAgents} agents still active`);
+                throw new SystemError(
+                  `Cleanup failed: ${usage.activeAgents} agents still active`,
+                  ErrorCode.RESOURCE_EXHAUSTED,
+                  { activeAgents: usage.activeAgents, test: 'cleanup' }
+                );
               }
             } catch (error) {
-              console.log('  ❌ Cleanup test failed:', (error as Error).message);
-              testResults.push({ test: 'cleanup', status: 'failed', error: (error as Error).message });
+              console.log(
+                '  ❌ Cleanup test failed:',
+                (error as Error).message
+              );
+              testResults.push({
+                test: 'cleanup',
+                status: 'failed',
+                error: (error as Error).message,
+              });
             }
           }
 
           // Git workflow tests
           if (options.gitTest) {
             console.log('\n🔀 Testing git workflow integration...');
-            
+
             totalTests++;
             try {
               // Test git workflow status
-              const gitStatus = swarmCoordinator['gitWorkflowManager'].getGitStatus();
-              console.log(`  ✅ Git workflow status: ${gitStatus.enabled ? 'enabled' : 'disabled'}`);
+              const gitStatus =
+                swarmCoordinator['gitWorkflowManager'].getGitStatus();
+              console.log(
+                `  ✅ Git workflow status: ${gitStatus.enabled ? 'enabled' : 'disabled'}`
+              );
               passedTests++;
-              testResults.push({ test: 'git_workflow', status: 'passed', data: gitStatus });
+              testResults.push({
+                test: 'git_workflow',
+                status: 'passed',
+                data: gitStatus,
+              });
             } catch (error) {
-              console.log('  ❌ Git workflow test failed:', (error as Error).message);
-              testResults.push({ test: 'git_workflow', status: 'failed', error: (error as Error).message });
+              console.log(
+                '  ❌ Git workflow test failed:',
+                (error as Error).message
+              );
+              testResults.push({
+                test: 'git_workflow',
+                status: 'failed',
+                error: (error as Error).message,
+              });
             }
           }
 
@@ -1070,7 +1130,9 @@ export function createRalphCommand(): Command {
           console.log(`   Total tests: ${totalTests}`);
           console.log(`   Passed: ${passedTests} ✅`);
           console.log(`   Failed: ${totalTests - passedTests} ❌`);
-          console.log(`   Success rate: ${Math.round((passedTests / totalTests) * 100)}%`);
+          console.log(
+            `   Success rate: ${Math.round((passedTests / totalTests) * 100)}%`
+          );
 
           // Generate report
           if (options.report) {
@@ -1082,27 +1144,30 @@ export function createRalphCommand(): Command {
                 totalTests,
                 passedTests,
                 failedTests: totalTests - passedTests,
-                successRate: (passedTests / totalTests) * 100
+                successRate: (passedTests / totalTests) * 100,
               },
               testResults,
               systemInfo: {
                 nodeVersion: process.version,
                 platform: process.platform,
-                arch: process.arch
-              }
+                arch: process.arch,
+              },
             };
-            
+
             fs.writeFileSync(reportPath, JSON.stringify(reportData, null, 2));
             console.log(`📋 Detailed report saved to: ${reportPath}`);
           }
 
           if (passedTests === totalTests) {
-            console.log('\n🎉 All tests passed! Swarm functionality is working correctly.');
+            console.log(
+              '\n🎉 All tests passed! Swarm functionality is working correctly.'
+            );
           } else {
-            console.log('\n⚠️  Some tests failed. Check the errors above for details.');
+            console.log(
+              '\n⚠️  Some tests failed. Check the errors above for details.'
+            );
             process.exit(1);
           }
-          
         } catch (error: unknown) {
           logger.error('Swarm testing failed', error as Error);
           console.error('❌ Test suite failed:', (error as Error).message);

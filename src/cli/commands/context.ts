@@ -9,19 +9,8 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { FrameManager, FrameType } from '../../core/context/frame-manager.js';
 import { createContextRehydrateCommand } from './context-rehydrate.js';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
 
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
+// Type-safe environment variable access
 
 export function createContextCommands(): Command {
   const context = new Command('context')

@@ -11,6 +11,11 @@
 import { Command } from 'commander';
 import { Pool } from 'pg';
 import Database from 'better-sqlite3';
+import {
+  DatabaseError,
+  ValidationError,
+  ErrorCode,
+} from '../../core/errors/index.js';
 
 type DbKind = 'pg' | 'sqlite';
 
@@ -20,7 +25,11 @@ interface Migrator {
   sqlite?: Database.Database;
 }
 
-const MIGRATIONS: Array<{ version: number; description: string; statements: string[] }> = [
+const MIGRATIONS: Array<{
+  version: number;
+  description: string;
+  statements: string[];
+}> = [
   {
     version: 1,
     description: 'base schema',
@@ -39,7 +48,7 @@ const MIGRATIONS: Array<{ version: number; description: string; statements: stri
       `CREATE INDEX IF NOT EXISTS idx_contexts_project ON contexts(project_id)`,
       `CREATE INDEX IF NOT EXISTS idx_api_keys_hash ON api_keys(key_hash)`,
       `CREATE INDEX IF NOT EXISTS idx_users_email ON users(email)`,
-      `CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id)`
+      `CREATE INDEX IF NOT EXISTS idx_project_members_user ON project_members(user_id)`,
     ],
   },
   {
@@ -47,7 +56,7 @@ const MIGRATIONS: Array<{ version: number; description: string; statements: stri
     description: 'admin sessions',
     statements: [
       `CREATE TABLE IF NOT EXISTS admin_sessions (id TEXT PRIMARY KEY, user_id TEXT NOT NULL, created_at ${isPg() ? 'TIMESTAMPTZ' : 'DATETIME'} DEFAULT ${isPg() ? 'NOW()' : 'CURRENT_TIMESTAMP'}, expires_at ${isPg() ? 'TIMESTAMPTZ' : 'DATETIME'} NOT NULL, user_agent TEXT, ip TEXT)`,
-      `CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id)`
+      `CREATE INDEX IF NOT EXISTS idx_admin_sessions_user ON admin_sessions(user_id)`,
     ],
   },
   {
@@ -60,7 +69,7 @@ const MIGRATIONS: Array<{ version: number; description: string; statements: stri
       `ALTER TABLE users ALTER COLUMN role TYPE user_role USING role::user_role`,
       `ALTER TABLE project_members ALTER COLUMN role TYPE member_role USING role::member_role`,
       `ALTER TABLE project_members ADD CONSTRAINT project_members_role_check CHECK (role IN ('admin','owner','editor','viewer'))`,
-      `ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','user'))`
+      `ALTER TABLE users ADD CONSTRAINT users_role_check CHECK (role IN ('admin','user'))`,
     ],
   },
 ];
@@ -74,54 +83,93 @@ async function connect(): Promise<Migrator> {
   if (isPg()) {
     const pool = new Pool({ connectionString: process.env.DATABASE_URL });
     // ensure version table
-    await pool.query(`CREATE TABLE IF NOT EXISTS railway_schema_version (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT NOW(), description TEXT)`);
+    await pool.query(
+      `CREATE TABLE IF NOT EXISTS railway_schema_version (version INTEGER PRIMARY KEY, applied_at TIMESTAMPTZ DEFAULT NOW(), description TEXT)`
+    );
     return { kind: 'pg', pg: pool };
   } else {
     const path = process.env.DATABASE_URL || '.stackmemory/railway.db';
     const db = new Database(path);
-    db.exec(`CREATE TABLE IF NOT EXISTS railway_schema_version (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP, description TEXT)`);
+    db.exec(
+      `CREATE TABLE IF NOT EXISTS railway_schema_version (version INTEGER PRIMARY KEY, applied_at DATETIME DEFAULT CURRENT_TIMESTAMP, description TEXT)`
+    );
     return { kind: 'sqlite', sqlite: db };
   }
 }
 
 async function getCurrentVersion(m: Migrator): Promise<number> {
   if (m.kind === 'pg') {
-    const r = await m.pg!.query('SELECT COALESCE(MAX(version), 0) AS v FROM railway_schema_version');
+    const r = await m.pg!.query(
+      'SELECT COALESCE(MAX(version), 0) AS v FROM railway_schema_version'
+    );
     return Number(r.rows[0]?.v || 0);
   }
-  const row = m.sqlite!.prepare('SELECT COALESCE(MAX(version), 0) AS v FROM railway_schema_version').get() as any;
+  const row = m
+    .sqlite!.prepare(
+      'SELECT COALESCE(MAX(version), 0) AS v FROM railway_schema_version'
+    )
+    .get() as any;
   return Number(row?.v || 0);
 }
 
-async function listApplied(m: Migrator): Promise<Array<{ version: number; description: string }>> {
+async function listApplied(
+  m: Migrator
+): Promise<Array<{ version: number; description: string }>> {
   if (m.kind === 'pg') {
-    const r = await m.pg!.query('SELECT version, description, applied_at FROM railway_schema_version ORDER BY version ASC');
-    return r.rows.map((row) => ({ version: Number(row.version), description: row.description }));
+    const r = await m.pg!.query(
+      'SELECT version, description, applied_at FROM railway_schema_version ORDER BY version ASC'
+    );
+    return r.rows.map((row) => ({
+      version: Number(row.version),
+      description: row.description,
+    }));
   }
-  const rows = m.sqlite!.prepare('SELECT version, description, applied_at FROM railway_schema_version ORDER BY version ASC').all() as any[];
-  return rows.map((row) => ({ version: Number(row.version), description: row.description }));
+  const rows = m
+    .sqlite!.prepare(
+      'SELECT version, description, applied_at FROM railway_schema_version ORDER BY version ASC'
+    )
+    .all() as any[];
+  return rows.map((row) => ({
+    version: Number(row.version),
+    description: row.description,
+  }));
 }
 
 async function applyTo(m: Migrator, target: number): Promise<void> {
   const current = await getCurrentVersion(m);
-  const pending = MIGRATIONS.filter((mig) => mig.version > current && mig.version <= target);
+  const pending = MIGRATIONS.filter(
+    (mig) => mig.version > current && mig.version <= target
+  );
   for (const mig of pending) {
     if (m.kind === 'pg') {
       for (const s of mig.statements) {
-        try { await m.pg!.query(s); } catch {}
+        try {
+          await m.pg!.query(s);
+        } catch {}
       }
-      await m.pg!.query('INSERT INTO railway_schema_version (version, description) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING', [mig.version, mig.description]);
+      await m.pg!.query(
+        'INSERT INTO railway_schema_version (version, description) VALUES ($1, $2) ON CONFLICT (version) DO NOTHING',
+        [mig.version, mig.description]
+      );
     } else {
       m.sqlite!.exec('BEGIN');
       try {
         for (const s of mig.statements) {
-          try { m.sqlite!.exec(s); } catch {}
+          try {
+            m.sqlite!.exec(s);
+          } catch {}
         }
-        m.sqlite!.prepare('INSERT OR IGNORE INTO railway_schema_version (version, description) VALUES (?, ?)').run(mig.version, mig.description);
+        m.sqlite!.prepare(
+          'INSERT OR IGNORE INTO railway_schema_version (version, description) VALUES (?, ?)'
+        ).run(mig.version, mig.description);
         m.sqlite!.exec('COMMIT');
       } catch {
         m.sqlite!.exec('ROLLBACK');
-        throw new Error(`Migration ${mig.version} failed`);
+        throw new DatabaseError(
+          `Migration ${mig.version} failed`,
+          ErrorCode.DB_MIGRATION_FAILED,
+          { version: mig.version, description: mig.description }
+        );
       }
     }
     console.log(`Applied migration v${mig.version}: ${mig.description}`);
@@ -136,11 +184,17 @@ async function rollbackTo(m: Migrator, target: number): Promise<void> {
   }
   // Soft rollback: move version pointer back; does not drop objects
   if (m.kind === 'pg') {
-    await m.pg!.query('DELETE FROM railway_schema_version WHERE version > $1', [target]);
+    await m.pg!.query('DELETE FROM railway_schema_version WHERE version > $1', [
+      target,
+    ]);
   } else {
-    m.sqlite!.prepare('DELETE FROM railway_schema_version WHERE version > ?').run(target);
+    m.sqlite!.prepare(
+      'DELETE FROM railway_schema_version WHERE version > ?'
+    ).run(target);
   }
-  console.log(`Rolled back schema version pointer from ${current} to ${target}`);
+  console.log(
+    `Rolled back schema version pointer from ${current} to ${target}`
+  );
 }
 
 async function main() {
@@ -154,7 +208,8 @@ async function main() {
     .command('list')
     .description('List applied migrations')
     .action(async () => {
-      if (program.opts().database) process.env.DATABASE_URL = program.opts().database;
+      if (program.opts().database)
+        process.env.DATABASE_URL = program.opts().database;
       const m = await connect();
       const applied = await listApplied(m);
       const current = await getCurrentVersion(m);
@@ -168,7 +223,8 @@ async function main() {
     .command('status')
     .description('Show current version and pending migrations')
     .action(async () => {
-      if (program.opts().database) process.env.DATABASE_URL = program.opts().database;
+      if (program.opts().database)
+        process.env.DATABASE_URL = program.opts().database;
       const m = await connect();
       const current = await getCurrentVersion(m);
       const latest = Math.max(...MIGRATIONS.map((m) => m.version));
@@ -186,13 +242,23 @@ async function main() {
   program
     .command('apply')
     .description('Apply migrations up to a target')
-    .option('--to <version|latest>', 'Target version (number or "latest")', 'latest')
+    .option(
+      '--to <version|latest>',
+      'Target version (number or "latest")',
+      'latest'
+    )
     .action(async (cmd) => {
-      if (program.opts().database) process.env.DATABASE_URL = program.opts().database;
+      if (program.opts().database)
+        process.env.DATABASE_URL = program.opts().database;
       const m = await connect();
       const latest = Math.max(...MIGRATIONS.map((m) => m.version));
       const target = cmd.to === 'latest' ? latest : parseInt(cmd.to, 10);
-      if (!Number.isFinite(target)) throw new Error('Invalid target');
+      if (!Number.isFinite(target))
+        throw new ValidationError(
+          'Invalid target version',
+          ErrorCode.INVALID_INPUT,
+          { target: cmd.to }
+        );
       await applyTo(m, target);
       console.log('Done.');
       process.exit(0);
@@ -203,10 +269,16 @@ async function main() {
     .description('Rollback schema version pointer (non-destructive)')
     .option('--to <version>', 'Target version number', '0')
     .action(async (cmd) => {
-      if (program.opts().database) process.env.DATABASE_URL = program.opts().database;
+      if (program.opts().database)
+        process.env.DATABASE_URL = program.opts().database;
       const m = await connect();
       const target = parseInt(cmd.to, 10);
-      if (!Number.isFinite(target)) throw new Error('Invalid target');
+      if (!Number.isFinite(target))
+        throw new ValidationError(
+          'Invalid target version',
+          ErrorCode.INVALID_INPUT,
+          { target: cmd.to }
+        );
       await rollbackTo(m, target);
       console.log('Done.');
       process.exit(0);
@@ -219,4 +291,3 @@ main().catch((e) => {
   console.error(e);
   process.exit(1);
 });
-

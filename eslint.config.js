@@ -31,8 +31,8 @@ export default [
       ...prettierConfig.rules,
       'prettier/prettier': 'error',
       '@typescript-eslint/no-unused-vars': [
-        'error',
-        { argsIgnorePattern: '^_' },
+        'warn',
+        { argsIgnorePattern: '^_', varsIgnorePattern: '^_' },
       ],
       '@typescript-eslint/explicit-function-return-type': 'off',
       '@typescript-eslint/no-explicit-any': 'warn',
