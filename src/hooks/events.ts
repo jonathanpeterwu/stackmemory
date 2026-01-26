@@ -75,7 +75,10 @@ export class HookEventEmitter extends EventEmitter {
     if (!this.handlers.has(eventType)) {
       this.handlers.set(eventType, new Set());
     }
-    this.handlers.get(eventType)!.add(handler);
+    const handlers = this.handlers.get(eventType);
+    if (handlers) {
+      handlers.add(handler);
+    }
     this.on(eventType, handler);
   }
 
