@@ -3,23 +3,42 @@
  * Centralized exports for all MCP tool handlers
  */
 
-export { ContextHandlers, type ContextHandlerDependencies } from './context-handlers.js';
+export {
+  ContextHandlers,
+  type ContextHandlerDependencies,
+} from './context-handlers.js';
 export { TaskHandlers, type TaskHandlerDependencies } from './task-handlers.js';
-export { LinearHandlers, type LinearHandlerDependencies } from './linear-handlers.js';
-export { TraceHandlers, type TraceHandlerDependencies } from './trace-handlers.js';
+export {
+  LinearHandlers,
+  type LinearHandlerDependencies,
+} from './linear-handlers.js';
+export {
+  TraceHandlers,
+  type TraceHandlerDependencies,
+} from './trace-handlers.js';
+export {
+  DiscoveryHandlers,
+  type DiscoveryDependencies,
+} from './discovery-handlers.js';
 
-import { ContextHandlers, ContextHandlerDependencies } from './context-handlers.js';
+import {
+  ContextHandlers,
+  ContextHandlerDependencies,
+} from './context-handlers.js';
 import { TaskHandlers, TaskHandlerDependencies } from './task-handlers.js';
-import { LinearHandlers, LinearHandlerDependencies } from './linear-handlers.js';
+import {
+  LinearHandlers,
+  LinearHandlerDependencies,
+} from './linear-handlers.js';
 import { TraceHandlers, TraceHandlerDependencies } from './trace-handlers.js';
 
 // Combined dependencies interface
-export interface MCPHandlerDependencies extends 
-  ContextHandlerDependencies,
-  TaskHandlerDependencies,
-  LinearHandlerDependencies,
-  TraceHandlerDependencies {
-}
+export interface MCPHandlerDependencies
+  extends
+    ContextHandlerDependencies,
+    TaskHandlerDependencies,
+    LinearHandlerDependencies,
+    TraceHandlerDependencies {}
 
 /**
  * Handler factory that creates all MCP tool handlers
@@ -62,7 +81,9 @@ export class MCPHandlerFactory {
       case 'get_context':
         return this.contextHandlers.handleGetContext.bind(this.contextHandlers);
       case 'add_decision':
-        return this.contextHandlers.handleAddDecision.bind(this.contextHandlers);
+        return this.contextHandlers.handleAddDecision.bind(
+          this.contextHandlers
+        );
       case 'start_frame':
         return this.contextHandlers.handleStartFrame.bind(this.contextHandlers);
       case 'close_frame':
@@ -70,7 +91,9 @@ export class MCPHandlerFactory {
       case 'add_anchor':
         return this.contextHandlers.handleAddAnchor.bind(this.contextHandlers);
       case 'get_hot_stack':
-        return this.contextHandlers.handleGetHotStack.bind(this.contextHandlers);
+        return this.contextHandlers.handleGetHotStack.bind(
+          this.contextHandlers
+        );
 
       // Task handlers
       case 'create_task':
@@ -82,15 +105,21 @@ export class MCPHandlerFactory {
       case 'get_task_metrics':
         return this.taskHandlers.handleGetTaskMetrics.bind(this.taskHandlers);
       case 'add_task_dependency':
-        return this.taskHandlers.handleAddTaskDependency.bind(this.taskHandlers);
+        return this.taskHandlers.handleAddTaskDependency.bind(
+          this.taskHandlers
+        );
 
       // Linear handlers
       case 'linear_sync':
         return this.linearHandlers.handleLinearSync.bind(this.linearHandlers);
       case 'linear_update_task':
-        return this.linearHandlers.handleLinearUpdateTask.bind(this.linearHandlers);
+        return this.linearHandlers.handleLinearUpdateTask.bind(
+          this.linearHandlers
+        );
       case 'linear_get_tasks':
-        return this.linearHandlers.handleLinearGetTasks.bind(this.linearHandlers);
+        return this.linearHandlers.handleLinearGetTasks.bind(
+          this.linearHandlers
+        );
       case 'linear_status':
         return this.linearHandlers.handleLinearStatus.bind(this.linearHandlers);
 
@@ -100,13 +129,17 @@ export class MCPHandlerFactory {
       case 'analyze_traces':
         return this.traceHandlers.handleAnalyzeTraces.bind(this.traceHandlers);
       case 'start_browser_debug':
-        return this.traceHandlers.handleStartBrowserDebug.bind(this.traceHandlers);
+        return this.traceHandlers.handleStartBrowserDebug.bind(
+          this.traceHandlers
+        );
       case 'take_screenshot':
         return this.traceHandlers.handleTakeScreenshot.bind(this.traceHandlers);
       case 'execute_script':
         return this.traceHandlers.handleExecuteScript.bind(this.traceHandlers);
       case 'stop_browser_debug':
-        return this.traceHandlers.handleStopBrowserDebug.bind(this.traceHandlers);
+        return this.traceHandlers.handleStopBrowserDebug.bind(
+          this.traceHandlers
+        );
 
       default:
         throw new Error(`Unknown tool: ${toolName}`);
@@ -120,25 +153,25 @@ export class MCPHandlerFactory {
     return [
       // Context tools
       'get_context',
-      'add_decision', 
+      'add_decision',
       'start_frame',
       'close_frame',
       'add_anchor',
       'get_hot_stack',
-      
+
       // Task tools
       'create_task',
       'update_task_status',
       'get_active_tasks',
       'get_task_metrics',
       'add_task_dependency',
-      
+
       // Linear tools
       'linear_sync',
       'linear_update_task',
       'linear_get_tasks',
       'linear_status',
-      
+
       // Trace tools
       'get_traces',
       'analyze_traces',

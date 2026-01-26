@@ -24,6 +24,7 @@ import { BrowserMCPIntegration } from '../../features/browser/browser-mcp.js';
 import { TraceDetector } from '../../core/trace/trace-detector.js';
 import { ToolCall, Trace } from '../../core/trace/types.js';
 import { LLMContextRetrieval } from '../../core/retrieval/index.js';
+import { DiscoveryHandlers } from './handlers/discovery-handlers.js';
 import { v4 as uuidv4 } from 'uuid';
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
@@ -38,7 +39,6 @@ function getEnv(key: string, defaultValue?: string): string {
 function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
-
 
 // ============================================
 // Simple Local MCP Server
@@ -57,6 +57,7 @@ class LocalStackMemoryMCP {
   private browserMCP: BrowserMCPIntegration;
   private traceDetector: TraceDetector;
   private contextRetrieval: LLMContextRetrieval;
+  private discoveryHandlers: DiscoveryHandlers;
 
   constructor() {
     // Find project root (where .git is)
@@ -116,6 +117,14 @@ class LocalStackMemoryMCP {
       this.frameManager,
       this.projectId
     );
+
+    // Initialize Discovery Handlers
+    this.discoveryHandlers = new DiscoveryHandlers({
+      frameManager: this.frameManager,
+      contextRetrieval: this.contextRetrieval,
+      db: this.db,
+      projectRoot: this.projectRoot,
+    });
 
     this.setupHandlers();
     this.loadInitialContext();
@@ -700,6 +709,93 @@ class LocalStackMemoryMCP {
                 },
               },
             },
+            // Discovery tools
+            {
+              name: 'sm_discover',
+              description:
+                'Discover relevant files based on current context. Extracts keywords from active frames and searches codebase.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  query: {
+                    type: 'string',
+                    description: 'Optional query to focus the discovery',
+                  },
+                  depth: {
+                    type: 'string',
+                    enum: ['shallow', 'medium', 'deep'],
+                    description: 'Search depth',
+                  },
+                  maxFiles: {
+                    type: 'number',
+                    description: 'Maximum files to return',
+                  },
+                },
+              },
+            },
+            {
+              name: 'sm_related_files',
+              description: 'Find files related to a specific file or concept',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  file: {
+                    type: 'string',
+                    description: 'File path to find related files for',
+                  },
+                  concept: {
+                    type: 'string',
+                    description: 'Concept to search for',
+                  },
+                  maxFiles: {
+                    type: 'number',
+                    description: 'Maximum files to return',
+                  },
+                },
+              },
+            },
+            {
+              name: 'sm_session_summary',
+              description:
+                'Get summary of current session with active tasks, files, and decisions',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  includeFiles: {
+                    type: 'boolean',
+                    description: 'Include recently accessed files',
+                  },
+                  includeDecisions: {
+                    type: 'boolean',
+                    description: 'Include recent decisions',
+                  },
+                },
+              },
+            },
+            {
+              name: 'sm_search',
+              description:
+                'Search across StackMemory - frames, events, decisions, tasks',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  query: {
+                    type: 'string',
+                    description: 'Search query',
+                  },
+                  scope: {
+                    type: 'string',
+                    enum: ['all', 'frames', 'events', 'decisions', 'tasks'],
+                    description: 'Scope of search',
+                  },
+                  limit: {
+                    type: 'number',
+                    description: 'Maximum results',
+                  },
+                },
+                required: ['query'],
+              },
+            },
           ],
         };
       }
@@ -824,6 +920,23 @@ class LocalStackMemoryMCP {
 
             case 'get_summary':
               result = await this.handleGetSummary(args);
+              break;
+
+            // Discovery tools
+            case 'sm_discover':
+              result = await this.handleSmDiscover(args);
+              break;
+
+            case 'sm_related_files':
+              result = await this.handleSmRelatedFiles(args);
+              break;
+
+            case 'sm_session_summary':
+              result = await this.handleSmSessionSummary(args);
+              break;
+
+            case 'sm_search':
+              result = await this.handleSmSearch(args);
               break;
 
             default:
@@ -1871,6 +1984,195 @@ ${typeBreakdown}`,
           {
             type: 'text',
             text: `❌ Failed to get summary: ${error.message}`,
+          },
+        ],
+      };
+    }
+  }
+
+  // ============================================
+  // Discovery Tools Handlers
+  // ============================================
+
+  private async handleSmDiscover(args: any) {
+    return this.discoveryHandlers.handleDiscover(args);
+  }
+
+  private async handleSmRelatedFiles(args: any) {
+    return this.discoveryHandlers.handleRelatedFiles(args);
+  }
+
+  private async handleSmSessionSummary(args: any) {
+    return this.discoveryHandlers.handleSessionSummary(args);
+  }
+
+  private async handleSmSearch(args: any) {
+    try {
+      const { query, scope = 'all', limit = 20 } = args;
+
+      if (!query) {
+        throw new Error('Query is required');
+      }
+
+      const results: any[] = [];
+
+      // Search frames
+      if (scope === 'all' || scope === 'frames') {
+        const frames = this.db
+          .prepare(
+            `
+          SELECT frame_id, name, type, created_at, inputs, outputs
+          FROM frames
+          WHERE project_id = ? AND (name LIKE ? OR inputs LIKE ? OR outputs LIKE ?)
+          ORDER BY created_at DESC
+          LIMIT ?
+        `
+          )
+          .all(
+            this.projectId,
+            `%${query}%`,
+            `%${query}%`,
+            `%${query}%`,
+            limit
+          ) as any[];
+
+        frames.forEach((f) => {
+          results.push({
+            type: 'frame',
+            id: f.frame_id,
+            name: f.name,
+            frameType: f.type,
+            created: new Date(f.created_at * 1000).toISOString(),
+          });
+        });
+      }
+
+      // Search events
+      if (scope === 'all' || scope === 'events') {
+        const events = this.db
+          .prepare(
+            `
+          SELECT e.event_id, e.type, e.data, e.timestamp, f.name as frame_name
+          FROM events e
+          JOIN frames f ON e.frame_id = f.frame_id
+          WHERE f.project_id = ? AND e.data LIKE ?
+          ORDER BY e.timestamp DESC
+          LIMIT ?
+        `
+          )
+          .all(this.projectId, `%${query}%`, limit) as any[];
+
+        events.forEach((e) => {
+          results.push({
+            type: 'event',
+            id: e.event_id,
+            eventType: e.type,
+            frame: e.frame_name,
+            timestamp: new Date(e.timestamp * 1000).toISOString(),
+          });
+        });
+      }
+
+      // Search decisions/anchors
+      if (scope === 'all' || scope === 'decisions') {
+        const anchors = this.db
+          .prepare(
+            `
+          SELECT a.anchor_id, a.type, a.text, a.priority, a.created_at, f.name as frame_name
+          FROM anchors a
+          JOIN frames f ON a.frame_id = f.frame_id
+          WHERE f.project_id = ? AND a.text LIKE ?
+          ORDER BY a.created_at DESC
+          LIMIT ?
+        `
+          )
+          .all(this.projectId, `%${query}%`, limit) as any[];
+
+        anchors.forEach((a) => {
+          results.push({
+            type: 'decision',
+            id: a.anchor_id,
+            decisionType: a.type,
+            text: a.text,
+            priority: a.priority,
+            frame: a.frame_name,
+          });
+        });
+      }
+
+      // Search tasks
+      if (scope === 'all' || scope === 'tasks') {
+        try {
+          const tasks = this.db
+            .prepare(
+              `
+            SELECT id, title, description, status, priority
+            FROM task_cache
+            WHERE title LIKE ? OR description LIKE ?
+            ORDER BY created_at DESC
+            LIMIT ?
+          `
+            )
+            .all(`%${query}%`, `%${query}%`, limit) as any[];
+
+          tasks.forEach((t) => {
+            results.push({
+              type: 'task',
+              id: t.id,
+              title: t.title,
+              status: t.status,
+              priority: t.priority,
+            });
+          });
+        } catch {
+          // Task table may not exist
+        }
+      }
+
+      // Format results
+      let response = `# Search Results for "${query}"\n\n`;
+      response += `Found ${results.length} results\n\n`;
+
+      const grouped = results.reduce(
+        (acc, r) => {
+          if (!acc[r.type]) acc[r.type] = [];
+          acc[r.type].push(r);
+          return acc;
+        },
+        {} as Record<string, any[]>
+      );
+
+      for (const [type, items] of Object.entries(grouped)) {
+        response += `## ${type.charAt(0).toUpperCase() + type.slice(1)}s (${items.length})\n`;
+        for (const item of items.slice(0, 10)) {
+          if (type === 'frame') {
+            response += `- [${item.frameType}] ${item.name}\n`;
+          } else if (type === 'decision') {
+            response += `- [${item.decisionType}] ${item.text.slice(0, 60)}...\n`;
+          } else if (type === 'task') {
+            response += `- [${item.status}] ${item.title}\n`;
+          } else {
+            response += `- ${JSON.stringify(item).slice(0, 80)}...\n`;
+          }
+        }
+        response += '\n';
+      }
+
+      return {
+        content: [
+          {
+            type: 'text',
+            text: response,
+          },
+        ],
+        metadata: { results, query, scope },
+      };
+    } catch (error: any) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: `❌ Search failed: ${error.message}`,
           },
         ],
       };
