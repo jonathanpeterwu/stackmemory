@@ -26,6 +26,12 @@ vi.mock('../../core/monitoring/logger.js', () => ({
     warn: vi.fn(),
     error: vi.fn(),
   },
+  Logger: class {
+    info = vi.fn();
+    debug = vi.fn();
+    warn = vi.fn();
+    error = vi.fn();
+  },
 }));
 
 describe('Claude Skills', () => {
@@ -504,6 +510,7 @@ describe('Claude Skills', () => {
         'dig',
         'dashboard',
         'api',
+        'repo',
       ]);
     });
 

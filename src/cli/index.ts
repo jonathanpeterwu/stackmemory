@@ -36,7 +36,6 @@ import {
   createDecisionCommand,
   createMemoryCommand,
 } from './commands/decision.js';
-import { createStorageCommand } from './commands/storage.js';
 import { createSkillsCommand } from './commands/skills.js';
 import { createTestCommand } from './commands/test.js';
 import clearCommand from './commands/clear.js';
@@ -659,7 +658,6 @@ program.addCommand(createConfigCommand());
 program.addCommand(createHandoffCommand());
 program.addCommand(createDecisionCommand());
 program.addCommand(createMemoryCommand());
-program.addCommand(createStorageCommand());
 program.addCommand(createSkillsCommand());
 program.addCommand(createTestCommand());
 program.addCommand(clearCommand);
