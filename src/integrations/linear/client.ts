@@ -4,6 +4,7 @@
  */
 
 import { logger } from '../../core/monitoring/logger.js';
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 
 export interface LinearConfig {
   apiKey: string;
@@ -75,7 +76,10 @@ export class LinearClient {
     this.baseUrl = config.baseUrl || 'https://api.linear.app';
 
     if (!config.apiKey) {
-      throw new Error('Linear API key is required');
+      throw new IntegrationError(
+        'Linear API key is required',
+        ErrorCode.LINEAR_AUTH_FAILED
+      );
     }
   }
 
@@ -206,7 +210,11 @@ export class LinearClient {
         await this.sleep(waitTime);
         return this.graphql<T>(query, variables, retries - 1, allowAuthRefresh);
       }
-      throw new Error('Linear API rate limit exceeded after retries');
+      throw new IntegrationError(
+        'Linear API rate limit exceeded after retries',
+        ErrorCode.LINEAR_API_ERROR,
+        { retries: 0 }
+      );
     }
 
     if (!response.ok) {
@@ -215,8 +223,14 @@ export class LinearClient {
         'Linear API error response:',
         new Error(`${response.status}: ${errorText}`)
       );
-      throw new Error(
-        `Linear API error: ${response.status} ${response.statusText} - ${errorText}`
+      throw new IntegrationError(
+        `Linear API error: ${response.status} ${response.statusText}`,
+        ErrorCode.LINEAR_API_ERROR,
+        {
+          status: response.status,
+          statusText: response.statusText,
+          body: errorText,
+        }
       );
     }
 
@@ -244,7 +258,11 @@ export class LinearClient {
       }
 
       logger.error('Linear GraphQL errors:', { errors: result.errors });
-      throw new Error(`Linear GraphQL error: ${result.errors[0].message}`);
+      throw new IntegrationError(
+        `Linear GraphQL error: ${result.errors[0].message}`,
+        ErrorCode.LINEAR_API_ERROR,
+        { errors: result.errors }
+      );
     }
 
     return result.data as T;
@@ -297,7 +315,11 @@ export class LinearClient {
     }>(mutation, { input });
 
     if (!result.issueCreate.success) {
-      throw new Error('Failed to create Linear issue');
+      throw new IntegrationError(
+        'Failed to create Linear issue',
+        ErrorCode.LINEAR_API_ERROR,
+        { input }
+      );
     }
 
     return result.issueCreate.issue;
@@ -353,7 +375,11 @@ export class LinearClient {
     }>(mutation, { id: issueId, input: updates });
 
     if (!result.issueUpdate.success) {
-      throw new Error(`Failed to update Linear issue ${issueId}`);
+      throw new IntegrationError(
+        `Failed to update Linear issue ${issueId}`,
+        ErrorCode.LINEAR_API_ERROR,
+        { issueId, updates }
+      );
     }
 
     return result.issueUpdate.issue;
@@ -488,7 +514,11 @@ export class LinearClient {
         team: { id: string; name: string; key: string };
       }>(query, { id: teamId });
       if (!result.team) {
-        throw new Error(`Team ${teamId} not found`);
+        throw new IntegrationError(
+          `Team ${teamId} not found`,
+          ErrorCode.LINEAR_API_ERROR,
+          { teamId }
+        );
       }
       return result.team;
     } else {
@@ -499,7 +529,10 @@ export class LinearClient {
       }>(query);
 
       if (result.teams.nodes.length === 0) {
-        throw new Error('No teams found');
+        throw new IntegrationError(
+          'No teams found',
+          ErrorCode.LINEAR_API_ERROR
+        );
       }
 
       return result.teams.nodes[0]!;

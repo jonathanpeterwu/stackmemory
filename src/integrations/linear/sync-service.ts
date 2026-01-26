@@ -1,22 +1,9 @@
-import { LinearClient, LinearIssue, LinearCreateIssueInput } from './client.js';
+import { LinearClient, LinearCreateIssueInput } from './client.js';
 import { ContextService } from '../../services/context-service.js';
 import { ConfigService } from '../../services/config-service.js';
 import { logger } from '../../core/monitoring/logger.js';
 import { Task, TaskStatus, TaskPriority } from '../../types/task.js';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
-
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
-
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 
 // Minimal issue data needed for sync (webhook payloads may have fewer fields)
 export interface LinearIssueData {
@@ -53,7 +40,10 @@ export class LinearSyncService {
 
     const apiKey = process.env['LINEAR_API_KEY'];
     if (!apiKey) {
-      throw new Error('LINEAR_API_KEY environment variable not set');
+      throw new IntegrationError(
+        'LINEAR_API_KEY environment variable not set',
+        ErrorCode.LINEAR_AUTH_FAILED
+      );
     }
 
     this.linearClient = new LinearClient({ apiKey });
@@ -73,7 +63,10 @@ export class LinearSyncService {
       const teamId = config.integrations?.linear?.teamId;
 
       if (!teamId) {
-        throw new Error('Linear team ID not configured');
+        throw new IntegrationError(
+          'Linear team ID not configured',
+          ErrorCode.LINEAR_SYNC_FAILED
+        );
       }
 
       const issues = await this.linearClient.getIssues({ teamId });
@@ -133,7 +126,11 @@ export class LinearSyncService {
     try {
       const task = await this.contextService.getTask(taskId);
       if (!task) {
-        throw new Error(`Task ${taskId} not found`);
+        throw new IntegrationError(
+          `Task ${taskId} not found`,
+          ErrorCode.LINEAR_SYNC_FAILED,
+          { taskId }
+        );
       }
 
       if (task.externalId) {
@@ -148,7 +145,10 @@ export class LinearSyncService {
         const config = await this.configService.getConfig();
         const teamId = config.integrations?.linear?.teamId;
         if (!teamId) {
-          throw new Error('Linear team ID not configured');
+          throw new IntegrationError(
+            'Linear team ID not configured',
+            ErrorCode.LINEAR_SYNC_FAILED
+          );
         }
         const createData: LinearCreateIssueInput = {
           title: task.title,

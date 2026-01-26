@@ -7,20 +7,7 @@ import { createHash, randomBytes } from 'crypto';
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../core/monitoring/logger.js';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
-
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
-
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 
 export interface LinearAuthConfig {
   clientId: string;
@@ -94,7 +81,10 @@ export class LinearAuthManager {
    */
   generateAuthUrl(state?: string): { url: string; codeVerifier: string } {
     if (!this.config) {
-      throw new Error('Linear OAuth configuration not loaded');
+      throw new IntegrationError(
+        'Linear OAuth configuration not loaded',
+        ErrorCode.LINEAR_AUTH_FAILED
+      );
     }
 
     // Generate PKCE parameters
@@ -130,7 +120,10 @@ export class LinearAuthManager {
     codeVerifier: string
   ): Promise<LinearTokens> {
     if (!this.config) {
-      throw new Error('Linear OAuth configuration not loaded');
+      throw new IntegrationError(
+        'Linear OAuth configuration not loaded',
+        ErrorCode.LINEAR_AUTH_FAILED
+      );
     }
 
     const tokenUrl = 'https://api.linear.app/oauth/token';
@@ -155,7 +148,11 @@ export class LinearAuthManager {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Token exchange failed: ${response.status} ${errorText}`);
+      throw new IntegrationError(
+        `Token exchange failed: ${response.status}`,
+        ErrorCode.LINEAR_AUTH_FAILED,
+        { status: response.status, body: errorText }
+      );
     }
 
     const result = (await response.json()) as LinearAuthResult;
@@ -179,12 +176,18 @@ export class LinearAuthManager {
    */
   async refreshAccessToken(): Promise<LinearTokens> {
     if (!this.config) {
-      throw new Error('Linear OAuth configuration not loaded');
+      throw new IntegrationError(
+        'Linear OAuth configuration not loaded',
+        ErrorCode.LINEAR_AUTH_FAILED
+      );
     }
 
     const currentTokens = this.loadTokens();
     if (!currentTokens?.refreshToken) {
-      throw new Error('No refresh token available');
+      throw new IntegrationError(
+        'No refresh token available',
+        ErrorCode.LINEAR_AUTH_FAILED
+      );
     }
 
     const tokenUrl = 'https://api.linear.app/oauth/token';
@@ -207,7 +210,11 @@ export class LinearAuthManager {
 
     if (!response.ok) {
       const errorText = await response.text();
-      throw new Error(`Token refresh failed: ${response.status} ${errorText}`);
+      throw new IntegrationError(
+        `Token refresh failed: ${response.status}`,
+        ErrorCode.LINEAR_AUTH_FAILED,
+        { status: response.status, body: errorText }
+      );
     }
 
     const result = (await response.json()) as LinearAuthResult;
@@ -229,7 +236,10 @@ export class LinearAuthManager {
   async getValidToken(): Promise<string> {
     const tokens = this.loadTokens();
     if (!tokens) {
-      throw new Error('No Linear tokens found. Please complete OAuth setup.');
+      throw new IntegrationError(
+        'No Linear tokens found. Please complete OAuth setup.',
+        ErrorCode.LINEAR_AUTH_FAILED
+      );
     }
 
     // Check if token expires in next 5 minutes
@@ -362,8 +372,9 @@ export class LinearOAuthSetup {
     try {
       const codeVerifier = process.env['_LINEAR_CODE_VERIFIER'];
       if (!codeVerifier) {
-        throw new Error(
-          'Code verifier not found. Please restart the setup process.'
+        throw new IntegrationError(
+          'Code verifier not found. Please restart the setup process.',
+          ErrorCode.LINEAR_AUTH_FAILED
         );
       }
 

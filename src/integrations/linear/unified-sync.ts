@@ -5,10 +5,11 @@
  */
 
 import { LinearClient, LinearIssue, LinearCreateIssueInput } from './client.js';
-import { LinearDuplicateDetector, DuplicateCheckResult } from './sync.js';
+import { LinearDuplicateDetector } from './sync.js';
 import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { LinearAuthManager } from './auth.js';
 import { logger } from '../../core/monitoring/logger.js';
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 import { Task, TaskStatus, TaskPriority } from '../../types/task.js';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
@@ -20,25 +21,25 @@ export interface UnifiedSyncConfig {
   enabled: boolean;
   direction: 'bidirectional' | 'to_linear' | 'from_linear';
   defaultTeamId?: string;
-  
+
   // Duplicate detection
   duplicateDetection: boolean;
   duplicateSimilarityThreshold: number; // 0-1, default 0.85
   mergeStrategy: 'merge_content' | 'skip' | 'create_anyway';
-  
+
   // Conflict resolution
   conflictResolution: 'newest_wins' | 'linear_wins' | 'local_wins' | 'manual';
-  
+
   // Task planning
   taskPlanningEnabled: boolean;
   taskPlanFile?: string; // Default: .stackmemory/task-plan.md
   autoCreateTaskPlan: boolean;
-  
+
   // Performance
   maxBatchSize: number;
   rateLimitDelay: number; // ms between requests
   maxRetries: number;
-  
+
   // Auto-sync
   autoSync: boolean;
   autoSyncInterval?: number; // minutes
@@ -128,11 +129,11 @@ export class UnifiedLinearSync extends EventEmitter {
     this.authManager = authManager;
     this.projectRoot = projectRoot;
     this.config = { ...DEFAULT_UNIFIED_CONFIG, ...config };
-    
+
     // Initialize Linear client - will be set up in initialize()
     this.linearClient = null as any;
     this.duplicateDetector = null as any;
-    
+
     // Load existing mappings
     this.loadMappings();
   }
@@ -145,7 +146,10 @@ export class UnifiedLinearSync extends EventEmitter {
       // Get Linear authentication
       const token = await this.authManager.getValidToken();
       if (!token) {
-        throw new Error('Linear authentication required. Run "stackmemory linear auth" first.');
+        throw new IntegrationError(
+          'Linear authentication required. Run "stackmemory linear auth" first.',
+          ErrorCode.LINEAR_AUTH_FAILED
+        );
       }
 
       // Initialize Linear client with proper auth
@@ -188,12 +192,15 @@ export class UnifiedLinearSync extends EventEmitter {
    */
   async sync(): Promise<SyncStats> {
     if (this.syncInProgress) {
-      throw new Error('Sync already in progress');
+      throw new IntegrationError(
+        'Sync already in progress',
+        ErrorCode.LINEAR_SYNC_FAILED
+      );
     }
 
     this.syncInProgress = true;
     const startTime = Date.now();
-    
+
     const stats: SyncStats = {
       toLinear: { created: 0, updated: 0, skipped: 0, duplicatesMerged: 0 },
       fromLinear: { created: 0, updated: 0, skipped: 0 },
@@ -243,10 +250,10 @@ export class UnifiedLinearSync extends EventEmitter {
     } catch (error: unknown) {
       stats.errors.push((error as Error).message);
       stats.duration = Date.now() - startTime;
-      
+
       this.emit('sync:failed', { stats, error });
       logger.error('Unified sync failed:', error as Error);
-      
+
       throw error;
     } finally {
       this.syncInProgress = false;
@@ -261,8 +268,9 @@ export class UnifiedLinearSync extends EventEmitter {
       logger.debug('Syncing from Linear...');
 
       // Get team ID
-      const teamId = this.config.defaultTeamId || (await this.getDefaultTeamId());
-      
+      const teamId =
+        this.config.defaultTeamId || (await this.getDefaultTeamId());
+
       // Fetch Linear issues
       const issues = await this.linearClient.getIssues({
         teamId,
@@ -272,10 +280,10 @@ export class UnifiedLinearSync extends EventEmitter {
       for (const issue of issues) {
         try {
           await this.delay(this.config.rateLimitDelay);
-          
+
           // Check if we have this issue mapped
           const localTaskId = this.findLocalTaskByLinearId(issue.id);
-          
+
           if (localTaskId) {
             // Update existing task
             const localTask = await this.taskStore.getTask(localTaskId);
@@ -291,7 +299,9 @@ export class UnifiedLinearSync extends EventEmitter {
             stats.fromLinear.created++;
           }
         } catch (error: unknown) {
-          stats.errors.push(`Failed to sync issue ${issue.identifier}: ${(error as Error).message}`);
+          stats.errors.push(
+            `Failed to sync issue ${issue.identifier}: ${(error as Error).message}`
+          );
         }
       }
     } catch (error: unknown) {
@@ -309,15 +319,16 @@ export class UnifiedLinearSync extends EventEmitter {
 
       // Get all local tasks
       const tasks = await this.taskStore.getAllTasks();
-      const teamId = this.config.defaultTeamId || (await this.getDefaultTeamId());
+      const teamId =
+        this.config.defaultTeamId || (await this.getDefaultTeamId());
 
       for (const task of tasks) {
         try {
           await this.delay(this.config.rateLimitDelay);
-          
+
           // Skip if already mapped to Linear
           const linearId = this.mappings.get(task.id);
-          
+
           if (linearId) {
             // Update existing Linear issue
             const linearIssue = await this.linearClient.getIssue(linearId);
@@ -330,15 +341,19 @@ export class UnifiedLinearSync extends EventEmitter {
           } else {
             // Check for duplicates before creating
             if (this.config.duplicateDetection) {
-              const duplicateCheck = await this.duplicateDetector.checkForDuplicate(
-                task.title,
-                teamId
-              );
-              
+              const duplicateCheck =
+                await this.duplicateDetector.checkForDuplicate(
+                  task.title,
+                  teamId
+                );
+
               if (duplicateCheck.isDuplicate && duplicateCheck.existingIssue) {
                 if (this.config.mergeStrategy === 'merge_content') {
                   // Merge into existing
-                  await this.mergeTaskIntoLinear(task, duplicateCheck.existingIssue);
+                  await this.mergeTaskIntoLinear(
+                    task,
+                    duplicateCheck.existingIssue
+                  );
                   this.mappings.set(task.id, duplicateCheck.existingIssue.id);
                   stats.toLinear.duplicatesMerged++;
                 } else if (this.config.mergeStrategy === 'skip') {
@@ -357,7 +372,9 @@ export class UnifiedLinearSync extends EventEmitter {
             }
           }
         } catch (error: unknown) {
-          stats.errors.push(`Failed to sync task ${task.id}: ${(error as Error).message}`);
+          stats.errors.push(
+            `Failed to sync task ${task.id}: ${(error as Error).message}`
+          );
         }
       }
     } catch (error: unknown) {
@@ -476,7 +493,7 @@ export class UnifiedLinearSync extends EventEmitter {
    */
   private generateTaskReport(plan: TaskPlan, stats: SyncStats): void {
     const reportFile = join(this.projectRoot, '.stackmemory', 'task-report.md');
-    
+
     let content = `# Task Sync Report\n\n`;
     content += `**Last Updated:** ${plan.lastUpdated.toLocaleString()}\n`;
     content += `**Sync Duration:** ${stats.duration}ms\n\n`;
@@ -505,13 +522,13 @@ export class UnifiedLinearSync extends EventEmitter {
     plan.phases.forEach((phase) => {
       content += `### ${phase.name} (${phase.tasks.length})\n`;
       content += `> ${phase.description}\n\n`;
-      
+
       if (phase.tasks.length > 0) {
         phase.tasks.slice(0, 10).forEach((task) => {
           const linearLink = task.linearId ? ` [Linear]` : '';
           content += `- **${task.title}**${linearLink}\n`;
         });
-        
+
         if (phase.tasks.length > 10) {
           content += `- _...and ${phase.tasks.length - 10} more_\n`;
         }
@@ -526,11 +543,14 @@ export class UnifiedLinearSync extends EventEmitter {
   /**
    * Helper methods
    */
-  
+
   private async getDefaultTeamId(): Promise<string> {
     const teams = await this.linearClient.getTeams();
     if (teams.length === 0) {
-      throw new Error('No Linear teams found');
+      throw new IntegrationError(
+        'No Linear teams found',
+        ErrorCode.LINEAR_API_ERROR
+      );
     }
     return teams[0]!.id;
   }
@@ -609,7 +629,10 @@ export class UnifiedLinearSync extends EventEmitter {
     });
   }
 
-  private async updateLinearIssue(issue: LinearIssue, task: Task): Promise<void> {
+  private async updateLinearIssue(
+    issue: LinearIssue,
+    task: Task
+  ): Promise<void> {
     await this.linearClient.updateIssue(issue.id, {
       title: task.title,
       description: task.description,
@@ -617,7 +640,10 @@ export class UnifiedLinearSync extends EventEmitter {
     });
   }
 
-  private async mergeTaskIntoLinear(task: Task, existingIssue: LinearIssue): Promise<void> {
+  private async mergeTaskIntoLinear(
+    task: Task,
+    existingIssue: LinearIssue
+  ): Promise<void> {
     await this.duplicateDetector.mergeIntoExisting(
       existingIssue,
       task.title,
@@ -642,7 +668,9 @@ export class UnifiedLinearSync extends EventEmitter {
     }
   }
 
-  private mapLinearPriorityToPriority(priority?: number): TaskPriority | undefined {
+  private mapLinearPriorityToPriority(
+    priority?: number
+  ): TaskPriority | undefined {
     switch (priority) {
       case 1:
         return 'urgent';
@@ -673,7 +701,11 @@ export class UnifiedLinearSync extends EventEmitter {
   }
 
   private loadMappings(): void {
-    const mappingFile = join(this.projectRoot, '.stackmemory', 'linear-mappings.json');
+    const mappingFile = join(
+      this.projectRoot,
+      '.stackmemory',
+      'linear-mappings.json'
+    );
     if (existsSync(mappingFile)) {
       try {
         const data = JSON.parse(readFileSync(mappingFile, 'utf8'));
@@ -685,7 +717,11 @@ export class UnifiedLinearSync extends EventEmitter {
   }
 
   private saveMappings(): void {
-    const mappingFile = join(this.projectRoot, '.stackmemory', 'linear-mappings.json');
+    const mappingFile = join(
+      this.projectRoot,
+      '.stackmemory',
+      'linear-mappings.json'
+    );
     const data = Object.fromEntries(this.mappings);
     writeFileSync(mappingFile, JSON.stringify(data, null, 2));
   }
@@ -699,7 +735,7 @@ export class UnifiedLinearSync extends EventEmitter {
         logger.error('Failed to load task plan:', error as Error);
       }
     }
-    
+
     return {
       version: '1.0.0',
       lastUpdated: new Date(),
