@@ -685,4 +685,171 @@ export class LinearClient {
 
     return result.issues.nodes;
   }
+
+  /**
+   * Assign an issue to a user
+   */
+  async assignIssue(
+    issueId: string,
+    assigneeId: string
+  ): Promise<{ success: boolean; issue?: LinearIssue }> {
+    const mutation = `
+      mutation AssignIssue($issueId: String!, $assigneeId: String!) {
+        issueUpdate(id: $issueId, input: { assigneeId: $assigneeId }) {
+          success
+          issue {
+            id
+            identifier
+            title
+            assignee {
+              id
+              name
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql<{
+      issueUpdate: {
+        success: boolean;
+        issue?: LinearIssue;
+      };
+    }>(mutation, { issueId, assigneeId });
+
+    return result.issueUpdate;
+  }
+
+  /**
+   * Update issue state (e.g., move to "In Progress")
+   */
+  async updateIssueState(
+    issueId: string,
+    stateId: string
+  ): Promise<{ success: boolean; issue?: LinearIssue }> {
+    const mutation = `
+      mutation UpdateIssueState($issueId: String!, $stateId: String!) {
+        issueUpdate(id: $issueId, input: { stateId: $stateId }) {
+          success
+          issue {
+            id
+            identifier
+            title
+            state {
+              id
+              name
+              type
+            }
+          }
+        }
+      }
+    `;
+
+    const result = await this.graphql<{
+      issueUpdate: {
+        success: boolean;
+        issue?: LinearIssue;
+      };
+    }>(mutation, { issueId, stateId });
+
+    return result.issueUpdate;
+  }
+
+  /**
+   * Get an issue by ID with team info
+   */
+  async getIssueById(issueId: string): Promise<LinearIssue | null> {
+    const query = `
+      query GetIssue($issueId: String!) {
+        issue(id: $issueId) {
+          id
+          identifier
+          title
+          description
+          state {
+            id
+            name
+            type
+          }
+          priority
+          assignee {
+            id
+            name
+            email
+          }
+          estimate
+          labels {
+            nodes {
+              id
+              name
+            }
+          }
+          team {
+            id
+            name
+          }
+          createdAt
+          updatedAt
+          url
+        }
+      }
+    `;
+
+    try {
+      const result = await this.graphql<{
+        issue: LinearIssue & { team: { id: string; name: string } };
+      }>(query, { issueId });
+      return result.issue;
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Start working on an issue (assign to self and move to In Progress)
+   */
+  async startIssue(issueId: string): Promise<{
+    success: boolean;
+    issue?: LinearIssue;
+    error?: string;
+  }> {
+    try {
+      // Get current user
+      const user = await this.getViewer();
+
+      // Get the issue to find its team
+      const issue = await this.getIssueById(issueId);
+      if (!issue) {
+        return { success: false, error: 'Issue not found' };
+      }
+
+      // Assign to self
+      const assignResult = await this.assignIssue(issueId, user.id);
+      if (!assignResult.success) {
+        return { success: false, error: 'Failed to assign issue' };
+      }
+
+      // Find the "In Progress" or "started" state for this issue's team
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const teamId = (issue as any).team?.id;
+      if (teamId) {
+        const states = await this.getWorkflowStates(teamId);
+        const inProgressState = states.find(
+          (s) =>
+            s.type === 'started' || s.name.toLowerCase().includes('progress')
+        );
+
+        if (inProgressState) {
+          await this.updateIssueState(issueId, inProgressState.id);
+        }
+      }
+
+      return { success: true, issue: assignResult.issue };
+    } catch (error) {
+      return {
+        success: false,
+        error: error instanceof Error ? error.message : 'Unknown error',
+      };
+    }
+  }
 }
