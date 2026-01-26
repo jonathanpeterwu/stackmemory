@@ -47,32 +47,6 @@ describe('CLI Integration Tests', () => {
       expect(result).toContain('Context Usage Status');
       expect(result).toContain('Usage:');
     });
-
-    it.skip('should save continuity ledger - NEEDS IMPLEMENTATION', () => {
-      const result = execSync(cli('clear --save'), {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      expect(result).toContain('Continuity ledger saved');
-
-      // Check that ledger file was created
-      const ledgerPath = path.join(testDir, '.stackmemory', 'continuity.json');
-      expect(fs.existsSync(ledgerPath)).toBe(true);
-    });
-
-    it.skip('should restore from ledger - NEEDS IMPLEMENTATION', () => {
-      // First save a ledger
-      execSync(cli('clear --save'), { cwd: testDir });
-
-      // Then restore
-      const result = execSync(cli('clear --restore'), {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      expect(result).toContain('restored');
-    });
   });
 
   describe('Workflow Commands', () => {
@@ -164,35 +138,6 @@ describe('CLI Integration Tests', () => {
 
       // Just check it ran without error
       expect(result).toBeDefined();
-    });
-  });
-
-  describe('Feature Integration', () => {
-    it.skip('should handle full workflow - NEEDS IMPLEMENTATION', () => {
-      // Start a workflow
-      let result = execSync(cli('workflow --start tdd'), {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      expect(result).toContain('workflow');
-
-      // Generate handoff
-      result = execSync(cli('handoff capture'), {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      // Just verify it ran
-      expect(result).toBeDefined();
-
-      // Save and clear
-      result = execSync(cli('clear --save'), {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      expect(result).toContain('Continuity ledger saved');
     });
   });
 });

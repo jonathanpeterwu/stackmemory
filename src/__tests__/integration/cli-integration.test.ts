@@ -54,7 +54,7 @@ describe('CLI Integration', () => {
       });
 
       expect(result).toContain('StackMemory initialized');
-      
+
       // Check that .stackmemory directory was created
       const stackmemoryDir = path.join(testDir, '.stackmemory');
       expect(fs.existsSync(stackmemoryDir)).toBe(true);
@@ -62,20 +62,6 @@ describe('CLI Integration', () => {
   });
 
   describe('Status Command', () => {
-    it.skip('should show status after init - needs database schema', () => {
-      // Initialize first
-      execSync(`node ${cliPath} init`, { cwd: testDir });
-
-      // Check status
-      const result = execSync(`node ${cliPath} status`, {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      expect(result).toContain('StackMemory Status');
-      expect(result).toContain('Initialized:');
-    });
-
     it('should handle status when not initialized', () => {
       try {
         execSync(`node ${cliPath} status`, {
@@ -99,19 +85,6 @@ describe('CLI Integration', () => {
       });
 
       expect(result).toContain('Context Usage');
-    });
-
-    it.skip('should check if clear is recommended - needs git repo', () => {
-      // Initialize first
-      execSync(`node ${cliPath} init`, { cwd: testDir });
-
-      const result = execSync(`node ${cliPath} clear --check`, {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      // Should provide some recommendation
-      expect(result.length).toBeGreaterThan(0);
     });
   });
 
