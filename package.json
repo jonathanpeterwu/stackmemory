@@ -12,7 +12,8 @@
     "stackmemory": "dist/cli/index.js",
     "codex-sm": "dist/cli/codex-sm.js",
     "claude-sm": "bin/claude-sm",
-    "claude-smd": "bin/claude-smd"
+    "claude-smd": "bin/claude-smd",
+    "opencode-sm": "bin/opencode-sm"
   },
   "types": "dist/src/index.d.ts",
   "files": [
