@@ -39,6 +39,7 @@ export interface SMSConfig {
     reviewReady: boolean;
     error: boolean;
     custom: boolean;
+    contextSync: boolean;
   };
   // Quiet hours (don't send during these times)
   quietHours?: {
@@ -69,7 +70,7 @@ export interface PromptOption {
 }
 
 export interface NotificationPayload {
-  type: 'task_complete' | 'review_ready' | 'error' | 'custom';
+  type: 'task_complete' | 'review_ready' | 'error' | 'custom' | 'context_sync';
   title: string;
   message: string;
   prompt?: {
@@ -90,6 +91,7 @@ const DEFAULT_CONFIG: SMSConfig = {
     reviewReady: true,
     error: true,
     custom: true,
+    contextSync: true,
   },
   quietHours: {
     enabled: false,
@@ -351,6 +353,7 @@ export async function sendNotification(
     review_ready: 'reviewReady',
     error: 'error',
     custom: 'custom',
+    context_sync: 'contextSync',
   };
 
   if (!config.notifyOn[typeMap[payload.type]]) {

@@ -19,6 +19,28 @@ import { retry, withTimeout } from '../errors/recovery.js';
 import { sessionManager, FrameQueryMode } from '../session/index.js';
 import { contextBridge } from './context-bridge.js';
 
+// WhatsApp sync integration - lazy loaded to avoid breaking if module has issues
+let whatsappSync: {
+  onFrameClosed: (data: any) => Promise<any>;
+  createFrameDigestData: (frame: any, events: any[], anchors: any[]) => any;
+} | null = null;
+
+async function loadWhatsAppSync() {
+  if (whatsappSync !== null) return whatsappSync;
+  try {
+    const mod = await import('../../hooks/whatsapp-sync.js');
+    whatsappSync = {
+      onFrameClosed: mod.onFrameClosed,
+      createFrameDigestData: mod.createFrameDigestData,
+    };
+    return whatsappSync;
+  } catch {
+    // Module not available or has errors - disable integration
+    whatsappSync = null;
+    return null;
+  }
+}
+
 // Constants for frame validation
 const MAX_FRAME_DEPTH = 100; // Maximum allowed frame depth
 const DEFAULT_MAX_DEPTH = 100; // Default if not configured
@@ -28,7 +50,11 @@ function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
   if (value === undefined) {
     if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
+    throw new SystemError(
+      `Environment variable ${key} is required`,
+      ErrorCode.CONFIGURATION_ERROR,
+      { variable: key }
+    );
   }
   return value;
 }
@@ -194,7 +220,11 @@ export class FrameManager {
     try {
       // Check if database is properly initialized
       if (!this.db || typeof this.db.exec !== 'function') {
-        throw new Error('Database not properly initialized. Expected SQLite Database instance with exec() method.');
+        throw new DatabaseError(
+          'Database not properly initialized. Expected SQLite Database instance with exec() method.',
+          ErrorCode.DB_CONNECTION_FAILED,
+          { operation: 'initializeSchema' }
+        );
       }
 
       // Enforce referential integrity
@@ -268,7 +298,10 @@ export class FrameManager {
       try {
         this.ensureCascadeConstraints();
       } catch (e) {
-        logger.warn('Failed to ensure cascade constraints (frame-manager)', e as Error);
+        logger.warn(
+          'Failed to ensure cascade constraints (frame-manager)',
+          e as Error
+        );
       }
     } catch (error: unknown) {
       const dbError = errorHandler(error, {
@@ -295,8 +328,14 @@ export class FrameManager {
   // Ensure ON DELETE CASCADE for events/anchors referencing frames
   private ensureCascadeConstraints(): void {
     const needsCascade = (table: string): boolean => {
-      const rows = this.db.prepare(`PRAGMA foreign_key_list(${table})`).all() as any[];
-      return rows.some((r) => r.table === 'frames' && String(r.on_delete).toUpperCase() !== 'CASCADE');
+      const rows = this.db
+        .prepare(`PRAGMA foreign_key_list(${table})`)
+        .all() as any[];
+      return rows.some(
+        (r) =>
+          r.table === 'frames' &&
+          String(r.on_delete).toUpperCase() !== 'CASCADE'
+      );
     };
 
     const migrateTable = (table: 'events' | 'anchors') => {
@@ -324,29 +363,37 @@ export class FrameManager {
                FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
              );`;
 
-      const cols = table === 'events'
-        ? 'event_id, run_id, frame_id, seq, event_type, payload, ts'
-        : 'anchor_id, frame_id, project_id, type, text, priority, created_at, metadata';
+      const cols =
+        table === 'events'
+          ? 'event_id, run_id, frame_id, seq, event_type, payload, ts'
+          : 'anchor_id, frame_id, project_id, type, text, priority, created_at, metadata';
 
-      const idxSql = table === 'events'
-        ? [
-            'CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);',
-            'CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);',
-          ]
-        : [
-            'CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);',
-          ];
+      const idxSql =
+        table === 'events'
+          ? [
+              'CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);',
+              'CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);',
+            ]
+          : [
+              'CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);',
+            ];
 
       this.db.exec('PRAGMA foreign_keys = OFF;');
       this.db.exec('BEGIN;');
       this.db.exec(createSql);
-      this.db.prepare(`INSERT INTO ${table === 'events' ? 'events_new' : 'anchors_new'} (${cols}) SELECT ${cols} FROM ${table}`).run();
+      this.db
+        .prepare(
+          `INSERT INTO ${table === 'events' ? 'events_new' : 'anchors_new'} (${cols}) SELECT ${cols} FROM ${table}`
+        )
+        .run();
       this.db.exec(`DROP TABLE ${table};`);
       this.db.exec(`ALTER TABLE ${table}_new RENAME TO ${table};`);
       for (const stmt of idxSql) this.db.exec(stmt);
       this.db.exec('COMMIT;');
       this.db.exec('PRAGMA foreign_keys = ON;');
-      logger.info(`Migrated ${table} to include ON DELETE CASCADE (frame-manager)`);
+      logger.info(
+        `Migrated ${table} to include ON DELETE CASCADE (frame-manager)`
+      );
     };
 
     if (needsCascade('events')) migrateTable('events');
@@ -674,6 +721,11 @@ export class FrameManager {
     // Close all child frames recursively
     this.closeChildFrames(targetFrameId);
 
+    // Trigger WhatsApp auto-sync if enabled (fire and forget)
+    this.triggerWhatsAppSync(frame, targetFrameId).catch(() => {
+      // Silently ignore errors - sync is non-critical
+    });
+
     logger.info('Closed frame', {
       frameId: targetFrameId,
       name: frame.name,
@@ -681,6 +733,26 @@ export class FrameManager {
       digestLength: digest.text.length,
       stackDepth: this.activeStack.length,
     });
+  }
+
+  /**
+   * Trigger WhatsApp sync for closed frame (non-blocking)
+   */
+  private async triggerWhatsAppSync(
+    frame: Frame,
+    frameId: string
+  ): Promise<void> {
+    const sync = await loadWhatsAppSync();
+    if (!sync) return;
+
+    try {
+      const events = this.getFrameEvents(frameId);
+      const anchors = this.getFrameAnchors(frameId);
+      const digestData = sync.createFrameDigestData(frame, events, anchors);
+      await sync.onFrameClosed(digestData);
+    } catch {
+      // Silently ignore - WhatsApp sync is optional
+    }
   }
 
   /**
@@ -1233,7 +1305,7 @@ export class FrameManager {
 
     // Start from the proposed parent and traverse up the hierarchy
     let currentId: string | undefined = parentFrameId;
-    
+
     while (currentId) {
       // If we've seen this frame before, we have a cycle
       if (visited.has(currentId)) {
@@ -1280,7 +1352,10 @@ export class FrameManager {
    * @param frameId - The frame to update
    * @param newParentFrameId - The new parent frame ID
    */
-  public updateParentFrame(frameId: string, newParentFrameId: string | null): void {
+  public updateParentFrame(
+    frameId: string,
+    newParentFrameId: string | null
+  ): void {
     // Check if frame exists
     const frame = this.getFrame(frameId);
     if (!frame) {
@@ -1329,9 +1404,7 @@ export class FrameManager {
     try {
       // Update the parent frame
       this.db
-        .prepare(
-          `UPDATE frames SET parent_frame_id = ? WHERE frame_id = ?`
-        )
+        .prepare(`UPDATE frames SET parent_frame_id = ? WHERE frame_id = ?`)
         .run(newParentFrameId, frameId);
 
       logger.info('Updated parent frame', {

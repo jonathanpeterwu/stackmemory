@@ -13,6 +13,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { spawn, execSync } from 'child_process';
 import { existsSync, readFileSync } from 'fs';
+import { SystemError, ErrorCode } from '../../core/errors/index.js';
 
 interface ServiceConfig {
   platform: 'darwin' | 'linux' | 'unsupported';
@@ -445,7 +446,11 @@ async function installService(
           stdio: 'pipe',
         });
       } catch {
-        throw new Error('Failed to load launchd service');
+        throw new SystemError(
+          'Failed to load launchd service',
+          ErrorCode.SERVICE_UNAVAILABLE,
+          { platform: 'darwin', serviceFile: config.serviceFile }
+        );
       }
     }
 
@@ -470,8 +475,10 @@ async function installService(
         stdio: 'pipe',
       });
     } catch {
-      throw new Error(
-        'Failed to enable systemd service. Make sure systemd user session is available.'
+      throw new SystemError(
+        'Failed to enable systemd service. Make sure systemd user session is available.',
+        ErrorCode.SERVICE_UNAVAILABLE,
+        { platform: 'linux', serviceName: config.serviceName }
       );
     }
 

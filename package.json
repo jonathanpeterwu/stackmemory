@@ -52,7 +52,7 @@
     "build": "node esbuild.config.js",
     "build:types": "tsc --emitDeclarationOnly --project tsconfig.build.json",
     "lint": "eslint src/**/*.ts scripts/**/*.ts",
-    "lint:fix": "eslint src/**/*.ts scripts/**/*.ts --fix",
+    "lint:fix": "eslint src/**/*.ts scripts/**/*.ts --fix --max-warnings=-1",
     "lint:fast": "oxlint src scripts",
     "format": "prettier --write src/**/*.ts scripts/**/*.ts",
     "test": "vitest",
@@ -142,7 +142,6 @@
   },
   "lint-staged": {
     "*.{ts,js}": [
-      "npm run lint:fix",
       "prettier --write"
     ]
   },

@@ -285,7 +285,14 @@ export function formatSummaryMessage(
 
   let message = `Claude session complete ${statusEmoji}\n`;
   message += `Duration: ${summary.duration}${exitInfo}${sessionInfo}\n`;
-  message += `Branch: ${summary.branch}\n\n`;
+  message += `Branch: ${summary.branch}\n`;
+
+  // Add Claude Code session URL if session ID is available
+  if (sessionId) {
+    message += `View: https://claude.ai/chat/${sessionId}\n`;
+  }
+
+  message += '\n';
 
   if (summary.suggestions.length > 0) {
     message += `What to do next:\n`;

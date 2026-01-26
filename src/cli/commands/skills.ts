@@ -11,9 +11,9 @@ import {
   ClaudeSkillsManager,
   type SkillContext,
 } from '../../skills/claude-skills.js';
-import { 
-  UnifiedRLMOrchestrator, 
-  initializeUnifiedOrchestrator 
+import {
+  UnifiedRLMOrchestrator,
+  initializeUnifiedOrchestrator,
 } from '../../skills/unified-rlm-orchestrator.js';
 import { DualStackManager } from '../../core/context/dual-stack-manager.js';
 import { FrameHandoffManager } from '../../core/context/frame-handoff-manager.js';
@@ -24,12 +24,22 @@ import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { ConfigManager } from '../../core/config/config-manager.js';
 import * as path from 'path';
 import * as os from 'os';
+import {
+  SystemError,
+  DatabaseError,
+  ErrorCode,
+} from '../../core/errors/index.js';
+
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
   if (value === undefined) {
     if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
+    throw new SystemError(
+      `Environment variable ${key} is required`,
+      ErrorCode.CONFIGURATION_ERROR,
+      { variable: key }
+    );
   }
   return value;
 }
@@ -38,7 +48,7 @@ function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
 
-async function initializeSkillContext(): Promise<{ 
+async function initializeSkillContext(): Promise<{
   context: SkillContext;
   unifiedOrchestrator: UnifiedRLMOrchestrator;
 }> {
@@ -60,19 +70,32 @@ async function initializeSkillContext(): Promise<{
   // Get raw database for FrameManager
   const rawDatabase = database.getRawDatabase();
   if (!rawDatabase) {
-    throw new Error('Failed to get raw database connection');
+    throw new DatabaseError(
+      'Failed to get raw database connection',
+      ErrorCode.DB_CONNECTION_FAILED,
+      { projectId, operation: 'initializeSkillContext' }
+    );
   }
-  
+
   // Validate database has required methods
   if (typeof rawDatabase.exec !== 'function') {
-    throw new Error(`Invalid database instance: missing exec() method. Got: ${typeof rawDatabase.exec}`);
+    throw new DatabaseError(
+      `Invalid database instance: missing exec() method. Got: ${typeof rawDatabase.exec}`,
+      ErrorCode.DB_CONNECTION_FAILED,
+      { projectId, operation: 'initializeSkillContext' }
+    );
   }
-  
+
   // Test database connectivity
   try {
     rawDatabase.exec('SELECT 1');
   } catch (err) {
-    throw new Error(`Database connection test failed: ${err.message}`);
+    throw new DatabaseError(
+      `Database connection test failed: ${(err as Error).message}`,
+      ErrorCode.DB_CONNECTION_FAILED,
+      { projectId, operation: 'initializeSkillContext' },
+      err as Error
+    );
   }
 
   const dualStackManager = new DualStackManager(database, projectId, userId);
@@ -90,7 +113,7 @@ async function initializeSkillContext(): Promise<{
     database,
     frameManager,
   };
-  
+
   // Initialize unified RLM orchestrator
   const unifiedOrchestrator = initializeUnifiedOrchestrator(
     frameManager,
@@ -427,12 +450,28 @@ export function createSkillsCommand(): Command {
     .description('Execute complex tasks with recursive agent orchestration')
     .option('--max-parallel <number>', 'Maximum concurrent subagents', '5')
     .option('--max-recursion <number>', 'Maximum recursion depth', '4')
-    .option('--max-tokens-per-agent <number>', 'Token budget per subagent', '30000')
+    .option(
+      '--max-tokens-per-agent <number>',
+      'Token budget per subagent',
+      '30000'
+    )
     .option('--review-stages <number>', 'Number of review iterations', '3')
-    .option('--quality-threshold <number>', 'Target quality score (0-1)', '0.85')
-    .option('--test-mode <mode>', 'Test generation mode (unit/integration/e2e/all)', 'all')
+    .option(
+      '--quality-threshold <number>',
+      'Target quality score (0-1)',
+      '0.85'
+    )
+    .option(
+      '--test-mode <mode>',
+      'Test generation mode (unit/integration/e2e/all)',
+      'all'
+    )
     .option('--verbose', 'Show all recursive operations', false)
-    .option('--share-context-realtime', 'Share discoveries between agents', true)
+    .option(
+      '--share-context-realtime',
+      'Share discoveries between agents',
+      true
+    )
     .option('--retry-failed-agents', 'Retry on failure', true)
     .option('--timeout-per-agent <number>', 'Timeout in seconds', '300')
     .action(async (task, options) => {
@@ -442,7 +481,7 @@ export function createSkillsCommand(): Command {
         const { context, unifiedOrchestrator } = await initializeSkillContext();
 
         spinner.text = 'Decomposing task...';
-        
+
         const result = await unifiedOrchestrator.executeSkill('rlm', [task], {
           maxParallel: parseInt(options.maxParallel),
           maxRecursionDepth: parseInt(options.maxRecursion),
@@ -460,16 +499,18 @@ export function createSkillsCommand(): Command {
 
         if (result.success) {
           console.log(chalk.green('✓'), 'RLM execution completed');
-          
+
           if (result.data) {
             console.log(chalk.cyan('\nExecution Summary:'));
             console.log(`  Total tokens: ${result.data.totalTokens}`);
-            console.log(`  Estimated cost: $${result.data.totalCost.toFixed(2)}`);
+            console.log(
+              `  Estimated cost: $${result.data.totalCost.toFixed(2)}`
+            );
             console.log(`  Duration: ${result.data.duration}ms`);
             console.log(`  Tests generated: ${result.data.testsGenerated}`);
             console.log(`  Issues found: ${result.data.issuesFound}`);
             console.log(`  Issues fixed: ${result.data.issuesFixed}`);
-            
+
             if (result.data.improvements?.length > 0) {
               console.log(chalk.cyan('\nImprovements:'));
               result.data.improvements.forEach((imp: string) => {
@@ -525,22 +566,32 @@ Options:
 `);
             break;
           default:
-            console.log(`Unknown skill: ${skill}. Use "stackmemory skills help" to see all available skills.`);
+            console.log(
+              `Unknown skill: ${skill}. Use "stackmemory skills help" to see all available skills.`
+            );
         }
       } else {
-        console.log(chalk.cyan('Available Claude Skills (RLM-Orchestrated):\n'));
+        console.log(
+          chalk.cyan('Available Claude Skills (RLM-Orchestrated):\n')
+        );
         console.log(
           '  handoff    - Streamline frame handoffs between team members'
         );
         console.log('  checkpoint - Create and manage recovery points');
         console.log('  dig        - Deep historical context retrieval');
-        console.log('  lint       - Comprehensive code linting and quality checks');
+        console.log(
+          '  lint       - Comprehensive code linting and quality checks'
+        );
         console.log('  test       - Generate comprehensive test suites');
         console.log('  review     - Multi-stage code review and improvements');
         console.log('  refactor   - Refactor code for better architecture');
         console.log('  publish    - Prepare and execute releases');
         console.log('  rlm        - Direct recursive agent orchestration\n');
-        console.log(chalk.yellow('\nAll skills now use RLM orchestration for intelligent task decomposition'));
+        console.log(
+          chalk.yellow(
+            '\nAll skills now use RLM orchestration for intelligent task decomposition'
+          )
+        );
         console.log(
           'Use "stackmemory skills help <skill>" for detailed help on each skill'
         );

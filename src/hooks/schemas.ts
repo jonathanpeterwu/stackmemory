@@ -34,6 +34,7 @@ export const NotifyOnSchema = z.object({
   reviewReady: z.boolean(),
   error: z.boolean(),
   custom: z.boolean(),
+  contextSync: z.boolean().optional().default(true),
 });
 
 export const QuietHoursSchema = z.object({
@@ -92,11 +93,85 @@ export const AutoBackgroundConfigSchema = z.object({
   verbose: z.boolean().optional(),
 });
 
+// WhatsApp Sync Options schema
+export const SyncOptionsSchema = z.object({
+  autoSyncOnClose: z.boolean(),
+  minFrameDuration: z.number().int().min(0).max(3600), // 0 to 1 hour
+  includeDecisions: z.boolean(),
+  includeFiles: z.boolean(),
+  includeTests: z.boolean(),
+  maxDigestLength: z.number().int().min(100).max(1000), // WhatsApp limit ~4096 chars
+});
+
+// WhatsApp Schedule Config schema
+export const ScheduleConfigSchema = z.object({
+  type: z.enum(['daily', 'hourly', 'interval']),
+  time: z
+    .string()
+    .regex(/^\d{2}:\d{2}$/)
+    .optional(), // "HH:MM" for daily
+  intervalMinutes: z.number().int().min(5).max(1440).optional(), // 5 min to 24 hours
+  includeInactive: z.boolean(), // Include when no activity
+  quietHoursRespect: z.boolean(), // Respect quiet hours setting
+});
+
+// WhatsApp Schedule storage schema
+export const ScheduleSchema = z.object({
+  id: z.string().max(32),
+  config: ScheduleConfigSchema,
+  enabled: z.boolean(),
+  lastRun: z
+    .string()
+    .datetime({ offset: true })
+    .or(z.string().regex(/^\d{4}-\d{2}-\d{2}T/))
+    .optional(),
+  nextRun: z
+    .string()
+    .datetime({ offset: true })
+    .or(z.string().regex(/^\d{4}-\d{2}-\d{2}T/))
+    .optional(),
+  createdAt: z
+    .string()
+    .datetime({ offset: true })
+    .or(z.string().regex(/^\d{4}-\d{2}-\d{2}T/)),
+});
+
+export const ScheduleStorageSchema = z.object({
+  schedules: z.array(ScheduleSchema).max(10),
+  lastChecked: z
+    .string()
+    .datetime({ offset: true })
+    .or(z.string().regex(/^\d{4}-\d{2}-\d{2}T/)),
+});
+
+// WhatsApp Command schema
+export const WhatsAppCommandSchema = z.object({
+  name: z.string().max(50),
+  description: z.string().max(200),
+  enabled: z.boolean(),
+  action: z.string().max(500).optional(), // Safe action to execute
+  requiresArg: z.boolean().optional(),
+  argPattern: z.string().max(100).optional(), // Regex pattern for arg validation
+});
+
+export const WhatsAppCommandsConfigSchema = z.object({
+  enabled: z.boolean(),
+  commands: z.array(WhatsAppCommandSchema).max(50),
+});
+
 // Type exports
 export type SMSConfigValidated = z.infer<typeof SMSConfigSchema>;
 export type ActionQueueValidated = z.infer<typeof ActionQueueSchema>;
 export type AutoBackgroundConfigValidated = z.infer<
   typeof AutoBackgroundConfigSchema
+>;
+export type SyncOptionsValidated = z.infer<typeof SyncOptionsSchema>;
+export type ScheduleConfigValidated = z.infer<typeof ScheduleConfigSchema>;
+export type ScheduleValidated = z.infer<typeof ScheduleSchema>;
+export type ScheduleStorageValidated = z.infer<typeof ScheduleStorageSchema>;
+export type WhatsAppCommandValidated = z.infer<typeof WhatsAppCommandSchema>;
+export type WhatsAppCommandsConfigValidated = z.infer<
+  typeof WhatsAppCommandsConfigSchema
 >;
 
 /**

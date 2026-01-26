@@ -6,6 +6,7 @@
 import { Frame, Event, Anchor, DigestResult } from './frame-types.js';
 import { FrameDatabase } from './frame-database.js';
 import { logger } from '../monitoring/logger.js';
+import { FrameError, ErrorCode } from '../errors/index.js';
 
 export class FrameDigestGenerator {
   constructor(private frameDb: FrameDatabase) {}
@@ -17,7 +18,11 @@ export class FrameDigestGenerator {
     try {
       const frame = this.frameDb.getFrame(frameId);
       if (!frame) {
-        throw new Error(`Frame not found: ${frameId}`);
+        throw new FrameError(
+          `Frame not found: ${frameId}`,
+          ErrorCode.FRAME_NOT_FOUND,
+          { frameId }
+        );
       }
 
       const events = this.frameDb.getFrameEvents(frameId);

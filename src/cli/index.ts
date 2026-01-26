@@ -57,6 +57,7 @@ import { createSMSNotifyCommand } from './commands/sms-notify.js';
 import { createSettingsCommand } from './commands/settings.js';
 import { createRetrievalCommands } from './commands/retrieval.js';
 import { createDiscoveryCommands } from './commands/discovery.js';
+import { createModelCommand } from './commands/model.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -676,6 +677,7 @@ program.addCommand(createSMSNotifyCommand());
 program.addCommand(createSettingsCommand());
 program.addCommand(createRetrievalCommands());
 program.addCommand(createDiscoveryCommands());
+program.addCommand(createModelCommand());
 
 // Register dashboard command
 program

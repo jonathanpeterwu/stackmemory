@@ -12,22 +12,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs/promises';
 import * as path from 'path';
-import { logger } from '../monitoring/logger.js';
 import { sessionManager } from '../session/session-manager.js';
 import type { Frame } from '../frame-manager/frame-manager.js';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
 
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
+// Type-safe environment variable access
 
 export interface SharedContext {
   projectId: string;
