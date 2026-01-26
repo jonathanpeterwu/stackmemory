@@ -9,7 +9,7 @@ import {
   Frame,
   Event,
   Anchor,
-} from '../context/frame-manager.js';
+} from '../context/index.js';
 import { EnhancedHybridDigestGenerator } from './enhanced-hybrid-digest.js';
 import { DigestInput, DigestLLMProvider } from './types.js';
 import { logger } from '../monitoring/logger.js';

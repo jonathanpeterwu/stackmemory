@@ -8,7 +8,7 @@ import chalk from 'chalk';
 import * as path from 'path';
 import Database from 'better-sqlite3';
 import { existsSync } from 'fs';
-import { FrameManager } from '../../core/context/frame-manager.js';
+import { FrameManager } from '../../core/context/index.js';
 import { workflowTemplates } from '../../core/frame/workflow-templates.js';
 import { sessionManager } from '../../core/session/session-manager.js';
 import { getEnv, getOptionalEnv } from '../../utils/env.js';

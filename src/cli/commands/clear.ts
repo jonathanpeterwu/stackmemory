@@ -12,7 +12,7 @@ import * as path from 'path';
 import Database from 'better-sqlite3';
 import { existsSync } from 'fs';
 import { ClearSurvival } from '../../core/session/clear-survival.js';
-import { FrameManager } from '../../core/context/frame-manager.js';
+import { FrameManager } from '../../core/context/index.js';
 import { HandoffGenerator } from '../../core/session/handoff-generator.js';
 import { sessionManager } from '../../core/session/session-manager.js';
 import { getEnv, getOptionalEnv } from '../../utils/env.js';

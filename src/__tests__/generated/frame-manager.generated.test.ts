@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { FrameManager } from '../../core/context/frame-manager.js';
+import { FrameManager } from '../../core/context/index.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { mkdtempSync, rmSync } from 'fs';

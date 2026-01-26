@@ -12,7 +12,7 @@ import { Command } from 'commander';
 import chalk from 'chalk';
 import ora from 'ora';
 import { SessionMonitor } from '../../core/monitoring/session-monitor.js';
-import { FrameManager } from '../../core/context/frame-manager.js';
+import { FrameManager } from '../../core/context/index.js';
 import Database from 'better-sqlite3';
 // getProjectRoot function will be defined below
 import * as fs from 'fs/promises';

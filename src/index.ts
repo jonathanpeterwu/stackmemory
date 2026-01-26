@@ -7,7 +7,7 @@ export {
   FrameManager,
   type FrameType,
   type FrameState,
-} from './core/context/frame-manager.js';
+} from './core/context/index.js';
 export { logger, Logger, LogLevel } from './core/monitoring/logger.js';
 export {
   StackMemoryError,

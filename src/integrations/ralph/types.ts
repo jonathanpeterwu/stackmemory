@@ -3,7 +3,7 @@
  * Includes swarm coordination, pattern learning, and orchestration types
  */
 
-import { Frame, FrameType } from '../../core/context/frame-manager.js';
+import { Frame, FrameType } from '../../core/context/index.js';
 import { Session } from '../../core/session/session-manager.js';
 
 // Ralph Loop types

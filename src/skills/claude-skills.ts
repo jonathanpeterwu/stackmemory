@@ -10,7 +10,7 @@ import {
 import { DualStackManager } from '../core/context/dual-stack-manager.js';
 import { SQLiteAdapter } from '../core/database/sqlite-adapter.js';
 import { ContextRetriever } from '../core/retrieval/context-retriever.js';
-import type { FrameManager } from '../core/context/frame-manager.js';
+import type { FrameManager } from '../core/context/index.js';
 import { logger } from '../core/monitoring/logger.js';
 import {
   RepoIngestionSkill,
@@ -25,7 +25,7 @@ import { getAPISkill, type APISkill } from './api-skill.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
-import type { Frame } from '../core/context/frame-manager.js';
+import type { Frame } from '../core/context/index.js';
 
 // Type definitions for Dig skill
 interface Pattern {

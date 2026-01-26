@@ -31,7 +31,3 @@ export {
   type FrameCloseHook,
   type FrameCreateHook,
 } from './frame-lifecycle-hooks.js';
-
-// Re-export from old frame-manager for backwards compatibility
-// This allows existing code to continue working without changes
-export { FrameManager as LegacyFrameManager } from './frame-manager.js';

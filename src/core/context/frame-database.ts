@@ -203,6 +203,16 @@ export class FrameDatabase {
         values.push(updates.closed_at);
       }
 
+      if (updates.parent_frame_id !== undefined) {
+        setClauses.push('parent_frame_id = ?');
+        values.push(updates.parent_frame_id);
+      }
+
+      if (updates.depth !== undefined) {
+        setClauses.push('depth = ?');
+        values.push(updates.depth);
+      }
+
       if (setClauses.length === 0) {
         return; // No updates to apply
       }

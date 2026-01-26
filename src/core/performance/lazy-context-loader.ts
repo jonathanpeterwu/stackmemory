@@ -4,7 +4,7 @@
  */
 
 import Database from 'better-sqlite3';
-import { Frame, Anchor, Event } from '../context/frame-manager.js';
+import { Frame, Anchor, Event } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 
 export interface LazyLoadOptions {

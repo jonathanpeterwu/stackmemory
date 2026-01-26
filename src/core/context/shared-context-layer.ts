@@ -13,7 +13,7 @@ import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { sessionManager } from '../session/session-manager.js';
-import type { Frame } from '../frame-manager/frame-manager.js';
+import type { Frame } from './frame-types.js';
 
 // Type-safe environment variable access
 

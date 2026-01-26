@@ -3,7 +3,7 @@
  * Intelligently discovers relevant files based on current context
  */
 
-import { FrameManager } from '../../../core/context/frame-manager.js';
+import { FrameManager } from '../../../core/context/index.js';
 import { LLMContextRetrieval } from '../../../core/retrieval/index.js';
 import { logger } from '../../../core/monitoring/logger.js';
 import { execSync } from 'child_process';

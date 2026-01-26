@@ -7,7 +7,7 @@
 import { Command } from 'commander';
 import { WorktreeManager } from '../../core/worktree/worktree-manager.js';
 import { ProjectManager } from '../../core/projects/project-manager.js';
-import { FrameManager } from '../../core/context/frame-manager.js';
+import { FrameManager } from '../../core/context/index.js';
 import chalk from 'chalk';
 import Table from 'cli-table3';
 import { join } from 'path';

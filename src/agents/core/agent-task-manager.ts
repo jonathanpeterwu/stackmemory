@@ -15,7 +15,7 @@ import {
   TaskPriority,
 } from '../../features/tasks/linear-task-manager.js';
 import { logger } from '../../core/monitoring/logger.js';
-import { FrameManager } from '../../core/context/frame-manager.js';
+import { FrameManager } from '../../core/context/index.js';
 import { TaskError, ErrorCode } from '../../core/errors/index.js';
 
 export interface AgentTaskSession {

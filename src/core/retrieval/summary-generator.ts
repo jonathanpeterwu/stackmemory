@@ -9,7 +9,7 @@ import {
   Frame,
   Anchor,
   Event,
-} from '../context/frame-manager.js';
+} from '../context/index.js';
 import { TraceDetector } from '../trace/trace-detector.js';
 import {
   CompressedSummary,

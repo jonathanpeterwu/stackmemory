@@ -13,7 +13,7 @@
  */
 
 import { logger } from '../core/monitoring/logger.js';
-import { FrameManager } from '../core/context/frame-manager.js';
+import { FrameManager } from '../core/context/index.js';
 import { DualStackManager } from '../core/context/dual-stack-manager.js';
 import { ContextRetriever } from '../core/retrieval/context-retriever.js';
 import { LinearTaskManager } from '../features/tasks/linear-task-manager.js';

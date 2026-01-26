@@ -15,7 +15,7 @@ import { Trace } from '../trace/types.js';
 import { LLMContextRetrieval } from './llm-context-retrieval.js';
 import { HierarchicalRetrieval } from './hierarchical-retrieval.js';
 import { GraphRetrieval } from './graph-retrieval.js';
-import { FrameManager } from '../context/frame-manager.js';
+import { FrameManager } from '../context/index.js';
 
 export interface BenchmarkQuery {
   query: string;

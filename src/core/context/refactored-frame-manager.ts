@@ -647,8 +647,18 @@ export class RefactoredFrameManager {
       );
     }
 
-    // If setting a parent, check for cycles
+    // If setting a parent, validate and check for cycles
     if (newParentFrameId) {
+      // Verify the new parent exists
+      const newParentFrame = this.frameDb.getFrame(newParentFrameId);
+      if (!newParentFrame) {
+        throw new FrameError(
+          `Parent frame not found: ${newParentFrameId}`,
+          ErrorCode.FRAME_NOT_FOUND,
+          { frameId, newParentFrameId }
+        );
+      }
+
       const cycle = this.detectCycle(frameId, newParentFrameId);
       if (cycle) {
         throw new FrameError(
@@ -664,27 +674,34 @@ export class RefactoredFrameManager {
       }
 
       // Check depth after parent change
-      const newParentFrame = this.frameDb.getFrame(newParentFrameId);
-      if (newParentFrame) {
-        const newDepth = newParentFrame.depth + 1;
-        if (newDepth > this.maxFrameDepth) {
-          throw new FrameError(
-            `Cannot set parent: would exceed maximum frame depth`,
-            ErrorCode.FRAME_STACK_OVERFLOW,
-            {
-              frameId,
-              newParentFrameId,
-              newDepth,
-              maxDepth: this.maxFrameDepth,
-            }
-          );
-        }
+      const newDepth = newParentFrame.depth + 1;
+      if (newDepth > this.maxFrameDepth) {
+        throw new FrameError(
+          `Cannot set parent: would exceed maximum frame depth`,
+          ErrorCode.FRAME_STACK_OVERFLOW,
+          {
+            frameId,
+            newParentFrameId,
+            newDepth,
+            maxDepth: this.maxFrameDepth,
+          }
+        );
       }
     }
 
-    // Update the frame's parent (this would need to be implemented in FrameDatabase)
+    // Calculate new depth based on parent
+    let newDepth = 0;
+    if (newParentFrameId) {
+      const newParentFrame = this.frameDb.getFrame(newParentFrameId);
+      if (newParentFrame) {
+        newDepth = newParentFrame.depth + 1;
+      }
+    }
+
+    // Update the frame's parent and depth
     this.frameDb.updateFrame(frameId, {
       parent_frame_id: newParentFrameId,
+      depth: newDepth,
     });
 
     logger.info('Updated parent frame', {

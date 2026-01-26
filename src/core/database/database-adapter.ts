@@ -4,7 +4,7 @@
  * Supports SQLite (current) and ParadeDB (new) with seamless migration
  */
 
-import type { Frame, Event, Anchor } from '../context/frame-manager.js';
+import type { Frame, Event, Anchor } from '../context/index.js';
 
 export interface QueryOptions {
   limit?: number;

@@ -15,7 +15,7 @@ import {
 import { join } from 'path';
 import Database from 'better-sqlite3';
 import { z } from 'zod';
-import { FrameManager } from '../../core/context/frame-manager.js';
+import { FrameManager } from '../../core/context/index.js';
 import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { logger } from '../../core/monitoring/logger.js';
 import { EnhancedHandoffGenerator } from '../../core/session/enhanced-handoff.js';

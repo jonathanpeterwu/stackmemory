@@ -3,7 +3,7 @@
  * Implements intelligent context selection based on compressed summaries
  */
 
-import { Frame, Anchor, Event } from '../context/frame-manager.js';
+import { Frame, Anchor, Event } from '../context/index.js';
 import { StackMemoryQuery } from '../query/query-parser.js';
 
 /**

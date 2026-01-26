@@ -26,7 +26,7 @@ import * as zlib from 'zlib';
 import { promisify } from 'util';
 import { v4 as uuidv4 } from 'uuid';
 import { Logger } from '../monitoring/logger.js';
-import type { Frame, Event, Anchor } from '../context/frame-manager.js';
+import type { Frame, Event, Anchor } from '../context/index.js';
 
 // LZ4 would be installed separately: npm install lz4
 // For now we'll use a placeholder

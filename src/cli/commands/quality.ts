@@ -14,7 +14,7 @@ import {
   PostTaskConfig,
   QualityGateResult,
 } from '../../integrations/claude-code/post-task-hooks.js';
-import { FrameManager } from '../../core/context/frame-manager.js';
+import { FrameManager } from '../../core/context/index.js';
 import Database from 'better-sqlite3';
 // getProjectRoot function will be defined below
 import * as fs from 'fs/promises';

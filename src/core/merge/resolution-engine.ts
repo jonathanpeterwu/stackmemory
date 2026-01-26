@@ -13,7 +13,7 @@ import {
   MergeResult,
   NotificationResult,
 } from './types.js';
-import { Frame } from '../context/frame-manager.js';
+import { Frame } from '../context/index.js';
 import { ConflictDetector } from './conflict-detector.js';
 import { StackDiffVisualizer } from './stack-diff.js';
 import { logger } from '../monitoring/logger.js';

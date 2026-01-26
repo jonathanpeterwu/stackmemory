@@ -9,7 +9,7 @@
 import Database from 'better-sqlite3';
 import { logger } from '../monitoring/logger.js';
 import { Trace, CompressedTrace } from '../trace/types.js';
-import { Frame, Anchor } from '../context/frame-manager.js';
+import { Frame, Anchor } from '../context/index.js';
 import crypto from 'crypto';
 
 export type NodeType =

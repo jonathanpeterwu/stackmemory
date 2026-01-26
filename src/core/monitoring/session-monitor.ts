@@ -6,7 +6,7 @@
 import { EventEmitter } from 'events';
 import { ClearSurvival } from '../session/clear-survival.js';
 import { HandoffGenerator } from '../session/handoff-generator.js';
-import { FrameManager } from '../frame/frame-manager.js';
+import { FrameManager } from '../context/index.js';
 import { DatabaseManager } from '../storage/database-manager.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';

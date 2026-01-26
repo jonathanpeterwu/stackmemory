@@ -3,7 +3,7 @@
  * 80% deterministic extraction, 20% AI-generated review/insights
  */
 
-import { Frame, Anchor, Event } from '../context/frame-manager.js';
+import { Frame, Anchor, Event } from '../context/index.js';
 
 /**
  * Deterministic fields extracted directly from frame data (60%)

@@ -20,7 +20,7 @@ import {
 import { logger } from '../core/monitoring/logger.js';
 import type { DualStackManager } from '../core/context/dual-stack-manager.js';
 import type { ContextRetriever } from '../core/retrieval/context-retriever.js';
-import type { FrameManager } from '../core/context/frame-manager.js';
+import type { FrameManager } from '../core/context/index.js';
 import type { LinearTaskManager } from '../features/tasks/linear-task-manager.js';
 
 // Skill to RLM mapping configuration

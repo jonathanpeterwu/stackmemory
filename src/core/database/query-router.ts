@@ -4,7 +4,7 @@
  */
 
 import { DatabaseAdapter } from './database-adapter.js';
-import type { Frame } from '../context/frame-manager.js';
+import type { Frame } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 import { DatabaseError, ErrorCode } from '../errors/index.js';
 import { EventEmitter } from 'events';

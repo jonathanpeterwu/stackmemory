@@ -21,7 +21,7 @@ import {
 import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { execSync } from 'child_process';
-import { FrameManager, FrameType } from '../../core/context/frame-manager.js';
+import { FrameManager, FrameType } from '../../core/context/index.js';
 import {
   LinearTaskManager,
   TaskPriority,

@@ -11,7 +11,7 @@ import {
   FrameContext,
   Anchor,
   Event,
-} from '../context/frame-manager.js';
+} from '../context/index.js';
 
 export interface ContextAssemblyOptions {
   maxEvents?: number;

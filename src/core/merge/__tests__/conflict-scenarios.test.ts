@@ -9,7 +9,7 @@ import { ConflictDetector } from '../conflict-detector.js';
 import { StackDiffVisualizer } from '../stack-diff.js';
 import { ResolutionEngine, ResolutionContext } from '../resolution-engine.js';
 import { FrameStack, MergeConflict, TeamVote } from '../types.js';
-import { Frame, Event } from '../../context/frame-manager.js';
+import { Frame, Event } from '../../context/index.js';
 
 // Test data factories
 function createMockFrame(overrides?: Partial<Frame>): Frame {
