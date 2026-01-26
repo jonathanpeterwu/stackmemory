@@ -17,7 +17,7 @@ import {
 } from '../../skills/unified-rlm-orchestrator.js';
 import { DualStackManager } from '../../core/context/dual-stack-manager.js';
 import { FrameHandoffManager } from '../../core/context/frame-handoff-manager.js';
-import { FrameManager } from '../../core/context/frame-manager.js';
+import { FrameManager } from '../../core/context/index.js';
 import { ContextRetriever } from '../../core/retrieval/context-retriever.js';
 import { SQLiteAdapter } from '../../core/database/sqlite-adapter.js';
 import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';

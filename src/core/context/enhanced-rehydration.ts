@@ -6,7 +6,7 @@
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { logger } from '../monitoring/logger.js';
-import { FrameManager } from './frame-manager.js';
+import { FrameManager } from './index.js';
 import { CompactionHandler } from './compaction-handler.js';
 
 export interface FileSnapshot {

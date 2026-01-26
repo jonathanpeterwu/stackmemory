@@ -7,7 +7,7 @@
 
 import { CloudClient, Collection } from 'chromadb';
 import { v4 as uuidv4 } from 'uuid';
-import { Frame } from '../context/frame-manager.js';
+import { Frame } from '../context/index.js';
 import { Logger } from '../monitoring/logger.js';
 
 interface ChromaDocument {

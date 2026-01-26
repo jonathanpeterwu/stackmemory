@@ -8,7 +8,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { execSync } from 'child_process';
 import { logger } from '../../../core/monitoring/logger.js';
-import { FrameManager } from '../../../core/context/frame-manager.js';
+import { FrameManager } from '../../../core/context/index.js';
 import { SessionManager } from '../../../core/session/session-manager.js';
 import { SQLiteAdapter } from '../../../core/database/sqlite-adapter.js';
 import { ContextBudgetManager } from '../context/context-budget-manager.js';

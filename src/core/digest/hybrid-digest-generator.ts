@@ -19,7 +19,7 @@ import {
   ErrorInfo,
   DEFAULT_DIGEST_CONFIG,
 } from './types.js';
-import { Frame, Anchor, Event } from '../context/frame-manager.js';
+import { Frame, Anchor, Event } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 
 /**

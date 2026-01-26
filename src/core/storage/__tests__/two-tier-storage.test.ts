@@ -13,7 +13,7 @@ import {
   type TwoTierConfig,
   type TierConfig
 } from '../two-tier-storage.js';
-import type { Frame, Event, Anchor } from '../../context/frame-manager.js';
+import type { Frame, Event, Anchor } from '../../context/index.js';
 
 describe('TwoTierStorageSystem', () => {
   let storage: TwoTierStorageSystem;

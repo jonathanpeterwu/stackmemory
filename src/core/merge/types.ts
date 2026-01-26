@@ -3,7 +3,7 @@
  * STA-101: Stack Merge Conflict Resolution
  */
 
-import { Frame, Event } from '../context/frame-manager.js';
+import { Frame, Event } from '../context/index.js';
 
 export interface MergeConflict {
   id: string;

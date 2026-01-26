@@ -7,7 +7,7 @@ import {
   DatabaseAdapter,
   SearchOptions,
 } from '../database/database-adapter.js';
-import { Frame } from '../context/frame-manager.js';
+import { Frame } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 
 export interface ContextQuery {

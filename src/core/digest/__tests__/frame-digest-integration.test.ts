@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { FrameManager } from '../../context/frame-manager.js';
+import { FrameManager } from '../../context/index.js';
 import {
   enhanceFrameManagerWithDigest,
   FrameDigestIntegration,

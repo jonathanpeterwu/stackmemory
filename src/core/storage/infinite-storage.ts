@@ -18,7 +18,7 @@ import {
 import { createClient as createRedisClient } from 'redis';
 import { Pool } from 'pg';
 import { Logger } from '../monitoring/logger.js';
-import { Frame } from '../context/frame-manager.js';
+import { Frame } from '../context/index.js';
 import { v4 as uuidv4 } from 'uuid';
 import { compress, decompress } from '../utils/compression.js';
 

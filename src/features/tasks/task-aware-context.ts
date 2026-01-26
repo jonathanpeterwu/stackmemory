@@ -9,7 +9,7 @@ import {
   Anchor,
   Event,
   FrameManager,
-} from '../../core/context/frame-manager.js';
+} from '../../core/context/index.js';
 import { logger } from '../../core/monitoring/logger.js';
 
 export type TaskStatus =

@@ -3,7 +3,7 @@
  * Handles frame management and context retrieval
  */
 
-import { FrameManager, FrameType } from '../../../core/context/frame-manager.js';
+import { FrameManager, FrameType } from '../../../core/context/index.js';
 import { LLMContextRetrieval } from '../../../core/retrieval/index.js';
 import { logger } from '../../../core/monitoring/logger.js';
 

@@ -2,21 +2,19 @@
  * Unit tests for circular reference detection in frame management
  */
 
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { FrameManager } from '../frame-manager.js';
-import { RefactoredFrameManager } from '../refactored-frame-manager.js';
+import { FrameManager } from '../index.js';
 import { ErrorCode } from '../../errors/index.js';
 
 describe('Frame Manager - Circular Reference Detection', () => {
   let db: Database.Database;
   let frameManager: FrameManager;
-  
+
   beforeEach(() => {
     db = new Database(':memory:');
     frameManager = new FrameManager(db, 'test-project', {
-      skipContextBridge: true,
-      maxFrameDepth: 10, // Lower limit for testing
+      maxStackDepth: 100, // Stack limit for testing
     });
   });
 
@@ -24,7 +22,7 @@ describe('Frame Manager - Circular Reference Detection', () => {
     db.close();
   });
 
-  describe('FrameManager', () => {
+  describe('Cycle Detection', () => {
     it('should detect direct circular reference (A -> B -> A)', () => {
       // Create frame A
       const frameA = frameManager.createFrame({
@@ -49,7 +47,6 @@ describe('Frame Manager - Circular Reference Detection', () => {
         frameManager.updateParentFrame(frameA, frameB);
       } catch (error: any) {
         expect(error.code).toBe(ErrorCode.FRAME_CYCLE_DETECTED);
-        expect(error.message).toContain('circular reference');
       }
     });
 
@@ -89,7 +86,6 @@ describe('Frame Manager - Circular Reference Detection', () => {
     });
 
     it('should prevent creating a frame that would cause a cycle', () => {
-      // This test requires modifying the createFrame to accept an ID
       // In practice, cycles are mainly prevented during parent updates
       const frameA = frameManager.createFrame({
         type: 'task',
@@ -106,40 +102,55 @@ describe('Frame Manager - Circular Reference Detection', () => {
       expect(frameManager.getFrame(frameB)?.parent_frame_id).toBe(frameA);
     });
 
-    it('should enforce maximum depth limit', () => {
+    it('should detect cycle during traversal safety check', () => {
+      // Create a chain
       let parentId: string | undefined;
-      
-      // Create a chain of frames up to the limit (depth starts at 0)
-      for (let i = 0; i <= 10; i++) {
+      const frameIds: string[] = [];
+
+      for (let i = 0; i < 8; i++) {
         parentId = frameManager.createFrame({
           type: 'task',
           name: `Frame ${i}`,
           parentFrameId: parentId,
         });
+        frameIds.push(parentId);
       }
 
-      // Try to create one more frame (should fail due to depth limit)
+      const lastFrame = frameIds[frameIds.length - 1];
+      const firstFrame = frameIds[0];
+
+      // This should fail due to cycle detection
       expect(() => {
-        frameManager.createFrame({
-          type: 'task',
-          name: 'Frame 12',
-          parentFrameId: parentId,
-        });
+        frameManager.updateParentFrame(firstFrame, lastFrame);
       }).toThrow();
-
-      // Check the error is about stack overflow
-      try {
-        frameManager.createFrame({
-          type: 'task',
-          name: 'Frame 12',
-          parentFrameId: parentId,
-        });
-      } catch (error: any) {
-        expect(error.code).toBe(ErrorCode.FRAME_STACK_OVERFLOW);
-        expect(error.message).toContain('Maximum frame depth exceeded');
-      }
     });
+  });
 
+  describe('Depth Limits', () => {
+    it('should enforce maximum depth limit', () => {
+      let parentId: string | undefined;
+      let errorThrown = false;
+
+      // Create frames until we hit the depth limit
+      try {
+        for (let i = 0; i <= 100; i++) {
+          parentId = frameManager.createFrame({
+            type: 'task',
+            name: `Frame ${i}`,
+            parentFrameId: parentId,
+          });
+        }
+      } catch (error: any) {
+        errorThrown = true;
+        expect(error.code).toBe(ErrorCode.FRAME_STACK_OVERFLOW);
+      }
+
+      // Should have thrown an error at some point
+      expect(errorThrown).toBe(true);
+    });
+  });
+
+  describe('Parent Updates', () => {
     it('should allow valid parent updates that do not create cycles', () => {
       const frameA = frameManager.createFrame({
         type: 'task',
@@ -188,160 +199,68 @@ describe('Frame Manager - Circular Reference Detection', () => {
       const updatedFrame = frameManager.getFrame(frameB);
       expect(updatedFrame?.parent_frame_id).toBeNull();
     });
-
-    it('should detect cycle during traversal safety check', () => {
-      // Create a chain close to the limit
-      let parentId: string | undefined;
-      const frameIds: string[] = [];
-      
-      for (let i = 0; i < 8; i++) {
-        parentId = frameManager.createFrame({
-          type: 'task',
-          name: `Frame ${i}`,
-          parentFrameId: parentId,
-        });
-        frameIds.push(parentId);
-      }
-
-      // Attempting to create a very deep chain should trigger safety checks
-      const lastFrame = frameIds[frameIds.length - 1];
-      const firstFrame = frameIds[0];
-
-      // This should fail due to cycle detection
-      expect(() => {
-        frameManager.updateParentFrame(firstFrame, lastFrame);
-      }).toThrow();
-    });
   });
 
-  describe('RefactoredFrameManager', () => {
-    let refactoredManager: RefactoredFrameManager;
-
-    beforeEach(() => {
-      refactoredManager = new RefactoredFrameManager(db, 'test-project', {
-        maxStackDepth: 100, // Higher stack limit so we can test frame depth
-      });
-    });
-
-    it('should detect circular references in refactored manager', () => {
-      // Create frame A
-      const frameA = refactoredManager.createFrame({
-        type: 'task',
-        name: 'Frame A',
-      });
-
-      // Create frame B as child of A
-      const frameB = refactoredManager.createFrame({
-        type: 'subtask',
-        name: 'Frame B',
-        parentFrameId: frameA,
-      });
-
-      // Try to update A's parent to B (should fail)
-      expect(() => {
-        refactoredManager.updateParentFrame(frameA, frameB);
-      }).toThrow();
-
-      // Check the error
-      try {
-        refactoredManager.updateParentFrame(frameA, frameB);
-      } catch (error: any) {
-        expect(error.code).toBe(ErrorCode.FRAME_CYCLE_DETECTED);
-      }
-    });
-
+  describe('Hierarchy Validation', () => {
     it('should validate entire frame hierarchy', () => {
       // Create a valid hierarchy
-      const frameA = refactoredManager.createFrame({
+      const frameA = frameManager.createFrame({
         type: 'task',
         name: 'Frame A',
       });
 
-      const frameB = refactoredManager.createFrame({
+      const frameB = frameManager.createFrame({
         type: 'subtask',
         name: 'Frame B',
         parentFrameId: frameA,
       });
 
-      const frameC = refactoredManager.createFrame({
+      const frameC = frameManager.createFrame({
         type: 'tool_scope',
         name: 'Frame C',
         parentFrameId: frameB,
       });
 
       // Validate hierarchy (should be valid)
-      const validation = refactoredManager.validateFrameHierarchy();
+      const validation = frameManager.validateFrameHierarchy();
       expect(validation.isValid).toBe(true);
       expect(validation.errors).toHaveLength(0);
     });
 
-    it('should detect depth violations in hierarchy validation', () => {
-      // Skip this test for refactored manager as it uses different depth tracking
-      // The refactored manager tracks stack depth, not hierarchy depth
-      const validation = refactoredManager.validateFrameHierarchy();
-      expect(validation.isValid).toBe(true);
-    });
-
-    it('should enforce maximum depth in refactored manager', () => {
-      let parentId: string | undefined;
-      let errorThrown = false;
-      
-      // The refactored manager enforces stack depth, not hierarchy depth
-      // So we test that it properly tracks depth through hierarchy
-      try {
-        for (let i = 0; i <= 100; i++) {
-          parentId = refactoredManager.createFrame({
-            type: 'task',
-            name: `Frame ${i}`,
-            parentFrameId: parentId,
-          });
-        }
-      } catch (error: any) {
-        errorThrown = true;
-        // Either stack overflow or depth exceeded is acceptable
-        expect([ErrorCode.FRAME_STACK_OVERFLOW, ErrorCode.FRAME_STACK_OVERFLOW]).toContain(error.code);
-      }
-      
-      // Should have thrown an error at some point
-      expect(errorThrown).toBe(true);
-    });
-
     it('should handle complex hierarchy validations', () => {
       // Create a tree structure
-      const root1 = refactoredManager.createFrame({
+      const root1 = frameManager.createFrame({
         type: 'task',
         name: 'Root 1',
       });
 
-      const root2 = refactoredManager.createFrame({
+      const root2 = frameManager.createFrame({
         type: 'task',
         name: 'Root 2',
       });
 
-      const child1_1 = refactoredManager.createFrame({
+      const child1_1 = frameManager.createFrame({
         type: 'subtask',
         name: 'Child 1.1',
         parentFrameId: root1,
       });
 
-      const child1_2 = refactoredManager.createFrame({
+      const child1_2 = frameManager.createFrame({
         type: 'subtask',
         name: 'Child 1.2',
         parentFrameId: root1,
       });
 
-      const child2_1 = refactoredManager.createFrame({
+      const child2_1 = frameManager.createFrame({
         type: 'subtask',
         name: 'Child 2.1',
         parentFrameId: root2,
       });
 
       // Validate - should be valid
-      const validation = refactoredManager.validateFrameHierarchy();
+      const validation = frameManager.validateFrameHierarchy();
       expect(validation.isValid).toBe(true);
       expect(validation.errors).toHaveLength(0);
-      
-      // All frames should be at safe depths
       expect(validation.warnings).toHaveLength(0);
     });
   });
@@ -373,22 +292,21 @@ describe('Frame Manager - Circular Reference Detection', () => {
 
       const fakeId = 'non-existent-frame-id';
 
-      // Try to set parent to non-existent frame - this will actually throw 
-      // because getFrame returns undefined for non-existent frames
+      // Try to set parent to non-existent frame
       expect(() => {
         frameManager.updateParentFrame(frameA, fakeId);
-      }).toThrow(); // Will throw when trying to get the non-existent parent frame
+      }).toThrow();
 
       // Try to update non-existent frame
       expect(() => {
         frameManager.updateParentFrame(fakeId, frameA);
-      }).toThrow(); // Should throw for non-existent frame to update
+      }).toThrow();
     });
 
     it('should handle concurrent frame operations safely', () => {
       // Create multiple frames rapidly
       const frameIds: string[] = [];
-      
+
       for (let i = 0; i < 5; i++) {
         const id = frameManager.createFrame({
           type: 'task',

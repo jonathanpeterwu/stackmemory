@@ -16,6 +16,7 @@ import {
 } from '../errors/index.js';
 import { retry, withTimeout } from '../errors/recovery.js';
 import { sessionManager, FrameQueryMode } from '../session/index.js';
+import { frameLifecycleHooks } from './frame-lifecycle-hooks.js';
 
 // Constants for frame validation
 const MAX_FRAME_DEPTH = 100; // Maximum allowed frame depth
@@ -307,6 +308,15 @@ export class RefactoredFrameManager {
 
     // Close all child frames recursively
     this.closeChildFrames(targetFrameId);
+
+    // Trigger lifecycle hooks (fire and forget)
+    const events = this.frameDb.getFrameEvents(targetFrameId);
+    const anchors = this.frameDb.getFrameAnchors(targetFrameId);
+    frameLifecycleHooks
+      .triggerClose({ frame: { ...frame, state: 'closed' }, events, anchors })
+      .catch(() => {
+        // Silently ignore errors - hooks are non-critical
+      });
 
     logger.info('Closed frame', {
       frameId: targetFrameId,
@@ -637,8 +647,18 @@ export class RefactoredFrameManager {
       );
     }
 
-    // If setting a parent, check for cycles
+    // If setting a parent, validate and check for cycles
     if (newParentFrameId) {
+      // Verify the new parent exists
+      const newParentFrame = this.frameDb.getFrame(newParentFrameId);
+      if (!newParentFrame) {
+        throw new FrameError(
+          `Parent frame not found: ${newParentFrameId}`,
+          ErrorCode.FRAME_NOT_FOUND,
+          { frameId, newParentFrameId }
+        );
+      }
+
       const cycle = this.detectCycle(frameId, newParentFrameId);
       if (cycle) {
         throw new FrameError(
@@ -654,27 +674,34 @@ export class RefactoredFrameManager {
       }
 
       // Check depth after parent change
-      const newParentFrame = this.frameDb.getFrame(newParentFrameId);
-      if (newParentFrame) {
-        const newDepth = newParentFrame.depth + 1;
-        if (newDepth > this.maxFrameDepth) {
-          throw new FrameError(
-            `Cannot set parent: would exceed maximum frame depth`,
-            ErrorCode.FRAME_STACK_OVERFLOW,
-            {
-              frameId,
-              newParentFrameId,
-              newDepth,
-              maxDepth: this.maxFrameDepth,
-            }
-          );
-        }
+      const newDepth = newParentFrame.depth + 1;
+      if (newDepth > this.maxFrameDepth) {
+        throw new FrameError(
+          `Cannot set parent: would exceed maximum frame depth`,
+          ErrorCode.FRAME_STACK_OVERFLOW,
+          {
+            frameId,
+            newParentFrameId,
+            newDepth,
+            maxDepth: this.maxFrameDepth,
+          }
+        );
       }
     }
 
-    // Update the frame's parent (this would need to be implemented in FrameDatabase)
+    // Calculate new depth based on parent
+    let newDepth = 0;
+    if (newParentFrameId) {
+      const newParentFrame = this.frameDb.getFrame(newParentFrameId);
+      if (newParentFrame) {
+        newDepth = newParentFrame.depth + 1;
+      }
+    }
+
+    // Update the frame's parent and depth
     this.frameDb.updateFrame(frameId, {
       parent_frame_id: newParentFrameId,
+      depth: newDepth,
     });
 
     logger.info('Updated parent frame', {
@@ -754,10 +781,145 @@ export class RefactoredFrameManager {
       warnings,
     };
   }
+
+  /**
+   * Set query mode for frame retrieval
+   */
+  setQueryMode(mode: FrameQueryMode): void {
+    this.queryMode = mode;
+    // Reinitialize stack with new query mode
+    this.frameStack.setQueryMode(mode);
+  }
+
+  /**
+   * Get recent frames for context sharing
+   */
+  async getRecentFrames(limit: number = 100): Promise<Frame[]> {
+    try {
+      const frames = this.frameDb.getFramesByProject(this.projectId);
+
+      // Sort by created_at descending and limit
+      return frames
+        .sort((a, b) => (b.created_at || 0) - (a.created_at || 0))
+        .slice(0, limit)
+        .map((frame) => ({
+          ...frame,
+          // Add compatibility fields
+          frameId: frame.frame_id,
+          runId: frame.run_id,
+          projectId: frame.project_id,
+          parentFrameId: frame.parent_frame_id,
+          title: frame.name,
+          timestamp: frame.created_at,
+          metadata: {
+            tags: this.extractTagsFromFrame(frame),
+            importance: this.calculateFrameImportance(frame),
+          },
+          data: {
+            inputs: frame.inputs,
+            outputs: frame.outputs,
+            digest: frame.digest_json,
+          },
+        }));
+    } catch (error: unknown) {
+      logger.error('Failed to get recent frames', error as Error);
+      return [];
+    }
+  }
+
+  /**
+   * Add context metadata to the current frame
+   */
+  async addContext(key: string, value: any): Promise<void> {
+    const currentFrameId = this.frameStack.getCurrentFrameId();
+    if (!currentFrameId) return;
+
+    try {
+      const frame = this.frameDb.getFrame(currentFrameId);
+      if (!frame) return;
+
+      const metadata = frame.outputs || {};
+      metadata[key] = value;
+
+      this.frameDb.updateFrame(currentFrameId, {
+        outputs: metadata,
+      });
+    } catch (error: unknown) {
+      logger.warn('Failed to add context to frame', { error, key });
+    }
+  }
+
+  /**
+   * Delete a frame completely from the database (used in handoffs)
+   */
+  deleteFrame(frameId: string): void {
+    try {
+      // Remove from active stack if present
+      this.frameStack.removeFrame(frameId);
+
+      // Delete the frame and related data (cascades via FrameDatabase)
+      this.frameDb.deleteFrame(frameId);
+
+      logger.debug('Deleted frame completely', { frameId });
+    } catch (error: unknown) {
+      logger.error('Failed to delete frame', { frameId, error });
+      throw error;
+    }
+  }
+
+  /**
+   * Extract tags from frame for categorization
+   */
+  private extractTagsFromFrame(frame: Frame): string[] {
+    const tags: string[] = [];
+
+    if (frame.type) tags.push(frame.type);
+
+    if (frame.name) {
+      const nameLower = frame.name.toLowerCase();
+      if (nameLower.includes('error')) tags.push('error');
+      if (nameLower.includes('fix')) tags.push('resolution');
+      if (nameLower.includes('decision')) tags.push('decision');
+      if (nameLower.includes('milestone')) tags.push('milestone');
+    }
+
+    try {
+      if (frame.digest_json && typeof frame.digest_json === 'object') {
+        const digest = frame.digest_json as Record<string, unknown>;
+        if (Array.isArray(digest.tags)) {
+          tags.push(...(digest.tags as string[]));
+        }
+      }
+    } catch {
+      // Ignore parse errors
+    }
+
+    return [...new Set(tags)];
+  }
+
+  /**
+   * Calculate frame importance for prioritization
+   */
+  private calculateFrameImportance(frame: Frame): 'high' | 'medium' | 'low' {
+    if (frame.type === 'milestone' || frame.name?.includes('decision')) {
+      return 'high';
+    }
+
+    if (frame.type === 'error' || frame.type === 'resolution') {
+      return 'medium';
+    }
+
+    if (frame.closed_at && frame.created_at) {
+      const duration = frame.closed_at - frame.created_at;
+      if (duration > 300) return 'medium';
+    }
+
+    return 'low';
+  }
 }
 
-// Re-export types for compatibility
-export {
+// Re-export types for compatibility (type-only, no runtime value)
+export type {
   Frame,
   FrameContext,
   Anchor,

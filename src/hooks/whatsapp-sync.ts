@@ -1,6 +1,9 @@
 /**
  * WhatsApp Context Sync Engine
  * Push frame digests and context updates to WhatsApp
+ *
+ * Uses the frame lifecycle hooks system to receive frame close events.
+ * Call `registerWhatsAppSyncHook()` to enable automatic sync on frame close.
  */
 
 import { existsSync, readFileSync } from 'fs';
@@ -14,6 +17,10 @@ import {
 } from './sms-notify.js';
 import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
 import { SyncOptionsSchema, parseConfigSafe } from './schemas.js';
+import {
+  frameLifecycleHooks,
+  type FrameCloseData,
+} from '../core/context/frame-lifecycle-hooks.js';
 
 export interface SyncOptions {
   autoSyncOnClose: boolean;
@@ -452,6 +459,55 @@ export async function onFrameClosed(
   // Auto-sync
   const options = loadSyncOptions();
   return syncFrameData(frameData, options);
+}
+
+/**
+ * Internal hook handler that receives FrameCloseData from lifecycle hooks
+ */
+async function handleFrameCloseHook(data: FrameCloseData): Promise<void> {
+  const digestData = createFrameDigestData(
+    data.frame,
+    data.events,
+    data.anchors
+  );
+  await onFrameClosed(digestData);
+}
+
+// Track if hook is registered to avoid duplicates
+let hookUnregister: (() => void) | null = null;
+
+/**
+ * Register WhatsApp sync as a frame lifecycle hook
+ * This enables automatic sync when frames are closed
+ * Call this during app initialization to enable the integration
+ *
+ * @returns Unregister function to disable the hook
+ */
+export function registerWhatsAppSyncHook(): () => void {
+  // Avoid duplicate registration
+  if (hookUnregister) {
+    return hookUnregister;
+  }
+
+  hookUnregister = frameLifecycleHooks.onFrameClosed(
+    'whatsapp-sync',
+    handleFrameCloseHook,
+    -10 // Low priority - run after other hooks
+  );
+
+  return () => {
+    if (hookUnregister) {
+      hookUnregister();
+      hookUnregister = null;
+    }
+  };
+}
+
+/**
+ * Check if the WhatsApp sync hook is currently registered
+ */
+export function isHookRegistered(): boolean {
+  return hookUnregister !== null;
 }
 
 /**

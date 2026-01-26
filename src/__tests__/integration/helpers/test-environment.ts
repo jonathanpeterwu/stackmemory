@@ -4,7 +4,7 @@
  */
 
 import { SQLiteAdapter, SQLiteConfig } from '../../../core/database/sqlite-adapter.js';
-import { FrameManager } from '../../../core/context/frame-manager.js';
+import { FrameManager } from '../../../core/context/index.js';
 import { SharedContextLayer } from '../../../core/context/shared-context-layer.js';
 import { ContextBridge } from '../../../core/context/context-bridge.js';
 import { ContextRetriever } from '../../../core/retrieval/context-retriever.js';

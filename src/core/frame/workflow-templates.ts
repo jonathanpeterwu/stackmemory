@@ -6,8 +6,7 @@
  * and enforces completion gates between transitions
  */
 
-import { Frame } from '../types';
-import { FrameManager } from './frame-manager';
+import { Frame, FrameManager } from '../context/index.js';
 
 export interface WorkflowPhase {
   name: string;

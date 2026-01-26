@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../../../core/monitoring/logger.js';
-import { FrameManager } from '../../../core/context/frame-manager.js';
+import { FrameManager } from '../../../core/context/index.js';
 import { sharedContextLayer } from '../../../core/context/shared-context-layer.js';
 import { ContextRetriever } from '../../../core/retrieval/context-retriever.js';
 import { sessionManager } from '../../../core/session/index.js';

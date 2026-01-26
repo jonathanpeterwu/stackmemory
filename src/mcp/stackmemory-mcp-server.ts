@@ -20,7 +20,7 @@ import {
   LinearTaskManager,
   TaskPriority,
 } from '../features/tasks/linear-task-manager.js';
-import { FrameManager } from '../core/context/frame-manager.js';
+import { FrameManager } from '../core/context/index.js';
 import { AgentTaskManager } from '../agents/core/agent-task-manager.js';
 import { logger } from '../core/monitoring/logger.js';
 
@@ -40,7 +40,7 @@ const frameManager = new FrameManager(db, PROJECT_ROOT, undefined);
 const agentTaskManager = new AgentTaskManager(taskStore, frameManager);
 
 // Track active Claude session
-// eslint-disable-next-line @typescript-eslint/no-unused-vars
+
 let _claudeSessionId: string | null = null;
 let claudeFrameId: string | null = null;
 

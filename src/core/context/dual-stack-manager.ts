@@ -3,8 +3,8 @@
  * Manages both individual and shared team stacks for collaboration
  */
 
-import type { Frame, Event, Anchor } from './frame-manager.js';
-import { FrameManager } from './frame-manager.js';
+import type { Frame, Event, Anchor } from './frame-types.js';
+import { FrameManager } from './index.js';
 import type { DatabaseAdapter } from '../database/database-adapter.js';
 import { SQLiteAdapter } from '../database/sqlite-adapter.js';
 import { logger } from '../monitoring/logger.js';

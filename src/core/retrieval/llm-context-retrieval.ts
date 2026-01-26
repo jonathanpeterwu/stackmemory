@@ -9,7 +9,7 @@ import {
   Frame,
   Anchor,
   Event,
-} from '../context/frame-manager.js';
+} from '../context/index.js';
 import { QueryParser, StackMemoryQuery } from '../query/query-parser.js';
 import { CompressedSummaryGenerator } from './summary-generator.js';
 import {

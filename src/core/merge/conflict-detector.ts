@@ -10,7 +10,7 @@ import {
   ParallelSolution,
   DecisionConflict,
 } from './types.js';
-import { Frame, Event } from '../context/frame-manager.js';
+import { Frame, Event } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 
 export class ConflictDetector {

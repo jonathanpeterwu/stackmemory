@@ -9,7 +9,7 @@ import { Server as SocketServer } from 'socket.io';
 import cors from 'cors';
 import { LinearTaskReader } from '../../tui/services/linear-task-reader.js';
 import { SessionManager } from '../../../core/session/session-manager.js';
-import { FrameManager } from '../../../core/context/frame-manager.js';
+import { FrameManager } from '../../../core/context/index.js';
 import Database from 'better-sqlite3';
 import { existsSync } from 'fs';
 import { join } from 'path';

@@ -7,7 +7,7 @@ import { Command } from 'commander';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { FrameManager, FrameType } from '../../core/context/frame-manager.js';
+import { FrameManager, FrameType } from '../../core/context/index.js';
 import { createContextRehydrateCommand } from './context-rehydrate.js';
 
 // Type-safe environment variable access

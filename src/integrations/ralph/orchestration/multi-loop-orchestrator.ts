@@ -5,7 +5,7 @@
 
 import { v4 as uuidv4 } from 'uuid';
 import { logger } from '../../../core/monitoring/logger.js';
-import { FrameManager } from '../../../core/context/frame-manager.js';
+import { FrameManager } from '../../../core/context/index.js';
 import { sessionManager } from '../../../core/session/index.js';
 import { RalphStackMemoryBridge } from '../bridge/ralph-stackmemory-bridge.js';
 import {

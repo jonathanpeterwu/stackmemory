@@ -3,7 +3,7 @@
  * Creates realistic test data for integration testing
  */
 
-import type { Frame, Event } from '../../../core/context/frame-manager.js';
+import type { Frame, Event } from '../../../core/context/index.js';
 
 export interface TestFrameOptions {
   count?: number;

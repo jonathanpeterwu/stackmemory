@@ -16,7 +16,7 @@ initializeTracing();
 
 import { program } from 'commander';
 import { logger } from '../core/monitoring/logger.js';
-import { FrameManager } from '../core/context/frame-manager.js';
+import { FrameManager } from '../core/context/index.js';
 import { sessionManager, FrameQueryMode } from '../core/session/index.js';
 import { sharedContextLayer } from '../core/context/shared-context-layer.js';
 import { UpdateChecker } from '../core/utils/update-checker.js';

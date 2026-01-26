@@ -3,7 +3,7 @@
  * Advanced conflict resolution for frame merging between individual and shared stacks
  */
 
-import type { Frame, Event, Anchor } from './frame-manager.js';
+import type { Frame, Event, Anchor } from './frame-types.js';
 import {
   DualStackManager,
   type StackSyncResult,

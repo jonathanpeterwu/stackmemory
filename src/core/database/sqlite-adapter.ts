@@ -16,7 +16,7 @@ import {
   VersionResult,
   FrameRow,
 } from './database-adapter.js';
-import type { Frame, Event, Anchor } from '../context/frame-manager.js';
+import type { Frame, Event, Anchor } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 import { DatabaseError, ErrorCode, ValidationError } from '../errors/index.js';
 import * as fs from 'fs/promises';
