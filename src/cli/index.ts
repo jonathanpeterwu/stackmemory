@@ -57,6 +57,7 @@ import { createAutoBackgroundCommand } from './commands/auto-background.js';
 import { createSMSNotifyCommand } from './commands/sms-notify.js';
 import { createSettingsCommand } from './commands/settings.js';
 import { createRetrievalCommands } from './commands/retrieval.js';
+import { createDiscoveryCommands } from './commands/discovery.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -676,6 +677,7 @@ program.addCommand(createAutoBackgroundCommand());
 program.addCommand(createSMSNotifyCommand());
 program.addCommand(createSettingsCommand());
 program.addCommand(createRetrievalCommands());
+program.addCommand(createDiscoveryCommands());
 
 // Register dashboard command
 program

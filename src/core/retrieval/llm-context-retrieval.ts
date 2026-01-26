@@ -30,8 +30,8 @@ import { ContextCache } from '../performance/context-cache.js';
 import { LLMProvider, createLLMProvider } from './llm-provider.js';
 import { RetrievalAuditStore } from './retrieval-audit.js';
 
-// Re-export LLMProvider for external use
-export { LLMProvider } from './llm-provider.js';
+// Re-export LLMProvider type for external use
+export type { LLMProvider } from './llm-provider.js';
 
 /**
  * LLM provider interface for context analysis

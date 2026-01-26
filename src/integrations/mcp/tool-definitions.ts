@@ -23,6 +23,7 @@ export class MCPToolDefinitions {
       ...this.getTaskTools(),
       ...this.getLinearTools(),
       ...this.getTraceTools(),
+      ...this.getDiscoveryTools(),
     ];
   }
 
@@ -74,13 +75,20 @@ export class MCPToolDefinitions {
         inputSchema: {
           type: 'object',
           properties: {
-            name: { 
-              type: 'string', 
-              description: 'Frame name/goal' 
+            name: {
+              type: 'string',
+              description: 'Frame name/goal',
             },
             type: {
               type: 'string',
-              enum: ['task', 'subtask', 'tool_scope', 'review', 'write', 'debug'],
+              enum: [
+                'task',
+                'subtask',
+                'tool_scope',
+                'review',
+                'write',
+                'debug',
+              ],
               default: 'task',
               description: 'Type of frame',
             },
@@ -116,13 +124,21 @@ export class MCPToolDefinitions {
       },
       {
         name: 'add_anchor',
-        description: 'Add an important fact or decision anchor to current frame',
+        description:
+          'Add an important fact or decision anchor to current frame',
         inputSchema: {
           type: 'object',
           properties: {
             type: {
               type: 'string',
-              enum: ['FACT', 'DECISION', 'CONSTRAINT', 'INTERFACE_CONTRACT', 'TODO', 'RISK'],
+              enum: [
+                'FACT',
+                'DECISION',
+                'CONSTRAINT',
+                'INTERFACE_CONTRACT',
+                'TODO',
+                'RISK',
+              ],
               description: 'Type of anchor',
             },
             text: {
@@ -207,7 +223,13 @@ export class MCPToolDefinitions {
             },
             status: {
               type: 'string',
-              enum: ['pending', 'in-progress', 'blocked', 'completed', 'cancelled'],
+              enum: [
+                'pending',
+                'in-progress',
+                'blocked',
+                'completed',
+                'cancelled',
+              ],
               description: 'New status',
             },
             progress: {
@@ -228,7 +250,13 @@ export class MCPToolDefinitions {
           properties: {
             status: {
               type: 'string',
-              enum: ['pending', 'in-progress', 'blocked', 'completed', 'cancelled'],
+              enum: [
+                'pending',
+                'in-progress',
+                'blocked',
+                'completed',
+                'cancelled',
+              ],
               description: 'Filter by status',
             },
             priority: {
@@ -340,7 +368,8 @@ export class MCPToolDefinitions {
               type: 'number',
               minimum: 0,
               maximum: 4,
-              description: 'Priority (0=None, 1=Low, 2=Medium, 3=High, 4=Urgent)',
+              description:
+                'Priority (0=None, 1=Low, 2=Medium, 3=High, 4=Urgent)',
             },
             labels: {
               type: 'array',
@@ -553,6 +582,120 @@ export class MCPToolDefinitions {
   }
 
   /**
+   * Discovery and exploration tools
+   */
+  private getDiscoveryTools(): MCPToolDefinition[] {
+    return [
+      {
+        name: 'sm_discover',
+        description:
+          'Discover relevant files based on current context. Extracts keywords from active frames and searches codebase for related files.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Optional query to focus the discovery',
+            },
+            depth: {
+              type: 'string',
+              enum: ['shallow', 'medium', 'deep'],
+              default: 'medium',
+              description:
+                'Search depth - shallow for quick results, deep for thorough exploration',
+            },
+            includePatterns: {
+              type: 'array',
+              items: { type: 'string' },
+              description: 'File patterns to include (e.g., ["*.ts", "*.md"])',
+            },
+            excludePatterns: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'Patterns to exclude (e.g., ["node_modules", "dist"])',
+            },
+            maxFiles: {
+              type: 'number',
+              default: 20,
+              description: 'Maximum files to return',
+            },
+          },
+        },
+      },
+      {
+        name: 'sm_related_files',
+        description:
+          'Find files related to a specific file or concept. Useful for understanding dependencies and connections.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file: {
+              type: 'string',
+              description: 'File path to find related files for',
+            },
+            concept: {
+              type: 'string',
+              description: 'Concept or term to find related files for',
+            },
+            maxFiles: {
+              type: 'number',
+              default: 10,
+              description: 'Maximum files to return',
+            },
+          },
+        },
+      },
+      {
+        name: 'sm_session_summary',
+        description:
+          'Get a summary of the current session including active tasks, recent files, and decisions made.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            includeFiles: {
+              type: 'boolean',
+              default: true,
+              description: 'Include list of recently accessed files',
+            },
+            includeDecisions: {
+              type: 'boolean',
+              default: true,
+              description: 'Include recent decisions and constraints',
+            },
+          },
+        },
+      },
+      {
+        name: 'sm_search',
+        description:
+          'Search across StackMemory context - frames, events, decisions, and tasks.',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Search query',
+            },
+            scope: {
+              type: 'string',
+              enum: ['all', 'frames', 'events', 'decisions', 'tasks'],
+              default: 'all',
+              description: 'Scope of search',
+            },
+            limit: {
+              type: 'number',
+              default: 20,
+              description: 'Maximum results to return',
+            },
+          },
+          required: ['query'],
+        },
+      },
+    ];
+  }
+
+  /**
    * Get tool definition by name
    */
   getToolDefinition(name: string): MCPToolDefinition | undefined {
@@ -562,7 +705,9 @@ export class MCPToolDefinitions {
   /**
    * Get tool names by category
    */
-  getToolsByCategory(category: 'context' | 'task' | 'linear' | 'trace'): MCPToolDefinition[] {
+  getToolsByCategory(
+    category: 'context' | 'task' | 'linear' | 'trace' | 'discovery'
+  ): MCPToolDefinition[] {
     switch (category) {
       case 'context':
         return this.getContextTools();
@@ -572,6 +717,8 @@ export class MCPToolDefinitions {
         return this.getLinearTools();
       case 'trace':
         return this.getTraceTools();
+      case 'discovery':
+        return this.getDiscoveryTools();
       default:
         return [];
     }

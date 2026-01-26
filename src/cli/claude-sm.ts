@@ -5,6 +5,9 @@
  * Automatically manages context persistence and instance isolation
  */
 
+import { config as loadDotenv } from 'dotenv';
+loadDotenv({ override: true });
+
 import { spawn, execSync, execFileSync } from 'child_process';
 import * as fs from 'fs';
 import * as path from 'path';
