@@ -6,6 +6,7 @@
 import { Pool, PoolClient, PoolConfig } from 'pg';
 import { EventEmitter } from 'events';
 import { logger } from '../monitoring/logger.js';
+import { DatabaseError, ErrorCode } from '../errors/index.js';
 
 export interface ConnectionPoolConfig extends PoolConfig {
   // Basic pool settings
@@ -278,7 +279,12 @@ export class ConnectionPool extends EventEmitter {
     } catch (error: unknown) {
       this.metrics.totalErrors++;
       logger.error('Failed to acquire connection:', error);
-      throw error;
+      throw new DatabaseError(
+        'Failed to acquire database connection',
+        ErrorCode.DB_CONNECTION_FAILED,
+        { pool: 'paradedb' },
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
@@ -435,7 +441,12 @@ export class ConnectionPool extends EventEmitter {
         logger.error('Transaction rollback failed:', rollbackError);
         this.markConnectionAsBad(client);
       }
-      throw error;
+      throw new DatabaseError(
+        'Transaction failed',
+        ErrorCode.DB_TRANSACTION_FAILED,
+        { operation: 'transaction' },
+        error instanceof Error ? error : undefined
+      );
     } finally {
       this.release(client);
     }

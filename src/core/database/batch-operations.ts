@@ -4,9 +4,10 @@
  */
 
 import Database from 'better-sqlite3';
-import { getConnectionPool } from './connection-pool.js';
+// Connection pool imported when needed: getConnectionPool
 import { logger } from '../monitoring/logger.js';
 import { trace } from '../trace/index.js';
+import { ErrorCode, wrapError } from '../errors/index.js';
 
 export interface BatchOperation {
   table: string;
@@ -159,9 +160,15 @@ export class BatchOperationsManager {
               stats.successfulInserts += result.changes;
             } catch (error: unknown) {
               stats.failedInserts++;
+              const wrappedError = wrapError(
+                error,
+                'Failed to update frame digest',
+                ErrorCode.DB_UPDATE_FAILED,
+                { frameId: update.frame_id }
+              );
               logger.warn('Failed to update frame digest', {
                 frameId: update.frame_id,
-                error: (error as Error).message,
+                error: wrappedError.message,
               });
             }
           }
@@ -245,9 +252,15 @@ export class BatchOperationsManager {
               stats.successfulInserts += result.changes;
             } catch (error: unknown) {
               stats.failedInserts++;
+              const wrappedError = wrapError(
+                error,
+                `Failed to insert ${table} record`,
+                ErrorCode.DB_INSERT_FAILED,
+                { table, record }
+              );
               logger.warn(`Failed to insert ${table} record`, {
                 record,
-                error: (error as Error).message,
+                error: wrappedError.message,
               });
             }
           }
@@ -315,7 +328,13 @@ export class BatchOperationsManager {
         }
       } catch (error: unknown) {
         stats.failedInserts += batch.length;
-        logger.error('Batch processing failed', error as Error, {
+        const wrappedError = wrapError(
+          error,
+          'Batch processing failed',
+          ErrorCode.DB_TRANSACTION_FAILED,
+          { batchNumber: stats.batchesProcessed + 1, batchSize: batch.length }
+        );
+        logger.error('Batch processing failed', wrappedError, {
           batchNumber: stats.batchesProcessed + 1,
           batchSize: batch.length,
         });
@@ -358,7 +377,13 @@ export class BatchOperationsManager {
         tables: groupedOps.size,
       });
     } catch (error: unknown) {
-      logger.error('Batch queue processing failed', error as Error);
+      const wrappedError = wrapError(
+        error,
+        'Batch queue processing failed',
+        ErrorCode.DB_TRANSACTION_FAILED,
+        { operationsCount: operations.length }
+      );
+      logger.error('Batch queue processing failed', wrappedError);
     } finally {
       this.isProcessing = false;
     }

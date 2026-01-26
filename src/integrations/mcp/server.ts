@@ -8,6 +8,16 @@ import { Server } from '@modelcontextprotocol/sdk/server/index.js';
 import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js';
 import { z } from 'zod';
 import Database from 'better-sqlite3';
+import {
+  validateInput,
+  StartFrameSchema,
+  CloseFrameSchema,
+  AddAnchorSchema,
+  CreateTaskSchema,
+  UpdateTaskStatusSchema,
+  AddDecisionSchema,
+  GetContextSchema,
+} from './schemas.js';
 import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { execSync } from 'child_process';
@@ -1047,8 +1057,12 @@ class LocalStackMemoryMCP {
     };
   }
 
-  private async handleStartFrame(args: any) {
-    const { name, type, constraints } = args;
+  private async handleStartFrame(args: unknown) {
+    const { name, type, constraints } = validateInput(
+      StartFrameSchema,
+      args,
+      'start_frame'
+    );
 
     const inputs: Record<string, any> = {};
     if (constraints) {
@@ -1120,8 +1134,12 @@ class LocalStackMemoryMCP {
     };
   }
 
-  private async handleAddAnchor(args: any) {
-    const { type, text, priority = 5 } = args;
+  private async handleAddAnchor(args: unknown) {
+    const { type, text, priority } = validateInput(
+      AddAnchorSchema,
+      args,
+      'add_anchor'
+    );
 
     const anchorId = this.frameManager.addAnchor(type, text, priority);
 
@@ -1217,9 +1235,10 @@ class LocalStackMemoryMCP {
       .run(query, response);
   }
 
-  private async handleCreateTask(args: any) {
-    const { title, description, priority, estimatedEffort, dependsOn, tags } =
-      args;
+  private async handleCreateTask(args: unknown) {
+    const validated = validateInput(CreateTaskSchema, args, 'create_task');
+    const { title, description, priority, tags } = validated;
+    const { estimatedEffort, dependsOn } = args as any; // Legacy fields
     const currentFrameId = this.frameManager.getCurrentFrameId();
 
     if (!currentFrameId) {

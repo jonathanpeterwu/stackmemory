@@ -6,6 +6,7 @@
 import { EventEmitter } from 'events';
 import { DatabaseAdapter } from './database-adapter.js';
 import { logger } from '../monitoring/logger.js';
+import { DatabaseError, ErrorCode, wrapError } from '../errors/index.js';
 
 export interface MigrationConfig {
   sourceAdapter: DatabaseAdapter;
@@ -68,28 +69,44 @@ export class MigrationManager extends EventEmitter {
 
   private validateConfig(config: MigrationConfig): void {
     if (!config.sourceAdapter || !config.targetAdapter) {
-      throw new Error('Source and target adapters are required');
+      throw new DatabaseError(
+        'Source and target adapters are required',
+        ErrorCode.DB_MIGRATION_FAILED,
+        { reason: 'missing_adapters' }
+      );
     }
 
     if (
       config.batchSize &&
       (config.batchSize < 1 || config.batchSize > 10000)
     ) {
-      throw new Error('Batch size must be between 1 and 10000');
+      throw new DatabaseError(
+        'Batch size must be between 1 and 10000',
+        ErrorCode.DB_MIGRATION_FAILED,
+        { batchSize: config.batchSize }
+      );
     }
 
     if (
       config.retryAttempts &&
       (config.retryAttempts < 0 || config.retryAttempts > 10)
     ) {
-      throw new Error('Retry attempts must be between 0 and 10');
+      throw new DatabaseError(
+        'Retry attempts must be between 0 and 10',
+        ErrorCode.DB_MIGRATION_FAILED,
+        { retryAttempts: config.retryAttempts }
+      );
     }
 
     if (
       config.retryDelayMs &&
       (config.retryDelayMs < 0 || config.retryDelayMs > 30000)
     ) {
-      throw new Error('Retry delay must be between 0 and 30000ms');
+      throw new DatabaseError(
+        'Retry delay must be between 0 and 30000ms',
+        ErrorCode.DB_MIGRATION_FAILED,
+        { retryDelayMs: config.retryDelayMs }
+      );
     }
   }
 
@@ -195,7 +212,11 @@ export class MigrationManager extends EventEmitter {
     }
   ): Promise<void> {
     if (this.isRunning) {
-      throw new Error('Migration already in progress');
+      throw new DatabaseError(
+        'Migration already in progress',
+        ErrorCode.DB_MIGRATION_FAILED,
+        { reason: 'already_running' }
+      );
     }
 
     this.isRunning = true;
@@ -252,7 +273,12 @@ export class MigrationManager extends EventEmitter {
       }
 
       // Create user-safe error message
-      const userError = new Error('Migration failed. Check logs for details.');
+      const userError = new DatabaseError(
+        'Migration failed. Check logs for details.',
+        ErrorCode.DB_MIGRATION_FAILED,
+        { phase: this.progress.phase },
+        error instanceof Error ? error : undefined
+      );
       this.emit('failed', userError);
       throw userError;
     } finally {
@@ -270,7 +296,11 @@ export class MigrationManager extends EventEmitter {
     }
 
     if (!(await this.config.sourceAdapter.ping())) {
-      throw new Error('Source adapter is not responding');
+      throw new DatabaseError(
+        'Source adapter is not responding',
+        ErrorCode.DB_CONNECTION_FAILED,
+        { adapter: 'source' }
+      );
     }
 
     // Check target adapter
@@ -279,7 +309,11 @@ export class MigrationManager extends EventEmitter {
     }
 
     if (!(await this.config.targetAdapter.ping())) {
-      throw new Error('Target adapter is not responding');
+      throw new DatabaseError(
+        'Target adapter is not responding',
+        ErrorCode.DB_CONNECTION_FAILED,
+        { adapter: 'target' }
+      );
     }
 
     // Verify schema compatibility
@@ -301,7 +335,12 @@ export class MigrationManager extends EventEmitter {
       await this.config.targetAdapter.initializeSchema();
     } catch (error: unknown) {
       logger.error('Failed to initialize target schema:', error);
-      throw new Error(`Target schema initialization failed: ${error}`);
+      throw new DatabaseError(
+        'Target schema initialization failed',
+        ErrorCode.DB_SCHEMA_ERROR,
+        { operation: 'initializeSchema' },
+        error instanceof Error ? error : undefined
+      );
     }
   }
 
@@ -320,7 +359,11 @@ export class MigrationManager extends EventEmitter {
   ): Promise<void> {
     for (const tablePlan of plan) {
       if (this.abortController?.signal.aborted) {
-        throw new Error('Migration aborted by user');
+        throw new DatabaseError(
+          'Migration aborted by user',
+          ErrorCode.DB_MIGRATION_FAILED,
+          { reason: 'user_abort' }
+        );
       }
 
       if (tablePlan.strategy === 'skip') {
@@ -335,7 +378,7 @@ export class MigrationManager extends EventEmitter {
 
   private async migrateTable(
     plan: TableMigrationPlan,
-    strategy: MigrationStrategy
+    _strategy: MigrationStrategy
   ): Promise<void> {
     logger.info(`Migrating table: ${plan.table} (~${plan.estimatedRows} rows)`);
 
@@ -376,7 +419,12 @@ export class MigrationManager extends EventEmitter {
         if (this.config.retryAttempts > 0) {
           await this.retryBatch(plan.table, offset, this.config.batchSize);
         } else {
-          throw error;
+          throw wrapError(
+            error,
+            `Batch migration failed for table ${plan.table}`,
+            ErrorCode.DB_MIGRATION_FAILED,
+            { table: plan.table, offset }
+          );
         }
       }
     }
@@ -394,19 +442,20 @@ export class MigrationManager extends EventEmitter {
     // Validate table name against whitelist
     const allowedTables = ['frames', 'events', 'anchors'] as const;
     if (!allowedTables.includes(table as any)) {
-      throw new Error(`Invalid table name: ${table}`);
+      throw new DatabaseError(
+        `Invalid table name: ${table}`,
+        ErrorCode.DB_QUERY_FAILED,
+        { table, allowedTables }
+      );
     }
 
     // Validate and bound parameters
     const safeLimit = Math.max(1, Math.min(limit, 10000));
     const safeOffset = Math.max(0, offset);
 
-    const options = {
-      limit: safeLimit,
-      offset: safeOffset,
-      orderBy: 'created_at',
-      orderDirection: 'ASC' as const,
-    };
+    // TODO: Use these options when adapter methods support pagination
+    void safeLimit;
+    void safeOffset;
 
     switch (table) {
       case 'frames':
@@ -417,7 +466,11 @@ export class MigrationManager extends EventEmitter {
       case 'anchors':
         return []; // Placeholder
       default:
-        throw new Error(`Unsupported table: ${table}`);
+        throw new DatabaseError(
+          `Unsupported table: ${table}`,
+          ErrorCode.DB_QUERY_FAILED,
+          { table }
+        );
     }
   }
 
@@ -425,7 +478,11 @@ export class MigrationManager extends EventEmitter {
     // Validate table name
     const allowedTables = ['frames', 'events', 'anchors'] as const;
     if (!allowedTables.includes(table as any)) {
-      throw new Error(`Invalid table name: ${table}`);
+      throw new DatabaseError(
+        `Invalid table name: ${table}`,
+        ErrorCode.DB_INSERT_FAILED,
+        { table }
+      );
     }
 
     // Use transaction for batch safety
@@ -442,7 +499,11 @@ export class MigrationManager extends EventEmitter {
 
   private validateRowData(table: string, row: any): any {
     if (!row || typeof row !== 'object') {
-      throw new Error(`Invalid row data for table ${table}`);
+      throw new DatabaseError(
+        `Invalid row data for table ${table}`,
+        ErrorCode.DB_INSERT_FAILED,
+        { table, rowType: typeof row }
+      );
     }
 
     switch (table) {
@@ -453,7 +514,11 @@ export class MigrationManager extends EventEmitter {
       case 'anchors':
         return this.validateAnchorRow(row);
       default:
-        throw new Error(`Unknown table: ${table}`);
+        throw new DatabaseError(
+          `Unknown table: ${table}`,
+          ErrorCode.DB_INSERT_FAILED,
+          { table }
+        );
     }
   }
 
@@ -469,7 +534,11 @@ export class MigrationManager extends EventEmitter {
     ];
     for (const field of required) {
       if (!(field in row)) {
-        throw new Error(`Missing required field ${field} in frame row`);
+        throw new DatabaseError(
+          `Missing required field ${field} in frame row`,
+          ErrorCode.DB_CONSTRAINT_VIOLATION,
+          { table: 'frames', missingField: field }
+        );
       }
     }
     return row;
@@ -479,7 +548,11 @@ export class MigrationManager extends EventEmitter {
     const required = ['event_id', 'frame_id', 'seq', 'type', 'text'];
     for (const field of required) {
       if (!(field in row)) {
-        throw new Error(`Missing required field ${field} in event row`);
+        throw new DatabaseError(
+          `Missing required field ${field} in event row`,
+          ErrorCode.DB_CONSTRAINT_VIOLATION,
+          { table: 'events', missingField: field }
+        );
       }
     }
     return row;
@@ -489,7 +562,11 @@ export class MigrationManager extends EventEmitter {
     const required = ['anchor_id', 'frame_id', 'type', 'text', 'priority'];
     for (const field of required) {
       if (!(field in row)) {
-        throw new Error(`Missing required field ${field} in anchor row`);
+        throw new DatabaseError(
+          `Missing required field ${field} in anchor row`,
+          ErrorCode.DB_CONSTRAINT_VIOLATION,
+          { table: 'anchors', missingField: field }
+        );
       }
     }
     return row;
@@ -516,8 +593,11 @@ export class MigrationManager extends EventEmitter {
         );
 
         if (attempt === this.config.retryAttempts) {
-          throw new Error(
-            `Failed after ${this.config.retryAttempts} retries: ${error}`
+          throw new DatabaseError(
+            `Failed after ${this.config.retryAttempts} retries`,
+            ErrorCode.DB_MIGRATION_FAILED,
+            { table, offset, attempts: this.config.retryAttempts },
+            error instanceof Error ? error : undefined
           );
         }
       }
@@ -559,13 +639,18 @@ export class MigrationManager extends EventEmitter {
     }
 
     if (this.progress.errors.length > 0) {
-      throw new Error(
-        `Data integrity verification failed with ${this.progress.errors.length} errors`
+      throw new DatabaseError(
+        `Data integrity verification failed with ${this.progress.errors.length} errors`,
+        ErrorCode.DB_MIGRATION_FAILED,
+        {
+          errorCount: this.progress.errors.length,
+          errors: this.progress.errors,
+        }
       );
     }
   }
 
-  private async completeMigration(strategy: MigrationStrategy): Promise<void> {
+  private async completeMigration(_strategy: MigrationStrategy): Promise<void> {
     logger.info('Completing migration');
 
     // Update target schema version if needed
@@ -668,7 +753,11 @@ export class MigrationManager extends EventEmitter {
 
   pause(): void {
     if (!this.isRunning) {
-      throw new Error('No migration in progress');
+      throw new DatabaseError(
+        'No migration in progress',
+        ErrorCode.DB_MIGRATION_FAILED,
+        { reason: 'not_running' }
+      );
     }
 
     this.isPaused = true;
@@ -678,7 +767,11 @@ export class MigrationManager extends EventEmitter {
 
   resume(): void {
     if (!this.isRunning) {
-      throw new Error('No migration in progress');
+      throw new DatabaseError(
+        'No migration in progress',
+        ErrorCode.DB_MIGRATION_FAILED,
+        { reason: 'not_running' }
+      );
     }
 
     this.isPaused = false;
@@ -688,7 +781,11 @@ export class MigrationManager extends EventEmitter {
 
   abort(): void {
     if (!this.isRunning) {
-      throw new Error('No migration in progress');
+      throw new DatabaseError(
+        'No migration in progress',
+        ErrorCode.DB_MIGRATION_FAILED,
+        { reason: 'not_running' }
+      );
     }
 
     this.abortController?.abort();
