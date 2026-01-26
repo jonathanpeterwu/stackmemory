@@ -11,6 +11,7 @@ import {
 } from './types.js';
 import { LinearSyncService } from './sync-service.js';
 import { LinearIssue as ClientLinearIssue } from './client.js';
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 import { logger } from '../../core/monitoring/logger.js';
 import chalk from 'chalk';
 // Type-safe environment variable access
@@ -18,7 +19,10 @@ function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
   if (value === undefined) {
     if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
+    throw new IntegrationError(
+      `Environment variable ${key} is required`,
+      ErrorCode.LINEAR_WEBHOOK_FAILED
+    );
   }
   return value;
 }
@@ -26,7 +30,6 @@ function getEnv(key: string, defaultValue?: string): string {
 function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
-
 
 export interface WebhookServerConfig {
   port?: number;
@@ -56,7 +59,8 @@ export class LinearWebhookServer {
     this.config = {
       port: config?.port || parseInt(process.env['WEBHOOK_PORT'] || '3456'),
       host: config?.host || process.env['WEBHOOK_HOST'] || 'localhost',
-      webhookSecret: config?.webhookSecret || process.env['LINEAR_WEBHOOK_SECRET'],
+      webhookSecret:
+        config?.webhookSecret || process.env['LINEAR_WEBHOOK_SECRET'],
       maxPayloadSize: config?.maxPayloadSize || '10mb',
       rateLimit: {
         windowMs: config?.rateLimit?.windowMs || 60000,
@@ -102,9 +106,7 @@ export class LinearWebhookServer {
 
         const payload = JSON.parse(req.body.toString()) as LinearWebhookPayload;
 
-        logger.info(
-          `Received webhook: ${payload.type} - ${payload.action}`
-        );
+        logger.info(`Received webhook: ${payload.type} - ${payload.action}`);
 
         this.eventQueue.push(payload);
         this.processQueue();
@@ -191,9 +193,7 @@ export class LinearWebhookServer {
 
     switch (action) {
       case 'create':
-        logger.info(
-          `New issue created: ${issue.identifier} - ${issue.title}`
-        );
+        logger.info(`New issue created: ${issue.identifier} - ${issue.title}`);
         await this.syncService.syncIssueToLocal(issue);
         break;
       case 'update':

@@ -6,6 +6,7 @@
 import { readFileSync, writeFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { logger } from '../../core/monitoring/logger.js';
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 import {
   PebblesTask,
   LinearTaskManager,
@@ -15,7 +16,6 @@ import {
 import { LinearClient, LinearIssue, LinearCreateIssueInput } from './client.js';
 import { LinearAuthManager } from './auth.js';
 import { getEnv, getOptionalEnv } from '../../utils/env.js';
-
 
 export interface SyncConfig {
   enabled: boolean;
@@ -93,8 +93,9 @@ export class LinearSyncEngine {
       // Fall back to OAuth tokens
       const tokens = this.authManager.loadTokens();
       if (!tokens) {
-        throw new Error(
-          'Linear API key or authentication tokens not found. Set LINEAR_API_KEY environment variable or run "stackmemory linear setup" first.'
+        throw new IntegrationError(
+          'Linear API key or authentication tokens not found. Set LINEAR_API_KEY environment variable or run "stackmemory linear setup" first.',
+          ErrorCode.LINEAR_SYNC_FAILED
         );
       }
 
@@ -235,13 +236,13 @@ export class LinearSyncEngine {
         );
 
         let linearIssue: LinearIssue;
-        
+
         if (duplicateCheck.isDuplicate && duplicateCheck.existingIssue) {
           // Found duplicate - merge instead of creating
           logger.info(
             `Found existing Linear issue for "${task.title}": ${duplicateCheck.existingIssue.identifier} (${Math.round((duplicateCheck.similarity || 0) * 100)}% match)`
           );
-          
+
           // Merge task content into existing issue
           linearIssue = await duplicateDetector.mergeIntoExisting(
             duplicateCheck.existingIssue,
@@ -853,7 +854,7 @@ export class LinearDuplicateDetector {
    */
   async searchByTitle(title: string, teamId?: string): Promise<LinearIssue[]> {
     const normalizedTitle = this.normalizeTitle(title);
-    
+
     // Check cache first
     if (this.isCacheValid()) {
       const cached = this.titleCache.get(normalizedTitle);
@@ -868,14 +869,17 @@ export class LinearDuplicateDetector {
       });
 
       // Filter for matching titles (exact and fuzzy)
-      const matchingIssues = allIssues.filter(issue => {
+      const matchingIssues = allIssues.filter((issue) => {
         const issueNormalized = this.normalizeTitle(issue.title);
-        
+
         // Exact match
         if (issueNormalized === normalizedTitle) return true;
-        
+
         // Fuzzy match - check if titles are very similar
-        const similarity = this.calculateSimilarity(normalizedTitle, issueNormalized);
+        const similarity = this.calculateSimilarity(
+          normalizedTitle,
+          issueNormalized
+        );
         return similarity > 0.85; // 85% similarity threshold
       });
 
@@ -898,7 +902,7 @@ export class LinearDuplicateDetector {
     teamId?: string
   ): Promise<DuplicateCheckResult> {
     const existingIssues = await this.searchByTitle(title, teamId);
-    
+
     if (existingIssues.length === 0) {
       return { isDuplicate: false };
     }
@@ -912,7 +916,7 @@ export class LinearDuplicateDetector {
         this.normalizeTitle(title),
         this.normalizeTitle(issue.title)
       );
-      
+
       if (similarity > bestSimilarity) {
         bestSimilarity = similarity;
         bestMatch = issue;
@@ -938,7 +942,7 @@ export class LinearDuplicateDetector {
     try {
       // Build merged description
       let mergedDescription = existingIssue.description || '';
-      
+
       if (newDescription && !mergedDescription.includes(newDescription)) {
         mergedDescription += `\n\n## Additional Context (${new Date().toISOString()})\n`;
         mergedDescription += newDescription;
@@ -982,7 +986,10 @@ export class LinearDuplicateDetector {
 
       return existingIssue;
     } catch (error) {
-      logger.error('Failed to merge into existing Linear issue:', error as Error);
+      logger.error(
+        'Failed to merge into existing Linear issue:',
+        error as Error
+      );
       return existingIssue;
     }
   }
@@ -994,7 +1001,7 @@ export class LinearDuplicateDetector {
     return title
       .toLowerCase()
       .trim()
-      .replace(/\s+/g, ' ')  // Normalize whitespace
+      .replace(/\s+/g, ' ') // Normalize whitespace
       .replace(/[^\w\s-]/g, '') // Remove special characters except hyphens
       .replace(/^(sta|eng|bug|feat|task|tsk)[-\s]\d+[-\s:]*/, '') // Remove issue prefixes
       .trim();
@@ -1010,8 +1017,8 @@ export class LinearDuplicateDetector {
     // Use Levenshtein distance for similarity calculation
     const distance = this.levenshteinDistance(str1, str2);
     const maxLength = Math.max(str1.length, str2.length);
-    
-    return 1 - (distance / maxLength);
+
+    return 1 - distance / maxLength;
   }
 
   /**
@@ -1032,11 +1039,13 @@ export class LinearDuplicateDetector {
         if (str1[i - 1] === str2[j - 1]) {
           dp[i][j] = dp[i - 1][j - 1];
         } else {
-          dp[i][j] = 1 + Math.min(
-            dp[i - 1][j],    // deletion
-            dp[i][j - 1],    // insertion
-            dp[i - 1][j - 1] // substitution
-          );
+          dp[i][j] =
+            1 +
+            Math.min(
+              dp[i - 1][j], // deletion
+              dp[i][j - 1], // insertion
+              dp[i - 1][j - 1] // substitution
+            );
         }
       }
     }

@@ -4,6 +4,7 @@
  */
 
 import { logger } from '../../core/monitoring/logger.js';
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 import { LinearSyncEngine } from './sync.js';
 import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import crypto from 'crypto';
@@ -12,7 +13,10 @@ function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
   if (value === undefined) {
     if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
+    throw new IntegrationError(
+      `Environment variable ${key} is required`,
+      ErrorCode.LINEAR_WEBHOOK_FAILED
+    );
   }
   return value;
 }
@@ -20,7 +24,6 @@ function getEnv(key: string, defaultValue?: string): string {
 function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
-
 
 export interface LinearWebhookPayload {
   action: 'create' | 'update' | 'remove';
@@ -135,7 +138,10 @@ export class LinearWebhookHandler {
     const validatedPayload = this.validateWebhookPayload(payload);
     if (!validatedPayload) {
       logger.error('Invalid webhook payload received');
-      throw new Error('Invalid webhook payload');
+      throw new IntegrationError(
+        'Invalid webhook payload',
+        ErrorCode.LINEAR_WEBHOOK_FAILED
+      );
     }
 
     logger.info('Processing Linear webhook', {

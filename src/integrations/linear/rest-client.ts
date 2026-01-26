@@ -4,6 +4,7 @@
  */
 
 import { logger } from '../../core/monitoring/logger.js';
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 
 export interface LinearTask {
   id: string;
@@ -53,9 +54,13 @@ export class LinearRestClient {
    */
   async getAllTasks(forceRefresh = false): Promise<LinearTask[]> {
     const now = Date.now();
-    
+
     // Return cached data if fresh
-    if (!forceRefresh && (now - this.lastSync) < this.cacheTTL && this.taskCache.size > 0) {
+    if (
+      !forceRefresh &&
+      now - this.lastSync < this.cacheTTL &&
+      this.taskCache.size > 0
+    ) {
       return Array.from(this.taskCache.values());
     }
 
@@ -100,13 +105,16 @@ export class LinearRestClient {
         `;
 
         const variables = cursor ? { after: cursor } : {};
-        const response = await this.makeRequest<LinearTasksResponse>(query, variables);
+        const response = await this.makeRequest<LinearTasksResponse>(
+          query,
+          variables
+        );
 
         const tasks = response.data.issues.nodes;
         allTasks.push(...tasks);
 
         // Update cache
-        tasks.forEach(task => {
+        tasks.forEach((task) => {
           this.taskCache.set(task.id, task);
         });
 
@@ -155,7 +163,7 @@ export class LinearRestClient {
     const tasks = await this.getAllTasks();
     const counts: Record<string, number> = {};
 
-    tasks.forEach(task => {
+    tasks.forEach((task) => {
       const status = task.state.type;
       counts[status] = (counts[status] || 0) + 1;
     });
@@ -170,10 +178,11 @@ export class LinearRestClient {
     const tasks = await this.getAllTasks();
     const searchTerm = query.toLowerCase();
 
-    return tasks.filter((task: any) => 
-      task.title.toLowerCase().includes(searchTerm) ||
-      task.description?.toLowerCase().includes(searchTerm) ||
-      task.identifier.toLowerCase().includes(searchTerm)
+    return tasks.filter(
+      (task: any) =>
+        task.title.toLowerCase().includes(searchTerm) ||
+        task.description?.toLowerCase().includes(searchTerm) ||
+        task.identifier.toLowerCase().includes(searchTerm)
     );
   }
 
@@ -225,7 +234,10 @@ export class LinearRestClient {
     }>(query);
 
     if (response.data.teams.nodes.length === 0) {
-      throw new Error('ENG team not found');
+      throw new IntegrationError(
+        'ENG team not found',
+        ErrorCode.LINEAR_API_ERROR
+      );
     }
 
     return response.data.teams.nodes[0]!;
@@ -245,7 +257,7 @@ export class LinearRestClient {
       size: this.taskCache.size,
       lastSync: this.lastSync,
       age: now - this.lastSync,
-      fresh: (now - this.lastSync) < this.cacheTTL,
+      fresh: now - this.lastSync < this.cacheTTL,
     };
   }
 
@@ -274,14 +286,19 @@ export class LinearRestClient {
       body: JSON.stringify({ query, variables }),
     });
 
-    const result = await response.json() as {
+    const result = (await response.json()) as {
       data?: unknown;
       errors?: Array<{ message: string }>;
     };
 
     if (!response.ok || result.errors) {
-      const errorMsg = result.errors?.[0]?.message || `${response.status} ${response.statusText}`;
-      throw new Error(`Linear API error: ${errorMsg}`);
+      const errorMsg =
+        result.errors?.[0]?.message ||
+        `${response.status} ${response.statusText}`;
+      throw new IntegrationError(
+        `Linear API error: ${errorMsg}`,
+        ErrorCode.LINEAR_API_ERROR
+      );
     }
 
     return result as T;
