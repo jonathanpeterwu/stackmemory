@@ -140,6 +140,77 @@ function storeLatestResponse(
   );
 }
 
+/**
+ * Store incoming request for Claude to pick up
+ * Used when a WhatsApp/SMS message arrives without a pending prompt
+ */
+function storeIncomingRequest(from: string, message: string): void {
+  ensureSecureDir(join(homedir(), '.stackmemory'));
+  const requestPath = join(
+    homedir(),
+    '.stackmemory',
+    'sms-incoming-request.json'
+  );
+  writeFileSecure(
+    requestPath,
+    JSON.stringify({
+      from,
+      message,
+      timestamp: new Date().toISOString(),
+      processed: false,
+    })
+  );
+}
+
+/**
+ * Get pending incoming request (if any)
+ */
+export function getIncomingRequest(): {
+  from: string;
+  message: string;
+  timestamp: string;
+  processed: boolean;
+} | null {
+  const requestPath = join(
+    homedir(),
+    '.stackmemory',
+    'sms-incoming-request.json'
+  );
+  if (!existsSync(requestPath)) {
+    return null;
+  }
+  try {
+    const data = JSON.parse(readFileSync(requestPath, 'utf-8'));
+    if (data.processed) {
+      return null;
+    }
+    return data;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Mark incoming request as processed
+ */
+export function markRequestProcessed(): void {
+  const requestPath = join(
+    homedir(),
+    '.stackmemory',
+    'sms-incoming-request.json'
+  );
+  if (!existsSync(requestPath)) {
+    return;
+  }
+  try {
+    const data = JSON.parse(readFileSync(requestPath, 'utf-8'));
+    data.processed = true;
+    writeFileSecure(requestPath, JSON.stringify(data));
+  } catch {
+    // Ignore errors
+  }
+}
+
 export async function handleSMSWebhook(payload: TwilioWebhookPayload): Promise<{
   response: string;
   action?: string;
@@ -168,7 +239,12 @@ export async function handleSMSWebhook(payload: TwilioWebhookPayload): Promise<{
         response: `Invalid response. Expected: ${result.prompt.options.map((o) => o.key).join(', ')}`,
       };
     }
-    return { response: 'No pending prompt found.' };
+    // No pending prompt - store as new incoming request for Claude
+    storeIncomingRequest(From, Body);
+    console.log(
+      `[sms-webhook] Stored new request from ${From}: ${Body.substring(0, 50)}...`
+    );
+    return { response: 'Got it! Your request has been queued.' };
   }
 
   // Store response for Claude hook
@@ -447,6 +523,22 @@ export function startWebhookServer(port: number = 3456): void {
             pendingPrompts: config.pendingPrompts.length,
           })
         );
+        return;
+      }
+
+      // Get pending incoming request endpoint
+      if (url.pathname === '/request' && req.method === 'GET') {
+        const request = getIncomingRequest();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ request }));
+        return;
+      }
+
+      // Mark request as processed endpoint
+      if (url.pathname === '/request/ack' && req.method === 'POST') {
+        markRequestProcessed();
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ success: true }));
         return;
       }
 
