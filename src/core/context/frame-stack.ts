@@ -7,9 +7,11 @@ import { Frame, FrameContext, FrameType } from './frame-types.js';
 import { FrameDatabase } from './frame-database.js';
 import { logger } from '../monitoring/logger.js';
 import { FrameError, ErrorCode } from '../errors/index.js';
+import { FrameQueryMode } from '../session/index.js';
 
 export class FrameStack {
   private activeStack: string[] = [];
+  private queryMode: FrameQueryMode = FrameQueryMode.PROJECT_ACTIVE;
 
   constructor(
     private frameDb: FrameDatabase,
@@ -183,6 +185,39 @@ export class FrameStack {
     this.activeStack = [];
 
     logger.info('Cleared frame stack', { previousDepth });
+  }
+
+  /**
+   * Set query mode and reinitialize stack
+   */
+  setQueryMode(mode: FrameQueryMode): void {
+    this.queryMode = mode;
+    // Reinitialize with new query mode
+    this.initialize().catch((error) => {
+      logger.warn('Failed to reinitialize stack with new query mode', {
+        mode,
+        error,
+      });
+    });
+  }
+
+  /**
+   * Remove a specific frame from the stack without popping frames above it
+   */
+  removeFrame(frameId: string): boolean {
+    const index = this.activeStack.indexOf(frameId);
+    if (index === -1) {
+      return false;
+    }
+
+    this.activeStack.splice(index, 1);
+
+    logger.debug('Removed frame from stack', {
+      frameId,
+      stackDepth: this.activeStack.length,
+    });
+
+    return true;
   }
 
   /**
