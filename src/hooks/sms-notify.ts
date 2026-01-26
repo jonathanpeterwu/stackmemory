@@ -524,6 +524,15 @@ export function processIncomingResponse(
   return { matched: false, prompt };
 }
 
+// Get session ID from environment or generate short ID
+function getSessionId(): string {
+  return (
+    process.env['CLAUDE_INSTANCE_ID'] ||
+    process.env['STACKMEMORY_SESSION_ID'] ||
+    Math.random().toString(36).substring(2, 8)
+  );
+}
+
 // Convenience functions for common notifications
 
 export async function notifyReviewReady(
@@ -531,23 +540,35 @@ export async function notifyReviewReady(
   description: string,
   options?: { label: string; action?: string }[]
 ): Promise<{ success: boolean; promptId?: string; error?: string }> {
+  const sessionId = getSessionId();
+
+  // Ensure minimum 2 options
+  let finalOptions = options || [];
+  if (finalOptions.length < 2) {
+    const defaults = [
+      { label: 'Approve', action: 'echo "Approved"' },
+      { label: 'Request changes', action: 'echo "Changes requested"' },
+    ];
+    finalOptions = [...finalOptions, ...defaults].slice(
+      0,
+      Math.max(2, finalOptions.length)
+    );
+  }
+
   const payload: NotificationPayload = {
     type: 'review_ready',
-    title: `Review Ready: ${title}`,
+    title: `[Claude ${sessionId}] Review Ready: ${title}`,
     message: description,
-  };
-
-  if (options && options.length > 0) {
-    payload.prompt = {
+    prompt: {
       type: 'options',
-      options: options.map((opt, i) => ({
+      options: finalOptions.map((opt, i) => ({
         key: String(i + 1),
         label: opt.label,
         action: opt.action,
       })),
       question: 'What would you like to do?',
-    };
-  }
+    },
+  };
 
   return sendSMSNotification(payload);
 }
@@ -558,9 +579,10 @@ export async function notifyWithYesNo(
   yesAction?: string,
   noAction?: string
 ): Promise<{ success: boolean; promptId?: string; error?: string }> {
+  const sessionId = getSessionId();
   return sendSMSNotification({
     type: 'custom',
-    title,
+    title: `[Claude ${sessionId}] ${title}`,
     message: question,
     prompt: {
       type: 'yesno',
@@ -575,22 +597,42 @@ export async function notifyWithYesNo(
 export async function notifyTaskComplete(
   taskName: string,
   summary: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; promptId?: string; error?: string }> {
+  const sessionId = getSessionId();
   return sendSMSNotification({
     type: 'task_complete',
-    title: `Task Complete: ${taskName}`,
+    title: `[Claude ${sessionId}] Task Complete: ${taskName}`,
     message: summary,
+    prompt: {
+      type: 'options',
+      options: [
+        { key: '1', label: 'Start next task', action: 'claude-sm' },
+        { key: '2', label: 'View details', action: 'stackmemory status' },
+      ],
+    },
   });
 }
 
 export async function notifyError(
   error: string,
   context?: string
-): Promise<{ success: boolean; error?: string }> {
+): Promise<{ success: boolean; promptId?: string; error?: string }> {
+  const sessionId = getSessionId();
   return sendSMSNotification({
     type: 'error',
-    title: 'Error Alert',
+    title: `[Claude ${sessionId}] Error Alert`,
     message: context ? `${error}\n\nContext: ${context}` : error,
+    prompt: {
+      type: 'options',
+      options: [
+        { key: '1', label: 'Retry', action: 'claude-sm' },
+        {
+          key: '2',
+          label: 'View logs',
+          action: 'tail -50 ~/.claude/logs/*.log',
+        },
+      ],
+    },
   });
 }
 
