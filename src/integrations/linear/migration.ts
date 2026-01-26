@@ -5,6 +5,7 @@
 
 import { LinearRestClient } from './rest-client.js';
 import { logger } from '../../core/monitoring/logger.js';
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 import chalk from 'chalk';
 
 export interface MigrationConfig {
@@ -56,7 +57,7 @@ export class LinearMigrator {
   }> {
     const result = {
       source: { success: false } as any,
-      target: { success: false } as any
+      target: { success: false } as any,
     };
 
     // Test source connection
@@ -67,17 +68,17 @@ export class LinearMigrator {
         success: true,
         info: {
           user: sourceViewer,
-          team: sourceTeam
-        }
+          team: sourceTeam,
+        },
       };
     } catch (error: unknown) {
       result.source = {
         success: false,
-        error: (error as Error).message
+        error: (error as Error).message,
       };
     }
 
-    // Test target connection  
+    // Test target connection
     try {
       const targetViewer = await this.targetClient.getViewer();
       const targetTeam = await this.targetClient.getTeam();
@@ -85,13 +86,13 @@ export class LinearMigrator {
         success: true,
         info: {
           user: targetViewer,
-          team: targetTeam
-        }
+          team: targetTeam,
+        },
       };
     } catch (error: unknown) {
       result.target = {
         success: false,
-        error: (error as Error).message
+        error: (error as Error).message,
       };
     }
 
@@ -110,44 +111,55 @@ export class LinearMigrator {
       deleted: 0,
       deleteFailed: 0,
       errors: [],
-      taskMappings: []
+      taskMappings: [],
     };
 
     try {
-      console.log(chalk.yellow('🔄 Starting Linear workspace migration...'));
+      console.log(chalk.yellow('Starting Linear workspace migration...'));
 
       // Get all tasks from source
       const sourceTasks = await this.sourceClient.getAllTasks(true); // Force refresh
       result.totalTasks = sourceTasks.length;
-      console.log(chalk.cyan(`📋 Found ${sourceTasks.length} tasks in source workspace`));
+      console.log(
+        chalk.cyan(`Found ${sourceTasks.length} tasks in source workspace`)
+      );
 
       // Filter by prefix (e.g., "STA-" tasks only)
       let tasksToMigrate = sourceTasks;
       if (this.config.taskPrefix) {
-        tasksToMigrate = sourceTasks.filter((task: any) => 
+        tasksToMigrate = sourceTasks.filter((task: any) =>
           task.identifier.startsWith(this.config.taskPrefix!)
         );
-        console.log(chalk.cyan(`📋 Filtered to ${tasksToMigrate.length} tasks with prefix "${this.config.taskPrefix}"`));
+        console.log(
+          chalk.cyan(
+            `Filtered to ${tasksToMigrate.length} tasks with prefix "${this.config.taskPrefix}"`
+          )
+        );
       }
 
       // Filter by states if specified
       if (this.config.includeStates?.length) {
-        tasksToMigrate = tasksToMigrate.filter((task: any) => 
+        tasksToMigrate = tasksToMigrate.filter((task: any) =>
           this.config.includeStates!.includes(task.state.type)
         );
-        console.log(chalk.cyan(`📋 Further filtered to ${tasksToMigrate.length} tasks matching states: ${this.config.includeStates.join(', ')}`));
+        const stateStr = this.config.includeStates.join(', ');
+        console.log(
+          chalk.cyan(
+            `Further filtered to ${tasksToMigrate.length} tasks matching states: ${stateStr}`
+          )
+        );
       }
 
       result.exported = tasksToMigrate.length;
 
       if (this.config.dryRun) {
-        console.log(chalk.yellow('🔍 DRY RUN - No tasks will be created'));
-        tasksToMigrate.forEach(task => {
+        console.log(chalk.yellow('DRY RUN - No tasks will be created'));
+        tasksToMigrate.forEach((task) => {
           result.taskMappings.push({
             sourceId: task.id,
             sourceIdentifier: task.identifier,
             targetId: 'DRY_RUN',
-            targetIdentifier: 'DRY_RUN'
+            targetIdentifier: 'DRY_RUN',
           });
         });
         result.imported = tasksToMigrate.length;
@@ -156,7 +168,9 @@ export class LinearMigrator {
 
       // Get target team info
       const targetTeam = await this.targetClient.getTeam();
-      console.log(chalk.cyan(`🎯 Target team: ${targetTeam.name} (${targetTeam.key})`));
+      console.log(
+        chalk.cyan(`Target team: ${targetTeam.name} (${targetTeam.key})`)
+      );
 
       // Migrate tasks in batches
       const batchSize = this.config.batchSize || 5;
@@ -164,7 +178,11 @@ export class LinearMigrator {
 
       for (let i = 0; i < tasksToMigrate.length; i += batchSize) {
         const batch = tasksToMigrate.slice(i, i + batchSize);
-        console.log(chalk.yellow(`📦 Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(tasksToMigrate.length / batchSize)}`));
+        console.log(
+          chalk.yellow(
+            `Processing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(tasksToMigrate.length / batchSize)}`
+          )
+        );
 
         for (const task of batch) {
           try {
@@ -174,11 +192,15 @@ export class LinearMigrator {
               sourceIdentifier: task.identifier,
               targetId: newTask.id,
               targetIdentifier: newTask.identifier,
-              deleted: false
+              deleted: false,
             };
 
             result.imported++;
-            console.log(chalk.green(`✅ ${task.identifier} → ${newTask.identifier}: ${task.title}`));
+            console.log(
+              chalk.green(
+                `${task.identifier} → ${newTask.identifier}: ${task.title}`
+              )
+            );
 
             // Delete from source if configured
             if (this.config.deleteFromSource) {
@@ -186,11 +208,19 @@ export class LinearMigrator {
                 await this.deleteTask(task.id);
                 mapping.deleted = true;
                 result.deleted++;
-                console.log(chalk.gray(`🗑️  Deleted ${task.identifier} from source`));
+                console.log(
+                  chalk.gray(`Deleted ${task.identifier} from source`)
+                );
               } catch (deleteError: unknown) {
                 result.deleteFailed++;
-                result.errors.push(`Delete failed for ${task.identifier}: ${(deleteError as Error).message}`);
-                console.log(chalk.yellow(`⚠️  Failed to delete ${task.identifier} from source: ${(deleteError as Error).message}`));
+                result.errors.push(
+                  `Delete failed for ${task.identifier}: ${(deleteError as Error).message}`
+                );
+                console.log(
+                  chalk.yellow(
+                    `Failed to delete ${task.identifier} from source: ${(deleteError as Error).message}`
+                  )
+                );
               }
             }
 
@@ -201,20 +231,19 @@ export class LinearMigrator {
             result.taskMappings.push({
               sourceId: task.id,
               sourceIdentifier: task.identifier,
-              error: errorMsg
+              error: errorMsg,
             });
             result.failed++;
-            console.log(chalk.red(`❌ ${task.identifier}: ${errorMsg}`));
+            console.log(chalk.red(`${task.identifier}: ${errorMsg}`));
           }
         }
 
         // Delay between batches to avoid rate limits
         if (i + batchSize < tasksToMigrate.length) {
-          console.log(chalk.gray(`⏳ Waiting ${delayMs}ms before next batch...`));
+          console.log(chalk.gray(`Waiting ${delayMs}ms before next batch...`));
           await this.delay(delayMs);
         }
       }
-
     } catch (error: unknown) {
       result.errors.push(`Migration failed: ${(error as Error).message}`);
       logger.error('Migration failed:', error as Error);
@@ -226,14 +255,17 @@ export class LinearMigrator {
   /**
    * Migrate a single task
    */
-  private async migrateTask(sourceTask: any, targetTeamId: string): Promise<any> {
+  private async migrateTask(
+    sourceTask: any,
+    targetTeamId: string
+  ): Promise<any> {
     // Map states from source to target format
     const stateMapping: Record<string, string> = {
-      'backlog': 'backlog',
-      'unstarted': 'unstarted', 
-      'started': 'started',
-      'completed': 'completed',
-      'canceled': 'canceled'
+      backlog: 'backlog',
+      unstarted: 'unstarted',
+      started: 'started',
+      completed: 'completed',
+      canceled: 'canceled',
     };
 
     // Create task in target workspace using GraphQL
@@ -265,7 +297,7 @@ export class LinearMigrator {
       title: `[MIGRATED] ${sourceTask.title}`,
       description: this.formatMigratedDescription(sourceTask),
       teamId: targetTeamId,
-      priority: this.mapPriority(sourceTask.priority)
+      priority: this.mapPriority(sourceTask.priority),
     };
 
     const response = await this.targetClient.makeRequest<{
@@ -278,7 +310,11 @@ export class LinearMigrator {
     }>(createTaskQuery, { input: taskInput });
 
     if (!response.data?.issueCreate?.success) {
-      throw new Error('Failed to create task in target workspace');
+      throw new IntegrationError(
+        'Failed to create task in target workspace',
+        ErrorCode.LINEAR_SYNC_FAILED,
+        { sourceTaskId: sourceTask.id, sourceIdentifier: sourceTask.identifier }
+      );
     }
 
     return response.data.issueCreate.issue;
@@ -289,16 +325,16 @@ export class LinearMigrator {
    */
   private formatMigratedDescription(sourceTask: any): string {
     let description = sourceTask.description || '';
-    
+
     description += `\n\n---\n**Migration Info:**\n`;
     description += `- Original ID: ${sourceTask.identifier}\n`;
     description += `- Migrated: ${new Date().toISOString()}\n`;
     description += `- Original State: ${sourceTask.state.name}\n`;
-    
+
     if (sourceTask.assignee) {
       description += `- Original Assignee: ${sourceTask.assignee.name}\n`;
     }
-    
+
     if (sourceTask.estimate) {
       description += `- Original Estimate: ${sourceTask.estimate} points\n`;
     }
@@ -326,10 +362,16 @@ export class LinearMigrator {
       }
     `;
 
-    const response = await (this.sourceClient as any).makeRequest(deleteQuery, { id: taskId });
-    
+    const response = await (this.sourceClient as any).makeRequest(deleteQuery, {
+      id: taskId,
+    });
+
     if (!response.data?.issueDelete?.success) {
-      throw new Error('Failed to delete task from source workspace');
+      throw new IntegrationError(
+        'Failed to delete task from source workspace',
+        ErrorCode.LINEAR_SYNC_FAILED,
+        { taskId }
+      );
     }
   }
 
@@ -337,7 +379,7 @@ export class LinearMigrator {
    * Delay helper
    */
   private delay(ms: number): Promise<void> {
-    return new Promise(resolve => setTimeout(resolve, ms));
+    return new Promise((resolve) => setTimeout(resolve, ms));
   }
 }
 
@@ -346,47 +388,65 @@ export class LinearMigrator {
  */
 export async function runMigration(config: MigrationConfig): Promise<void> {
   const migrator = new LinearMigrator(config);
-  
-  console.log(chalk.blue('🔍 Testing connections...'));
+
+  console.log(chalk.blue('Testing connections...'));
   const connectionTest = await migrator.testConnections();
-  
+
   if (!connectionTest.source.success) {
-    console.error(chalk.red(`❌ Source connection failed: ${connectionTest.source.error}`));
+    console.error(
+      chalk.red(`Source connection failed: ${connectionTest.source.error}`)
+    );
     return;
   }
-  
+
   if (!connectionTest.target.success) {
-    console.error(chalk.red(`❌ Target connection failed: ${connectionTest.target.error}`));
+    console.error(
+      chalk.red(`Target connection failed: ${connectionTest.target.error}`)
+    );
     return;
   }
-  
-  console.log(chalk.green('✅ Both connections successful'));
-  console.log(chalk.cyan(`📤 Source: ${connectionTest.source.info.user.name} @ ${connectionTest.source.info.team.name}`));
-  console.log(chalk.cyan(`📥 Target: ${connectionTest.target.info.user.name} @ ${connectionTest.target.info.team.name}`));
-  
+
+  console.log(chalk.green('Both connections successful'));
+  console.log(
+    chalk.cyan(
+      `Source: ${connectionTest.source.info.user.name} @ ${connectionTest.source.info.team.name}`
+    )
+  );
+  console.log(
+    chalk.cyan(
+      `Target: ${connectionTest.target.info.user.name} @ ${connectionTest.target.info.team.name}`
+    )
+  );
+
   const result = await migrator.migrate();
-  
-  console.log(chalk.blue('\n📊 Migration Summary:'));
+
+  console.log(chalk.blue('\nMigration Summary:'));
   console.log(`  Total tasks: ${result.totalTasks}`);
   console.log(`  Exported: ${result.exported}`);
-  console.log(chalk.green(`  ✅ Imported: ${result.imported}`));
-  console.log(chalk.red(`  ❌ Failed: ${result.failed}`));
+  console.log(chalk.green(`  Imported: ${result.imported}`));
+  console.log(chalk.red(`  Failed: ${result.failed}`));
   if (config.deleteFromSource) {
-    console.log(chalk.gray(`  🗑️  Deleted: ${result.deleted}`));
+    console.log(chalk.gray(`  Deleted: ${result.deleted}`));
     if (result.deleteFailed > 0) {
-      console.log(chalk.yellow(`  ⚠️  Delete failed: ${result.deleteFailed}`));
+      console.log(chalk.yellow(`  Delete failed: ${result.deleteFailed}`));
     }
   }
-  
+
   if (result.errors.length > 0) {
-    console.log(chalk.red('\n❌ Errors:'));
-    result.errors.forEach(error => console.log(chalk.red(`  - ${error}`)));
+    console.log(chalk.red('\nErrors:'));
+    result.errors.forEach((error) => console.log(chalk.red(`  - ${error}`)));
   }
-  
+
   if (result.imported > 0) {
-    console.log(chalk.green(`\n🎉 Migration completed! ${result.imported} tasks migrated successfully.`));
+    console.log(
+      chalk.green(
+        `\nMigration completed! ${result.imported} tasks migrated successfully.`
+      )
+    );
     if (config.deleteFromSource && result.deleted > 0) {
-      console.log(chalk.gray(`   ${result.deleted} tasks deleted from source workspace.`));
+      console.log(
+        chalk.gray(`   ${result.deleted} tasks deleted from source workspace.`)
+      );
     }
   }
 }

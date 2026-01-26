@@ -9,12 +9,16 @@ import { URL } from 'url';
 import { logger } from '../../core/monitoring/logger.js';
 import { LinearAuthManager } from './auth.js';
 import chalk from 'chalk';
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
   if (value === undefined) {
     if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
+    throw new IntegrationError(
+      `Environment variable ${key} is required`,
+      ErrorCode.LINEAR_AUTH_FAILED
+    );
   }
   return value;
 }
@@ -22,7 +26,6 @@ function getEnv(key: string, defaultValue?: string): string {
 function getOptionalEnv(key: string): string | undefined {
   return process.env[key];
 }
-
 
 export interface OAuthServerConfig {
   port?: number;
@@ -38,12 +41,13 @@ export class LinearOAuthServer {
   private authManager: LinearAuthManager;
   private config: OAuthServerConfig;
   private pendingCodeVerifiers: Map<string, string> = new Map();
-  private authCompleteCallbacks: Map<string, (success: boolean) => void> = new Map();
+  private authCompleteCallbacks: Map<string, (success: boolean) => void> =
+    new Map();
 
   constructor(projectRoot: string, config?: OAuthServerConfig) {
     this.app = express();
     this.authManager = new LinearAuthManager(projectRoot);
-    
+
     this.config = {
       port: config?.port || 3456,
       host: config?.host || 'localhost',
@@ -72,43 +76,53 @@ export class LinearOAuthServer {
       // Handle OAuth errors
       if (error) {
         logger.error(`OAuth error: ${error} - ${error_description}`);
-        res.send(this.generateErrorPage(
-          'Authorization Failed',
-          `${error}: ${error_description || 'An error occurred during authorization'}`
-        ));
-        
+        res.send(
+          this.generateErrorPage(
+            'Authorization Failed',
+            `${error}: ${error_description || 'An error occurred during authorization'}`
+          )
+        );
+
         if (state && this.authCompleteCallbacks.has(state as string)) {
           this.authCompleteCallbacks.get(state as string)!(false);
           this.authCompleteCallbacks.delete(state as string);
         }
-        
+
         this.scheduleShutdown();
         return;
       }
 
       // Validate required parameters
       if (!code) {
-        res.send(this.generateErrorPage(
-          'Missing Authorization Code',
-          'No authorization code was provided in the callback'
-        ));
+        res.send(
+          this.generateErrorPage(
+            'Missing Authorization Code',
+            'No authorization code was provided in the callback'
+          )
+        );
         this.scheduleShutdown();
         return;
       }
 
       try {
         // Get the code verifier for this session
-        const codeVerifier = state 
+        const codeVerifier = state
           ? this.pendingCodeVerifiers.get(state as string)
           : process.env['_LINEAR_CODE_VERIFIER'];
 
         if (!codeVerifier) {
-          throw new Error('Code verifier not found. Please restart the authorization process.');
+          throw new IntegrationError(
+            'Code verifier not found. Please restart the authorization process.',
+            ErrorCode.LINEAR_AUTH_FAILED
+          );
         }
 
         // Exchange code for tokens
         logger.info('Exchanging authorization code for tokens...');
-        await this.authManager.exchangeCodeForToken(code as string, codeVerifier);
+        await this.authManager.exchangeCodeForToken(
+          code as string,
+          codeVerifier
+        );
 
         // Clean up
         if (state) {
@@ -118,12 +132,15 @@ export class LinearOAuthServer {
 
         // Test the connection
         const testSuccess = await this.testConnection();
-        
+
         if (testSuccess) {
           res.send(this.generateSuccessPage());
           logger.info('Linear OAuth authentication completed successfully!');
         } else {
-          throw new Error('Failed to verify Linear connection');
+          throw new IntegrationError(
+            'Failed to verify Linear connection',
+            ErrorCode.LINEAR_AUTH_FAILED
+          );
         }
 
         // Notify callback if registered
@@ -136,16 +153,18 @@ export class LinearOAuthServer {
         this.scheduleShutdown();
       } catch (error: unknown) {
         logger.error('Failed to complete OAuth flow:', error as Error);
-        res.send(this.generateErrorPage(
-          'Authentication Failed',
-          (error as Error).message
-        ));
-        
+        res.send(
+          this.generateErrorPage(
+            'Authentication Failed',
+            (error as Error).message
+          )
+        );
+
         if (state && this.authCompleteCallbacks.has(state as string)) {
           this.authCompleteCallbacks.get(state as string)!(false);
           this.authCompleteCallbacks.delete(state as string);
         }
-        
+
         this.scheduleShutdown();
       }
     });
@@ -155,17 +174,21 @@ export class LinearOAuthServer {
       try {
         const config = this.authManager.loadConfig();
         if (!config) {
-          res.status(400).send(this.generateErrorPage(
-            'Configuration Missing',
-            'Linear OAuth configuration not found. Please configure your client ID and secret.'
-          ));
+          res
+            .status(400)
+            .send(
+              this.generateErrorPage(
+                'Configuration Missing',
+                'Linear OAuth configuration not found. Please configure your client ID and secret.'
+              )
+            );
           return;
         }
 
         // Generate state for CSRF protection
         const state = this.generateState();
         const { url, codeVerifier } = this.authManager.generateAuthUrl(state);
-        
+
         // Store code verifier for this session
         this.pendingCodeVerifiers.set(state, codeVerifier);
 
@@ -173,10 +196,14 @@ export class LinearOAuthServer {
         res.redirect(url);
       } catch (error: unknown) {
         logger.error('Failed to start OAuth flow:', error as Error);
-        res.status(500).send(this.generateErrorPage(
-          'OAuth Start Failed',
-          (error as Error).message
-        ));
+        res
+          .status(500)
+          .send(
+            this.generateErrorPage(
+              'OAuth Start Failed',
+              (error as Error).message
+            )
+          );
       }
     });
 
@@ -187,8 +214,10 @@ export class LinearOAuthServer {
   }
 
   private generateState(): string {
-    return Math.random().toString(36).substring(2, 15) + 
-           Math.random().toString(36).substring(2, 15);
+    return (
+      Math.random().toString(36).substring(2, 15) +
+      Math.random().toString(36).substring(2, 15)
+    );
   }
 
   private generateSuccessPage(): string {
@@ -334,11 +363,11 @@ export class LinearOAuthServer {
   private async testConnection(): Promise<boolean> {
     try {
       const token = await this.authManager.getValidToken();
-      
+
       const response = await fetch('https://api.linear.app/graphql', {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
@@ -347,11 +376,13 @@ export class LinearOAuthServer {
       });
 
       if (response.ok) {
-        const result = await response.json() as {
+        const result = (await response.json()) as {
           data?: { viewer?: { id: string; name: string; email: string } };
         };
         if (result.data?.viewer) {
-          logger.info(`Connected to Linear as: ${result.data.viewer.name} (${result.data.viewer.email})`);
+          logger.info(
+            `Connected to Linear as: ${result.data.viewer.name} (${result.data.viewer.email})`
+          );
           return true;
         }
       }
@@ -380,24 +411,34 @@ export class LinearOAuthServer {
         if (!config) {
           // If no config, provide setup instructions
           const setupUrl = `http://${this.config.host}:${this.config.port}/auth/linear/start`;
-          
+
           this.server = this.app.listen(
             this.config.port!,
             this.config.host!,
             () => {
-              console.log(chalk.green('✓') + chalk.bold(' Linear OAuth Server Started'));
+              console.log(
+                chalk.green('✓') + chalk.bold(' Linear OAuth Server Started')
+              );
               console.log(chalk.cyan('  Authorization URL: ') + setupUrl);
-              console.log(chalk.cyan('  Callback URL: ') + 
-                `http://${this.config.host}:${this.config.port}${this.config.redirectPath}`);
+              console.log(
+                chalk.cyan('  Callback URL: ') +
+                  `http://${this.config.host}:${this.config.port}${this.config.redirectPath}`
+              );
               console.log('');
               console.log(chalk.yellow('  ⚠ Configuration Required:'));
-              console.log('  1. Create a Linear OAuth app at: https://linear.app/settings/api');
-              console.log(`  2. Set redirect URI to: http://${this.config.host}:${this.config.port}${this.config.redirectPath}`);
+              console.log(
+                '  1. Create a Linear OAuth app at: https://linear.app/settings/api'
+              );
+              console.log(
+                `  2. Set redirect URI to: http://${this.config.host}:${this.config.port}${this.config.redirectPath}`
+              );
               console.log('  3. Set environment variables:');
               console.log('     export LINEAR_CLIENT_ID="your_client_id"');
-              console.log('     export LINEAR_CLIENT_SECRET="your_client_secret"');
+              console.log(
+                '     export LINEAR_CLIENT_SECRET="your_client_secret"'
+              );
               console.log('  4. Restart the auth process');
-              
+
               resolve({ url: setupUrl });
             }
           );
@@ -407,7 +448,7 @@ export class LinearOAuthServer {
         // Generate state and auth URL
         const state = this.generateState();
         const { url, codeVerifier } = this.authManager.generateAuthUrl(state);
-        
+
         // Store code verifier
         this.pendingCodeVerifiers.set(state, codeVerifier);
 
@@ -415,12 +456,18 @@ export class LinearOAuthServer {
           this.config.port!,
           this.config.host!,
           () => {
-            console.log(chalk.green('✓') + chalk.bold(' Linear OAuth Server Started'));
+            console.log(
+              chalk.green('✓') + chalk.bold(' Linear OAuth Server Started')
+            );
             console.log(chalk.cyan('  Open this URL in your browser:'));
             console.log('  ' + chalk.underline(url));
             console.log('');
-            console.log(chalk.gray('  The server will automatically shut down after authorization completes.'));
-            
+            console.log(
+              chalk.gray(
+                '  The server will automatically shut down after authorization completes.'
+              )
+            );
+
             resolve({ url, codeVerifier });
           }
         );
@@ -428,12 +475,13 @@ export class LinearOAuthServer {
         // Register auth complete callback
         this.authCompleteCallbacks.set(state, (success) => {
           if (success) {
-            console.log(chalk.green('\n✓ Linear authorization completed successfully!'));
+            console.log(
+              chalk.green('\n✓ Linear authorization completed successfully!')
+            );
           } else {
             console.log(chalk.red('\n✗ Linear authorization failed'));
           }
         });
-
       } catch (error: unknown) {
         reject(error);
       }
@@ -454,7 +502,10 @@ export class LinearOAuthServer {
     });
   }
 
-  public async waitForAuth(state: string, timeout: number = 300000): Promise<boolean> {
+  public async waitForAuth(
+    state: string,
+    timeout: number = 300000
+  ): Promise<boolean> {
     return new Promise((resolve) => {
       const timeoutId = setTimeout(() => {
         this.authCompleteCallbacks.delete(state);
@@ -477,7 +528,8 @@ if (process.argv[1] === new URL(import.meta.url).pathname) {
     shutdownDelay: 5000,
   });
 
-  server.start()
+  server
+    .start()
     .then(({ url }) => {
       if (url) {
         console.log(chalk.cyan('\nWaiting for authorization...'));

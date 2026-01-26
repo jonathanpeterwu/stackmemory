@@ -8,6 +8,7 @@ import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { LinearAuthManager } from './auth.js';
 import { LinearSyncEngine, DEFAULT_SYNC_CONFIG, SyncConfig } from './sync.js';
 import { LinearConfigManager } from './config.js';
+import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
@@ -74,16 +75,18 @@ export class LinearAutoSyncService {
       // Verify Linear integration is configured
       const authManager = new LinearAuthManager(this.projectRoot);
       if (!authManager.isConfigured()) {
-        throw new Error(
-          'Linear integration not configured. Run "stackmemory linear setup" first.'
+        throw new IntegrationError(
+          'Linear integration not configured. Run "stackmemory linear setup" first.',
+          ErrorCode.LINEAR_AUTH_FAILED
         );
       }
 
       // Initialize sync engine
       const dbPath = join(this.projectRoot, '.stackmemory', 'context.db');
       if (!existsSync(dbPath)) {
-        throw new Error(
-          'StackMemory not initialized. Run "stackmemory init" first.'
+        throw new IntegrationError(
+          'StackMemory not initialized. Run "stackmemory init" first.',
+          ErrorCode.LINEAR_SYNC_FAILED
         );
       }
 
@@ -99,8 +102,9 @@ export class LinearAutoSyncService {
       // Test connection before starting
       const token = await authManager.getValidToken();
       if (!token) {
-        throw new Error(
-          'Unable to get valid Linear token. Check authentication.'
+        throw new IntegrationError(
+          'Unable to get valid Linear token. Check authentication.',
+          ErrorCode.LINEAR_AUTH_FAILED
         );
       }
 
@@ -177,7 +181,10 @@ export class LinearAutoSyncService {
    */
   async forceSync(): Promise<void> {
     if (!this.syncEngine) {
-      throw new Error('Sync engine not initialized');
+      throw new IntegrationError(
+        'Sync engine not initialized',
+        ErrorCode.LINEAR_SYNC_FAILED
+      );
     }
 
     logger.info('Forcing immediate Linear sync');
@@ -252,7 +259,10 @@ export class LinearAutoSyncService {
           });
         }
       } else {
-        throw new Error(`Sync failed: ${result.errors.join(', ')}`);
+        throw new IntegrationError(
+          `Sync failed: ${result.errors.join(', ')}`,
+          ErrorCode.LINEAR_SYNC_FAILED
+        );
       }
     } catch (error: unknown) {
       logger.error('Linear auto-sync failed:', error as Error);
