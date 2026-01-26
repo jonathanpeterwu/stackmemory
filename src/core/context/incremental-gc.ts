@@ -5,7 +5,8 @@
  * with generational aging and priority-based collection.
  */
 
-import { Frame, FrameManager } from './frame-manager.js';
+import { FrameManager } from './index.js';
+import type { Frame } from './index.js';
 import { Logger } from '../monitoring/logger.js';
 
 interface GCConfig {

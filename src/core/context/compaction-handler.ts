@@ -3,7 +3,8 @@
  * Preserves critical context across token limit boundaries
  */
 
-import { FrameManager, Anchor, Event } from './frame-manager.js';
+import { FrameManager } from './index.js';
+import type { Anchor, Event } from './index.js';
 import { logger } from '../monitoring/logger.js';
 
 export interface CompactionMetrics {

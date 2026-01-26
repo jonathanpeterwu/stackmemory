@@ -4,7 +4,7 @@
  */
 
 import { logger } from '../monitoring/logger.js';
-import type { Frame, Event, Anchor } from './frame-manager.js';
+import type { Frame, Event, Anchor } from './frame-types.js';
 
 /**
  * Data passed to frame close hooks

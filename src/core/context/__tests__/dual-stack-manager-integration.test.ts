@@ -5,7 +5,7 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { DualStackManager } from '../dual-stack-manager.js';
-import { FrameManager } from '../frame-manager.js';
+import { FrameManager } from '../index.js';
 import { SQLiteAdapter } from '../../database/sqlite-adapter.js';
 import * as fs from 'fs';
 import * as path from 'path';

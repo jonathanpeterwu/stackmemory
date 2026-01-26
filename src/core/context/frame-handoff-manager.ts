@@ -3,7 +3,7 @@
  * Handles frame transfers between individual and team stacks with approval workflows
  */
 
-import type { Frame, Event, Anchor } from './frame-manager.js';
+import type { Frame, Event, Anchor } from './frame-types.js';
 import {
   DualStackManager,
   type StackContext,

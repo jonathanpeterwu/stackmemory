@@ -1,9 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { ContextBridge, contextBridge } from '../context-bridge.js';
-import { FrameManager } from '../frame-manager.js';
+import { FrameManager, type Frame } from '../index.js';
 import { sharedContextLayer } from '../shared-context-layer.js';
 import { sessionManager } from '../../session/session-manager.js';
-import type { Frame } from '../frame-manager.js';
 
 vi.mock('../shared-context-layer.js');
 vi.mock('../../session/session-manager.js');

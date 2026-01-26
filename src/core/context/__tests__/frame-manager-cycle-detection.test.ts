@@ -4,17 +4,16 @@
 
 import { describe, it, expect, beforeEach } from 'vitest';
 import Database from 'better-sqlite3';
-import { FrameManager } from '../frame-manager.js';
-import { RefactoredFrameManager } from '../refactored-frame-manager.js';
+import { FrameManager, LegacyFrameManager } from '../index.js';
 import { ErrorCode } from '../../errors/index.js';
 
 describe('Frame Manager - Circular Reference Detection', () => {
   let db: Database.Database;
-  let frameManager: FrameManager;
-  
+  let frameManager: LegacyFrameManager;
+
   beforeEach(() => {
     db = new Database(':memory:');
-    frameManager = new FrameManager(db, 'test-project', {
+    frameManager = new LegacyFrameManager(db, 'test-project', {
       skipContextBridge: true,
       maxFrameDepth: 10, // Lower limit for testing
     });
@@ -24,7 +23,7 @@ describe('Frame Manager - Circular Reference Detection', () => {
     db.close();
   });
 
-  describe('FrameManager', () => {
+  describe('LegacyFrameManager', () => {
     it('should detect direct circular reference (A -> B -> A)', () => {
       // Create frame A
       const frameA = frameManager.createFrame({
@@ -214,11 +213,11 @@ describe('Frame Manager - Circular Reference Detection', () => {
     });
   });
 
-  describe('RefactoredFrameManager', () => {
-    let refactoredManager: RefactoredFrameManager;
+  describe('RefactoredFrameManager (now FrameManager)', () => {
+    let refactoredManager: FrameManager;
 
     beforeEach(() => {
-      refactoredManager = new RefactoredFrameManager(db, 'test-project', {
+      refactoredManager = new FrameManager(db, 'test-project', {
         maxStackDepth: 100, // Higher stack limit so we can test frame depth
       });
     });

@@ -6,8 +6,8 @@
 // Export refactored components as primary
 export { RefactoredFrameManager as FrameManager } from './refactored-frame-manager.js';
 
-// Export types
-export {
+// Export types (type-only, no runtime value)
+export type {
   Frame,
   FrameContext,
   Anchor,

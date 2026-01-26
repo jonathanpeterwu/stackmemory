@@ -7,11 +7,10 @@
  * - Maintains consistency across sessions
  */
 
-import { FrameManager } from './frame-manager.js';
+import { FrameManager, type Frame } from './index.js';
 import { sharedContextLayer } from './shared-context-layer.js';
 import { sessionManager } from '../session/session-manager.js';
 import { logger } from '../monitoring/logger.js';
-import type { Frame } from './frame-manager.js';
 
 export interface BridgeOptions {
   autoSync: boolean;

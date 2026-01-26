@@ -901,8 +901,8 @@ export class RefactoredFrameManager {
   }
 }
 
-// Re-export types for compatibility
-export {
+// Re-export types for compatibility (type-only, no runtime value)
+export type {
   Frame,
   FrameContext,
   Anchor,

@@ -3,7 +3,7 @@
  * Automatically creates and manages context frames
  */
 
-import { FrameManager } from './frame-manager.js';
+import { FrameManager } from './index.js';
 import { logger } from '../monitoring/logger.js';
 
 export class AutoContext {
