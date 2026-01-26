@@ -21,6 +21,7 @@ import {
   processIncomingResponse,
   loadSMSConfig,
   cleanupExpiredPrompts,
+  sendNotification,
 } from './sms-notify.js';
 import {
   queueAction,
@@ -446,6 +447,59 @@ export function startWebhookServer(port: number = 3456): void {
             pendingPrompts: config.pendingPrompts.length,
           })
         );
+        return;
+      }
+
+      // Send outgoing notification endpoint
+      if (url.pathname === '/send' && req.method === 'POST') {
+        let body = '';
+        req.on('data', (chunk) => {
+          body += chunk;
+          if (body.length > MAX_BODY_SIZE) {
+            req.destroy();
+          }
+        });
+
+        req.on('end', async () => {
+          try {
+            const payload = JSON.parse(body);
+            const message = payload.message || payload.body || '';
+            const title = payload.title || 'Notification';
+            const type = payload.type || 'custom';
+
+            if (!message) {
+              res.writeHead(400, { 'Content-Type': 'application/json' });
+              res.end(
+                JSON.stringify({ success: false, error: 'Message required' })
+              );
+              return;
+            }
+
+            const result = await sendNotification({
+              type: type as
+                | 'task_complete'
+                | 'review_ready'
+                | 'error'
+                | 'custom',
+              title,
+              message,
+            });
+
+            res.writeHead(result.success ? 200 : 500, {
+              'Content-Type': 'application/json',
+            });
+            res.end(JSON.stringify(result));
+          } catch (err) {
+            console.error('[sms-webhook] Send error:', err);
+            res.writeHead(500, { 'Content-Type': 'application/json' });
+            res.end(
+              JSON.stringify({
+                success: false,
+                error: err instanceof Error ? err.message : 'Send failed',
+              })
+            );
+          }
+        });
         return;
       }
 
