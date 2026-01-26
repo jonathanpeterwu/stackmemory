@@ -13,6 +13,12 @@ import { program } from 'commander';
 import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
 import { initializeTracing, trace } from '../core/trace/index.js';
+import {
+  generateSessionSummary,
+  formatSummaryMessage,
+  SessionContext,
+} from '../hooks/session-summary.js';
+import { sendNotification } from '../hooks/sms-notify.js';
 
 // __filename and __dirname are provided by esbuild banner for ESM compatibility
 
@@ -22,6 +28,7 @@ interface ClaudeSMConfig {
   defaultChrome: boolean;
   defaultTracing: boolean;
   defaultRemote: boolean;
+  defaultNotifyOnDone: boolean;
 }
 
 interface ClaudeConfig {
@@ -31,12 +38,14 @@ interface ClaudeConfig {
   useChrome: boolean;
   useWorktree: boolean;
   useRemote: boolean;
+  notifyOnDone: boolean;
   contextEnabled: boolean;
   branch?: string;
   task?: string;
   tracingEnabled: boolean;
   verboseTracing: boolean;
   claudeBin?: string;
+  sessionStartTime: number;
 }
 
 const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
@@ -45,6 +54,7 @@ const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
   defaultChrome: false,
   defaultTracing: true,
   defaultRemote: false,
+  defaultNotifyOnDone: true,
 };
 
 function getConfigPath(): string {
@@ -90,9 +100,11 @@ class ClaudeSM {
       useChrome: this.smConfig.defaultChrome,
       useWorktree: this.smConfig.defaultWorktree,
       useRemote: this.smConfig.defaultRemote,
+      notifyOnDone: this.smConfig.defaultNotifyOnDone,
       contextEnabled: true,
       tracingEnabled: this.smConfig.defaultTracing,
       verboseTracing: false,
+      sessionStartTime: Date.now(),
     };
 
     this.stackmemoryPath = this.findStackMemory();
@@ -269,22 +281,24 @@ class ClaudeSM {
     try {
       console.log(chalk.blue('📚 Loading previous context...'));
 
-      const cmd = `${this.stackmemoryPath} context list --limit 5 --format json`;
-      const output = execSync(cmd, { encoding: 'utf8' });
-      const contexts = JSON.parse(output);
+      // Use 'context show' command which outputs the current context stack
+      const cmd = `${this.stackmemoryPath} context show`;
+      const output = execSync(cmd, {
+        encoding: 'utf8',
+        stdio: ['pipe', 'pipe', 'pipe'], // Capture stderr to suppress errors
+      });
 
-      if (contexts.length > 0) {
-        console.log(chalk.gray('Recent context loaded:'));
-        contexts.forEach(
-          (ctx: { message: string; metadata?: { timestamp?: string } }) => {
-            console.log(
-              chalk.gray(`  - ${ctx.message} (${ctx.metadata?.timestamp})`)
-            );
-          }
-        );
+      // Check if we got meaningful output (not empty or just headers)
+      const lines = output
+        .trim()
+        .split('\n')
+        .filter((l) => l.trim());
+      if (lines.length > 3) {
+        // Has content beyond headers
+        console.log(chalk.gray('Context stack loaded'));
       }
     } catch {
-      // Silently continue
+      // Silently continue - context loading is optional
     }
   }
 
@@ -323,6 +337,58 @@ class ClaudeSM {
     }
   }
 
+  private async sendDoneNotification(exitCode: number | null): Promise<void> {
+    try {
+      const context: SessionContext = {
+        instanceId: this.config.instanceId,
+        exitCode,
+        sessionStartTime: this.config.sessionStartTime,
+        worktreePath: this.config.worktreePath,
+        branch: this.config.branch,
+        task: this.config.task,
+      };
+
+      const summary = await generateSessionSummary(context);
+      const message = formatSummaryMessage(summary);
+
+      console.log(chalk.cyan('\nSending session summary via WhatsApp...'));
+
+      // Build options from suggestions for interactive response
+      const options = summary.suggestions.slice(0, 4).map((s) => ({
+        key: s.key,
+        label: s.label,
+        action: s.action,
+      }));
+
+      const result = await sendNotification({
+        type: 'task_complete',
+        title: 'Claude Session Complete',
+        message,
+        prompt:
+          options.length > 0
+            ? {
+                type: 'options',
+                options,
+              }
+            : undefined,
+      });
+
+      if (result.success) {
+        console.log(chalk.green('Notification sent successfully'));
+      } else {
+        console.log(
+          chalk.yellow(`Notification not sent: ${result.error || 'unknown'}`)
+        );
+      }
+    } catch (error) {
+      console.log(
+        chalk.yellow(
+          `Could not send notification: ${error instanceof Error ? error.message : 'unknown'}`
+        )
+      );
+    }
+  }
+
   public async run(args: string[]): Promise<void> {
     // Parse arguments
     const claudeArgs: string[] = [];
@@ -346,6 +412,13 @@ class ClaudeSM {
           break;
         case '--no-remote':
           this.config.useRemote = false;
+          break;
+        case '--notify-done':
+        case '-n':
+          this.config.notifyOnDone = true;
+          break;
+        case '--no-notify-done':
+          this.config.notifyOnDone = false;
           break;
         case '--sandbox':
         case '-s':
@@ -545,7 +618,7 @@ class ClaudeSM {
     });
 
     // Handle exit
-    claude.on('exit', (code) => {
+    claude.on('exit', async (code) => {
       // Save final context
       this.saveContext('Claude session ended', {
         action: 'session_end',
@@ -559,6 +632,11 @@ class ClaudeSM {
         console.log(chalk.gray('─'.repeat(42)));
         console.log(chalk.blue('Debug Trace Summary:'));
         console.log(chalk.gray(summary));
+      }
+
+      // Send notification when done (if enabled)
+      if (this.config.notifyOnDone || this.config.useRemote) {
+        await this.sendDoneNotification(code);
       }
 
       // Offer to clean up worktree
@@ -624,6 +702,9 @@ configCmd
     console.log(
       `  defaultRemote:   ${config.defaultRemote ? chalk.green('true') : chalk.gray('false')}`
     );
+    console.log(
+      `  defaultNotifyOnDone: ${config.defaultNotifyOnDone ? chalk.green('true') : chalk.gray('false')}`
+    );
     console.log(chalk.gray(`\nConfig: ${getConfigPath()}`));
   });
 
@@ -640,13 +721,17 @@ configCmd
       chrome: 'defaultChrome',
       tracing: 'defaultTracing',
       remote: 'defaultRemote',
+      'notify-done': 'defaultNotifyOnDone',
+      notifyondone: 'defaultNotifyOnDone',
     };
 
     const configKey = keyMap[key];
     if (!configKey) {
       console.log(chalk.red(`Unknown key: ${key}`));
       console.log(
-        chalk.gray('Valid keys: worktree, sandbox, chrome, tracing, remote')
+        chalk.gray(
+          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done'
+        )
       );
       process.exit(1);
     }
@@ -696,12 +781,34 @@ configCmd
     console.log(chalk.green('Remote mode disabled by default'));
   });
 
+configCmd
+  .command('notify-done-on')
+  .description('Enable WhatsApp notification when session ends (default)')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultNotifyOnDone = true;
+    saveSMConfig(config);
+    console.log(chalk.green('Notify-on-done enabled by default'));
+  });
+
+configCmd
+  .command('notify-done-off')
+  .description('Disable notification when session ends')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultNotifyOnDone = false;
+    saveSMConfig(config);
+    console.log(chalk.green('Notify-on-done disabled by default'));
+  });
+
 // Main command (default action when no subcommand)
 program
   .option('-w, --worktree', 'Create isolated worktree for this instance')
   .option('-W, --no-worktree', 'Disable worktree (override default)')
   .option('-r, --remote', 'Enable remote mode (WhatsApp for all questions)')
   .option('--no-remote', 'Disable remote mode (override default)')
+  .option('-n, --notify-done', 'Send WhatsApp notification when session ends')
+  .option('--no-notify-done', 'Disable notification when session ends')
   .option('-s, --sandbox', 'Enable sandbox mode (file/network restrictions)')
   .option('-c, --chrome', 'Enable Chrome automation')
   .option('-a, --auto', 'Automatically detect and apply best settings')
