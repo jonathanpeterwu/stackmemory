@@ -274,8 +274,9 @@ export class APIDiscoverySkill {
     }
 
     // Check if already discovered
-    if (this.discoveredAPIs.has(discovered.name)) {
-      return this.discoveredAPIs.get(discovered.name)!;
+    const existing = this.discoveredAPIs.get(discovered.name);
+    if (existing) {
+      return existing;
     }
 
     // Only probe for spec if it's not a known service (known services already have spec URLs)
