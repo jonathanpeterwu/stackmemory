@@ -39,7 +39,9 @@ describe('frame-manager', () => {
 
     // Assert
     expect(result).toBeTypeOf('string');
-    expect(result).toMatch(/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/);
+    expect(result).toMatch(
+      /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/
+    );
   });
 
   it('should handle null input in createFrame', () => {
@@ -56,20 +58,17 @@ describe('frame-manager', () => {
     // Arrange
     const params = { type: 'task', name: '', inputs: {} };
 
-    // Act
-    const result = frameManager.createFrame(params);
-
-    // Assert
-    expect(result).toBeDefined();
-    const frame = frameManager.getFrame(result);
-    expect(frame?.name).toBe('');
+    // Act & Assert - empty name should throw validation error
+    expect(() => frameManager.createFrame(params)).toThrow(
+      'Frame name is required'
+    );
   });
 
   it('should execute getFrame successfully with valid input', () => {
     // Arrange
-    const frameId = frameManager.createFrame({ 
-      type: 'task', 
-      name: 'Test Frame' 
+    const frameId = frameManager.createFrame({
+      type: 'task',
+      name: 'Test Frame',
     });
 
     // Act
@@ -96,7 +95,7 @@ describe('frame-manager', () => {
     // Arrange
     const frameId = frameManager.createFrame({
       type: 'task',
-      name: 'Frame to close'
+      name: 'Frame to close',
     });
 
     // Act
@@ -120,15 +119,19 @@ describe('frame-manager', () => {
     // Arrange
     const frameId = frameManager.createFrame({
       type: 'task',
-      name: 'Event test frame'
+      name: 'Event test frame',
     });
     const eventData = {
       type: 'test-event',
-      data: { message: 'Test event data' }
+      data: { message: 'Test event data' },
     };
 
     // Act
-    frameManager.addEvent('tool_call', { tool: 'test', args: eventData.data }, frameId);
+    frameManager.addEvent(
+      'tool_call',
+      { tool: 'test', args: eventData.data },
+      frameId
+    );
     const frame = frameManager.getFrame(frameId);
 
     // Assert
@@ -140,13 +143,13 @@ describe('frame-manager', () => {
     // Arrange
     const parentId = frameManager.createFrame({
       type: 'task',
-      name: 'Parent Frame'
+      name: 'Parent Frame',
     });
-    
+
     const childId = frameManager.createFrame({
       type: 'subtask',
       name: 'Child Frame',
-      parentFrameId: parentId
+      parentFrameId: parentId,
     });
 
     // Act
@@ -161,7 +164,7 @@ describe('frame-manager', () => {
     // Arrange
     let currentParentId = frameManager.createFrame({
       type: 'root',
-      name: 'Root Frame'
+      name: 'Root Frame',
     });
 
     // Act - Create nested frames up to max depth
@@ -169,7 +172,7 @@ describe('frame-manager', () => {
       const childId = frameManager.createFrame({
         type: 'nested',
         name: `Level ${i + 1}`,
-        parentFrameId: currentParentId
+        parentFrameId: currentParentId,
       });
       currentParentId = childId;
     }
@@ -179,7 +182,7 @@ describe('frame-manager', () => {
       frameManager.createFrame({
         type: 'too-deep',
         name: 'Exceeds max depth',
-        parentFrameId: currentParentId
+        parentFrameId: currentParentId,
       });
     }).not.toThrow();
   });
@@ -194,7 +197,7 @@ describe('frame-manager', () => {
         Promise.resolve(
           frameManager.createFrame({
             type: 'concurrent',
-            name: `Frame ${i}`
+            name: `Frame ${i}`,
           })
         )
       );
@@ -211,7 +214,7 @@ describe('frame-manager', () => {
     // Arrange
     const frameId = frameManager.createFrame({
       type: 'persistent',
-      name: 'Persistent Frame'
+      name: 'Persistent Frame',
     });
 
     // Act - Create new manager instance with same DB
@@ -229,8 +232,8 @@ describe('frame-manager', () => {
       type: 'large',
       name: 'Large Data Frame',
       inputs: {
-        data: 'x'.repeat(10000) // 10KB of data
-      }
+        data: 'x'.repeat(10000), // 10KB of data
+      },
     };
 
     // Act
@@ -249,8 +252,8 @@ describe('frame-manager', () => {
       name: 'Frame with "quotes" and \'apostrophes\' and \\backslashes',
       inputs: {
         sql: "'; DROP TABLE frames; --",
-        unicode: '😀🎉🔥'
-      }
+        unicode: '😀🎉🔥',
+      },
     };
 
     // Act

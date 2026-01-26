@@ -6,6 +6,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { execFileSync } from 'child_process';
 import { writeFileSecure, ensureSecureDir } from './secure-fs.js';
 import { WhatsAppCommandsConfigSchema, parseConfigSafe } from './schemas.js';
 import { executeActionSafe } from './sms-action-runner.js';
@@ -16,6 +17,44 @@ import {
   loadSyncOptions,
 } from './whatsapp-sync.js';
 import { sendNotification } from './sms-notify.js';
+
+// ReDoS protection: max execution time for regex test (ms)
+const REGEX_TIMEOUT_MS = 100;
+// Max input length for regex matching to prevent catastrophic backtracking
+const MAX_REGEX_INPUT_LENGTH = 200;
+
+/**
+ * Safely test a regex pattern against input with ReDoS protection
+ * Returns false if pattern is invalid, times out, or doesn't match
+ */
+function safeRegexTest(pattern: string, input: string): boolean {
+  // Truncate input to prevent catastrophic backtracking
+  const safeInput = input.slice(0, MAX_REGEX_INPUT_LENGTH);
+
+  try {
+    const regex = new RegExp(pattern);
+
+    // Use a simple timeout approach - run in try/catch with limited input
+    // For true async timeout, we'd need Worker threads which adds complexity
+    const startTime = Date.now();
+    const result = regex.test(safeInput);
+    const elapsed = Date.now() - startTime;
+
+    // Log warning if regex took too long (could indicate ReDoS attempt)
+    if (elapsed > REGEX_TIMEOUT_MS) {
+      console.warn(
+        `[whatsapp-commands] Slow regex detected: ${pattern} took ${elapsed}ms`
+      );
+      return false;
+    }
+
+    return result;
+  } catch {
+    // Invalid regex pattern
+    console.warn(`[whatsapp-commands] Invalid regex pattern: ${pattern}`);
+    return false;
+  }
+}
 
 export interface WhatsAppCommand {
   name: string;
@@ -39,6 +78,62 @@ export interface CommandResult {
 }
 
 const CONFIG_PATH = join(homedir(), '.stackmemory', 'whatsapp-commands.json');
+const REMOTE_SESSIONS_PATH = join(
+  homedir(),
+  '.stackmemory',
+  'remote-sessions.json'
+);
+
+/**
+ * Remote session tracking
+ */
+export interface RemoteSession {
+  id: string;
+  url: string;
+  prompt: string;
+  createdAt: string;
+  status: 'active' | 'completed' | 'failed';
+  lastActivity?: string;
+}
+
+interface RemoteSessionsStore {
+  sessions: RemoteSession[];
+}
+
+function loadRemoteSessions(): RemoteSessionsStore {
+  try {
+    if (existsSync(REMOTE_SESSIONS_PATH)) {
+      return JSON.parse(readFileSync(REMOTE_SESSIONS_PATH, 'utf8'));
+    }
+  } catch {
+    // Use defaults
+  }
+  return { sessions: [] };
+}
+
+function saveRemoteSessions(store: RemoteSessionsStore): void {
+  try {
+    ensureSecureDir(join(homedir(), '.stackmemory'));
+    writeFileSecure(REMOTE_SESSIONS_PATH, JSON.stringify(store, null, 2));
+  } catch {
+    // Silently fail
+  }
+}
+
+function addRemoteSession(session: RemoteSession): void {
+  const store = loadRemoteSessions();
+  // Keep last 20 sessions
+  store.sessions = [session, ...store.sessions.slice(0, 19)];
+  saveRemoteSessions(store);
+}
+
+export function getRemoteSessions(): RemoteSession[] {
+  return loadRemoteSessions().sessions;
+}
+
+export function getActiveRemoteSessions(): RemoteSession[] {
+  return loadRemoteSessions().sessions.filter((s) => s.status === 'active');
+}
 
 // Default supported commands
 const DEFAULT_COMMANDS: WhatsAppCommand[] = [
@@ -127,6 +222,19 @@ const DEFAULT_COMMANDS: WhatsAppCommand[] = [
     description: 'Show current branch',
     enabled: true,
     action: 'git branch --show-current',
+  },
+  {
+    name: 'remote',
+    description: 'Launch remote Claude session (requires task prompt)',
+    enabled: true,
+    requiresArg: true,
+    // No action - handled specially to capture session URL
+  },
+  {
+    name: 'sessions',
+    description: 'List active remote sessions',
+    enabled: true,
+    // No action - handled specially
   },
 ];
 
@@ -313,6 +421,87 @@ async function handleTasksCommand(): Promise<string> {
 }
 
 /**
+ * Handle the 'remote' command - launch a remote Claude session
+ */
+async function handleRemoteCommand(prompt: string): Promise<string> {
+  try {
+    // Sanitize prompt - remove any shell-dangerous characters
+    const sanitizedPrompt = prompt
+      .replace(/[`$\\]/g, '')
+      .replace(/["']/g, "'")
+      .substring(0, 500);
+
+    if (!sanitizedPrompt.trim()) {
+      return 'Please provide a task prompt. Usage: remote <your task>';
+    }
+
+    console.log(
+      `[whatsapp-commands] Launching remote session: ${sanitizedPrompt.substring(0, 50)}...`
+    );
+
+    // Execute claude --remote with the prompt
+    const output = execFileSync('claude', ['--remote', sanitizedPrompt], {
+      encoding: 'utf8',
+      timeout: 30000,
+      stdio: ['pipe', 'pipe', 'pipe'],
+    });
+
+    // Parse session URL from output
+    // Expected format contains: https://claude.ai/code/session_...
+    const urlMatch = output.match(
+      /https:\/\/claude\.ai\/code\/session_[a-zA-Z0-9]+/
+    );
+
+    if (urlMatch) {
+      const sessionUrl = urlMatch[0];
+      const sessionId = sessionUrl.split('/').pop() || 'unknown';
+
+      // Store the session
+      addRemoteSession({
+        id: sessionId,
+        url: sessionUrl,
+        prompt: sanitizedPrompt,
+        createdAt: new Date().toISOString(),
+        status: 'active',
+      });
+
+      return `Remote session launched!\n\n${sessionUrl}\n\nTask: ${sanitizedPrompt.substring(0, 100)}`;
+    }
+
+    // No URL found - return raw output
+    return `Session launched:\n${output.substring(0, 300)}`;
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    console.error(`[whatsapp-commands] Remote launch failed: ${error}`);
+    return `Failed to launch remote session: ${error.substring(0, 100)}`;
+  }
+}
+
+/**
+ * Handle the 'sessions' command - list active remote sessions
+ */
+function handleSessionsCommand(): string {
+  const sessions = getActiveRemoteSessions();
+
+  if (sessions.length === 0) {
+    return 'No active remote sessions';
+  }
+
+  const lines: string[] = ['Active remote sessions:'];
+
+  sessions.slice(0, 5).forEach((s, i) => {
+    const age = Math.round(
+      (Date.now() - new Date(s.createdAt).getTime()) / 60000
+    );
+    const ageStr = age < 60 ? `${age}m ago` : `${Math.round(age / 60)}h ago`;
+    lines.push(`${i + 1}. ${s.prompt.substring(0, 40)}... (${ageStr})`);
+    lines.push(`   ${s.url}`);
+  });
+
+  return lines.join('\n');
+}
+
+/**
  * Process an incoming WhatsApp command
  */
 export async function processCommand(
@@ -364,6 +553,24 @@ export async function processCommand(
     return { handled: true, response: tasksText };
   }
 
+  if (command.name === 'remote') {
+    if (!parsed.arg) {
+      return {
+        handled: true,
+        response:
+          'Usage: remote <task prompt>\nExample: remote Fix the login bug',
+        error: 'Missing prompt',
+      };
+    }
+    const remoteText = await handleRemoteCommand(parsed.arg);
+    return { handled: true, response: remoteText };
+  }
+
+  if (command.name === 'sessions') {
+    const sessionsText = handleSessionsCommand();
+    return { handled: true, response: sessionsText };
+  }
+
   // Check if argument is required
   if (command.requiresArg && !parsed.arg) {
     return {
@@ -373,10 +580,9 @@ export async function processCommand(
     };
   }
 
-  // Validate argument pattern if specified
+  // Validate argument pattern if specified (with ReDoS protection)
   if (command.argPattern && parsed.arg) {
-    const pattern = new RegExp(command.argPattern);
-    if (!pattern.test(parsed.arg)) {
+    if (!safeRegexTest(command.argPattern, parsed.arg)) {
       return {
         handled: true,
         response: `Invalid argument format for ${command.name}`,

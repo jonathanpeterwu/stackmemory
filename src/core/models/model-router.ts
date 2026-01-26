@@ -7,6 +7,10 @@ import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { writeFileSecure, ensureSecureDir } from '../../hooks/secure-fs.js';
+import {
+  ModelRouterConfigSchema,
+  parseConfigSafe,
+} from '../../hooks/schemas.js';
 
 export type ModelProvider =
   | 'anthropic'
@@ -107,13 +111,18 @@ const DEFAULT_CONFIG: ModelRouterConfig = {
 };
 
 /**
- * Load model router configuration
+ * Load model router configuration with Zod validation
  */
 export function loadModelRouterConfig(): ModelRouterConfig {
   try {
     if (existsSync(CONFIG_PATH)) {
       const data = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
-      return { ...DEFAULT_CONFIG, ...data };
+      return parseConfigSafe(
+        ModelRouterConfigSchema,
+        { ...DEFAULT_CONFIG, ...data },
+        DEFAULT_CONFIG,
+        'model-router'
+      );
     }
   } catch {
     // Use defaults

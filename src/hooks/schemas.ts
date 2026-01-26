@@ -159,7 +159,67 @@ export const WhatsAppCommandsConfigSchema = z.object({
   commands: z.array(WhatsAppCommandSchema).max(50),
 });
 
+// Model Router schemas
+export const ModelProviderSchema = z.enum([
+  'anthropic',
+  'qwen',
+  'openai',
+  'ollama',
+  'custom',
+]);
+
+export const ModelConfigSchema = z.object({
+  provider: ModelProviderSchema,
+  model: z.string().max(100),
+  baseUrl: z.string().url().max(500).optional(),
+  apiKeyEnv: z.string().max(100),
+  headers: z.record(z.string().max(500)).optional(),
+  params: z.record(z.unknown()).optional(),
+});
+
+export const ModelRouterConfigSchema = z.object({
+  enabled: z.boolean(),
+  defaultProvider: ModelProviderSchema,
+  taskRouting: z
+    .object({
+      plan: ModelProviderSchema.optional(),
+      think: ModelProviderSchema.optional(),
+      code: ModelProviderSchema.optional(),
+      review: ModelProviderSchema.optional(),
+    })
+    .optional()
+    .default({}),
+  fallback: z.object({
+    enabled: z.boolean(),
+    provider: ModelProviderSchema,
+    onRateLimit: z.boolean(),
+    onError: z.boolean(),
+    onTimeout: z.boolean(),
+    maxRetries: z.number().int().min(0).max(10),
+    retryDelayMs: z.number().int().min(100).max(30000),
+  }),
+  providers: z
+    .object({
+      anthropic: ModelConfigSchema.optional(),
+      qwen: ModelConfigSchema.optional(),
+      openai: ModelConfigSchema.optional(),
+      ollama: ModelConfigSchema.optional(),
+      custom: ModelConfigSchema.optional(),
+    })
+    .optional()
+    .default({}),
+  thinkingMode: z.object({
+    enabled: z.boolean(),
+    budget: z.number().int().min(1000).max(100000).optional(),
+    temperature: z.number().min(0).max(2).optional(),
+    topP: z.number().min(0).max(1).optional(),
+  }),
+});
+
 // Type exports
+export type ModelRouterConfigValidated = z.infer<
+  typeof ModelRouterConfigSchema
+>;
 export type SMSConfigValidated = z.infer<typeof SMSConfigSchema>;
 export type ActionQueueValidated = z.infer<typeof ActionQueueSchema>;
 export type AutoBackgroundConfigValidated = z.infer<

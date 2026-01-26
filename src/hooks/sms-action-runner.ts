@@ -54,6 +54,12 @@ const SAFE_ACTION_PATTERNS: Array<{
   { pattern: /^help$/i },
   { pattern: /^sync$/i },
 
+  // Claude Code launcher
+  { pattern: /^claude-sm$/ },
+
+  // Log viewing (safe read-only)
+  { pattern: /^tail -\d+ ~\/\.claude\/logs\/\*\.log$/ },
+
   // Custom aliases (cwm = claude worktree merge)
   { pattern: /^cwm$/ },
 
