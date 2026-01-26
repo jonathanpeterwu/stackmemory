@@ -30,7 +30,6 @@ docs/            # Documentation
 
 Quick reference (agent_docs/):
 - linear_integration.md - Linear sync
-- railway_deployment.md - Deployment
 - mcp_server.md - MCP tools
 - database_storage.md - Storage
 - claude_hooks.md - Hooks
@@ -61,12 +60,20 @@ npm run linear:sync    # Sync with Linear
 ## Validation (MUST DO)
 
 After code changes:
-1. `npm run lint` - fix any errors
-2. `npm test` - verify no regressions
+1. `npm run lint` - fix any errors AND warnings
+2. `npm run test:run` - verify no regressions
 3. `npm run build` - ensure compilation
 4. Run code to verify it works
 
 Never: Assume success | Skip testing | Use mock data as fallback
+
+## Git Rules (CRITICAL)
+
+- NEVER use `--no-verify` on git push or commit
+- ALWAYS fix lint/test errors before pushing
+- If pre-push hooks fail, fix the underlying issue
+- Run `npm run lint && npm run test:run` before pushing
+- Commit message format: `type(scope): message`
 
 ## Security
 
