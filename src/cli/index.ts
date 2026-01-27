@@ -57,17 +57,14 @@ import { createSettingsCommand } from './commands/settings.js';
 import { createRetrievalCommands } from './commands/retrieval.js';
 import { createDiscoveryCommands } from './commands/discovery.js';
 import { createModelCommand } from './commands/model.js';
+import { registerSetupCommands } from './commands/setup.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import inquirer from 'inquirer';
 import chalk from 'chalk';
-import {
-  loadStorageConfig,
-  enableChromaDB,
-  getStorageModeDescription,
-} from '../core/config/storage-config.js';
+import { enableChromaDB } from '../core/config/storage-config.js';
 import { spawn } from 'child_process';
 import { homedir } from 'os';
 
@@ -173,65 +170,58 @@ program
 program
   .command('init')
   .description(
-    `Initialize StackMemory in current project
+    `Initialize StackMemory in current project (zero-config by default)
 
-Storage Modes:
-  SQLite (default): Local only, fast, no setup required
-  ChromaDB (hybrid): Adds semantic search and cloud backup, requires API key`
+Options:
+  --interactive    Ask configuration questions
+  --chromadb       Enable ChromaDB semantic search (prompts for API key)`
   )
-  .option('--sqlite', 'Use SQLite-only storage (default, skip prompts)')
+  .option('-i, --interactive', 'Interactive mode with configuration prompts')
   .option(
     '--chromadb',
     'Enable ChromaDB for semantic search (prompts for API key)'
   )
-  .option('--skip-storage-prompt', 'Skip storage configuration prompt')
   .action(async (options) => {
     try {
       const projectRoot = process.cwd();
       const dbDir = join(projectRoot, '.stackmemory');
 
+      // Check if already initialized
+      const alreadyInit = existsSync(join(dbDir, 'context.db'));
+      if (alreadyInit && !options.interactive) {
+        console.log(chalk.yellow('StackMemory already initialized.'));
+        console.log(chalk.gray('Run with --interactive to reconfigure.'));
+        return;
+      }
+
       if (!existsSync(dbDir)) {
         mkdirSync(dbDir, { recursive: true });
       }
 
-      // Handle storage configuration
-      let storageConfig = loadStorageConfig();
-      const isFirstTimeSetup =
-        !storageConfig.chromadb.enabled && storageConfig.mode === 'sqlite';
-
-      // Skip prompts if --sqlite flag or --skip-storage-prompt
-      if (options.sqlite || options.skipStoragePrompt) {
-        // Use SQLite-only (default)
-        console.log(chalk.gray('Using SQLite-only storage mode.'));
-      } else if (options.chromadb) {
-        // User explicitly requested ChromaDB, prompt for API key
+      // Zero-config by default - just use SQLite, no questions
+      if (options.chromadb) {
         await promptAndEnableChromaDB();
-      } else if (isFirstTimeSetup && process.stdin.isTTY) {
-        // Interactive mode - ask user about ChromaDB
+      } else if (options.interactive && process.stdin.isTTY) {
+        // Only ask questions in interactive mode
         console.log(chalk.cyan('\nStorage Configuration'));
-        console.log(chalk.gray('StackMemory supports two storage modes:\n'));
-        console.log(chalk.white('  SQLite (default):'));
-        console.log(chalk.gray('    - Local storage only'));
-        console.log(chalk.gray('    - Fast and simple'));
-        console.log(chalk.gray('    - No external dependencies\n'));
-        console.log(chalk.white('  ChromaDB (hybrid):'));
-        console.log(chalk.gray('    - Semantic search across your context'));
-        console.log(chalk.gray('    - Cloud backup capability'));
-        console.log(chalk.gray('    - Requires ChromaDB API key\n'));
+        console.log(
+          chalk.gray('SQLite (default) is fast and requires no setup.')
+        );
+        console.log(
+          chalk.gray('ChromaDB adds semantic search but requires an API key.\n')
+        );
 
         const { enableChroma } = await inquirer.prompt([
           {
             type: 'confirm',
             name: 'enableChroma',
-            message: 'Enable ChromaDB for semantic search? (requires API key)',
+            message: 'Enable ChromaDB for semantic search?',
             default: false,
           },
         ]);
 
         if (enableChroma) {
           await promptAndEnableChromaDB();
-        } else {
-          console.log(chalk.gray('Using SQLite-only storage mode.'));
         }
       }
 
@@ -241,22 +231,36 @@ Storage Modes:
       new FrameManager(db, 'cli-project');
 
       logger.info('StackMemory initialized successfully', { projectRoot });
-      console.log(
-        chalk.green('\n[OK] StackMemory initialized in'),
-        projectRoot
-      );
+      console.log(chalk.green('\n[OK] StackMemory initialized'));
+      console.log(chalk.gray(`    Project: ${projectRoot}`));
+      console.log(chalk.gray(`    Storage: SQLite (local)`));
 
-      // Show current storage mode
-      storageConfig = loadStorageConfig();
-      console.log(chalk.gray(`Storage mode: ${getStorageModeDescription()}`));
+      // Show next steps
+      console.log(chalk.cyan('\nNext steps:'));
+      console.log(
+        chalk.white('  1. stackmemory setup-mcp') +
+          chalk.gray('  # Configure Claude Code integration')
+      );
+      console.log(
+        chalk.white('  2. stackmemory status') +
+          chalk.gray('     # Check status')
+      );
+      console.log(
+        chalk.white('  3. stackmemory doctor') +
+          chalk.gray('     # Diagnose issues')
+      );
 
       db.close();
     } catch (error: unknown) {
       logger.error('Failed to initialize StackMemory', error as Error);
+      console.error(chalk.red('\n[ERROR] Initialization failed'));
+      console.error(chalk.gray(`  Reason: ${(error as Error).message}`));
       console.error(
-        chalk.red('[ERROR] Initialization failed:'),
-        (error as Error).message
+        chalk.gray(
+          '  Fix: Ensure you have write permissions to the current directory'
+        )
       );
+      console.error(chalk.gray('  Run: stackmemory doctor'));
       process.exit(1);
     }
   });
@@ -696,6 +700,9 @@ if (isFeatureEnabled('whatsapp')) {
 program.addCommand(createRetrievalCommands());
 program.addCommand(createDiscoveryCommands());
 program.addCommand(createModelCommand());
+
+// Register setup and diagnostic commands
+registerSetupCommands(program);
 
 // Register dashboard command
 program

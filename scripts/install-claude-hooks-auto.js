@@ -3,6 +3,8 @@
 /**
  * Auto-install Claude hooks during npm install
  * This runs as a postinstall script to set up tracing hooks and daemon
+ *
+ * INTERACTIVE: Asks for user consent before modifying ~/.claude
  */
 
 import {
@@ -14,6 +16,7 @@ import {
 } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
+import { createInterface } from 'readline';
 
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
@@ -27,12 +30,63 @@ const templatesDir = join(__dirname, '..', 'templates', 'claude-hooks');
 const stackmemoryBinDir = join(homedir(), '.stackmemory', 'bin');
 const distDir = join(__dirname, '..', 'dist');
 
+/**
+ * Ask user for confirmation before installing hooks
+ * Returns true if user consents, false otherwise
+ */
+async function askForConsent() {
+  // Skip prompt if:
+  // 1. Not a TTY (CI/CD, piped input)
+  // 2. STACKMEMORY_AUTO_HOOKS=true is set
+  // 3. Running in CI environment
+  if (
+    !process.stdin.isTTY ||
+    process.env.STACKMEMORY_AUTO_HOOKS === 'true' ||
+    process.env.CI === 'true'
+  ) {
+    // In non-interactive mode, skip hook installation silently
+    console.log(
+      'StackMemory installed. Run "stackmemory setup-mcp" to configure Claude Code integration.'
+    );
+    return false;
+  }
+
+  console.log('\n📦 StackMemory Post-Install\n');
+  console.log(
+    'StackMemory can integrate with Claude Code by installing hooks that:'
+  );
+  console.log('  - Track tool usage for better context');
+  console.log('  - Enable session persistence across restarts');
+  console.log('  - Sync context with Linear (optional)');
+  console.log('\nThis will modify files in ~/.claude/\n');
+
+  return new Promise((resolve) => {
+    const rl = createInterface({
+      input: process.stdin,
+      output: process.stdout,
+    });
+
+    rl.question('Install Claude Code hooks? [y/N] ', (answer) => {
+      rl.close();
+      const normalized = answer.toLowerCase().trim();
+      resolve(normalized === 'y' || normalized === 'yes');
+    });
+
+    // Timeout after 30 seconds - default to no
+    setTimeout(() => {
+      console.log('\n(Timed out, skipping hook installation)');
+      rl.close();
+      resolve(false);
+    }, 30000);
+  });
+}
+
 async function installClaudeHooks() {
   try {
     // Create Claude hooks directory if it doesn't exist
     if (!existsSync(claudeHooksDir)) {
       mkdirSync(claudeHooksDir, { recursive: true });
-      console.log('📁 Created Claude hooks directory');
+      console.log('Created ~/.claude/hooks directory');
     }
 
     // Copy hook files
@@ -48,7 +102,7 @@ async function installClaudeHooks() {
         if (existsSync(destPath)) {
           const backupPath = `${destPath}.backup-${Date.now()}`;
           copyFileSync(destPath, backupPath);
-          console.log(`📋 Backed up existing hook: ${hookFile}`);
+          console.log(`  Backed up: ${hookFile}`);
         }
 
         copyFileSync(srcPath, destPath);
@@ -62,7 +116,7 @@ async function installClaudeHooks() {
         }
 
         installed++;
-        console.log(`✅ Installed hook: ${hookFile}`);
+        console.log(`  Installed: ${hookFile}`);
       }
     }
 
@@ -71,9 +125,8 @@ async function installClaudeHooks() {
     if (existsSync(claudeConfigFile)) {
       try {
         hooksConfig = JSON.parse(readFileSync(claudeConfigFile, 'utf8'));
-        console.log('📋 Loaded existing hooks.json');
       } catch {
-        console.log('⚠️  Could not parse existing hooks.json, creating new');
+        // Start fresh if parse fails
       }
     }
 
@@ -86,21 +139,11 @@ async function installClaudeHooks() {
     };
 
     writeFileSync(claudeConfigFile, JSON.stringify(newHooksConfig, null, 2));
-    console.log('🔧 Updated hooks.json configuration');
 
     if (installed > 0) {
-      console.log(
-        `\nSuccessfully installed ${installed} Claude hooks for StackMemory tracing!`
-      );
-      console.log(
-        'Tool usage and session data will now be automatically logged'
-      );
-      console.log(
-        `Traces saved to: ${join(homedir(), '.stackmemory', 'traces')}`
-      );
-      console.log(
-        '\nTo disable tracing, set DEBUG_TRACE=false in your .env file'
-      );
+      console.log(`\n[OK] Installed ${installed} Claude hooks`);
+      console.log(`     Traces: ~/.stackmemory/traces/`);
+      console.log('     To disable: set DEBUG_TRACE=false in .env');
     }
 
     // Install session daemon binary
@@ -108,10 +151,8 @@ async function installClaudeHooks() {
 
     return true;
   } catch (error) {
-    console.error('Failed to install Claude hooks:', error.message);
-    console.error(
-      '   This is not critical - StackMemory will still work without hooks'
-    );
+    console.error('Hook installation failed:', error.message);
+    console.error('(Non-critical - StackMemory works without hooks)');
     return false;
   }
 }
@@ -154,8 +195,17 @@ async function installSessionDaemon() {
 
 // Only run if called directly (not imported)
 if (import.meta.url === `file://${process.argv[1]}`) {
-  console.log('🔧 Installing StackMemory Claude Code integration hooks...\n');
-  await installClaudeHooks();
+  const consent = await askForConsent();
+  if (consent) {
+    await installClaudeHooks();
+    console.log(
+      '\nNext: Run "stackmemory setup-mcp" to complete Claude Code integration.'
+    );
+  } else {
+    console.log(
+      'Skipped hook installation. Run "stackmemory hooks install" later if needed.'
+    );
+  }
 }
 
 export { installClaudeHooks };
