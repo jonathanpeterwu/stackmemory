@@ -216,7 +216,13 @@ export async function pickNextLinearTask(
       score: best.score,
     };
   } catch (error) {
-    console.error('[linear-task-picker] Error fetching tasks:', error);
+    // Silent fail for auth errors (401/403) - expected when not configured
+    const isAuthError =
+      error instanceof Error &&
+      (error.message.includes('401') || error.message.includes('403'));
+    if (!isAuthError) {
+      console.error('[linear-task-picker] Error fetching tasks:', error);
+    }
     return null;
   }
 }
@@ -271,7 +277,13 @@ export async function getTopTaskSuggestions(
       };
     });
   } catch (error) {
-    console.error('[linear-task-picker] Error fetching tasks:', error);
+    // Silent fail for auth errors (401/403) - expected when not configured
+    const isAuthError =
+      error instanceof Error &&
+      (error.message.includes('401') || error.message.includes('403'));
+    if (!isAuthError) {
+      console.error('[linear-task-picker] Error fetching tasks:', error);
+    }
     return [];
   }
 }

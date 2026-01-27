@@ -219,10 +219,13 @@ export class LinearClient {
 
     if (!response.ok) {
       const errorText = await response.text();
-      logger.error(
-        'Linear API error response:',
-        new Error(`${response.status}: ${errorText}`)
-      );
+      // Don't log 401/403 - expected when not authenticated
+      if (response.status !== 401 && response.status !== 403) {
+        logger.error(
+          'Linear API error response:',
+          new Error(`${response.status}: ${errorText}`)
+        );
+      }
       throw new IntegrationError(
         `Linear API error: ${response.status} ${response.statusText}`,
         ErrorCode.LINEAR_API_ERROR,
