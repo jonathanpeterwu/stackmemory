@@ -1,19 +1,15 @@
 # StackMemory
 
-**Lossless, project-scoped memory for AI tools** • v0.5.30
+**Lossless, project-scoped memory for AI tools** • v0.5.40
 
-StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions. With **Phases 1-4 complete**, it delivers:
+StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions:
 
-- **89-98% faster** task operations than manual tracking
-- **10,000+ frame depth** support with hierarchical organization
+- **Zero-config setup** - `stackmemory init` just works, no questions asked
+- **26 MCP tools** for Claude Code integration
 - **Full Linear integration** with bidirectional sync
-- **20+ MCP tools** for Claude Code
 - **Context persistence** that survives /clear operations
-- **Two-tier storage system** with local tiers and infinite remote storage
-- **Smart compression** (LZ4/ZSTD) with 2.5-3.5x ratios
-- **Background migration** with configurable triggers
-- **396 tests passing** with standardized error handling
-- **npm v0.5.30** published with WhatsApp notifications and improved integrations
+- **Hierarchical frame organization** (nested call stack model)
+- **490 tests passing** with comprehensive coverage
 
 Instead of a linear chat log, StackMemory organizes memory as a **call stack** of scoped work (frames), with intelligent LLM-driven retrieval and team collaboration features.
 
@@ -120,46 +116,76 @@ The editor never manages memory directly; it asks StackMemory for the **context 
 
 # QuickStart
 
-## 1. Hosted (Recommended)
-
-### Step 1: Create a project
+## 1. Install & Initialize (30 seconds)
 
 ```bash
-stackmemory projects create \
-  --repo https://github.com/org/repo
+# Install globally
+npm install -g @stackmemoryai/stackmemory
+
+# Initialize in your project (zero-config, just works)
+cd your-project
+stackmemory init
+
+# Configure Claude Code integration
+stackmemory setup-mcp
+
+# Verify everything works
+stackmemory doctor
 ```
 
-This creates a **project-scoped memory space** tied to the repo.
+That's it! Restart Claude Code and StackMemory MCP tools are available.
 
 ---
 
-### Step 2: Install StackMemory
+## 2. Detailed Setup
+
+### Install
 
 ```bash
-npm install -g @stackmemoryai/stackmemory@0.5.30
-# or latest
 npm install -g @stackmemoryai/stackmemory@latest
 ```
 
----
+During install, you'll be asked if you want to install Claude Code hooks (optional but recommended).
 
-### Step 3: Setup Claude Code Integration (Automated)
+### Initialize Project
 
 ```bash
-# Automatic setup - configures MCP and session hooks
-npm run claude:setup
+cd your-project
+stackmemory init
+```
+
+This creates `.stackmemory/` with SQLite storage. No questions asked.
+
+For interactive setup with more options:
+```bash
+stackmemory init --interactive
+```
+
+### Configure Claude Code
+
+```bash
+stackmemory setup-mcp
 ```
 
 This automatically:
-
 - Creates `~/.claude/stackmemory-mcp.json` MCP configuration
-- Sets up session initialization hooks
 - Updates `~/.claude/config.json` with StackMemory integration
+- Validates the configuration
 
-**Manual setup alternative:**
+### Diagnose Issues
+
+```bash
+stackmemory doctor
+```
+
+Checks project initialization, database integrity, MCP config, and suggests fixes.
+
+---
+
+## 3. Advanced Setup
 
 <details>
-<summary>Click to expand manual setup steps</summary>
+<summary>Manual MCP configuration</summary>
 
 Create MCP configuration:
 
@@ -178,7 +204,7 @@ cat > ~/.claude/stackmemory-mcp.json << 'EOF'
 EOF
 ```
 
-Update Claude config:
+Update Claude config.json:
 
 ```json
 {
@@ -190,6 +216,26 @@ Update Claude config:
 
 </details>
 
+<details>
+<summary>Hosted mode (cloud storage)</summary>
+
+```bash
+stackmemory onboard
+# Select "Hosted" when prompted
+# Or set DATABASE_URL environment variable
+```
+
+</details>
+
+<details>
+<summary>ChromaDB for semantic search</summary>
+
+```bash
+stackmemory init --chromadb
+# Prompts for ChromaDB API key
+```
+
+</details>
 
 Claude Code sessions automatically capture tool calls, maintain context across sessions, and sync with Linear when configured.
 
@@ -409,8 +455,13 @@ stackmemory skills rlm "Build, test, and publish version 2.0.0"
 ## CLI Commands
 
 ```bash
-# Core
-stackmemory init                          # Initialize project
+# Setup & Diagnostics
+stackmemory init                          # Initialize project (zero-config)
+stackmemory init --interactive            # Interactive setup with options
+stackmemory setup-mcp                     # Configure Claude Code MCP
+stackmemory doctor                        # Diagnose issues and suggest fixes
+
+# Status
 stackmemory status                        # Current status
 stackmemory progress                      # Recent activity
 
@@ -455,20 +506,33 @@ stackmemory mcp-server [--port 3001]
 - Hosted: **Private beta**
 - OSS mirror: **Production ready**
 - MCP integration: **Stable**
-- CLI: **v0.5.30** - Full task, context, Linear, and storage management
+- CLI: **v0.5.40** - Zero-config setup, diagnostics, full task/context/Linear management
 - Two-tier storage: **Complete**
-- Test Suite: **396 tests passing**
+- Test Suite: **490 tests passing**
 
 ---
 
 ## Changelog
+
+### v0.5.40 (2026-01-27)
+- **Zero-config onboarding**: `stackmemory init` now works without any prompts
+- **New `setup-mcp` command**: Auto-configures Claude Code MCP integration
+- **New `doctor` command**: Diagnoses issues and suggests fixes
+- **Interactive postinstall**: Asks for consent before modifying ~/.claude
+- **Better error messages**: Shows reason + fix + next step
+- 490 tests passing
+
+### v0.5.39 (2026-01-27)
+- **AsyncMutex**: Thread-safe Linear sync with stale lock detection
+- **Action timeout**: 60s timeout for SMS action execution
+- **Persistent rate limiting**: Survives server restarts
+- **Atomic file writes**: Prevents corruption on crash
 
 ### v0.5.30 (2026-01-26)
 - Standardized error handling with `IntegrationError`, `DatabaseError`, `ValidationError`
 - Adopted error classes across Linear integration (12 files)
 - Adopted error classes across database layer (6 files)
 - WhatsApp notifications with session ID and interactive options
-- 396 tests passing with improved code quality
 
 ### v0.5.28 (2026-01-25)
 - WhatsApp flag for claude-sm automatic notifications
