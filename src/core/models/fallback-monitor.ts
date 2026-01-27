@@ -129,25 +129,32 @@ export class FallbackMonitor {
         this.currentProvider = this.routerConfig.fallback?.provider || 'qwen';
       }
 
+      // Use 'inherit' for TTY to preserve interactive mode
+      // Claude CLI checks stdout TTY to decide interactive vs print mode
+      const isTTY = process.stdout.isTTY;
+
       currentProcess = spawn(command, args, {
-        stdio: ['inherit', 'pipe', 'pipe'],
+        stdio: isTTY ? 'inherit' : ['inherit', 'pipe', 'pipe'],
         env,
         cwd: options.cwd,
       });
 
-      // Monitor stdout
-      currentProcess.stdout?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        process.stdout.write(data);
-        this.checkForErrors(text);
-      });
+      // Only monitor output in non-TTY mode (fallback detection still works via exit code)
+      if (!isTTY) {
+        // Monitor stdout
+        currentProcess.stdout?.on('data', (data: Buffer) => {
+          const text = data.toString();
+          process.stdout.write(data);
+          this.checkForErrors(text);
+        });
 
-      // Monitor stderr
-      currentProcess.stderr?.on('data', (data: Buffer) => {
-        const text = data.toString();
-        process.stderr.write(data);
-        this.checkForErrors(text);
-      });
+        // Monitor stderr
+        currentProcess.stderr?.on('data', (data: Buffer) => {
+          const text = data.toString();
+          process.stderr.write(data);
+          this.checkForErrors(text);
+        });
+      }
 
       // Handle exit
       currentProcess.on('exit', (code, _signal) => {
