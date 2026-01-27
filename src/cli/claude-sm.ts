@@ -680,14 +680,17 @@ class ClaudeSM {
       i++;
     }
 
-    // Validate --print/-p requires a prompt argument
+    // Validate --print/-p requires a prompt argument (unless stdin is piped)
     const printIndex = claudeArgs.findIndex(
       (a) => a === '-p' || a === '--print'
     );
     if (printIndex !== -1) {
       const nextArg = claudeArgs[printIndex + 1];
-      // If no next arg, or next arg is a flag, error out
-      if (!nextArg || nextArg.startsWith('-')) {
+      const hasStdin = !process.stdin.isTTY; // stdin is piped
+      const hasPromptArg = nextArg && !nextArg.startsWith('-');
+
+      // Error only if no stdin AND no prompt argument
+      if (!hasStdin && !hasPromptArg) {
         console.error(
           chalk.red('Error: --print/-p requires a prompt argument.')
         );
