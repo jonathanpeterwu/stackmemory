@@ -6,7 +6,7 @@
  */
 
 import { config as loadDotenv } from 'dotenv';
-loadDotenv({ override: true });
+loadDotenv({ override: true, debug: false });
 
 import { spawn, execSync, execFileSync } from 'child_process';
 import * as fs from 'fs';

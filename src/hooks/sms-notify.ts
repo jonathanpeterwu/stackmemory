@@ -103,11 +103,11 @@ const DEFAULT_CONFIG: SMSConfig = {
 };
 
 export function loadSMSConfig(): SMSConfig {
-  // Load .env files (project, home, global)
-  loadDotenv({ path: join(process.cwd(), '.env') });
-  loadDotenv({ path: join(process.cwd(), '.env.local') });
-  loadDotenv({ path: join(homedir(), '.env') });
-  loadDotenv({ path: join(homedir(), '.stackmemory', '.env') });
+  // Load .env files (project, home, global) - suppress debug logs
+  loadDotenv({ path: join(process.cwd(), '.env'), debug: false });
+  loadDotenv({ path: join(process.cwd(), '.env.local'), debug: false });
+  loadDotenv({ path: join(homedir(), '.env'), debug: false });
+  loadDotenv({ path: join(homedir(), '.stackmemory', '.env'), debug: false });
 
   try {
     if (existsSync(CONFIG_PATH)) {
