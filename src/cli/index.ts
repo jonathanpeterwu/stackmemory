@@ -22,8 +22,8 @@ import { sharedContextLayer } from '../core/context/shared-context-layer.js';
 import { UpdateChecker } from '../core/utils/update-checker.js';
 import { ProgressTracker } from '../core/monitoring/progress-tracker.js';
 import { registerProjectCommands } from './commands/projects.js';
-import { registerLinearCommands } from './commands/linear.js';
 import { createSessionCommands } from './commands/session.js';
+import { isFeatureEnabled, isLocalOnly } from '../core/config/feature-flags.js';
 import { registerWorktreeCommands } from './commands/worktree.js';
 import { registerOnboardingCommand } from './commands/onboard.js';
 import { createTaskCommands } from './commands/tasks.js';
@@ -53,7 +53,6 @@ import { createShellCommand } from './commands/shell.js';
 import { createAPICommand } from './commands/api.js';
 import { createCleanupProcessesCommand } from './commands/cleanup-processes.js';
 import { createAutoBackgroundCommand } from './commands/auto-background.js';
-import { createSMSNotifyCommand } from './commands/sms-notify.js';
 import { createSettingsCommand } from './commands/settings.js';
 import { createRetrievalCommands } from './commands/retrieval.js';
 import { createDiscoveryCommands } from './commands/discovery.js';
@@ -69,7 +68,6 @@ import {
   enableChromaDB,
   getStorageModeDescription,
 } from '../core/config/storage-config.js';
-import { loadSMSConfig } from '../hooks/sms-notify.js';
 import { spawn } from 'child_process';
 import { homedir } from 'os';
 
@@ -86,7 +84,11 @@ UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
 
 // Auto-start webhook and ngrok if notifications are enabled
 async function startNotificationServices(): Promise<void> {
+  // Skip in local-only mode
+  if (isLocalOnly() || !isFeatureEnabled('whatsapp')) return;
+
   try {
+    const { loadSMSConfig } = await import('../hooks/sms-notify.js');
     const config = loadSMSConfig();
     if (!config.enabled) return;
 
@@ -644,8 +646,14 @@ registerDbCommands(program);
 registerProjectCommands(program);
 registerWorktreeCommands(program);
 
-// Register Linear integration commands
-registerLinearCommands(program);
+// Register Linear integration commands (lazy-loaded, optional)
+if (isFeatureEnabled('linear')) {
+  import('./commands/linear.js')
+    .then(({ registerLinearCommands }) => registerLinearCommands(program))
+    .catch(() => {
+      // Linear integration not available - silently skip
+    });
+}
 
 // Register session management commands
 program.addCommand(createSessionCommands());
@@ -673,8 +681,18 @@ program.addCommand(createShellCommand());
 program.addCommand(createAPICommand());
 program.addCommand(createCleanupProcessesCommand());
 program.addCommand(createAutoBackgroundCommand());
-program.addCommand(createSMSNotifyCommand());
 program.addCommand(createSettingsCommand());
+
+// Register WhatsApp/SMS commands (lazy-loaded, optional)
+if (isFeatureEnabled('whatsapp')) {
+  import('./commands/sms-notify.js')
+    .then(({ createSMSNotifyCommand }) =>
+      program.addCommand(createSMSNotifyCommand())
+    )
+    .catch(() => {
+      // WhatsApp integration not available - silently skip
+    });
+}
 program.addCommand(createRetrievalCommands());
 program.addCommand(createDiscoveryCommands());
 program.addCommand(createModelCommand());

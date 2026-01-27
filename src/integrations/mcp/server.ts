@@ -22,14 +22,20 @@ import { readFileSync, existsSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { execSync } from 'child_process';
 import { FrameManager, FrameType } from '../../core/context/index.js';
-import {
-  LinearTaskManager,
+import { logger } from '../../core/monitoring/logger.js';
+import { isFeatureEnabled } from '../../core/config/feature-flags.js';
+
+// Linear types - imported dynamically when needed
+type LinearTaskManager =
+  import('../../features/tasks/linear-task-manager.js').LinearTaskManager;
+type LinearAuthManager = import('../linear/auth.js').LinearAuthManager;
+type LinearSyncEngine = import('../linear/sync.js').LinearSyncEngine;
+
+// Re-export task types for handlers (these are just enums/types, not runtime deps)
+export {
   TaskPriority,
   TaskStatus,
 } from '../../features/tasks/linear-task-manager.js';
-import { LinearAuthManager, LinearOAuthSetup } from '../linear/auth.js';
-import { LinearSyncEngine, DEFAULT_SYNC_CONFIG } from '../linear/sync.js';
-import { logger } from '../../core/monitoring/logger.js';
 import { BrowserMCPIntegration } from '../../features/browser/browser-mcp.js';
 import { TraceDetector } from '../../core/trace/trace-detector.js';
 import { ToolCall, Trace } from '../../core/trace/types.js';
@@ -59,9 +65,9 @@ class LocalStackMemoryMCP {
   private db: Database.Database;
   private projectRoot: string;
   private frameManager: FrameManager;
-  private taskStore: LinearTaskManager;
-  private linearAuthManager: LinearAuthManager;
-  private linearSync: LinearSyncEngine;
+  private taskStore: LinearTaskManager | null = null;
+  private linearAuthManager: LinearAuthManager | null = null;
+  private linearSync: LinearSyncEngine | null = null;
   private projectId: string;
   private contexts: Map<string, any> = new Map();
   private browserMCP: BrowserMCPIntegration;
@@ -88,16 +94,8 @@ class LocalStackMemoryMCP {
     // Initialize frame manager
     this.frameManager = new FrameManager(this.db, this.projectId);
 
-    // Initialize task store
-    this.taskStore = new LinearTaskManager(this.projectRoot, this.db);
-
-    // Initialize Linear integration
-    this.linearAuthManager = new LinearAuthManager(this.projectRoot);
-    this.linearSync = new LinearSyncEngine(
-      this.taskStore,
-      this.linearAuthManager,
-      DEFAULT_SYNC_CONFIG
-    );
+    // Initialize Linear integration (optional - lazy loaded)
+    this.initLinearIfEnabled();
 
     // Initialize MCP server
     this.server = new Server(
@@ -159,6 +157,36 @@ class LocalStackMemoryMCP {
       dir = dirname(dir);
     }
     return process.cwd();
+  }
+
+  /**
+   * Initialize Linear integration if enabled and credentials available
+   */
+  private async initLinearIfEnabled(): Promise<void> {
+    if (!isFeatureEnabled('linear')) {
+      logger.info('Linear integration disabled (no API key or LOCAL mode)');
+      return;
+    }
+
+    try {
+      const { LinearTaskManager } =
+        await import('../../features/tasks/linear-task-manager.js');
+      const { LinearAuthManager } = await import('../linear/auth.js');
+      const { LinearSyncEngine, DEFAULT_SYNC_CONFIG } =
+        await import('../linear/sync.js');
+
+      this.taskStore = new LinearTaskManager(this.projectRoot, this.db);
+      this.linearAuthManager = new LinearAuthManager(this.projectRoot);
+      this.linearSync = new LinearSyncEngine(
+        this.taskStore,
+        this.linearAuthManager,
+        DEFAULT_SYNC_CONFIG
+      );
+
+      logger.info('Linear integration initialized');
+    } catch (error) {
+      logger.warn('Failed to initialize Linear integration', { error });
+    }
   }
 
   private initDB() {

@@ -153,16 +153,59 @@ export class AnthropicLLMProvider implements LLMProvider {
 }
 
 /**
+ * Local fallback LLM provider - uses heuristic summarization without external APIs
+ * This ensures StackMemory works in LOCAL_ONLY mode
+ */
+export class LocalFallbackProvider implements LLMProvider {
+  async analyze(prompt: string, maxTokens: number): Promise<string> {
+    // Extract content from prompt and create a heuristic summary
+    const lines = prompt.split('\n').filter((l) => l.trim());
+    const contentStart = lines.findIndex((l) => l.includes('Content:'));
+
+    if (contentStart === -1 || lines.length < 3) {
+      return 'Context summary not available (local mode)';
+    }
+
+    // Extract key information heuristically
+    const content = lines.slice(contentStart + 1).join('\n');
+    const sentences = content
+      .split(/[.!?]+/)
+      .filter((s) => s.trim().length > 10);
+
+    // Take first few sentences up to maxTokens (rough approximation: 4 chars = 1 token)
+    const maxChars = maxTokens * 4;
+    let summary = '';
+    for (const sentence of sentences.slice(0, 5)) {
+      if (summary.length + sentence.length > maxChars) break;
+      summary += sentence.trim() + '. ';
+    }
+
+    return (
+      summary.trim() || 'Context available (use LLM API for detailed analysis)'
+    );
+  }
+}
+
+/**
  * Factory function to create an LLM provider based on environment
  */
 export function createLLMProvider(): LLMProvider | undefined {
+  // Check for local-only mode
+  if (
+    process.env['STACKMEMORY_LOCAL'] === 'true' ||
+    process.env['LOCAL_ONLY'] === 'true'
+  ) {
+    logger.info('LOCAL mode - using heuristic summarization');
+    return new LocalFallbackProvider();
+  }
+
   const apiKey = process.env['ANTHROPIC_API_KEY'];
 
   if (!apiKey) {
     logger.info(
       'No ANTHROPIC_API_KEY found, LLM retrieval will use heuristics'
     );
-    return undefined;
+    return new LocalFallbackProvider();
   }
 
   return new AnthropicLLMProvider({
