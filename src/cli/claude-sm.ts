@@ -680,6 +680,23 @@ class ClaudeSM {
       i++;
     }
 
+    // Validate --print/-p requires a prompt argument
+    const printIndex = claudeArgs.findIndex(
+      (a) => a === '-p' || a === '--print'
+    );
+    if (printIndex !== -1) {
+      const nextArg = claudeArgs[printIndex + 1];
+      // If no next arg, or next arg is a flag, error out
+      if (!nextArg || nextArg.startsWith('-')) {
+        console.error(
+          chalk.red('Error: --print/-p requires a prompt argument.')
+        );
+        console.log(chalk.gray('Usage: claude-smd -p "your prompt here"'));
+        console.log(chalk.gray('       echo "prompt" | claude-smd -p'));
+        process.exit(1);
+      }
+    }
+
     // Initialize tracing system if enabled
     if (this.config.tracingEnabled) {
       // Set up environment for tracing
