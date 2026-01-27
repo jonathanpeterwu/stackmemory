@@ -195,9 +195,9 @@ describe('Frame Manager - Circular Reference Detection', () => {
         frameManager.updateParentFrame(frameB, null);
       }).not.toThrow();
 
-      // Verify B is now a root
+      // Verify B is now a root (parent_frame_id is undefined for root frames)
       const updatedFrame = frameManager.getFrame(frameB);
-      expect(updatedFrame?.parent_frame_id).toBeNull();
+      expect(updatedFrame?.parent_frame_id).toBeUndefined();
     });
   });
 

@@ -8,6 +8,65 @@ import { Frame, Event, Anchor } from './frame-types.js';
 import { logger } from '../monitoring/logger.js';
 import { DatabaseError, ErrorCode } from '../errors/index.js';
 
+// Database row types for type-safe queries
+interface FrameRow {
+  frame_id: string;
+  run_id: string;
+  project_id: string;
+  parent_frame_id: string | null;
+  depth: number;
+  type: string;
+  name: string;
+  state: string;
+  inputs: string;
+  outputs: string;
+  digest_text: string | null;
+  digest_json: string;
+  created_at: number;
+  closed_at: number | null;
+}
+
+interface EventRow {
+  event_id: string;
+  frame_id: string;
+  run_id: string;
+  seq: number;
+  event_type: string;
+  payload: string;
+  ts: number;
+}
+
+interface AnchorRow {
+  anchor_id: string;
+  frame_id: string;
+  type: string;
+  text: string;
+  priority: number;
+  metadata: string;
+  created_at: number;
+}
+
+interface CountRow {
+  count: number;
+}
+
+interface MaxSeqRow {
+  max_seq: number | null;
+}
+
+// Safe JSON parse with fallback
+function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
+  if (!json) return fallback;
+  try {
+    return JSON.parse(json) as T;
+  } catch {
+    logger.warn('Failed to parse JSON, using fallback', {
+      json: json.substring(0, 100),
+    });
+    return fallback;
+  }
+}
+
 export class FrameDatabase {
   constructor(private db: Database.Database) {}
 
@@ -154,16 +213,20 @@ export class FrameDatabase {
     try {
       const row = this.db
         .prepare('SELECT * FROM frames WHERE frame_id = ?')
-        .get(frameId) as any;
+        .get(frameId) as FrameRow | undefined;
 
       if (!row) return undefined;
 
       return {
         ...row,
-        inputs: JSON.parse(row.inputs || '{}'),
-        outputs: JSON.parse(row.outputs || '{}'),
-        digest_json: JSON.parse(row.digest_json || '{}'),
-      };
+        parent_frame_id: row.parent_frame_id ?? undefined,
+        inputs: safeJsonParse<Record<string, unknown>>(row.inputs, {}),
+        outputs: safeJsonParse<Record<string, unknown>>(row.outputs, {}),
+        digest_json: safeJsonParse<Record<string, unknown>>(
+          row.digest_json,
+          {}
+        ),
+      } as Frame;
     } catch (error: unknown) {
       logger.warn(`Failed to get frame: ${frameId}`, { error });
       return undefined;
@@ -176,7 +239,7 @@ export class FrameDatabase {
   updateFrame(frameId: string, updates: Partial<Frame>): void {
     try {
       const setClauses: string[] = [];
-      const values: any[] = [];
+      const values: (string | number | null)[] = [];
 
       if (updates.state !== undefined) {
         setClauses.push('state = ?');
@@ -252,14 +315,18 @@ export class FrameDatabase {
         : 'SELECT * FROM frames WHERE project_id = ? ORDER BY created_at';
 
       const params = state ? [projectId, state] : [projectId];
-      const rows = this.db.prepare(query).all(...params) as any[];
+      const rows = this.db.prepare(query).all(...params) as FrameRow[];
 
-      return rows.map((row: any) => ({
+      return rows.map((row) => ({
         ...row,
-        inputs: JSON.parse(row.inputs || '{}'),
-        outputs: JSON.parse(row.outputs || '{}'),
-        digest_json: JSON.parse(row.digest_json || '{}'),
-      }));
+        parent_frame_id: row.parent_frame_id ?? undefined,
+        inputs: safeJsonParse<Record<string, unknown>>(row.inputs, {}),
+        outputs: safeJsonParse<Record<string, unknown>>(row.outputs, {}),
+        digest_json: safeJsonParse<Record<string, unknown>>(
+          row.digest_json,
+          {}
+        ),
+      })) as Frame[];
     } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get frames for project: ${projectId}`,
@@ -304,12 +371,15 @@ export class FrameDatabase {
       // Return the created event with timestamp
       const createdEvent = this.db
         .prepare('SELECT * FROM events WHERE event_id = ?')
-        .get(event.event_id) as any;
+        .get(event.event_id) as EventRow;
 
       return {
         ...createdEvent,
-        payload: JSON.parse(createdEvent.payload),
-      };
+        payload: safeJsonParse<Record<string, unknown>>(
+          createdEvent.payload,
+          {}
+        ),
+      } as Event;
     } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to insert event: ${event.event_id}`,
@@ -334,12 +404,12 @@ export class FrameDatabase {
         : 'SELECT * FROM events WHERE frame_id = ? ORDER BY seq ASC';
 
       const params = limit ? [frameId, limit] : [frameId];
-      const rows = this.db.prepare(query).all(...params) as any[];
+      const rows = this.db.prepare(query).all(...params) as EventRow[];
 
-      return rows.map((row: any) => ({
+      return rows.map((row) => ({
         ...row,
-        payload: JSON.parse(row.payload),
-      }));
+        payload: safeJsonParse<Record<string, unknown>>(row.payload, {}),
+      })) as Event[];
     } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get events for frame: ${frameId}`,
@@ -357,7 +427,7 @@ export class FrameDatabase {
     try {
       const result = this.db
         .prepare('SELECT MAX(seq) as max_seq FROM events WHERE frame_id = ?')
-        .get(frameId) as { max_seq: number | null };
+        .get(frameId) as MaxSeqRow;
 
       return (result.max_seq || 0) + 1;
     } catch (error: unknown) {
@@ -404,12 +474,15 @@ export class FrameDatabase {
       // Return the created anchor with timestamp
       const createdAnchor = this.db
         .prepare('SELECT * FROM anchors WHERE anchor_id = ?')
-        .get(anchor.anchor_id) as any;
+        .get(anchor.anchor_id) as AnchorRow;
 
       return {
         ...createdAnchor,
-        metadata: JSON.parse(createdAnchor.metadata || '{}'),
-      };
+        metadata: safeJsonParse<Record<string, unknown>>(
+          createdAnchor.metadata,
+          {}
+        ),
+      } as Anchor;
     } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to insert anchor: ${anchor.anchor_id}`,
@@ -433,12 +506,12 @@ export class FrameDatabase {
         .prepare(
           'SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC'
         )
-        .all(frameId) as any[];
+        .all(frameId) as AnchorRow[];
 
-      return rows.map((row: any) => ({
+      return rows.map((row) => ({
         ...row,
-        metadata: JSON.parse(row.metadata || '{}'),
-      }));
+        metadata: safeJsonParse<Record<string, unknown>>(row.metadata, {}),
+      })) as Anchor[];
     } catch (error: unknown) {
       throw new DatabaseError(
         `Failed to get anchors for frame: ${frameId}`,
@@ -477,16 +550,16 @@ export class FrameDatabase {
     try {
       const frameCount = this.db
         .prepare('SELECT COUNT(*) as count FROM frames')
-        .get() as { count: number };
+        .get() as CountRow;
       const eventCount = this.db
         .prepare('SELECT COUNT(*) as count FROM events')
-        .get() as { count: number };
+        .get() as CountRow;
       const anchorCount = this.db
         .prepare('SELECT COUNT(*) as count FROM anchors')
-        .get() as { count: number };
+        .get() as CountRow;
       const activeFrames = this.db
         .prepare("SELECT COUNT(*) as count FROM frames WHERE state = 'active'")
-        .get() as { count: number };
+        .get() as CountRow;
 
       return {
         totalFrames: frameCount.count,

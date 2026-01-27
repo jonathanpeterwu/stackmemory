@@ -62,7 +62,7 @@ export class RefactoredFrameManager {
       sessionId: config?.sessionId || uuidv4(),
       maxStackDepth: config?.maxStackDepth || 50,
     };
-    
+
     // Set max frame depth from config if provided
     this.maxFrameDepth = config?.maxStackDepth || DEFAULT_MAX_DEPTH;
 
@@ -173,7 +173,7 @@ export class RefactoredFrameManager {
     // Determine parent frame
     const resolvedParentId =
       frameOptions.parentFrameId || this.frameStack.getCurrentFrameId();
-    
+
     // Get depth from parent frame, not from stack position
     let depth = 0;
     if (resolvedParentId) {
@@ -514,26 +514,62 @@ export class RefactoredFrameManager {
   }
 
   /**
-   * Close all child frames recursively
+   * Close all child frames recursively with depth limit to prevent stack overflow
    */
-  private closeChildFrames(parentFrameId: string): void {
+  private closeChildFrames(parentFrameId: string, depth: number = 0): void {
+    // Prevent stack overflow with depth limit
+    if (depth > this.maxFrameDepth) {
+      logger.warn('closeChildFrames depth limit exceeded', {
+        parentFrameId,
+        depth,
+        maxDepth: this.maxFrameDepth,
+      });
+      return;
+    }
+
     try {
       const activeFrames = this.frameDb.getFramesByProject(
         this.projectId,
         'active'
       );
       const childFrames = activeFrames.filter(
-        (f: any) => f.parent_frame_id === parentFrameId
+        (f) => f.parent_frame_id === parentFrameId
       );
 
       for (const childFrame of childFrames) {
         if (this.frameStack.isFrameActive(childFrame.frame_id)) {
-          this.closeFrame(childFrame.frame_id);
+          // Close child's children first (depth-first)
+          this.closeChildFrames(childFrame.frame_id, depth + 1);
+          // Then close the child frame directly without recursing through closeFrame
+          this.closeFrameDirectly(childFrame.frame_id);
         }
       }
     } catch (error: unknown) {
       logger.warn('Failed to close child frames', { parentFrameId, error });
     }
+  }
+
+  /**
+   * Close a frame directly without triggering child frame closure
+   * Used by closeChildFrames to avoid double recursion
+   */
+  private closeFrameDirectly(frameId: string): void {
+    const frame = this.frameDb.getFrame(frameId);
+    if (!frame || frame.state === 'closed') return;
+
+    const digest = this.digestGenerator.generateDigest(frameId);
+
+    this.frameDb.updateFrame(frameId, {
+      state: 'closed',
+      outputs: digest.structured,
+      digest_text: digest.text,
+      digest_json: digest.structured,
+      closed_at: Math.floor(Date.now() / 1000),
+    });
+
+    this.frameStack.popFrame(frameId);
+
+    logger.debug('Closed child frame directly', { frameId });
   }
 
   /**
@@ -555,19 +591,19 @@ export class RefactoredFrameManager {
   /**
    * Extract constraints from frame inputs
    */
-  extractConstraints(inputs: Record<string, any>): string[] {
+  extractConstraints(inputs: Record<string, unknown>): string[] {
     const constraints: string[] = [];
 
     if (inputs.constraints && Array.isArray(inputs.constraints)) {
-      constraints.push(...inputs.constraints);
+      constraints.push(...(inputs.constraints as string[]));
     }
 
     if (inputs.requirements && Array.isArray(inputs.requirements)) {
-      constraints.push(...inputs.requirements);
+      constraints.push(...(inputs.requirements as string[]));
     }
 
     if (inputs.limitations && Array.isArray(inputs.limitations)) {
-      constraints.push(...inputs.limitations);
+      constraints.push(...(inputs.limitations as string[]));
     }
 
     return constraints;
@@ -589,7 +625,7 @@ export class RefactoredFrameManager {
 
     // Start from the proposed parent and traverse up the hierarchy
     let currentId: string | undefined = parentFrameId;
-    
+
     while (currentId) {
       // If we've seen this frame before, we have a cycle
       if (visited.has(currentId)) {
@@ -636,7 +672,10 @@ export class RefactoredFrameManager {
    * @param frameId - The frame to update
    * @param newParentFrameId - The new parent frame ID (null to make it a root frame)
    */
-  public updateParentFrame(frameId: string, newParentFrameId: string | null): void {
+  public updateParentFrame(
+    frameId: string,
+    newParentFrameId: string | null
+  ): void {
     // Check if frame exists
     const frame = this.frameDb.getFrame(frameId);
     if (!frame) {
@@ -723,7 +762,7 @@ export class RefactoredFrameManager {
     const errors: string[] = [];
     const warnings: string[] = [];
     const allFrames = this.frameDb.getFramesByProject(this.projectId);
-    
+
     // Check each frame for depth violations
     for (const frame of allFrames) {
       if (frame.depth > this.maxFrameDepth) {
@@ -731,7 +770,7 @@ export class RefactoredFrameManager {
           `Frame ${frame.frame_id} exceeds max depth: ${frame.depth} > ${this.maxFrameDepth}`
         );
       }
-      
+
       // Warn about deep frames approaching the limit
       if (frame.depth > this.maxFrameDepth * 0.8) {
         warnings.push(
@@ -739,42 +778,42 @@ export class RefactoredFrameManager {
         );
       }
     }
-    
+
     // Check for cycles by traversing from each root
-    const rootFrames = allFrames.filter(f => !f.parent_frame_id);
+    const rootFrames = allFrames.filter((f) => !f.parent_frame_id);
     const visited = new Set<string>();
     const visiting = new Set<string>();
-    
+
     const checkForCycle = (frameId: string): boolean => {
       if (visiting.has(frameId)) {
         errors.push(`Cycle detected involving frame ${frameId}`);
         return true;
       }
-      
+
       if (visited.has(frameId)) {
         return false;
       }
-      
+
       visiting.add(frameId);
-      
+
       // Check all children
-      const children = allFrames.filter(f => f.parent_frame_id === frameId);
+      const children = allFrames.filter((f) => f.parent_frame_id === frameId);
       for (const child of children) {
         if (checkForCycle(child.frame_id)) {
           return true;
         }
       }
-      
+
       visiting.delete(frameId);
       visited.add(frameId);
       return false;
     };
-    
+
     // Check from each root
     for (const root of rootFrames) {
       checkForCycle(root.frame_id);
     }
-    
+
     return {
       isValid: errors.length === 0,
       errors,

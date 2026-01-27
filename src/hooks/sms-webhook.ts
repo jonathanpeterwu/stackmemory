@@ -85,10 +85,23 @@ function verifyTwilioSignature(
 ): boolean {
   const authToken = process.env['TWILIO_AUTH_TOKEN'];
   if (!authToken) {
-    console.warn(
-      '[sms-webhook] TWILIO_AUTH_TOKEN not set, skipping signature verification'
+    // Only allow bypass in explicit development mode
+    const isDev =
+      process.env['NODE_ENV'] === 'development' ||
+      process.env['SKIP_TWILIO_VERIFICATION'] === 'true';
+
+    if (isDev) {
+      console.warn(
+        '[sms-webhook] TWILIO_AUTH_TOKEN not set, skipping verification (dev mode)'
+      );
+      return true;
+    }
+
+    // In production, reject requests without auth token configured
+    console.error(
+      '[sms-webhook] TWILIO_AUTH_TOKEN not set - rejecting request in production'
     );
-    return true; // Allow in development, but log warning
+    return false;
   }
 
   // Build the data string (URL + sorted params)

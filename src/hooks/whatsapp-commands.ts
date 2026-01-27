@@ -18,37 +18,67 @@ import {
 } from './whatsapp-sync.js';
 import { sendNotification } from './sms-notify.js';
 
-// ReDoS protection: max execution time for regex test (ms)
-const REGEX_TIMEOUT_MS = 100;
 // Max input length for regex matching to prevent catastrophic backtracking
 const MAX_REGEX_INPUT_LENGTH = 200;
 
+// Dangerous regex patterns that can cause ReDoS (catastrophic backtracking)
+// These patterns have nested quantifiers or overlapping alternatives
+const DANGEROUS_PATTERNS = [
+  /(\+|\*|\?)\s*(\+|\*|\?)/, // Nested quantifiers like .+* or .*+
+  /\(\?[^)]*\)\s*[+*]/, // Quantified groups with + or *
+  /\[[^\]]*\]\s*[+*]\s*[+*]/, // Character classes with nested quantifiers
+  /(\.\*|\.\+)\s*(\.\*|\.\+)/, // Overlapping .* or .+
+  /\(\[[^\]]+\]\+\)\+/, // Nested + with character class
+  /\(.*\+\).*\+/, // Nested + quantifiers
+];
+
+/**
+ * Check if a regex pattern might be vulnerable to ReDoS
+ * Returns true if the pattern appears safe, false if potentially dangerous
+ */
+function isPatternSafe(pattern: string): boolean {
+  // Check against known dangerous patterns
+  for (const dangerous of DANGEROUS_PATTERNS) {
+    if (dangerous.test(pattern)) {
+      console.warn(
+        `[whatsapp-commands] Potentially dangerous regex pattern blocked: ${pattern}`
+      );
+      return false;
+    }
+  }
+
+  // Additional heuristics: limit pattern complexity
+  const quantifierCount = (pattern.match(/[+*?]/g) || []).length;
+  const groupCount = (pattern.match(/\(/g) || []).length;
+
+  // If too many quantifiers or groups, consider it risky
+  if (quantifierCount > 5 || groupCount > 3) {
+    console.warn(
+      `[whatsapp-commands] Complex regex pattern blocked: ${pattern} (${quantifierCount} quantifiers, ${groupCount} groups)`
+    );
+    return false;
+  }
+
+  return true;
+}
+
 /**
  * Safely test a regex pattern against input with ReDoS protection
- * Returns false if pattern is invalid, times out, or doesn't match
+ * Pre-validates the pattern for dangerous constructs before testing
+ * Returns false if pattern is dangerous, invalid, or doesn't match
  */
 function safeRegexTest(pattern: string, input: string): boolean {
+  // Pre-validate pattern for ReDoS safety BEFORE running it
+  if (!isPatternSafe(pattern)) {
+    return false;
+  }
+
   // Truncate input to prevent catastrophic backtracking
   const safeInput = input.slice(0, MAX_REGEX_INPUT_LENGTH);
 
   try {
     const regex = new RegExp(pattern);
-
-    // Use a simple timeout approach - run in try/catch with limited input
-    // For true async timeout, we'd need Worker threads which adds complexity
-    const startTime = Date.now();
-    const result = regex.test(safeInput);
-    const elapsed = Date.now() - startTime;
-
-    // Log warning if regex took too long (could indicate ReDoS attempt)
-    if (elapsed > REGEX_TIMEOUT_MS) {
-      console.warn(
-        `[whatsapp-commands] Slow regex detected: ${pattern} took ${elapsed}ms`
-      );
-      return false;
-    }
-
-    return result;
+    return regex.test(safeInput);
   } catch {
     // Invalid regex pattern
     console.warn(`[whatsapp-commands] Invalid regex pattern: ${pattern}`);

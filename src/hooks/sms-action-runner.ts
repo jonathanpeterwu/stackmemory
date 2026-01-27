@@ -15,6 +15,64 @@ import { ActionQueueSchema, parseConfigSafe } from './schemas.js';
 import { LinearClient } from '../integrations/linear/client.js';
 import { LinearAuthManager } from '../integrations/linear/auth.js';
 
+/**
+ * Parse a command string into an array of arguments, respecting quotes
+ * Handles single quotes, double quotes, and escaped characters
+ *
+ * Examples:
+ *   'echo "hello world"' -> ['echo', 'hello world']
+ *   "git commit -m 'fix bug'" -> ['git', 'commit', '-m', 'fix bug']
+ *   'npm run build' -> ['npm', 'run', 'build']
+ */
+function parseCommandArgs(command: string): string[] {
+  const args: string[] = [];
+  let current = '';
+  let inSingleQuote = false;
+  let inDoubleQuote = false;
+  let escaped = false;
+
+  for (let i = 0; i < command.length; i++) {
+    const char = command[i];
+
+    if (escaped) {
+      current += char;
+      escaped = false;
+      continue;
+    }
+
+    if (char === '\\' && !inSingleQuote) {
+      escaped = true;
+      continue;
+    }
+
+    if (char === "'" && !inDoubleQuote) {
+      inSingleQuote = !inSingleQuote;
+      continue;
+    }
+
+    if (char === '"' && !inSingleQuote) {
+      inDoubleQuote = !inDoubleQuote;
+      continue;
+    }
+
+    if (char === ' ' && !inSingleQuote && !inDoubleQuote) {
+      if (current.length > 0) {
+        args.push(current);
+        current = '';
+      }
+      continue;
+    }
+
+    current += char;
+  }
+
+  if (current.length > 0) {
+    args.push(current);
+  }
+
+  return args;
+}
+
 // Allowlist of safe action patterns
 const SAFE_ACTION_PATTERNS: Array<{
   pattern: RegExp;
@@ -260,8 +318,12 @@ export async function executeActionSafe(
   try {
     console.log(`[sms-action] Executing safe action: ${action}`);
 
-    // Parse the action into command and args
-    const parts = action.split(' ');
+    // Parse the action into command and args, respecting quotes
+    const parts = parseCommandArgs(action);
+    if (parts.length === 0) {
+      return { success: false, error: 'Empty command' };
+    }
+
     const cmd = parts[0];
     const args = parts.slice(1);
 

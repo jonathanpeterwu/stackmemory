@@ -140,8 +140,8 @@ export class FrameStack {
    */
   getStackFrames(): Frame[] {
     return this.activeStack
-      .map((frameId: any) => this.frameDb.getFrame(frameId))
-      .filter(Boolean) as Frame[];
+      .map((frameId) => this.frameDb.getFrame(frameId))
+      .filter((f): f is Frame => f !== undefined);
   }
 
   /**
@@ -149,8 +149,8 @@ export class FrameStack {
    */
   getHotStackContext(maxEvents: number = 20): FrameContext[] {
     return this.activeStack
-      .map((frameId: any) => this.buildFrameContext(frameId, maxEvents))
-      .filter(Boolean) as FrameContext[];
+      .map((frameId) => this.buildFrameContext(frameId, maxEvents))
+      .filter((ctx): ctx is FrameContext => ctx !== null);
   }
 
   /**
@@ -303,11 +303,11 @@ export class FrameStack {
   /**
    * Extract constraints from frame inputs
    */
-  private extractConstraints(inputs: Record<string, any>): string[] {
+  private extractConstraints(inputs: Record<string, unknown>): string[] {
     const constraints: string[] = [];
 
     if (inputs.constraints && Array.isArray(inputs.constraints)) {
-      constraints.push(...inputs.constraints);
+      constraints.push(...(inputs.constraints as string[]));
     }
 
     return constraints;
@@ -316,12 +316,13 @@ export class FrameStack {
   /**
    * Extract active artifacts from events
    */
-  private extractActiveArtifacts(events: any[]): string[] {
+  private extractActiveArtifacts(events: Event[]): string[] {
     const artifacts: string[] = [];
 
     for (const event of events) {
-      if (event.event_type === 'artifact' && event.payload?.path) {
-        artifacts.push(event.payload.path);
+      const payload = event.payload as Record<string, unknown>;
+      if (event.event_type === 'artifact' && payload?.path) {
+        artifacts.push(payload.path as string);
       }
     }
 
@@ -350,7 +351,7 @@ export class FrameStack {
 
     // Find root frames (no parent or parent not in active set)
     const rootFrames = frames.filter(
-      (f: any) => !f.parent_frame_id || !frameMap.has(f.parent_frame_id)
+      (f) => !f.parent_frame_id || !frameMap.has(f.parent_frame_id)
     );
 
     if (rootFrames.length === 0) {
@@ -360,13 +361,13 @@ export class FrameStack {
 
     if (rootFrames.length > 1) {
       logger.warn('Multiple root frames found, using most recent', {
-        rootFrames: rootFrames.map((f: any) => f.frame_id),
+        rootFrames: rootFrames.map((f) => f.frame_id),
       });
     }
 
     // Build stack from root to leaves
     const stack: string[] = [];
-    let currentFrame = rootFrames.sort(
+    let currentFrame: Frame | undefined = rootFrames.sort(
       (a, b) => a.created_at - b.created_at
     )[0];
 
@@ -374,9 +375,8 @@ export class FrameStack {
       stack.push(currentFrame.frame_id);
 
       // Find child frame
-      const childFrame = frames.find(
-        (f: any) => f.parent_frame_id === currentFrame.frame_id
-      );
+      const parentId = currentFrame.frame_id;
+      const childFrame = frames.find((f) => f.parent_frame_id === parentId);
       if (childFrame) {
         currentFrame = childFrame;
       } else {
