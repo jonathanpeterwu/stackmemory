@@ -54,6 +54,11 @@ interface MaxSeqRow {
   max_seq: number | null;
 }
 
+// Default limits to prevent unbounded queries
+export const DEFAULT_FRAME_LIMIT = 1000;
+export const DEFAULT_EVENT_LIMIT = 500;
+export const DEFAULT_ANCHOR_LIMIT = 200;
+
 // Safe JSON parse with fallback
 function safeJsonParse<T>(json: string | null | undefined, fallback: T): T {
   if (!json) return fallback;
@@ -308,13 +313,17 @@ export class FrameDatabase {
   /**
    * Get frames by project and state
    */
-  getFramesByProject(projectId: string, state?: 'active' | 'closed'): Frame[] {
+  getFramesByProject(
+    projectId: string,
+    state?: 'active' | 'closed',
+    limit: number = DEFAULT_FRAME_LIMIT
+  ): Frame[] {
     try {
       const query = state
-        ? 'SELECT * FROM frames WHERE project_id = ? AND state = ? ORDER BY created_at'
-        : 'SELECT * FROM frames WHERE project_id = ? ORDER BY created_at';
+        ? 'SELECT * FROM frames WHERE project_id = ? AND state = ? ORDER BY created_at LIMIT ?'
+        : 'SELECT * FROM frames WHERE project_id = ? ORDER BY created_at LIMIT ?';
 
-      const params = state ? [projectId, state] : [projectId];
+      const params = state ? [projectId, state, limit] : [projectId, limit];
       const rows = this.db.prepare(query).all(...params) as FrameRow[];
 
       return rows.map((row) => ({
@@ -397,13 +406,14 @@ export class FrameDatabase {
   /**
    * Get events for a frame
    */
-  getFrameEvents(frameId: string, limit?: number): Event[] {
+  getFrameEvents(
+    frameId: string,
+    limit: number = DEFAULT_EVENT_LIMIT
+  ): Event[] {
     try {
-      const query = limit
-        ? 'SELECT * FROM events WHERE frame_id = ? ORDER BY seq DESC LIMIT ?'
-        : 'SELECT * FROM events WHERE frame_id = ? ORDER BY seq ASC';
-
-      const params = limit ? [frameId, limit] : [frameId];
+      const query =
+        'SELECT * FROM events WHERE frame_id = ? ORDER BY seq DESC LIMIT ?';
+      const params = [frameId, limit];
       const rows = this.db.prepare(query).all(...params) as EventRow[];
 
       return rows.map((row) => ({
@@ -500,13 +510,16 @@ export class FrameDatabase {
   /**
    * Get anchors for a frame
    */
-  getFrameAnchors(frameId: string): Anchor[] {
+  getFrameAnchors(
+    frameId: string,
+    limit: number = DEFAULT_ANCHOR_LIMIT
+  ): Anchor[] {
     try {
       const rows = this.db
         .prepare(
-          'SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC'
+          'SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at ASC LIMIT ?'
         )
-        .all(frameId) as AnchorRow[];
+        .all(frameId, limit) as AnchorRow[];
 
       return rows.map((row) => ({
         ...row,
@@ -540,6 +553,34 @@ export class FrameDatabase {
         { frameId, operation: 'deleteFrame' },
         error instanceof Error ? error : undefined
       );
+    }
+  }
+
+  /**
+   * Count frames by project and state (without loading all data)
+   */
+  countFrames(projectId?: string, state?: 'active' | 'closed'): number {
+    try {
+      let query = 'SELECT COUNT(*) as count FROM frames';
+      const params: (string | undefined)[] = [];
+
+      if (projectId) {
+        query += ' WHERE project_id = ?';
+        params.push(projectId);
+        if (state) {
+          query += ' AND state = ?';
+          params.push(state);
+        }
+      } else if (state) {
+        query += ' WHERE state = ?';
+        params.push(state);
+      }
+
+      const result = this.db.prepare(query).get(...params) as CountRow;
+      return result.count;
+    } catch (error: unknown) {
+      logger.warn('Failed to count frames', { error, projectId, state });
+      return 0;
     }
   }
 
