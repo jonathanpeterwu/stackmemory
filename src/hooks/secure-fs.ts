@@ -3,12 +3,21 @@
  * Ensures config files have restricted permissions (0600)
  */
 
-import { writeFileSync, mkdirSync, chmodSync, existsSync } from 'fs';
-import { dirname } from 'path';
+import {
+  writeFileSync,
+  mkdirSync,
+  chmodSync,
+  existsSync,
+  renameSync,
+  unlinkSync,
+} from 'fs';
+import { dirname, join } from 'path';
+import { randomBytes } from 'crypto';
 
 /**
  * Write file with secure permissions (0600 - user read/write only)
- * Also ensures parent directory has 0700 permissions
+ * Uses atomic write pattern: write to temp file, then rename
+ * This prevents corruption if process crashes mid-write
  */
 export function writeFileSecure(filePath: string, data: string): void {
   const dir = dirname(filePath);
@@ -18,11 +27,29 @@ export function writeFileSecure(filePath: string, data: string): void {
     mkdirSync(dir, { recursive: true, mode: 0o700 });
   }
 
-  // Write file
-  writeFileSync(filePath, data);
+  // Generate temp file path in same directory (required for atomic rename)
+  const tempPath = join(dir, `.tmp-${randomBytes(8).toString('hex')}`);
 
-  // Set secure permissions (user read/write only)
-  chmodSync(filePath, 0o600);
+  try {
+    // Write to temp file first
+    writeFileSync(tempPath, data);
+
+    // Set secure permissions on temp file
+    chmodSync(tempPath, 0o600);
+
+    // Atomic rename (same filesystem, so this is atomic on POSIX)
+    renameSync(tempPath, filePath);
+  } catch (error) {
+    // Clean up temp file on failure
+    try {
+      if (existsSync(tempPath)) {
+        unlinkSync(tempPath);
+      }
+    } catch {
+      // Ignore cleanup errors
+    }
+    throw error;
+  }
 }
 
 /**

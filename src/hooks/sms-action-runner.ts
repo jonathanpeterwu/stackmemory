@@ -141,6 +141,12 @@ function isActionAllowed(action: string): boolean {
   });
 }
 
+export interface ActionResult {
+  success: boolean;
+  output?: string;
+  error?: string;
+}
+
 export interface PendingAction {
   id: string;
   promptId: string;

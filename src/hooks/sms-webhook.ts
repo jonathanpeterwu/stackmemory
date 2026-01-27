@@ -27,6 +27,7 @@ import {
   queueAction,
   executeActionSafe,
   cleanupOldActions,
+  type ActionResult,
 } from './sms-action-runner.js';
 import {
   isCommand,
@@ -56,16 +57,91 @@ const MAX_PHONE_LENGTH = 50; // WhatsApp format: whatsapp:+12345678901
 const MAX_BODY_SIZE = 50 * 1024; // 50KB max body
 const RATE_LIMIT_WINDOW_MS = 60 * 1000; // 1 minute
 const RATE_LIMIT_MAX_REQUESTS = 30; // 30 requests per minute per IP
+const ACTION_TIMEOUT_MS = 60000; // 60 second timeout for action execution
 
-// Rate limiting store (in production, use Redis)
-const rateLimitStore = new Map<string, { count: number; resetTime: number }>();
+/**
+ * Execute action with timeout to prevent hanging requests
+ */
+async function executeActionWithTimeout(
+  action: string,
+  response: string
+): Promise<ActionResult> {
+  return Promise.race([
+    executeActionSafe(action, response),
+    new Promise<ActionResult>((_, reject) =>
+      setTimeout(
+        () =>
+          reject(new Error(`Action timed out after ${ACTION_TIMEOUT_MS}ms`)),
+        ACTION_TIMEOUT_MS
+      )
+    ),
+  ]).catch((error) => ({
+    success: false,
+    error: error instanceof Error ? error.message : String(error),
+  }));
+}
+
+// Rate limiting store - persisted to disk to survive restarts
+const RATE_LIMIT_PATH = join(homedir(), '.stackmemory', 'rate-limits.json');
+
+interface RateLimitRecord {
+  count: number;
+  resetTime: number;
+}
+
+interface RateLimitStore {
+  [ip: string]: RateLimitRecord;
+}
+
+// In-memory cache with periodic persistence
+let rateLimitCache: RateLimitStore = {};
+let rateLimitCacheDirty = false;
+
+function loadRateLimits(): RateLimitStore {
+  try {
+    if (existsSync(RATE_LIMIT_PATH)) {
+      const data = JSON.parse(readFileSync(RATE_LIMIT_PATH, 'utf8'));
+      // Clean up expired entries on load
+      const now = Date.now();
+      const cleaned: RateLimitStore = {};
+      for (const [ip, record] of Object.entries(data)) {
+        const r = record as RateLimitRecord;
+        if (r.resetTime > now) {
+          cleaned[ip] = r;
+        }
+      }
+      return cleaned;
+    }
+  } catch {
+    // Use empty store on error
+  }
+  return {};
+}
+
+function saveRateLimits(): void {
+  if (!rateLimitCacheDirty) return;
+  try {
+    ensureSecureDir(join(homedir(), '.stackmemory'));
+    writeFileSecure(RATE_LIMIT_PATH, JSON.stringify(rateLimitCache));
+    rateLimitCacheDirty = false;
+  } catch {
+    // Ignore save errors - rate limiting is best-effort
+  }
+}
+
+// Persist rate limits periodically (every 30 seconds)
+setInterval(saveRateLimits, 30000);
+
+// Load on startup
+rateLimitCache = loadRateLimits();
 
 function checkRateLimit(ip: string): boolean {
   const now = Date.now();
-  const record = rateLimitStore.get(ip);
+  const record = rateLimitCache[ip];
 
   if (!record || now > record.resetTime) {
-    rateLimitStore.set(ip, { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS });
+    rateLimitCache[ip] = { count: 1, resetTime: now + RATE_LIMIT_WINDOW_MS };
+    rateLimitCacheDirty = true;
     return true;
   }
 
@@ -74,6 +150,7 @@ function checkRateLimit(ip: string): boolean {
   }
 
   record.count++;
+  rateLimitCacheDirty = true;
   return true;
 }
 
@@ -298,11 +375,11 @@ export async function handleSMSWebhook(payload: TwilioWebhookPayload): Promise<{
   // Trigger notification to alert user/Claude
   triggerResponseNotification(result.response || Body);
 
-  // Execute action safely if present (no shell injection)
+  // Execute action safely if present (no shell injection, with timeout)
   if (result.action) {
     console.log(`[sms-webhook] Executing action: ${result.action}`);
 
-    const actionResult = await executeActionSafe(
+    const actionResult = await executeActionWithTimeout(
       result.action,
       result.response || Body
     );

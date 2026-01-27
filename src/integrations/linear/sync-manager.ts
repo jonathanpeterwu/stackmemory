@@ -8,6 +8,7 @@ import { logger } from '../../core/monitoring/logger.js';
 import { LinearSyncEngine, SyncConfig, SyncResult } from './sync.js';
 import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { LinearAuthManager } from './auth.js';
+import { AsyncMutex } from '../../core/utils/async-mutex.js';
 
 export interface SyncManagerConfig extends SyncConfig {
   autoSyncInterval?: number; // minutes
@@ -23,9 +24,7 @@ export class LinearSyncManager extends EventEmitter {
   private pendingSyncTimer?: NodeJS.Timeout;
   private config: SyncManagerConfig;
   private lastSyncTime: number = 0;
-  private syncInProgress: boolean = false;
-  private syncLockAcquired: number = 0; // Timestamp when lock was acquired
-  private readonly SYNC_LOCK_TIMEOUT = 300000; // 5 minutes max sync time
+  private syncMutex: AsyncMutex;
   private taskStore: LinearTaskManager;
 
   constructor(
@@ -36,6 +35,7 @@ export class LinearSyncManager extends EventEmitter {
   ) {
     super();
     this.taskStore = taskStore;
+    this.syncMutex = new AsyncMutex(300000); // 5 minute lock timeout
     this.config = {
       ...config,
       autoSyncInterval: config.autoSyncInterval || 15,
@@ -123,6 +123,7 @@ export class LinearSyncManager extends EventEmitter {
 
   /**
    * Perform a sync operation
+   * Uses mutex to prevent concurrent sync operations (thread-safe)
    */
   async performSync(
     trigger:
@@ -141,7 +142,9 @@ export class LinearSyncManager extends EventEmitter {
       };
     }
 
-    if (this.syncInProgress) {
+    // Try to acquire lock without waiting (non-blocking check)
+    const release = this.syncMutex.tryAcquire(`linear-sync-${trigger}`);
+    if (!release) {
       logger.warn(`Linear sync already in progress, skipping ${trigger} sync`);
       return {
         success: false,
@@ -151,27 +154,26 @@ export class LinearSyncManager extends EventEmitter {
       };
     }
 
-    // Check minimum time between syncs (avoid rapid fire)
-    const now = Date.now();
-    const timeSinceLastSync = now - this.lastSyncTime;
-    const minInterval = 10000; // 10 seconds minimum between syncs
-
-    if (trigger !== 'manual' && timeSinceLastSync < minInterval) {
-      logger.debug(
-        `Skipping ${trigger} sync, too soon since last sync (${timeSinceLastSync}ms ago)`
-      );
-      return {
-        success: false,
-        synced: { toLinear: 0, fromLinear: 0, updated: 0 },
-        conflicts: [],
-        errors: [
-          `Too soon since last sync (wait ${minInterval - timeSinceLastSync}ms)`,
-        ],
-      };
-    }
-
     try {
-      this.syncInProgress = true;
+      // Check minimum time between syncs (avoid rapid fire)
+      const now = Date.now();
+      const timeSinceLastSync = now - this.lastSyncTime;
+      const minInterval = 10000; // 10 seconds minimum between syncs
+
+      if (trigger !== 'manual' && timeSinceLastSync < minInterval) {
+        logger.debug(
+          `Skipping ${trigger} sync, too soon since last sync (${timeSinceLastSync}ms ago)`
+        );
+        return {
+          success: false,
+          synced: { toLinear: 0, fromLinear: 0, updated: 0 },
+          conflicts: [],
+          errors: [
+            `Too soon since last sync (wait ${minInterval - timeSinceLastSync}ms)`,
+          ],
+        };
+      }
+
       this.emit('sync:started', { trigger });
 
       logger.info(`Starting Linear sync (trigger: ${trigger})`);
@@ -205,7 +207,7 @@ export class LinearSyncManager extends EventEmitter {
       this.emit('sync:failed', { trigger, result, error });
       return result;
     } finally {
-      this.syncInProgress = false;
+      release(); // Always release the lock
     }
   }
 
@@ -262,7 +264,7 @@ export class LinearSyncManager extends EventEmitter {
 
     return {
       enabled: this.config.enabled,
-      syncInProgress: this.syncInProgress,
+      syncInProgress: this.syncMutex.isLocked(),
       lastSyncTime: this.lastSyncTime,
       nextSyncTime,
       config: this.config,
