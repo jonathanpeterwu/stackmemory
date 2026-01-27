@@ -717,10 +717,14 @@ program
 
 // Auto-detect current project on startup
 if (process.argv.length > 2) {
-  const manager = ProjectManager.getInstance();
-  manager.detectProject().catch(() => {
-    // Silently fail if not in a project directory
-  });
+  try {
+    const manager = ProjectManager.getInstance();
+    manager.detectProject().catch(() => {
+      // Silently fail if not in a project directory
+    });
+  } catch {
+    // Silently fail if database initialization fails (e.g., native module version mismatch)
+  }
 }
 
 // Only parse when running as main module (not when imported for testing)
