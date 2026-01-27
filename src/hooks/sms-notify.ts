@@ -298,7 +298,8 @@ function formatPromptMessage(payload: NotificationPayload): string {
     }
   }
 
-  return message;
+  // Always append session URL if available
+  return appendSessionUrl(message);
 }
 
 function getChannelNumbers(config: SMSConfig): {
@@ -536,6 +537,26 @@ function getSessionId(): string {
   );
 }
 
+// Get Claude session URL if available
+export function getSessionUrl(): string | undefined {
+  // Check for remote session URL in environment
+  const sessionId = process.env['CLAUDE_SESSION_ID'];
+  if (sessionId?.startsWith('session_')) {
+    return `https://claude.ai/code/${sessionId}`;
+  }
+  // Check for explicit URL
+  return process.env['CLAUDE_SESSION_URL'];
+}
+
+// Format message with session URL
+function appendSessionUrl(message: string): string {
+  const url = getSessionUrl();
+  if (url) {
+    return `${message}\n\nSession: ${url}`;
+  }
+  return message;
+}
+
 // Convenience functions for common notifications
 
 export async function notifyReviewReady(
@@ -655,4 +676,80 @@ export function cleanupExpiredPrompts(): number {
   }
 
   return removed;
+}
+
+// ============================================================================
+// SIMPLIFIED API - Use these for basic notifications
+// ============================================================================
+
+/**
+ * Send a simple status notification
+ * Always includes session URL if available
+ */
+export async function notify(
+  message: string
+): Promise<{ success: boolean; error?: string }> {
+  const sessionId = getSessionId();
+  return sendNotification({
+    type: 'custom',
+    title: `[Claude ${sessionId}]`,
+    message,
+  });
+}
+
+/**
+ * Send a notification with A/B choice (1 or 2)
+ * Always includes session URL if available
+ */
+export async function notifyChoice(
+  message: string,
+  optionA: string,
+  optionB: string
+): Promise<{ success: boolean; promptId?: string; error?: string }> {
+  const sessionId = getSessionId();
+  return sendNotification({
+    type: 'custom',
+    title: `[Claude ${sessionId}]`,
+    message,
+    prompt: {
+      type: 'options',
+      options: [
+        { key: '1', label: optionA },
+        { key: '2', label: optionB },
+      ],
+    },
+  });
+}
+
+/**
+ * Send a notification with Yes/No choice
+ * Always includes session URL if available
+ */
+export async function notifyYesNo(
+  message: string
+): Promise<{ success: boolean; promptId?: string; error?: string }> {
+  const sessionId = getSessionId();
+  return sendNotification({
+    type: 'custom',
+    title: `[Claude ${sessionId}]`,
+    message,
+    prompt: { type: 'yesno' },
+  });
+}
+
+/**
+ * Send step completion notification
+ * Always includes session URL if available
+ */
+export async function notifyStep(
+  step: string,
+  status: 'done' | 'failed' | 'waiting' = 'done'
+): Promise<{ success: boolean; error?: string }> {
+  const sessionId = getSessionId();
+  const symbol = status === 'done' ? '✓' : status === 'failed' ? '✗' : '⏳';
+  return sendNotification({
+    type: 'task_complete',
+    title: `[Claude ${sessionId}]`,
+    message: `${symbol} ${step}`,
+  });
 }

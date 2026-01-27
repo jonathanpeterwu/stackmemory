@@ -165,106 +165,44 @@ export function getActiveRemoteSessions(): RemoteSession[] {
   return loadRemoteSessions().sessions.filter((s) => s.status === 'active');
 }
 
-// Default supported commands
+// Default supported commands - simplified for notifications + choices
 const DEFAULT_COMMANDS: WhatsAppCommand[] = [
-  {
-    name: 'status',
-    description: 'Get current task/frame status',
-    enabled: true,
-    // No action - handled specially in-process
-  },
-  {
-    name: 'tasks',
-    description: 'List active tasks',
-    enabled: true,
-    // No action - handled specially in-process
-  },
-  {
-    name: 'context',
-    description: 'Get latest context digest',
-    enabled: true,
-    // No action - handled specially
-  },
-  {
-    name: 'approve',
-    description: 'Approve a PR (requires PR number)',
-    enabled: true,
-    requiresArg: true,
-    argPattern: '^\\d+$', // PR number must be numeric
-  },
-  {
-    name: 'merge',
-    description: 'Merge a PR (requires PR number)',
-    enabled: true,
-    requiresArg: true,
-    argPattern: '^\\d+$',
-  },
   {
     name: 'help',
     description: 'List available commands',
     enabled: true,
-    // No action - handled specially
   },
   {
-    name: 'sync',
-    description: 'Push current context to WhatsApp',
+    name: 'status',
+    description: 'Get current task/frame status',
     enabled: true,
-    // No action - handled specially
   },
   {
-    name: 'build',
-    description: 'Run npm build',
+    name: 'sessions',
+    description: 'List active remote sessions with URLs',
     enabled: true,
-    action: 'npm run build',
-  },
-  {
-    name: 'test',
-    description: 'Run tests',
-    enabled: true,
-    action: 'npm run test:run',
-  },
-  {
-    name: 'lint',
-    description: 'Run linter',
-    enabled: true,
-    action: 'npm run lint',
-  },
-  {
-    name: 'log',
-    description: 'Show recent git commits',
-    enabled: true,
-    action: 'git log --oneline -5',
-  },
-  {
-    name: 'diff',
-    description: 'Show git diff summary',
-    enabled: true,
-    action: 'git diff --stat',
-  },
-  {
-    name: 'pr',
-    description: 'List open PRs',
-    enabled: true,
-    action: 'gh pr list',
-  },
-  {
-    name: 'branch',
-    description: 'Show current branch',
-    enabled: true,
-    action: 'git branch --show-current',
   },
   {
     name: 'remote',
     description: 'Launch remote Claude session (requires task prompt)',
     enabled: true,
     requiresArg: true,
-    // No action - handled specially to capture session URL
+  },
+  // Disabled by default - can be enabled in config if needed
+  {
+    name: 'context',
+    description: 'Get latest context digest',
+    enabled: false,
   },
   {
-    name: 'sessions',
-    description: 'List active remote sessions',
-    enabled: true,
-    // No action - handled specially
+    name: 'sync',
+    description: 'Push current context to WhatsApp',
+    enabled: false,
+  },
+  {
+    name: 'tasks',
+    description: 'List active tasks',
+    enabled: false,
   },
 ];
 

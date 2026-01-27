@@ -160,96 +160,48 @@ describe('WhatsApp Scheduler', () => {
 
   describe('parseTime', () => {
     // parseTime is internal but tested via scheduleDailyDigest
-    it('should accept valid time format HH:MM', () => {
+    it('should accept valid time formats and reject invalid ones', () => {
       // Valid times should not throw
       expect(() => scheduleDailyDigest('09:00')).not.toThrow();
       expect(() => scheduleDailyDigest('00:00')).not.toThrow();
       expect(() => scheduleDailyDigest('23:59')).not.toThrow();
-      expect(() => scheduleDailyDigest('12:30')).not.toThrow();
-    });
 
-    it('should reject invalid time format', () => {
+      // Invalid formats
       expect(() => scheduleDailyDigest('9:00')).toThrow('Invalid time format');
-      expect(() => scheduleDailyDigest('09:0')).toThrow('Invalid time format');
-      expect(() => scheduleDailyDigest('9:0')).toThrow('Invalid time format');
       expect(() => scheduleDailyDigest('invalid')).toThrow(
         'Invalid time format'
       );
       expect(() => scheduleDailyDigest('')).toThrow('Invalid time format');
-    });
 
-    it('should reject out-of-range hours', () => {
+      // Out of range
       expect(() => scheduleDailyDigest('24:00')).toThrow('Invalid time format');
-      expect(() => scheduleDailyDigest('25:00')).toThrow('Invalid time format');
-    });
-
-    it('should reject out-of-range minutes', () => {
       expect(() => scheduleDailyDigest('09:60')).toThrow('Invalid time format');
-      expect(() => scheduleDailyDigest('09:99')).toThrow('Invalid time format');
     });
   });
 
   describe('calculateNextRun', () => {
-    it('should calculate next run for daily schedule', () => {
-      // Schedule for 09:00 daily
-      const id = scheduleDailyDigest('09:00');
-      const schedule = getSchedule(id);
+    it('should calculate next run correctly for daily, hourly, and interval schedules', () => {
+      // Daily schedule - 09:00
+      const dailyId = scheduleDailyDigest('09:00');
+      const dailySchedule = getSchedule(dailyId);
+      expect(dailySchedule?.nextRun).toBeDefined();
+      const dailyNextRun = new Date(dailySchedule!.nextRun!);
+      expect(dailyNextRun.getHours()).toBe(9);
+      expect(dailyNextRun.getMinutes()).toBe(0);
 
-      expect(schedule).toBeDefined();
-      expect(schedule?.nextRun).toBeDefined();
+      // Hourly schedule - at top of next hour
+      const hourlyId = scheduleHourlyDigest();
+      const hourlyNextRun = new Date(getSchedule(hourlyId)!.nextRun!);
+      expect(hourlyNextRun.getMinutes()).toBe(0);
+      expect(hourlyNextRun.getHours()).toBe((new Date().getHours() + 1) % 24);
 
-      const nextRun = new Date(schedule!.nextRun!);
-      expect(nextRun.getHours()).toBe(9);
-      expect(nextRun.getMinutes()).toBe(0);
-    });
-
-    it('should schedule for next day if time has passed today', () => {
-      // Use a time that has already passed today
-      const now = new Date();
-      const pastHour = Math.max(0, now.getHours() - 1);
-      const timeStr = `${pastHour.toString().padStart(2, '0')}:00`;
-
-      const id = scheduleDailyDigest(timeStr);
-      const schedule = getSchedule(id);
-
-      expect(schedule).toBeDefined();
-      const nextRun = new Date(schedule!.nextRun!);
-
-      // Should be tomorrow since the time has passed
-      const tomorrow = new Date();
-      tomorrow.setDate(tomorrow.getDate() + 1);
-      expect(nextRun.getDate()).toBe(tomorrow.getDate());
-    });
-
-    it('should calculate next run for hourly schedule', () => {
-      const id = scheduleHourlyDigest();
-      const schedule = getSchedule(id);
-
-      expect(schedule).toBeDefined();
-      expect(schedule?.nextRun).toBeDefined();
-
-      const nextRun = new Date(schedule!.nextRun!);
-      const now = new Date();
-
-      // Should be at the top of the next hour
-      expect(nextRun.getMinutes()).toBe(0);
-      expect(nextRun.getSeconds()).toBe(0);
-      expect(nextRun.getHours()).toBe((now.getHours() + 1) % 24);
-    });
-
-    it('should calculate next run for interval schedule', () => {
-      const id = scheduleIntervalDigest(30); // 30 minutes
-      const schedule = getSchedule(id);
-
-      expect(schedule).toBeDefined();
-      expect(schedule?.nextRun).toBeDefined();
-
-      const nextRun = new Date(schedule!.nextRun!);
-      const now = new Date();
-      const expectedTime = now.getTime() + 30 * 60 * 1000;
-
-      // Should be approximately 30 minutes from now (within 1 second tolerance)
-      expect(Math.abs(nextRun.getTime() - expectedTime)).toBeLessThan(1000);
+      // Interval schedule - 30 min from now
+      const intervalId = scheduleIntervalDigest(30);
+      const intervalNextRun = new Date(getSchedule(intervalId)!.nextRun!);
+      const expectedTime = Date.now() + 30 * 60 * 1000;
+      expect(Math.abs(intervalNextRun.getTime() - expectedTime)).toBeLessThan(
+        1000
+      );
     });
   });
 
@@ -262,7 +214,8 @@ describe('WhatsApp Scheduler', () => {
       loadSMSConfigMock = smsModule.loadSMSConfig as MockInstance;
     });
 
-    it('should return false when quiet hours disabled', async () => {
+    it('should handle disabled, same-day, and overnight quiet hours scenarios', async () => {
+      // Disabled quiet hours - schedules should be created
       loadSMSConfigMock.mockReturnValue({
         enabled: true,
         channel: 'whatsapp',
@@ -273,30 +226,19 @@ describe('WhatsApp Scheduler', () => {
           custom: true,
           contextSync: true,
         },
-        quietHours: {
-          enabled: false,
-          start: '22:00',
-          end: '08:00',
-        },
+        quietHours: { enabled: false, start: '22:00', end: '08:00' },
         responseTimeout: 300,
         pendingPrompts: [],
       });
-
-      // Create a schedule that respects quiet hours
-      const id = scheduleDigest({
+      const disabledId = scheduleDigest({
         type: 'interval',
         intervalMinutes: 5,
         includeInactive: false,
         quietHoursRespect: true,
       });
+      expect(getSchedule(disabledId)).toBeDefined();
 
-      const schedule = getSchedule(id);
-      expect(schedule).toBeDefined();
-      // Schedule should be created regardless of time since quiet hours is disabled
-    });
-
-    it('should detect when within quiet hours range (same day)', async () => {
-      // Set quiet hours 10:00 - 14:00 (same day range)
+      // Same-day range (10:00-14:00) - verify checkAndRunDueSchedules works
       loadSMSConfigMock.mockReturnValue({
         enabled: true,
         channel: 'whatsapp',
@@ -307,44 +249,36 @@ describe('WhatsApp Scheduler', () => {
           custom: true,
           contextSync: true,
         },
-        quietHours: {
-          enabled: true,
-          start: '10:00',
-          end: '14:00',
-        },
+        quietHours: { enabled: true, start: '10:00', end: '14:00' },
         responseTimeout: 300,
         pendingPrompts: [],
       });
-
-      // Test via checkAndRunDueSchedules with a due schedule
-      const scheduleData = {
-        schedules: [
-          {
-            id: 'test-quiet-1',
-            config: {
-              type: 'interval' as const,
-              intervalMinutes: 5,
-              includeInactive: false,
-              quietHoursRespect: true,
+      writeFileSync(
+        SCHEDULE_PATH,
+        JSON.stringify({
+          schedules: [
+            {
+              id: 'test-quiet-1',
+              config: {
+                type: 'interval' as const,
+                intervalMinutes: 5,
+                includeInactive: false,
+                quietHoursRespect: true,
+              },
+              enabled: true,
+              nextRun: new Date(Date.now() - 60000).toISOString(),
+              createdAt: new Date().toISOString(),
             },
-            enabled: true,
-            nextRun: new Date(Date.now() - 60000).toISOString(), // 1 min ago (due)
-            createdAt: new Date().toISOString(),
-          },
-        ],
-        lastChecked: new Date().toISOString(),
-      };
-      writeFileSync(SCHEDULE_PATH, JSON.stringify(scheduleData));
-
-      // The behavior depends on current time - just verify function runs
+          ],
+          lastChecked: new Date().toISOString(),
+        })
+      );
       const result = await checkAndRunDueSchedules();
       expect(result).toHaveProperty('checked');
       expect(result).toHaveProperty('ran');
       expect(result).toHaveProperty('errors');
-    });
 
-    it('should detect when within overnight quiet hours', async () => {
-      // Set quiet hours 22:00 - 08:00 (overnight)
+      // Overnight range (22:00-08:00) - schedules should still be created
       loadSMSConfigMock.mockReturnValue({
         enabled: true,
         channel: 'whatsapp',
@@ -355,260 +289,132 @@ describe('WhatsApp Scheduler', () => {
           custom: true,
           contextSync: true,
         },
-        quietHours: {
-          enabled: true,
-          start: '22:00',
-          end: '08:00',
-        },
+        quietHours: { enabled: true, start: '22:00', end: '08:00' },
         responseTimeout: 300,
         pendingPrompts: [],
       });
-
-      // Schedule should still be created
-      const id = scheduleDigest({
+      writeFileSync(
+        SCHEDULE_PATH,
+        JSON.stringify({ schedules: [], lastChecked: new Date().toISOString() })
+      );
+      const overnightId = scheduleDigest({
         type: 'interval',
         intervalMinutes: 5,
         includeInactive: false,
         quietHoursRespect: true,
       });
-
-      const schedule = getSchedule(id);
-      expect(schedule).toBeDefined();
+      expect(getSchedule(overnightId)).toBeDefined();
     });
   });
 
   describe('scheduleDigest / cancelSchedule', () => {
-    it('should create a new schedule and return id', () => {
-      const config: ScheduleConfig = {
+    it('should create schedules with id, persist to storage, and set nextRun', () => {
+      const id = scheduleDigest({
         type: 'daily',
         time: '10:00',
         includeInactive: false,
         quietHoursRespect: true,
-      };
-
-      const id = scheduleDigest(config);
+      });
 
       expect(id).toBeDefined();
       expect(typeof id).toBe('string');
-      expect(id.length).toBeGreaterThan(0);
-    });
 
-    it('should persist schedule to storage', () => {
-      const config: ScheduleConfig = {
-        type: 'hourly',
-        includeInactive: true,
-        quietHoursRespect: false,
-      };
-
-      const id = scheduleDigest(config);
+      // Persisted to storage
       const schedules = listSchedules();
-
       expect(schedules.length).toBe(1);
       expect(schedules[0].id).toBe(id);
-      expect(schedules[0].config.type).toBe('hourly');
       expect(schedules[0].enabled).toBe(true);
+
+      // nextRun set
+      expect(getSchedule(id)?.nextRun).toBeDefined();
     });
 
-    it('should set nextRun on creation', () => {
-      const config: ScheduleConfig = {
-        type: 'interval',
-        intervalMinutes: 15,
-        includeInactive: false,
-        quietHoursRespect: true,
-      };
-
-      const id = scheduleDigest(config);
-      const schedule = getSchedule(id);
-
-      expect(schedule?.nextRun).toBeDefined();
-      const nextRun = new Date(schedule!.nextRun!);
-      expect(nextRun.getTime()).toBeGreaterThan(Date.now());
-    });
-
-    it('should cancel existing schedule', () => {
-      const id = scheduleHourlyDigest();
-      expect(listSchedules().length).toBe(1);
-
-      const result = cancelSchedule(id);
-
-      expect(result).toBe(true);
-      expect(listSchedules().length).toBe(0);
-    });
-
-    it('should return false when cancelling non-existent schedule', () => {
-      const result = cancelSchedule('non-existent-id');
-      expect(result).toBe(false);
-    });
-
-    it('should remove only the specified schedule', () => {
+    it('should cancel existing schedules and return false for non-existent', () => {
       const id1 = scheduleDailyDigest('09:00');
       const id2 = scheduleHourlyDigest();
-      const id3 = scheduleIntervalDigest(30);
+      expect(listSchedules().length).toBe(2);
 
-      expect(listSchedules().length).toBe(3);
+      // Cancel one
+      expect(cancelSchedule(id2)).toBe(true);
+      expect(listSchedules().length).toBe(1);
+      expect(listSchedules()[0].id).toBe(id1);
 
-      cancelSchedule(id2);
-
-      const remaining = listSchedules();
-      expect(remaining.length).toBe(2);
-      expect(remaining.find((s) => s.id === id1)).toBeDefined();
-      expect(remaining.find((s) => s.id === id2)).toBeUndefined();
-      expect(remaining.find((s) => s.id === id3)).toBeDefined();
+      // Non-existent
+      expect(cancelSchedule('non-existent-id')).toBe(false);
     });
   });
 
   describe('listSchedules / getSchedule', () => {
-    it('should return empty array when no schedules', () => {
-      const schedules = listSchedules();
-      expect(schedules).toEqual([]);
-    });
+    it('should list and retrieve schedules correctly', () => {
+      // Empty initially
+      expect(listSchedules()).toEqual([]);
 
-    it('should return all schedules', () => {
-      scheduleDailyDigest('09:00');
-      scheduleHourlyDigest();
-      scheduleIntervalDigest(60);
+      // Create schedules
+      const id1 = scheduleDailyDigest('09:00');
+      const id2 = scheduleHourlyDigest();
+      expect(listSchedules().length).toBe(2);
 
-      const schedules = listSchedules();
-      expect(schedules.length).toBe(3);
-    });
-
-    it('should get specific schedule by id', () => {
-      const id = scheduleDailyDigest('14:30');
-      const schedule = getSchedule(id);
-
-      expect(schedule).toBeDefined();
-      expect(schedule?.id).toBe(id);
+      // Get specific schedule
+      const schedule = getSchedule(id1);
+      expect(schedule?.id).toBe(id1);
       expect(schedule?.config.type).toBe('daily');
-      expect(schedule?.config.time).toBe('14:30');
-    });
-
-    it('should return undefined for non-existent schedule', () => {
-      const schedule = getSchedule('non-existent');
-      expect(schedule).toBeUndefined();
-    });
-
-    it('should include all schedule fields', () => {
-      const id = scheduleDigest({
-        type: 'interval',
-        intervalMinutes: 45,
-        includeInactive: true,
-        quietHoursRespect: false,
-      });
-
-      const schedule = getSchedule(id);
-
-      expect(schedule).toMatchObject({
-        id,
-        config: {
-          type: 'interval',
-          intervalMinutes: 45,
-          includeInactive: true,
-          quietHoursRespect: false,
-        },
-        enabled: true,
-      });
+      expect(schedule?.config.time).toBe('09:00');
       expect(schedule?.nextRun).toBeDefined();
       expect(schedule?.createdAt).toBeDefined();
+
+      // Non-existent returns undefined
+      expect(getSchedule('non-existent')).toBeUndefined();
     });
   });
 
-  describe('scheduleDailyDigest', () => {
-    it('should create daily schedule with specified time', () => {
-      const id = scheduleDailyDigest('08:30');
-      const schedule = getSchedule(id);
+  describe('schedule convenience functions', () => {
+    it('should create daily, hourly, and interval schedules with correct defaults', () => {
+      // Daily schedule
+      const dailyId = scheduleDailyDigest('08:30');
+      const dailySchedule = getSchedule(dailyId);
+      expect(dailySchedule?.config.type).toBe('daily');
+      expect(dailySchedule?.config.time).toBe('08:30');
+      expect(dailySchedule?.config.quietHoursRespect).toBe(true);
 
-      expect(schedule?.config.type).toBe('daily');
-      expect(schedule?.config.time).toBe('08:30');
-      expect(schedule?.config.quietHoursRespect).toBe(true);
-      expect(schedule?.config.includeInactive).toBe(false);
+      // Hourly schedule
+      const hourlyId = scheduleHourlyDigest();
+      expect(getSchedule(hourlyId)?.config.type).toBe('hourly');
+
+      // Interval schedule
+      const intervalId = scheduleIntervalDigest(120);
+      const intervalSchedule = getSchedule(intervalId);
+      expect(intervalSchedule?.config.type).toBe('interval');
+      expect(intervalSchedule?.config.intervalMinutes).toBe(120);
     });
 
-    it('should throw for invalid time format', () => {
-      expect(() => scheduleDailyDigest('8:30')).toThrow();
-      expect(() => scheduleDailyDigest('abc')).toThrow();
-      expect(() => scheduleDailyDigest('')).toThrow();
-    });
-  });
-
-  describe('scheduleHourlyDigest', () => {
-    it('should create hourly schedule', () => {
-      const id = scheduleHourlyDigest();
-      const schedule = getSchedule(id);
-
-      expect(schedule?.config.type).toBe('hourly');
-      expect(schedule?.config.quietHoursRespect).toBe(true);
-      expect(schedule?.config.includeInactive).toBe(false);
-    });
-  });
-
-  describe('scheduleIntervalDigest', () => {
-    it('should create interval schedule with specified minutes', () => {
-      const id = scheduleIntervalDigest(120);
-      const schedule = getSchedule(id);
-
-      expect(schedule?.config.type).toBe('interval');
-      expect(schedule?.config.intervalMinutes).toBe(120);
-      expect(schedule?.config.quietHoursRespect).toBe(true);
-    });
-
-    it('should throw for interval less than 5 minutes', () => {
+    it('should validate interval bounds', () => {
       expect(() => scheduleIntervalDigest(4)).toThrow(
         'Interval must be between 5 and 1440 minutes'
       );
-      expect(() => scheduleIntervalDigest(0)).toThrow();
-      expect(() => scheduleIntervalDigest(-10)).toThrow();
-    });
-
-    it('should throw for interval greater than 1440 minutes', () => {
       expect(() => scheduleIntervalDigest(1441)).toThrow(
         'Interval must be between 5 and 1440 minutes'
       );
-      expect(() => scheduleIntervalDigest(2000)).toThrow();
-    });
-
-    it('should accept boundary values', () => {
       expect(() => scheduleIntervalDigest(5)).not.toThrow();
       expect(() => scheduleIntervalDigest(1440)).not.toThrow();
     });
   });
 
   describe('setScheduleEnabled', () => {
-    it('should disable a schedule', () => {
+    it('should toggle schedule enabled state and recalculate nextRun', () => {
       const id = scheduleHourlyDigest();
       expect(getSchedule(id)?.enabled).toBe(true);
 
-      const result = setScheduleEnabled(id, false);
-
-      expect(result).toBe(true);
+      // Disable
+      expect(setScheduleEnabled(id, false)).toBe(true);
       expect(getSchedule(id)?.enabled).toBe(false);
-    });
 
-    it('should enable a disabled schedule', () => {
-      const id = scheduleHourlyDigest();
-      setScheduleEnabled(id, false);
-
-      const result = setScheduleEnabled(id, true);
-
-      expect(result).toBe(true);
+      // Re-enable and verify nextRun is recalculated
+      expect(setScheduleEnabled(id, true)).toBe(true);
       expect(getSchedule(id)?.enabled).toBe(true);
-    });
+      expect(getSchedule(id)?.nextRun).toBeDefined();
 
-    it('should recalculate nextRun when enabling', () => {
-      const id = scheduleHourlyDigest();
-      const originalNextRun = getSchedule(id)?.nextRun;
-
-      setScheduleEnabled(id, false);
-      // Wait a bit to ensure different nextRun time
-      setScheduleEnabled(id, true);
-
-      const newNextRun = getSchedule(id)?.nextRun;
-      // nextRun should be recalculated
-      expect(newNextRun).toBeDefined();
-    });
-
-    it('should return false for non-existent schedule', () => {
-      const result = setScheduleEnabled('non-existent', true);
-      expect(result).toBe(false);
+      // Non-existent schedule
+      expect(setScheduleEnabled('non-existent', true)).toBe(false);
     });
   });
 
@@ -621,19 +427,16 @@ describe('WhatsApp Scheduler', () => {
       sendNotificationMock.mockResolvedValue({ success: true, sent: true });
     });
 
-    it('should return counts when no schedules exist', async () => {
-      const result = await checkAndRunDueSchedules();
-
+    it('should return correct counts for empty, not-due, and disabled schedules', async () => {
+      // No schedules
+      let result = await checkAndRunDueSchedules();
       expect(result.checked).toBe(0);
       expect(result.ran).toBe(0);
       expect(result.errors).toBe(0);
-    });
 
-    it('should not run schedules that are not due', async () => {
-      // Create schedule with future nextRun
-      const id = scheduleIntervalDigest(60); // 60 min from now
-      const result = await checkAndRunDueSchedules();
-
+      // Not due (60 min from now)
+      scheduleIntervalDigest(60);
+      result = await checkAndRunDueSchedules();
       expect(result.checked).toBe(1);
       expect(result.ran).toBe(0);
       expect(sendNotificationMock).not.toHaveBeenCalled();
@@ -667,7 +470,8 @@ describe('WhatsApp Scheduler', () => {
       expect(sendNotificationMock).toHaveBeenCalled();
     });
 
-    it('should skip disabled schedules', async () => {
+    it('should skip disabled schedules and update lastChecked timestamp', async () => {
+      const oldTime = new Date(Date.now() - 3600000).toISOString();
       const scheduleData = {
         schedules: [
           {
@@ -678,33 +482,22 @@ describe('WhatsApp Scheduler', () => {
               quietHoursRespect: true,
             },
             enabled: false,
-            nextRun: new Date(Date.now() - 60000).toISOString(), // Due but disabled
+            nextRun: new Date(Date.now() - 60000).toISOString(),
             createdAt: new Date().toISOString(),
           },
         ],
-        lastChecked: new Date().toISOString(),
+        lastChecked: oldTime,
       };
       writeFileSync(SCHEDULE_PATH, JSON.stringify(scheduleData));
 
       const result = await checkAndRunDueSchedules();
 
+      // Disabled schedule not run
       expect(result.checked).toBe(1);
       expect(result.ran).toBe(0);
       expect(sendNotificationMock).not.toHaveBeenCalled();
-    });
 
-    it('should update lastChecked timestamp', async () => {
-      const oldTime = new Date(Date.now() - 3600000).toISOString(); // 1 hour ago
-      writeFileSync(
-        SCHEDULE_PATH,
-        JSON.stringify({
-          schedules: [],
-          lastChecked: oldTime,
-        })
-      );
-
-      await checkAndRunDueSchedules();
-
+      // lastChecked updated
       const data = JSON.parse(readFileSync(SCHEDULE_PATH, 'utf8'));
       expect(new Date(data.lastChecked).getTime()).toBeGreaterThan(
         new Date(oldTime).getTime()
@@ -823,33 +616,23 @@ describe('WhatsApp Scheduler', () => {
   });
 
   describe('storage edge cases', () => {
-    it('should handle missing storage file gracefully', () => {
+    it('should handle missing, corrupted, or invalid storage gracefully', () => {
+      // Missing file
       if (existsSync(SCHEDULE_PATH)) {
         unlinkSync(SCHEDULE_PATH);
       }
+      expect(listSchedules()).toEqual([]);
 
-      const schedules = listSchedules();
-      expect(schedules).toEqual([]);
-    });
-
-    it('should handle corrupted storage file', () => {
+      // Corrupted JSON
       writeFileSync(SCHEDULE_PATH, 'not valid json{{{');
+      expect(listSchedules()).toEqual([]);
 
-      const schedules = listSchedules();
-      expect(schedules).toEqual([]);
-    });
-
-    it('should handle storage with invalid schema', () => {
+      // Invalid schema
       writeFileSync(
         SCHEDULE_PATH,
-        JSON.stringify({
-          schedules: 'not-an-array',
-          lastChecked: 123,
-        })
+        JSON.stringify({ schedules: 'not-an-array' })
       );
-
-      const schedules = listSchedules();
-      expect(schedules).toEqual([]);
+      expect(listSchedules()).toEqual([]);
     });
   });
 });

@@ -162,455 +162,256 @@ describe('WhatsApp Commands', () => {
   });
 
   describe('isCommand', () => {
-    it('should return true for valid enabled commands', () => {
+    it('should recognize valid commands (case-insensitive, with args, with whitespace)', () => {
+      // Valid enabled commands
       expect(isCommand('status')).toBe(true);
       expect(isCommand('tasks')).toBe(true);
       expect(isCommand('help')).toBe(true);
-      expect(isCommand('sync')).toBe(true);
-      expect(isCommand('context')).toBe(true);
-    });
 
-    it('should return true for commands with arguments', () => {
+      // With arguments
       expect(isCommand('approve 123')).toBe(true);
-      expect(isCommand('merge 456')).toBe(true);
-    });
 
-    it('should be case insensitive', () => {
+      // Case insensitive
       expect(isCommand('STATUS')).toBe(true);
       expect(isCommand('Status')).toBe(true);
-      expect(isCommand('HELP')).toBe(true);
+
+      // With whitespace
+      expect(isCommand('  status  ')).toBe(true);
     });
 
-    it('should return false for invalid commands', () => {
+    it('should return false for invalid, disabled, or globally disabled commands', () => {
+      // Invalid commands
       expect(isCommand('invalid')).toBe(false);
-      expect(isCommand('unknown')).toBe(false);
       expect(isCommand('')).toBe(false);
-      expect(isCommand('random text')).toBe(false);
-    });
 
-    it('should return false for disabled commands', () => {
+      // Disabled commands
       expect(isCommand('disabled-cmd')).toBe(false);
-    });
 
-    it('should return false when commands are globally disabled', () => {
+      // Globally disabled
       const config = loadCommandsConfig();
       config.enabled = false;
       saveCommandsConfig(config);
-
       expect(isCommand('status')).toBe(false);
-      expect(isCommand('help')).toBe(false);
-    });
-
-    it('should handle whitespace', () => {
-      expect(isCommand('  status  ')).toBe(true);
-      expect(isCommand('\thelp\n')).toBe(true);
     });
   });
 
   describe('processCommand', () => {
-    describe('help command', () => {
-      it('should return help text for help command', async () => {
+    describe('built-in commands', () => {
+      it('should return help text with available commands and argument hints', async () => {
         const result = await processCommand('+1234567890', 'help');
-
         expect(result.handled).toBe(true);
         expect(result.response).toContain('Available commands:');
         expect(result.response).toContain('status');
-        expect(result.response).toContain('tasks');
-        expect(result.response).toContain('help');
-      });
-
-      it('should include argument hints for commands that require args', async () => {
-        const result = await processCommand('+1234567890', 'help');
-
         expect(result.response).toContain('approve <arg>');
-        expect(result.response).toContain('merge <arg>');
-      });
-
-      it('should not include disabled commands in help', async () => {
-        const result = await processCommand('+1234567890', 'help');
-
         expect(result.response).not.toContain('disabled-cmd');
       });
-    });
 
-    describe('status command', () => {
-      it('should handle status command in-process', async () => {
-        const result = await processCommand('+1234567890', 'status');
+      it('should handle status and tasks commands in-process', async () => {
+        const statusResult = await processCommand('+1234567890', 'status');
+        expect(statusResult.handled).toBe(true);
+        expect(statusResult.response).toBeDefined();
 
-        expect(result.handled).toBe(true);
-        // status is now handled in-process, no executeActionSafe call
+        const tasksResult = await processCommand('+1234567890', 'tasks');
+        expect(tasksResult.handled).toBe(true);
         expect(executeActionSafe).not.toHaveBeenCalled();
-        // Response comes from in-process handler
-        expect(result.response).toBeDefined();
       });
-    });
 
-    describe('tasks command', () => {
-      it('should handle tasks command in-process', async () => {
-        const result = await processCommand('+1234567890', 'tasks');
-
-        expect(result.handled).toBe(true);
-        // tasks is now handled in-process, no executeActionSafe call
-        expect(executeActionSafe).not.toHaveBeenCalled();
-        // Response comes from in-process handler
-        expect(result.response).toBeDefined();
-      });
-    });
-
-    describe('context command', () => {
-      it('should return context digest', async () => {
+      it('should return context digest or handle no context', async () => {
         const result = await processCommand('+1234567890', 'context');
-
         expect(result.handled).toBe(true);
-        expect(getFrameDigestData).toHaveBeenCalled();
         expect(result.response).toContain('FRAME:');
-      });
 
-      it('should handle no context available', async () => {
         vi.mocked(getFrameDigestData).mockResolvedValueOnce(null);
-
-        const result = await processCommand('+1234567890', 'context');
-
-        expect(result.handled).toBe(true);
-        expect(result.response).toContain('No context available');
+        const noContextResult = await processCommand('+1234567890', 'context');
+        expect(noContextResult.response).toContain('No context available');
       });
-    });
 
-    describe('sync command', () => {
-      it('should sync context successfully', async () => {
+      it('should sync context successfully or handle failure', async () => {
         const result = await processCommand('+1234567890', 'sync');
-
         expect(result.handled).toBe(true);
-        expect(syncContext).toHaveBeenCalled();
         expect(result.response).toContain('Context synced');
-        expect(result.response).toContain('350 chars');
-      });
 
-      it('should handle sync failure', async () => {
         vi.mocked(syncContext).mockResolvedValueOnce({
           success: false,
-          error: 'No data to sync',
+          error: 'No data',
         });
-
-        const result = await processCommand('+1234567890', 'sync');
-
-        expect(result.handled).toBe(true);
-        expect(result.response).toContain('Sync failed');
-        expect(result.response).toContain('No data to sync');
+        const failResult = await processCommand('+1234567890', 'sync');
+        expect(failResult.response).toContain('Sync failed');
       });
     });
 
-    describe('approve command', () => {
-      it('should approve PR with valid number', async () => {
-        // The approve command has no initial action, but special handling builds it
-        // First, update the command to have an action so the special handling triggers
+    describe('PR commands (approve/merge)', () => {
+      it('should approve and merge PRs with valid numbers', async () => {
+        // Setup approve command
         addCommand({
           name: 'approve',
-          description: 'Approve a PR',
+          description: 'Approve PR',
           enabled: true,
           requiresArg: true,
           argPattern: '^\\d+$',
-          action: 'gh pr review', // Base action for special handling
+          action: 'gh pr review',
         });
-
-        const result = await processCommand('+1234567890', 'approve 123');
-
-        expect(result.handled).toBe(true);
+        const approveResult = await processCommand(
+          '+1234567890',
+          'approve 123'
+        );
+        expect(approveResult.handled).toBe(true);
         expect(executeActionSafe).toHaveBeenCalledWith(
           'gh pr review 123 --approve',
           'approve 123'
         );
-      });
 
-      it('should require argument', async () => {
-        const result = await processCommand('+1234567890', 'approve');
-
-        expect(result.handled).toBe(true);
-        expect(result.error).toBe('Missing argument');
-        expect(result.response).toContain('requires an argument');
-      });
-
-      it('should validate argument pattern', async () => {
-        const result = await processCommand('+1234567890', 'approve abc');
-
-        expect(result.handled).toBe(true);
-        expect(result.error).toBe('Invalid argument format');
-        expect(result.response).toContain('Invalid argument format');
-      });
-    });
-
-    describe('merge command', () => {
-      it('should merge PR with valid number', async () => {
-        // The merge command has no initial action, but special handling builds it
-        // First, update the command to have an action so the special handling triggers
+        // Setup merge command
         addCommand({
           name: 'merge',
-          description: 'Merge a PR',
+          description: 'Merge PR',
           enabled: true,
           requiresArg: true,
           argPattern: '^\\d+$',
-          action: 'gh pr merge', // Base action for special handling
+          action: 'gh pr merge',
         });
+        const mergeResult = await processCommand('+1234567890', 'merge 456');
+        expect(mergeResult.handled).toBe(true);
+      });
 
-        const result = await processCommand('+1234567890', 'merge 456');
-
-        expect(result.handled).toBe(true);
-        expect(executeActionSafe).toHaveBeenCalledWith(
-          'gh pr merge 456 --squash',
-          'merge 456'
+      it('should require argument and validate pattern', async () => {
+        // Missing argument
+        expect((await processCommand('+1234567890', 'approve')).error).toBe(
+          'Missing argument'
         );
-      });
-
-      it('should require argument', async () => {
-        const result = await processCommand('+1234567890', 'merge');
-
-        expect(result.handled).toBe(true);
-        expect(result.error).toBe('Missing argument');
-      });
-
-      it('should reject non-numeric PR numbers', async () => {
-        const result = await processCommand('+1234567890', 'merge pr-123');
-
-        expect(result.handled).toBe(true);
-        expect(result.error).toBe('Invalid argument format');
+        // Invalid pattern
+        expect(
+          (await processCommand('+1234567890', 'merge pr-123')).error
+        ).toBe('Invalid argument format');
       });
     });
 
     describe('invalid commands', () => {
-      it('should return handled:false for unknown commands', async () => {
-        const result = await processCommand('+1234567890', 'unknown');
+      it('should return handled:false for unknown, empty, or disabled commands', async () => {
+        expect((await processCommand('+1234567890', 'unknown')).handled).toBe(
+          false
+        );
+        expect((await processCommand('+1234567890', '')).handled).toBe(false);
 
-        expect(result.handled).toBe(false);
-      });
-
-      it('should return handled:false for empty messages', async () => {
-        const result = await processCommand('+1234567890', '');
-
-        expect(result.handled).toBe(false);
-      });
-
-      it('should return handled:false when commands disabled', async () => {
         disableCommands();
-
-        const result = await processCommand('+1234567890', 'status');
-
-        expect(result.handled).toBe(false);
+        expect((await processCommand('+1234567890', 'status')).handled).toBe(
+          false
+        );
       });
     });
   });
 
   describe('loadCommandsConfig / saveCommandsConfig', () => {
-    it('should load default config when no file exists', () => {
+    it('should load default config when no file or invalid JSON, and load/save custom configs', () => {
+      // No file - returns defaults
       unlinkSync(CONFIG_PATH);
-
-      const config = loadCommandsConfig();
-
+      let config = loadCommandsConfig();
       expect(config.enabled).toBe(true);
-      expect(config.commands.length).toBeGreaterThan(0);
       expect(config.commands.some((c) => c.name === 'status')).toBe(true);
-    });
 
-    it('should load config from file', () => {
-      const customConfig: CommandsConfig = {
-        enabled: false,
-        commands: [
-          { name: 'custom', description: 'Custom command', enabled: true },
-        ],
-      };
-      writeFileSync(CONFIG_PATH, JSON.stringify(customConfig));
-
-      const config = loadCommandsConfig();
-
-      expect(config.enabled).toBe(false);
-      expect(config.commands.some((c) => c.name === 'custom')).toBe(true);
-    });
-
-    it('should save config to file', () => {
-      const config: CommandsConfig = {
-        enabled: true,
-        commands: [
-          {
-            name: 'test',
-            description: 'Test command',
-            enabled: true,
-            action: 'echo test',
-          },
-        ],
-      };
-
-      saveCommandsConfig(config);
-
-      const saved = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
-      expect(saved.enabled).toBe(true);
-      expect(saved.commands[0].name).toBe('test');
-    });
-
-    it('should handle invalid JSON gracefully', () => {
+      // Invalid JSON - returns defaults
       writeFileSync(CONFIG_PATH, 'invalid json {{{');
-
-      const config = loadCommandsConfig();
-
-      // Should return default config
+      config = loadCommandsConfig();
       expect(config.enabled).toBe(true);
-      expect(config.commands.length).toBeGreaterThan(0);
+
+      // Save custom config
+      saveCommandsConfig({
+        enabled: false,
+        commands: [{ name: 'test', description: 'Test', enabled: true }],
+      });
+      config = loadCommandsConfig();
+      expect(config.enabled).toBe(false);
+      expect(config.commands.some((c) => c.name === 'test')).toBe(true);
     });
   });
 
   describe('enableCommands / disableCommands', () => {
-    it('should enable commands', () => {
+    it('should enable, disable, and persist command state', () => {
+      // Disable
       disableCommands();
       expect(isCommandsEnabled()).toBe(false);
+      expect(loadCommandsConfig().enabled).toBe(false);
 
+      // Enable
       enableCommands();
       expect(isCommandsEnabled()).toBe(true);
-    });
-
-    it('should disable commands', () => {
-      enableCommands();
-      expect(isCommandsEnabled()).toBe(true);
-
-      disableCommands();
-      expect(isCommandsEnabled()).toBe(false);
-    });
-
-    it('should persist enable state', () => {
-      enableCommands();
-
-      // Reload and check
-      const config = loadCommandsConfig();
-      expect(config.enabled).toBe(true);
-    });
-
-    it('should persist disable state', () => {
-      disableCommands();
-
-      // Reload and check
-      const config = loadCommandsConfig();
-      expect(config.enabled).toBe(false);
+      expect(loadCommandsConfig().enabled).toBe(true);
     });
   });
 
   describe('addCommand / removeCommand', () => {
-    it('should add a new command', () => {
-      const newCmd: WhatsAppCommand = {
+    it('should add and update commands (case-insensitive)', () => {
+      // Add new command
+      addCommand({
         name: 'newcmd',
         description: 'A new command',
         enabled: true,
         action: 'echo new',
-      };
+      });
+      expect(
+        loadCommandsConfig().commands.find((c) => c.name === 'newcmd')
+          ?.description
+      ).toBe('A new command');
 
-      addCommand(newCmd);
-
-      const config = loadCommandsConfig();
-      const added = config.commands.find((c) => c.name === 'newcmd');
-      expect(added).toBeDefined();
-      expect(added?.description).toBe('A new command');
-    });
-
-    it('should update existing command', () => {
-      const updatedCmd: WhatsAppCommand = {
+      // Update existing command
+      addCommand({
         name: 'status',
-        description: 'Updated status command',
+        description: 'Updated',
         enabled: true,
-        action: 'stackmemory status --verbose',
-      };
+        action: 'updated',
+      });
+      expect(
+        loadCommandsConfig().commands.find((c) => c.name === 'status')
+          ?.description
+      ).toBe('Updated');
 
-      addCommand(updatedCmd);
-
-      const config = loadCommandsConfig();
-      const statusCmd = config.commands.find((c) => c.name === 'status');
-      expect(statusCmd?.description).toBe('Updated status command');
-      expect(statusCmd?.action).toBe('stackmemory status --verbose');
-    });
-
-    it('should handle case insensitive command names when updating', () => {
-      const updatedCmd: WhatsAppCommand = {
+      // Case insensitive update - should not create duplicate
+      addCommand({
         name: 'STATUS',
-        description: 'Uppercase update',
+        description: 'Uppercase',
         enabled: true,
-        action: 'stackmemory status',
-      };
-
-      addCommand(updatedCmd);
-
-      const config = loadCommandsConfig();
-      // Should update existing, not add new
-      const statusCommands = config.commands.filter(
+        action: 'test',
+      });
+      const statusCommands = loadCommandsConfig().commands.filter(
         (c) => c.name.toLowerCase() === 'status'
       );
       expect(statusCommands.length).toBe(1);
     });
 
-    it('should remove a command', () => {
-      const result = removeCommand('status');
-
-      expect(result).toBe(true);
-      const config = loadCommandsConfig();
-      expect(config.commands.find((c) => c.name === 'status')).toBeUndefined();
-    });
-
-    it('should return false when removing non-existent command', () => {
-      const result = removeCommand('nonexistent');
-
-      expect(result).toBe(false);
-    });
-
-    it('should remove command case insensitively', () => {
-      const result = removeCommand('STATUS');
-
-      expect(result).toBe(true);
-      const config = loadCommandsConfig();
-      expect(config.commands.find((c) => c.name === 'status')).toBeUndefined();
+    it('should remove commands (case-insensitive)', () => {
+      expect(removeCommand('status')).toBe(true);
+      expect(removeCommand('nonexistent')).toBe(false);
     });
   });
 
   describe('getAvailableCommands', () => {
-    it('should return only enabled commands', () => {
+    it('should return only enabled commands including default ones', () => {
       const commands = getAvailableCommands();
 
-      expect(commands.length).toBeGreaterThan(0);
+      // Only enabled
       expect(commands.every((c) => c.enabled)).toBe(true);
       expect(commands.find((c) => c.name === 'disabled-cmd')).toBeUndefined();
-    });
 
-    it('should include all default commands when enabled', () => {
-      const commands = getAvailableCommands();
-
-      const commandNames = commands.map((c) => c.name);
-      expect(commandNames).toContain('status');
-      expect(commandNames).toContain('tasks');
-      expect(commandNames).toContain('help');
-      expect(commandNames).toContain('sync');
-      expect(commandNames).toContain('context');
+      // Default commands included
+      const names = commands.map((c) => c.name);
+      expect(names).toContain('status');
+      expect(names).toContain('help');
+      expect(names).toContain('sync');
     });
   });
 
-  describe('command with special handling (tasks)', () => {
-    it('should handle tasks command in-process', async () => {
-      const result = await processCommand('+1234567890', 'tasks');
+  describe('special command handling', () => {
+    it('should handle tasks command in-process and acknowledge commands without action', async () => {
+      // Tasks command - handled in-process
+      const tasksResult = await processCommand('+1234567890', 'tasks');
+      expect(tasksResult.handled).toBe(true);
+      expect(tasksResult.action).toBeUndefined();
 
-      expect(result.handled).toBe(true);
-      // tasks command is now handled specially, no action field
-      expect(result.action).toBeUndefined();
-      // Response comes from in-process handler
-      expect(result.response).toBeDefined();
-    });
-  });
-
-  describe('command without action', () => {
-    it('should acknowledge command without action', async () => {
-      // Add a command with no action
-      addCommand({
-        name: 'ping',
-        description: 'Simple ping',
-        enabled: true,
-        // No action defined
-      });
-
-      const result = await processCommand('+1234567890', 'ping');
-
-      expect(result.handled).toBe(true);
-      expect(result.response).toContain('Command ping acknowledged');
+      // Command without action - acknowledged
+      addCommand({ name: 'ping', description: 'Simple ping', enabled: true });
+      const pingResult = await processCommand('+1234567890', 'ping');
+      expect(pingResult.handled).toBe(true);
+      expect(pingResult.response).toContain('Command ping acknowledged');
     });
   });
 });

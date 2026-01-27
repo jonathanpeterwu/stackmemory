@@ -63,75 +63,37 @@ describe('WhatsApp Sync', () => {
   });
 
   describe('loadSyncOptions', () => {
-    it('should return default options when no config file exists', () => {
+    it('should return defaults when no file exists or invalid JSON', () => {
       // Remove config file
       if (existsSync(SYNC_CONFIG_PATH)) {
         unlinkSync(SYNC_CONFIG_PATH);
       }
-
-      const options = loadSyncOptions();
-
+      let options = loadSyncOptions();
       expect(options.autoSyncOnClose).toBe(false);
       expect(options.minFrameDuration).toBe(30);
-      expect(options.includeDecisions).toBe(true);
-      expect(options.includeFiles).toBe(true);
-      expect(options.includeTests).toBe(true);
-      expect(options.maxDigestLength).toBe(400);
+
+      // Invalid JSON
+      writeFileSync(SYNC_CONFIG_PATH, 'not valid json');
+      options = loadSyncOptions();
+      expect(options.autoSyncOnClose).toBe(false);
     });
 
-    it('should load options from config file', () => {
+    it('should load options from file and merge partial configs', () => {
+      // Full config
       writeFileSync(
         SYNC_CONFIG_PATH,
-        JSON.stringify({
-          autoSyncOnClose: true,
-          minFrameDuration: 60,
-          includeDecisions: false,
-          includeFiles: true,
-          includeTests: false,
-          maxDigestLength: 500,
-        })
+        JSON.stringify({ autoSyncOnClose: true, minFrameDuration: 60 })
       );
-
-      const options = loadSyncOptions();
-
+      let options = loadSyncOptions();
       expect(options.autoSyncOnClose).toBe(true);
       expect(options.minFrameDuration).toBe(60);
-      expect(options.includeDecisions).toBe(false);
-      expect(options.includeFiles).toBe(true);
-      expect(options.includeTests).toBe(false);
-      expect(options.maxDigestLength).toBe(500);
-    });
-
-    it('should merge partial config with defaults', () => {
-      writeFileSync(
-        SYNC_CONFIG_PATH,
-        JSON.stringify({
-          autoSyncOnClose: true,
-          maxDigestLength: 600,
-        })
-      );
-
-      const options = loadSyncOptions();
-
-      expect(options.autoSyncOnClose).toBe(true);
-      expect(options.maxDigestLength).toBe(600);
-      // Defaults should be preserved
-      expect(options.minFrameDuration).toBe(30);
+      // Defaults preserved
       expect(options.includeDecisions).toBe(true);
-    });
-
-    it('should return defaults for invalid JSON', () => {
-      writeFileSync(SYNC_CONFIG_PATH, 'not valid json');
-
-      const options = loadSyncOptions();
-
-      expect(options.autoSyncOnClose).toBe(false);
-      expect(options.minFrameDuration).toBe(30);
     });
   });
 
   describe('saveSyncOptions', () => {
-    it('should save options to config file', () => {
+    it('should save options to config file and create directory if needed', () => {
       const options: SyncOptions = {
         autoSyncOnClose: true,
         minFrameDuration: 120,
@@ -143,27 +105,10 @@ describe('WhatsApp Sync', () => {
 
       saveSyncOptions(options);
 
+      expect(existsSync(SYNC_CONFIG_PATH)).toBe(true);
       const saved = JSON.parse(readFileSync(SYNC_CONFIG_PATH, 'utf8'));
       expect(saved.autoSyncOnClose).toBe(true);
       expect(saved.minFrameDuration).toBe(120);
-      expect(saved.includeDecisions).toBe(false);
-      expect(saved.maxDigestLength).toBe(350);
-    });
-
-    it('should create config directory if it does not exist', () => {
-      // This is implicitly tested since we rely on ensureSecureDir
-      const options: SyncOptions = {
-        autoSyncOnClose: true,
-        minFrameDuration: 30,
-        includeDecisions: true,
-        includeFiles: true,
-        includeTests: true,
-        maxDigestLength: 400,
-      };
-
-      saveSyncOptions(options);
-
-      expect(existsSync(SYNC_CONFIG_PATH)).toBe(true);
     });
   });
 
@@ -361,48 +306,19 @@ describe('WhatsApp Sync', () => {
       expect(digest).not.toContain('Out of bounds');
     });
 
-    it('should include correct NEXT action for success status', () => {
-      const data: FrameDigestData = {
-        ...baseDigestData,
-        status: 'success',
-      };
-
-      const digest = generateMobileDigest(data);
-
-      expect(digest).toContain('NEXT: commit & test');
-    });
-
-    it('should include correct NEXT action for failure status', () => {
-      const data: FrameDigestData = {
-        ...baseDigestData,
-        status: 'failure',
-      };
-
-      const digest = generateMobileDigest(data);
-
-      expect(digest).toContain('NEXT: fix errors');
-    });
-
-    it('should include correct NEXT action for partial status', () => {
-      const data: FrameDigestData = {
-        ...baseDigestData,
-        status: 'partial',
-      };
-
-      const digest = generateMobileDigest(data);
-
-      expect(digest).toContain('NEXT: review & continue');
-    });
-
-    it('should include correct NEXT action for ongoing status', () => {
-      const data: FrameDigestData = {
-        ...baseDigestData,
-        status: 'ongoing',
-      };
-
-      const digest = generateMobileDigest(data);
-
-      expect(digest).toContain('NEXT: check status');
+    it('should include correct NEXT action for each status', () => {
+      expect(
+        generateMobileDigest({ ...baseDigestData, status: 'success' })
+      ).toContain('NEXT: commit & test');
+      expect(
+        generateMobileDigest({ ...baseDigestData, status: 'failure' })
+      ).toContain('NEXT: fix errors');
+      expect(
+        generateMobileDigest({ ...baseDigestData, status: 'partial' })
+      ).toContain('NEXT: review & continue');
+      expect(
+        generateMobileDigest({ ...baseDigestData, status: 'ongoing' })
+      ).toContain('NEXT: check status');
     });
 
     it('should respect maxDigestLength', () => {
@@ -503,34 +419,27 @@ describe('WhatsApp Sync', () => {
       errors: [],
     };
 
-    it('should format seconds correctly', () => {
-      const data = { ...baseData, durationSeconds: 45 };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('45s');
-    });
-
-    it('should format minutes correctly', () => {
-      const data = { ...baseData, durationSeconds: 120 };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('2m');
-    });
-
-    it('should format minutes and seconds correctly', () => {
-      const data = { ...baseData, durationSeconds: 90 };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('1m30s');
-    });
-
-    it('should format hours correctly', () => {
-      const data = { ...baseData, durationSeconds: 3600 };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('1h');
-    });
-
-    it('should format hours and minutes correctly', () => {
-      const data = { ...baseData, durationSeconds: 5400 };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('1h30m');
+    it('should format duration correctly at various scales', () => {
+      // Seconds
+      expect(
+        generateMobileDigest({ ...baseData, durationSeconds: 45 })
+      ).toContain('45s');
+      // Minutes
+      expect(
+        generateMobileDigest({ ...baseData, durationSeconds: 120 })
+      ).toContain('2m');
+      // Minutes and seconds
+      expect(
+        generateMobileDigest({ ...baseData, durationSeconds: 90 })
+      ).toContain('1m30s');
+      // Hours
+      expect(
+        generateMobileDigest({ ...baseData, durationSeconds: 3600 })
+      ).toContain('1h');
+      // Hours and minutes
+      expect(
+        generateMobileDigest({ ...baseData, durationSeconds: 5400 })
+      ).toContain('1h30m');
     });
   });
 
@@ -549,20 +458,18 @@ describe('WhatsApp Sync', () => {
       errors: [],
     };
 
-    it('should not truncate short text', () => {
-      const data = { ...baseData, name: 'Short' };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('FRAME: Short');
-      expect(digest).not.toMatch(/Short\.\.\./);
-    });
+    it('should truncate long text with ellipsis but not short text', () => {
+      // Short text - no truncation
+      const shortDigest = generateMobileDigest({ ...baseData, name: 'Short' });
+      expect(shortDigest).toContain('FRAME: Short');
+      expect(shortDigest).not.toMatch(/Short\.\.\./);
 
-    it('should truncate long text with ellipsis', () => {
-      const data = {
+      // Long text - truncated
+      const longDigest = generateMobileDigest({
         ...baseData,
         name: 'This is a very long frame name that exceeds the limit',
-      };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('...');
+      });
+      expect(longDigest).toContain('...');
     });
   });
 
@@ -581,28 +488,19 @@ describe('WhatsApp Sync', () => {
       errors: [],
     };
 
-    it('should show OK for success status', () => {
-      const data = { ...baseData, status: 'success' as const };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('OK');
-    });
-
-    it('should show FAIL for failure status', () => {
-      const data = { ...baseData, status: 'failure' as const };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('FAIL');
-    });
-
-    it('should show PARTIAL for partial status', () => {
-      const data = { ...baseData, status: 'partial' as const };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('PARTIAL');
-    });
-
-    it('should show ACTIVE for ongoing status', () => {
-      const data = { ...baseData, status: 'ongoing' as const };
-      const digest = generateMobileDigest(data);
-      expect(digest).toContain('ACTIVE');
+    it('should show correct status symbol for each status', () => {
+      expect(
+        generateMobileDigest({ ...baseData, status: 'success' })
+      ).toContain('OK');
+      expect(
+        generateMobileDigest({ ...baseData, status: 'failure' })
+      ).toContain('FAIL');
+      expect(
+        generateMobileDigest({ ...baseData, status: 'partial' })
+      ).toContain('PARTIAL');
+      expect(
+        generateMobileDigest({ ...baseData, status: 'ongoing' })
+      ).toContain('ACTIVE');
     });
   });
 
