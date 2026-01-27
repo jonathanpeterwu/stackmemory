@@ -711,10 +711,15 @@ describe('WhatsApp Scheduler', () => {
       );
     });
 
-    // TODO: Fix flaky test - saveStorage may fail silently in test environment
-    it.skip('should update schedule lastRun and nextRun after execution', async () => {
-      // Create a schedule using the public API
-      const id = scheduleIntervalDigest(30);
+    it('should update schedule lastRun and nextRun after execution', async () => {
+      // Create a schedule with includeInactive: true so it always runs
+      // (mocked getFrameDigestData may return empty data)
+      const id = scheduleDigest({
+        type: 'interval',
+        intervalMinutes: 30,
+        includeInactive: true, // Always send, even with no activity
+        quietHoursRespect: false,
+      });
       const scheduleBefore = getSchedule(id);
       expect(scheduleBefore).toBeDefined();
       expect(scheduleBefore?.lastRun).toBeUndefined(); // No lastRun initially
@@ -722,16 +727,18 @@ describe('WhatsApp Scheduler', () => {
       // Run the schedule directly (bypassing the due check)
       const result = await runScheduledDigest(id);
 
-      // Verify execution
+      // Verify execution succeeded
       expect(result.success).toBe(true);
 
-      // Verify schedule was updated
-      const scheduleAfter = getSchedule(id);
-      expect(scheduleAfter?.lastRun).toBeDefined();
-      expect(scheduleAfter?.nextRun).toBeDefined();
-      // The nextRun should now be different (further in future since we just ran)
-      // And lastRun should be set
-      expect(scheduleAfter!.lastRun).not.toBeUndefined();
+      // Verify schedule was updated by reading the file directly
+      // (avoids potential caching issues with getSchedule)
+      const fileData = JSON.parse(readFileSync(SCHEDULE_PATH, 'utf8'));
+      const scheduleAfter = fileData.schedules.find(
+        (s: { id: string }) => s.id === id
+      );
+      expect(scheduleAfter).toBeDefined();
+      expect(scheduleAfter.lastRun).toBeDefined();
+      expect(scheduleAfter.nextRun).toBeDefined();
     });
 
     it('should handle multiple schedules with mixed due states', async () => {
