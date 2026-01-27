@@ -37,11 +37,14 @@ import {
 import { FrameDatabase } from './frame-database.js';
 import { FrameStack } from './frame-stack.js';
 import { FrameDigestGenerator } from './frame-digest.js';
+import { FrameRecovery, type RecoveryReport } from './frame-recovery.js';
 
 export class RefactoredFrameManager {
   private frameDb: FrameDatabase;
   private frameStack: FrameStack;
   private digestGenerator: FrameDigestGenerator;
+  private frameRecovery: FrameRecovery;
+  private db: Database.Database;
 
   private currentRunId: string;
   private sessionId: string;
@@ -49,6 +52,7 @@ export class RefactoredFrameManager {
   private queryMode: FrameQueryMode = FrameQueryMode.PROJECT_ACTIVE;
   private config: FrameManagerConfig;
   private maxFrameDepth: number = DEFAULT_MAX_DEPTH;
+  private lastRecoveryReport: RecoveryReport | null = null;
 
   constructor(
     db: Database.Database,
@@ -56,6 +60,7 @@ export class RefactoredFrameManager {
     config?: Partial<FrameManagerConfig>
   ) {
     this.projectId = projectId;
+    this.db = db;
     this.config = {
       projectId,
       runId: config?.runId || uuidv4(),
@@ -77,6 +82,8 @@ export class RefactoredFrameManager {
       this.currentRunId
     );
     this.digestGenerator = new FrameDigestGenerator(this.frameDb);
+    this.frameRecovery = new FrameRecovery(db);
+    this.frameRecovery.setCurrentRunId(this.currentRunId);
 
     // Initialize database schema
     this.frameDb.initSchema();
@@ -93,10 +100,23 @@ export class RefactoredFrameManager {
    */
   async initialize(): Promise<void> {
     try {
+      // Run crash recovery first
+      this.lastRecoveryReport = await this.frameRecovery.recoverOnStartup();
+
+      if (!this.lastRecoveryReport.recovered) {
+        logger.warn('Recovery completed with issues', {
+          errors: this.lastRecoveryReport.errors,
+          orphansFound: this.lastRecoveryReport.orphanedFrames.detected,
+          integrityPassed: this.lastRecoveryReport.integrityCheck.passed,
+        });
+      }
+
       await this.frameStack.initialize();
 
       logger.info('Frame manager initialization completed', {
         stackDepth: this.frameStack.getDepth(),
+        recoveryRan: true,
+        orphansClosed: this.lastRecoveryReport.orphanedFrames.closed,
       });
     } catch (error: unknown) {
       throw new SystemError(
@@ -511,6 +531,28 @@ export class RefactoredFrameManager {
    */
   getStatistics(): Record<string, number> {
     return this.frameDb.getStatistics();
+  }
+
+  /**
+   * Get the last recovery report from initialization
+   */
+  getRecoveryReport(): RecoveryReport | null {
+    return this.lastRecoveryReport;
+  }
+
+  /**
+   * Manually trigger recovery (e.g., after detecting issues)
+   */
+  async runRecovery(): Promise<RecoveryReport> {
+    this.lastRecoveryReport = await this.frameRecovery.recoverOnStartup();
+    return this.lastRecoveryReport;
+  }
+
+  /**
+   * Validate project data integrity
+   */
+  validateProjectIntegrity(): { valid: boolean; issues: string[] } {
+    return this.frameRecovery.validateProjectIntegrity(this.projectId);
   }
 
   /**

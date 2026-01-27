@@ -31,3 +31,12 @@ export {
   type FrameCloseHook,
   type FrameCreateHook,
 } from './frame-lifecycle-hooks.js';
+
+// Export recovery system
+export {
+  FrameRecovery,
+  recoverDatabase,
+  type RecoveryReport,
+  type IntegrityCheckResult,
+  type OrphanedFrameResult,
+} from './frame-recovery.js';
