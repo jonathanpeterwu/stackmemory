@@ -3,10 +3,15 @@
  * Provides isolated test environments for integration testing
  */
 
-import { SQLiteAdapter, SQLiteConfig } from '../../../core/database/sqlite-adapter.js';
+import {
+  SQLiteAdapter,
+  SQLiteConfig,
+} from '../../../core/database/sqlite-adapter.js';
 import { FrameManager } from '../../../core/context/index.js';
-import { SharedContextLayer } from '../../../core/context/shared-context-layer.js';
-import { ContextBridge } from '../../../core/context/context-bridge.js';
+import {
+  SharedContextLayer,
+  ContextBridge,
+} from '../../../core/context/shared-context-layer.js';
 import { ContextRetriever } from '../../../core/retrieval/context-retriever.js';
 import { QueryRouter } from '../../../core/database/query-router.js';
 import { execSync } from 'child_process';
@@ -19,7 +24,7 @@ export interface TestSession {
   sharedContext: SharedContextLayer;
   contextBridge?: ContextBridge;
   retriever: ContextRetriever;
-  
+
   recordActivity(activities: ActivityRecord[]): Promise<string[]>;
   saveContext(): Promise<SavedContext>;
   generateHandoff(): Promise<string>;
@@ -50,10 +55,18 @@ export class TestEnvironment {
 
   private constructor(projectId: string) {
     this.projectId = projectId;
-    this.tempDir = path.join(os.tmpdir(), `stackmemory-test-${Date.now()}-${Math.random().toString(36).slice(2)}`);
-    this.dbPath = path.join(this.tempDir, '.stackmemory', 'db', 'stackmemory.db');
+    this.tempDir = path.join(
+      os.tmpdir(),
+      `stackmemory-test-${Date.now()}-${Math.random().toString(36).slice(2)}`
+    );
+    this.dbPath = path.join(
+      this.tempDir,
+      '.stackmemory',
+      'db',
+      'stackmemory.db'
+    );
     this.cliPath = path.join(process.cwd(), 'dist', 'cli', 'index.js');
-    
+
     // Adapter will be created after directories are set up
     this.adapter = null as any; // Will be initialized in setup()
   }
@@ -66,10 +79,16 @@ export class TestEnvironment {
 
   private async setup(): Promise<void> {
     // Create directory structure
-    fs.mkdirSync(path.join(this.tempDir, '.stackmemory', 'db'), { recursive: true });
-    fs.mkdirSync(path.join(this.tempDir, '.stackmemory', 'contexts'), { recursive: true });
-    fs.mkdirSync(path.join(this.tempDir, '.stackmemory', 'handoffs'), { recursive: true });
-    
+    fs.mkdirSync(path.join(this.tempDir, '.stackmemory', 'db'), {
+      recursive: true,
+    });
+    fs.mkdirSync(path.join(this.tempDir, '.stackmemory', 'contexts'), {
+      recursive: true,
+    });
+    fs.mkdirSync(path.join(this.tempDir, '.stackmemory', 'handoffs'), {
+      recursive: true,
+    });
+
     // Create adapter with test configuration
     const config: SQLiteConfig = {
       dbPath: this.dbPath,
@@ -77,9 +96,9 @@ export class TestEnvironment {
       busyTimeout: 5000,
       synchronous: 'NORMAL',
     };
-    
+
     this.adapter = new SQLiteAdapter(this.projectId, config);
-    
+
     // Initialize database
     await this.adapter.connect();
     await this.adapter.initializeSchema();
@@ -104,7 +123,7 @@ export class TestEnvironment {
         path: this.dbPath,
       },
     };
-    
+
     fs.writeFileSync(
       path.join(this.tempDir, 'stackmemory.json'),
       JSON.stringify(config, null, 2)
@@ -114,12 +133,18 @@ export class TestEnvironment {
   async createProject(name: string): Promise<{ id: string; path: string }> {
     const projectPath = path.join(this.tempDir, name);
     fs.mkdirSync(projectPath, { recursive: true });
-    
+
     // Initialize git repo
     execSync('git init', { cwd: projectPath, stdio: 'pipe' });
-    execSync('git config user.email "test@example.com"', { cwd: projectPath, stdio: 'pipe' });
-    execSync('git config user.name "Test User"', { cwd: projectPath, stdio: 'pipe' });
-    
+    execSync('git config user.email "test@example.com"', {
+      cwd: projectPath,
+      stdio: 'pipe',
+    });
+    execSync('git config user.name "Test User"', {
+      cwd: projectPath,
+      stdio: 'pipe',
+    });
+
     return {
       id: `${this.projectId}-${name}`,
       path: projectPath,
@@ -128,7 +153,7 @@ export class TestEnvironment {
 
   async startSession(sessionId?: string): Promise<TestSession> {
     const id = sessionId || `session-${Date.now()}`;
-    
+
     // Create FrameManager without auto-initialization
     const frameManager = Object.create(FrameManager.prototype);
     Object.assign(frameManager, {
@@ -141,23 +166,23 @@ export class TestEnvironment {
         maxDepth: 10,
       },
     });
-    
+
     const sharedContext = new SharedContextLayer({
       projectId: this.projectId,
       maxSharedFrames: 100,
       syncInterval: 1000,
     });
-    
+
     const retriever = new ContextRetriever(this.adapter);
-    
+
     const session: TestSession = {
       frameManager,
       sharedContext,
       retriever,
-      
+
       recordActivity: async (activities: ActivityRecord[]) => {
         const frameIds: string[] = [];
-        
+
         for (const activity of activities) {
           const frameId = await this.adapter.createFrame({
             parent_frame_id: frameIds[frameIds.length - 1] || null,
@@ -165,52 +190,55 @@ export class TestEnvironment {
             run_id: id,
             type: activity.type === 'error' ? 'error' : 'operation',
             name: this.getActivityName(activity),
-            state: activity.type === 'error' || activity.status === 'fail' ? 'error' : 'completed',
+            state:
+              activity.type === 'error' || activity.status === 'fail'
+                ? 'error'
+                : 'completed',
             depth: frameIds.length,
             digest_text: this.getActivityDigest(activity),
           });
-          
+
           frameIds.push(frameId);
         }
-        
+
         return frameIds;
       },
-      
+
       saveContext: async () => {
         const frames = await this.adapter.search({
           query: '',
           searchType: 'recent',
           limit: 100,
         });
-        
+
         const context: SavedContext = {
           frames,
           timestamp: Date.now(),
           sessionId: id,
         };
-        
+
         // Save to file for persistence testing
         fs.writeFileSync(
           path.join(this.tempDir, '.stackmemory', 'contexts', `${id}.json`),
           JSON.stringify(context, null, 2)
         );
-        
+
         return context;
       },
-      
+
       generateHandoff: async () => {
         const frames = await this.adapter.search({
           query: '',
           searchType: 'recent',
           limit: 50,
         });
-        
+
         let handoff = '# Session Handoff\n\n';
         handoff += '## Session Summary\n\n';
         handoff += `- Session ID: ${id}\n`;
         handoff += `- Total Frames: ${frames.length}\n`;
         handoff += `- Timestamp: ${new Date().toISOString()}\n\n`;
-        
+
         handoff += '## Activity Log\n\n';
         for (const frame of frames) {
           handoff += `- [${frame.type}] ${frame.name}\n`;
@@ -218,17 +246,17 @@ export class TestEnvironment {
             handoff += `  ${frame.digest_text}\n`;
           }
         }
-        
+
         // Save handoff
         fs.writeFileSync(
           path.join(this.tempDir, '.stackmemory', 'handoffs', `${id}.md`),
           handoff
         );
-        
+
         return handoff;
       },
     };
-    
+
     this.sessions.set(id, session);
     return session;
   }
@@ -241,27 +269,39 @@ export class TestEnvironment {
       if ((session.frameManager as any).frames) {
         (session.frameManager as any).frames.clear();
       }
-      
+
       // SharedContextLayer doesn't have a clear method, so we just reset the sessions
       // The context is persisted in files/database anyway
     }
   }
 
   async restoreContext(sessionId?: string): Promise<SavedContext> {
-    const contextFiles = fs.readdirSync(path.join(this.tempDir, '.stackmemory', 'contexts'));
-    
+    const contextFiles = fs.readdirSync(
+      path.join(this.tempDir, '.stackmemory', 'contexts')
+    );
+
     if (sessionId) {
-      const contextPath = path.join(this.tempDir, '.stackmemory', 'contexts', `${sessionId}.json`);
+      const contextPath = path.join(
+        this.tempDir,
+        '.stackmemory',
+        'contexts',
+        `${sessionId}.json`
+      );
       return JSON.parse(fs.readFileSync(contextPath, 'utf8'));
     }
-    
+
     // Return most recent context
     if (contextFiles.length > 0) {
       const latestFile = contextFiles.sort().pop()!;
-      const contextPath = path.join(this.tempDir, '.stackmemory', 'contexts', latestFile);
+      const contextPath = path.join(
+        this.tempDir,
+        '.stackmemory',
+        'contexts',
+        latestFile
+      );
       return JSON.parse(fs.readFileSync(contextPath, 'utf8'));
     }
-    
+
     return {
       frames: [],
       timestamp: Date.now(),
@@ -280,7 +320,9 @@ export class TestEnvironment {
         },
       });
     } catch (error: any) {
-      throw new Error(`CLI command failed: ${error.message}\nOutput: ${error.stdout || error.stderr}`);
+      throw new Error(
+        `CLI command failed: ${error.message}\nOutput: ${error.stdout || error.stderr}`
+      );
     }
   }
 
@@ -290,7 +332,7 @@ export class TestEnvironment {
 
   async createQueryRouter(): Promise<QueryRouter> {
     const router = new QueryRouter();
-    
+
     router.registerTier({
       name: 'sqlite',
       adapter: this.adapter,
@@ -302,7 +344,7 @@ export class TestEnvironment {
         routingRules: [],
       },
     });
-    
+
     return router;
   }
 
@@ -313,12 +355,12 @@ export class TestEnvironment {
         session.contextBridge.stop();
       }
     }
-    
+
     // Disconnect database
     if (this.adapter) {
       await this.adapter.disconnect();
     }
-    
+
     // Remove temp directory
     if (fs.existsSync(this.tempDir)) {
       fs.rmSync(this.tempDir, { recursive: true, force: true });

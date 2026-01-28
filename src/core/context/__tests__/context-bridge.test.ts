@@ -1,10 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { ContextBridge, contextBridge } from '../context-bridge.js';
 import { FrameManager, type Frame } from '../index.js';
-import { sharedContextLayer } from '../shared-context-layer.js';
-import { sessionManager } from '../../session/session-manager.js';
 
-vi.mock('../shared-context-layer.js');
+// Mock dependencies before importing the module under test
 vi.mock('../../session/session-manager.js');
 vi.mock('../../monitoring/logger.js', () => ({
   logger: {
@@ -14,6 +11,14 @@ vi.mock('../../monitoring/logger.js', () => ({
     debug: vi.fn(),
   },
 }));
+
+// Import after mocks are set up
+import {
+  ContextBridge,
+  SharedContextLayer,
+  sharedContextLayer,
+} from '../shared-context-layer.js';
+import { sessionManager } from '../../session/session-manager.js';
 
 describe('ContextBridge', () => {
   let bridge: ContextBridge;
@@ -30,46 +35,62 @@ describe('ContextBridge', () => {
     state: 'active' as const,
   };
 
+  // Spy on sharedContextLayer methods
+  let autoDiscoverSpy: ReturnType<typeof vi.spyOn>;
+  let addToSharedContextSpy: ReturnType<typeof vi.spyOn>;
+  let querySharedContextSpy: ReturnType<typeof vi.spyOn>;
+  let addDecisionSpy: ReturnType<typeof vi.spyOn>;
+
   beforeEach(async () => {
     vi.clearAllMocks();
     vi.mocked(sessionManager.getCurrentSession).mockReturnValue(mockSession);
-    vi.mocked(sharedContextLayer.initialize).mockResolvedValue(undefined);
-    vi.mocked(sharedContextLayer.autoDiscoverContext).mockResolvedValue({
-      hasSharedContext: true,
-      sessionCount: 2,
-      recentPatterns: [
-        {
-          pattern: 'Error pattern',
-          type: 'error',
-          frequency: 3,
-          lastSeen: Date.now(),
-        },
-      ],
-      lastDecisions: [
-        {
-          id: '1',
-          decision: 'Use TypeScript',
-          reasoning: 'Type safety',
-          timestamp: Date.now(),
-          sessionId: 'old-session',
-        },
-      ],
-      suggestedFrames: [
-        {
-          frameId: 'f1',
-          title: 'Important Frame',
-          type: 'task',
-          score: 0.9,
-          tags: ['important'],
-          createdAt: Date.now(),
-        },
-      ],
-    });
-    vi.mocked(sharedContextLayer.addToSharedContext).mockResolvedValue(
-      undefined
-    );
-    vi.mocked(sharedContextLayer.querySharedContext).mockResolvedValue([]);
-    vi.mocked(sharedContextLayer.addDecision).mockResolvedValue(undefined);
+
+    // Spy on SharedContextLayer methods
+    autoDiscoverSpy = vi
+      .spyOn(sharedContextLayer, 'autoDiscoverContext')
+      .mockResolvedValue({
+        hasSharedContext: true,
+        sessionCount: 2,
+        recentPatterns: [
+          {
+            pattern: 'Error pattern',
+            type: 'error',
+            frequency: 3,
+            lastSeen: Date.now(),
+          },
+        ],
+        lastDecisions: [
+          {
+            id: '1',
+            decision: 'Use TypeScript',
+            reasoning: 'Type safety',
+            timestamp: Date.now(),
+            sessionId: 'old-session',
+          },
+        ],
+        suggestedFrames: [
+          {
+            frameId: 'f1',
+            title: 'Important Frame',
+            type: 'task',
+            score: 0.9,
+            tags: ['important'],
+            createdAt: Date.now(),
+          },
+        ],
+      });
+
+    addToSharedContextSpy = vi
+      .spyOn(sharedContextLayer, 'addToSharedContext')
+      .mockResolvedValue(undefined);
+
+    querySharedContextSpy = vi
+      .spyOn(sharedContextLayer, 'querySharedContext')
+      .mockResolvedValue([]);
+
+    addDecisionSpy = vi
+      .spyOn(sharedContextLayer, 'addDecision')
+      .mockResolvedValue(undefined);
 
     mockFrameManager = {
       getActiveFramePath: vi.fn().mockReturnValue([]),
@@ -85,6 +106,7 @@ describe('ContextBridge', () => {
   });
 
   afterEach(() => {
+    bridge.stopAutoSync();
     vi.restoreAllMocks();
     vi.clearAllTimers();
   });
@@ -97,13 +119,13 @@ describe('ContextBridge', () => {
 
     // Test initialization
     await bridge.initialize(mockFrameManager as FrameManager, {
-      autoSync: true,
+      autoSync: false, // Disable to avoid timer issues
       syncInterval: 30000,
       minFrameScore: 0.6,
       importantTags: ['custom-tag'],
     });
 
-    expect(sharedContextLayer.autoDiscoverContext).toHaveBeenCalled();
+    expect(autoDiscoverSpy).toHaveBeenCalled();
     expect(mockFrameManager.addContext).toHaveBeenCalledWith(
       'shared-context-suggestions',
       expect.objectContaining({
@@ -114,16 +136,14 @@ describe('ContextBridge', () => {
   });
 
   it('should handle initialization errors and empty context gracefully', async () => {
-    vi.mocked(sharedContextLayer.autoDiscoverContext).mockRejectedValueOnce(
-      new Error('Load failed')
-    );
+    autoDiscoverSpy.mockRejectedValueOnce(new Error('Load failed'));
     await expect(
-      bridge.initialize(mockFrameManager as FrameManager)
+      bridge.initialize(mockFrameManager as FrameManager, { autoSync: false })
     ).resolves.not.toThrow();
 
     // Test empty shared context
     vi.mocked(mockFrameManager.addContext).mockClear();
-    vi.mocked(sharedContextLayer.autoDiscoverContext).mockResolvedValueOnce({
+    autoDiscoverSpy.mockResolvedValueOnce({
       hasSharedContext: false,
       sessionCount: 0,
       recentPatterns: [],
@@ -136,6 +156,7 @@ describe('ContextBridge', () => {
 
   it('should sync important frames and filter by importance', async () => {
     await bridge.initialize(mockFrameManager as FrameManager, {
+      autoSync: false,
       minFrameScore: 0.5,
       importantTags: ['test-tag'],
     });
@@ -157,7 +178,7 @@ describe('ContextBridge', () => {
 
     await bridge.syncToSharedContext();
 
-    expect(sharedContextLayer.addToSharedContext).toHaveBeenCalledWith(
+    expect(addToSharedContextSpy).toHaveBeenCalledWith(
       expect.arrayContaining([
         expect.objectContaining({ frame_id: '1' }),
         expect.objectContaining({ frame_id: '3' }),
@@ -168,12 +189,12 @@ describe('ContextBridge', () => {
   });
 
   it('should query shared frames and handle errors', async () => {
-    await bridge.initialize(mockFrameManager as FrameManager);
+    await bridge.initialize(mockFrameManager as FrameManager, {
+      autoSync: false,
+    });
 
     const mockResults = [{ frameId: 'f1', title: 'Result 1', score: 0.8 }];
-    vi.mocked(sharedContextLayer.querySharedContext).mockResolvedValueOnce(
-      mockResults
-    );
+    querySharedContextSpy.mockResolvedValueOnce(mockResults);
 
     const results = await bridge.querySharedFrames({
       tags: ['important'],
@@ -183,27 +204,25 @@ describe('ContextBridge', () => {
     expect(results).toEqual(mockResults);
 
     // Test error handling
-    vi.mocked(sharedContextLayer.querySharedContext).mockRejectedValueOnce(
-      new Error('Query failed')
-    );
+    querySharedContextSpy.mockRejectedValueOnce(new Error('Query failed'));
     const errorResults = await bridge.querySharedFrames({ tags: ['test'] });
     expect(errorResults).toEqual([]);
   });
 
   it('should add decisions and handle errors', async () => {
-    await bridge.initialize(mockFrameManager as FrameManager);
+    await bridge.initialize(mockFrameManager as FrameManager, {
+      autoSync: false,
+    });
 
     await bridge.addDecision('Use new architecture', 'Better scalability');
-    expect(sharedContextLayer.addDecision).toHaveBeenCalledWith({
+    expect(addDecisionSpy).toHaveBeenCalledWith({
       decision: 'Use new architecture',
       reasoning: 'Better scalability',
       outcome: 'pending',
     });
 
     // Test error handling
-    vi.mocked(sharedContextLayer.addDecision).mockRejectedValueOnce(
-      new Error('Save failed')
-    );
+    addDecisionSpy.mockRejectedValueOnce(new Error('Save failed'));
     await expect(
       bridge.addDecision('Test decision', 'Test reasoning')
     ).resolves.not.toThrow();
@@ -224,16 +243,16 @@ describe('ContextBridge', () => {
 
     // Fast-forward time to trigger the interval
     await vi.advanceTimersByTimeAsync(5000);
-    expect(sharedContextLayer.addToSharedContext).toHaveBeenCalledTimes(1);
+    expect(addToSharedContextSpy).toHaveBeenCalledTimes(1);
 
     // Stop auto-sync
     bridge.stopAutoSync();
     await vi.advanceTimersByTimeAsync(10000);
-    expect(sharedContextLayer.addToSharedContext).toHaveBeenCalledTimes(1); // No new calls
+    expect(addToSharedContextSpy).toHaveBeenCalledTimes(1); // No new calls
 
     // Manual sync
     await bridge.forceSyncNow();
-    expect(sharedContextLayer.addToSharedContext).toHaveBeenCalledTimes(2);
+    expect(addToSharedContextSpy).toHaveBeenCalledTimes(2);
 
     vi.useRealTimers();
   });
