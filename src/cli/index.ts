@@ -31,7 +31,11 @@ import { createSearchCommand } from './commands/search.js';
 import { createLogCommand } from './commands/log.js';
 import { createContextCommands } from './commands/context.js';
 import { createConfigCommand } from './commands/config.js';
-import { createHandoffCommand } from './commands/handoff.js';
+import {
+  createCaptureCommand,
+  createRestoreCommand,
+  createAutoCaptureCommand,
+} from './commands/handoff.js';
 import {
   createDecisionCommand,
   createMemoryCommand,
@@ -683,7 +687,9 @@ program.addCommand(createSearchCommand());
 program.addCommand(createLogCommand());
 program.addCommand(createContextCommands());
 program.addCommand(createConfigCommand());
-program.addCommand(createHandoffCommand());
+program.addCommand(createCaptureCommand());
+program.addCommand(createRestoreCommand());
+program.addCommand(createAutoCaptureCommand());
 program.addCommand(createDecisionCommand());
 program.addCommand(createMemoryCommand());
 program.addCommand(clearCommand);

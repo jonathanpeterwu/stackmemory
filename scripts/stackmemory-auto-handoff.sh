@@ -32,10 +32,10 @@ capture_handoff() {
     echo -e "${YELLOW}📸 Capturing handoff context...${NC}"
     log "Capturing handoff: reason=$reason, exit_code=$exit_code"
     
-    # Run stackmemory handoff command
+    # Run stackmemory capture command
     if command -v "$STACKMEMORY_BIN" &> /dev/null; then
         # Capture the handoff
-        "$STACKMEMORY_BIN" handoff --no-commit 2>&1 | tee -a "$LOG_FILE"
+        "$STACKMEMORY_BIN" capture --no-commit 2>&1 | tee -a "$LOG_FILE"
         
         # Save additional metadata
         local metadata_file="${HANDOFF_DIR}/last-handoff-meta.json"
@@ -75,7 +75,7 @@ EOF
             done
         fi
         
-        echo -e "${GREEN}✨ Run 'stackmemory handoff restore' in your next session${NC}"
+        echo -e "${GREEN}✨ Run 'stackmemory restore' in your next session${NC}"
     else
         echo -e "${RED}❌ StackMemory not found${NC}"
         log "ERROR: StackMemory binary not found"

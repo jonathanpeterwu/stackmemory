@@ -49,9 +49,9 @@ describe('CLI Integration Tests', () => {
     });
   });
 
-  describe('Handoff Commands', () => {
+  describe('Capture/Restore Commands', () => {
     it('should generate handoff document', () => {
-      const result = execSync(cli('handoff capture'), {
+      const result = execSync(cli('capture'), {
         cwd: testDir,
         encoding: 'utf8',
       });
@@ -69,10 +69,10 @@ describe('CLI Integration Tests', () => {
 
     it('should load handoff document', { timeout: 30000 }, () => {
       // First generate a handoff
-      execSync(cli('handoff capture'), { cwd: testDir, timeout: 15000 });
+      execSync(cli('capture'), { cwd: testDir, timeout: 15000 });
 
       // Then load it
-      const result = execSync(cli('handoff restore'), {
+      const result = execSync(cli('restore'), {
         cwd: testDir,
         encoding: 'utf8',
         timeout: 15000,
@@ -82,11 +82,11 @@ describe('CLI Integration Tests', () => {
       expect(result).toBeDefined();
     });
 
-    it('should list handoff documents', { timeout: 30000 }, () => {
-      // Generate a handoff first
-      execSync(cli('handoff capture'), { cwd: testDir, timeout: 15000 });
+    it('should capture handoff document', { timeout: 30000 }, () => {
+      // Generate a capture
+      execSync(cli('capture'), { cwd: testDir, timeout: 15000 });
 
-      const result = execSync(cli('handoff'), {
+      const result = execSync(cli('capture'), {
         cwd: testDir,
         encoding: 'utf8',
         timeout: 15000,

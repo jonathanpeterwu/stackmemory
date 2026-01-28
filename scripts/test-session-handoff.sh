@@ -73,7 +73,7 @@ echo
 
 # 3. Generate handoff
 echo -e "${BLUE}3. Generating handoff summary...${NC}"
-stackmemory handoff > /tmp/handoff-test.md
+stackmemory capture > /tmp/handoff-test.md
 echo -e "${GREEN}✓ Handoff generated${NC}"
 echo "  Saved to: /tmp/handoff-test.md"
 echo
@@ -159,7 +159,7 @@ echo "  • Last handoff: ./.stackmemory/last-handoff.md"
 echo "  • Session data: ~/.stackmemory/sessions/"
 echo
 echo -e "${YELLOW}💡 To use in new Claude session:${NC}"
-echo "  1. Run: stackmemory handoff"
+echo "  1. Run: stackmemory capture"
 echo "  2. Copy the handoff summary"
 echo "  3. Paste at start of new session"
 echo "  4. Context will be automatically loaded"

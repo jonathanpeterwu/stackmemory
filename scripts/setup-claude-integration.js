@@ -34,13 +34,13 @@ console.log('⚙️  Creating StackMemory MCP configuration...');
 const mcpConfig = {
   mcpServers: {
     stackmemory: {
-      command: "stackmemory",
-      args: ["mcp-server"],
+      command: 'stackmemory',
+      args: ['mcp-server'],
       env: {
-        NODE_ENV: "production"
-      }
-    }
-  }
+        NODE_ENV: 'production',
+      },
+    },
+  },
 };
 
 writeFileSync(STACKMEMORY_MCP_CONFIG, JSON.stringify(mcpConfig, null, 2));
@@ -90,7 +90,7 @@ fi
 
 # Load previous handoff if exists
 if [ -d ".stackmemory/handoffs" ]; then
-    stackmemory handoff --load 2>/dev/null || true
+    stackmemory restore --no-copy 2>/dev/null || true
 fi
 
 # Check and restore from ledger if needed
@@ -163,7 +163,9 @@ try {
   execSync('stackmemory --version', { stdio: 'ignore' });
   console.log('✅ StackMemory CLI available');
 } catch {
-  console.log('⚠️  StackMemory CLI not in PATH - you may need to restart your terminal');
+  console.log(
+    '⚠️  StackMemory CLI not in PATH - you may need to restart your terminal'
+  );
 }
 
 try {
@@ -171,7 +173,9 @@ try {
   execSync('claude --help', { stdio: 'ignore' });
   console.log('✅ Claude Code available');
 } catch {
-  console.log('⚠️  Claude Code not found - install from https://claude.ai/code');
+  console.log(
+    '⚠️  Claude Code not found - install from https://claude.ai/code'
+  );
 }
 
 // 7. Usage instructions

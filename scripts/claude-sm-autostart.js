@@ -3,7 +3,7 @@
 /**
  * StackMemory Claude Auto-Start Daemon Manager
  * Automatically starts essential daemons when Claude loads the project
- * 
+ *
  * Daemons managed:
  * 1. Context Monitor - Saves context every 15 min
  * 2. Linear Sync - Syncs tasks hourly
@@ -24,10 +24,10 @@ import dotenv from 'dotenv';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Load .env first (as per CLAUDE.md)
-dotenv.config({ 
+dotenv.config({
   path: path.join(__dirname, '..', '.env'),
   override: true,
-  silent: true
+  silent: true,
 });
 
 class ClaudeAutoStartManager {
@@ -36,8 +36,12 @@ class ClaudeAutoStartManager {
     this.watchers = new Map();
     this.projectRoot = path.dirname(__dirname);
     this.logDir = path.join(process.env.HOME, '.stackmemory', 'logs');
-    this.pidFile = path.join(process.env.HOME, '.stackmemory', 'claude-daemons.pid');
-    
+    this.pidFile = path.join(
+      process.env.HOME,
+      '.stackmemory',
+      'claude-daemons.pid'
+    );
+
     // Ensure log directory exists
     if (!fs.existsSync(this.logDir)) {
       fs.mkdirSync(this.logDir, { recursive: true });
@@ -48,7 +52,7 @@ class ClaudeAutoStartManager {
     const timestamp = new Date().toISOString();
     const logMessage = `[${timestamp}] [${level}] ${message}`;
     console.log(logMessage);
-    
+
     const logFile = path.join(this.logDir, 'claude-autostart.log');
     fs.appendFileSync(logFile, logMessage + '\n');
   }
@@ -60,61 +64,64 @@ class ClaudeAutoStartManager {
    */
   startContextMonitor() {
     this.log('Starting Context Monitor...');
-    
-    const contextInterval = setInterval(async () => {
-      try {
-        // Check if stackmemory is available
-        const { exec } = await import('child_process');
-        const { promisify } = await import('util');
-        const execAsync = promisify(exec);
-        
-        // Save current context
-        const { stdout } = await execAsync(
-          `cd ${this.projectRoot} && ~/.stackmemory/bin/stackmemory context add decision "Auto-checkpoint at ${new Date().toISOString()}"`
-        );
-        
-        this.log('Context checkpoint saved');
-        
-        // Load context from ChromaDB if available
-        if (process.env.CHROMADB_API_KEY) {
-          try {
-            await execAsync(
-              `cd ${this.projectRoot} && node scripts/chromadb-context-loader.js load 1`
-            );
-            this.log('ChromaDB context loaded');
-            
-            // Check for important changes
-            await execAsync(
-              `cd ${this.projectRoot} && node scripts/chromadb-context-loader.js changes`
-            );
-          } catch (error) {
-            // Silent fail for ChromaDB
+
+    const contextInterval = setInterval(
+      async () => {
+        try {
+          // Check if stackmemory is available
+          const { exec } = await import('child_process');
+          const { promisify } = await import('util');
+          const execAsync = promisify(exec);
+
+          // Save current context
+          const { stdout } = await execAsync(
+            `cd ${this.projectRoot} && ~/.stackmemory/bin/stackmemory context add decision "Auto-checkpoint at ${new Date().toISOString()}"`
+          );
+
+          this.log('Context checkpoint saved');
+
+          // Load context from ChromaDB if available
+          if (process.env.CHROMADB_API_KEY) {
+            try {
+              await execAsync(
+                `cd ${this.projectRoot} && node scripts/chromadb-context-loader.js load 1`
+              );
+              this.log('ChromaDB context loaded');
+
+              // Check for important changes
+              await execAsync(
+                `cd ${this.projectRoot} && node scripts/chromadb-context-loader.js changes`
+              );
+            } catch (error) {
+              // Silent fail for ChromaDB
+            }
           }
+        } catch (error) {
+          this.log(`Context monitor error: ${error.message}`, 'ERROR');
         }
-      } catch (error) {
-        this.log(`Context monitor error: ${error.message}`, 'ERROR');
-      }
-    }, 15 * 60 * 1000); // Every 15 minutes
-    
+      },
+      15 * 60 * 1000
+    ); // Every 15 minutes
+
     // Also load context immediately on start
     this.loadInitialContext();
-    
+
     this.daemons.set('context-monitor', contextInterval);
   }
 
   async loadInitialContext() {
     if (!process.env.CHROMADB_API_KEY) return;
-    
+
     try {
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
-      
+
       // Load last 24 hours of context
       await execAsync(
         `cd ${this.projectRoot} && node scripts/chromadb-context-loader.js auto`
       );
-      
+
       this.log('Initial ChromaDB context loaded');
     } catch (error) {
       this.log(`Initial context load error: ${error.message}`, 'WARN');
@@ -126,20 +133,25 @@ class ClaudeAutoStartManager {
    * Already created, just ensure it's running
    */
   startLinearSync() {
-    if (!process.env.STACKMEMORY_LINEAR_API_KEY && !process.env.LINEAR_API_KEY) {
+    if (
+      !process.env.STACKMEMORY_LINEAR_API_KEY &&
+      !process.env.LINEAR_API_KEY
+    ) {
       this.log('Linear sync skipped - no API key', 'WARN');
       return;
     }
-    
+
     this.log('Starting Linear Sync Daemon...');
-    
-    const linearSync = spawn('node', [
-      path.join(this.projectRoot, 'scripts', 'linear-sync-daemon.js')
-    ], {
-      detached: true,
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
-    
+
+    const linearSync = spawn(
+      'node',
+      [path.join(this.projectRoot, 'scripts', 'linear-sync-daemon.js')],
+      {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+      }
+    );
+
     linearSync.unref();
     this.daemons.set('linear-sync', linearSync);
     this.log(`Linear sync started (PID: ${linearSync.pid})`);
@@ -151,13 +163,13 @@ class ClaudeAutoStartManager {
    */
   startFileWatcher() {
     this.log('Starting File Watcher...');
-    
+
     const watchPaths = [
       path.join(this.projectRoot, 'src'),
       path.join(this.projectRoot, 'scripts'),
-      path.join(this.projectRoot, '.stackmemory', 'tasks.jsonl')
+      path.join(this.projectRoot, '.stackmemory', 'tasks.jsonl'),
     ];
-    
+
     const watcher = chokidar.watch(watchPaths, {
       persistent: true,
       ignoreInitial: true,
@@ -166,25 +178,25 @@ class ClaudeAutoStartManager {
         '**/.git/**',
         '**/dist/**',
         '**/build/**',
-        '**/*.log'
-      ]
+        '**/*.log',
+      ],
     });
-    
+
     let changeTimeout;
-    
+
     watcher.on('change', (filepath) => {
       // Debounce changes
       clearTimeout(changeTimeout);
       changeTimeout = setTimeout(() => {
         this.log(`File changed: ${path.relative(this.projectRoot, filepath)}`);
-        
+
         // Auto-save context on significant changes
         if (filepath.endsWith('.ts') || filepath.endsWith('.js')) {
           this.saveFileChangeContext(filepath);
         }
       }, 1000);
     });
-    
+
     this.watchers.set('file-watcher', watcher);
     this.log('File watcher active');
   }
@@ -194,7 +206,7 @@ class ClaudeAutoStartManager {
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
-      
+
       const filename = path.basename(filepath);
       await execAsync(
         `cd ${this.projectRoot} && ~/.stackmemory/bin/stackmemory context add observation "Modified: ${filename}"`
@@ -210,47 +222,50 @@ class ClaudeAutoStartManager {
    */
   startErrorMonitor() {
     this.log('Starting Error Monitor...');
-    
+
     const errorPatterns = [
       /ERROR/i,
       /FAILED/i,
       /Exception/,
       /TypeError/,
       /ReferenceError/,
-      /SyntaxError/
+      /SyntaxError/,
     ];
-    
+
     const monitorInterval = setInterval(() => {
       // Check recent logs for errors
       const logsToCheck = [
         path.join(this.logDir, 'linear-sync.log'),
         path.join(this.logDir, 'sync-manager.log'),
-        path.join(this.projectRoot, 'npm-debug.log')
+        path.join(this.projectRoot, 'npm-debug.log'),
       ];
-      
-      logsToCheck.forEach(logFile => {
+
+      logsToCheck.forEach((logFile) => {
         if (fs.existsSync(logFile)) {
           const stats = fs.statSync(logFile);
           const lastCheck = this.lastErrorCheck || 0;
-          
+
           if (stats.mtimeMs > lastCheck) {
             const content = fs.readFileSync(logFile, 'utf8');
             const lines = content.split('\n').slice(-100); // Last 100 lines
-            
-            lines.forEach(line => {
-              errorPatterns.forEach(pattern => {
+
+            lines.forEach((line) => {
+              errorPatterns.forEach((pattern) => {
                 if (pattern.test(line)) {
-                  this.log(`Error detected: ${line.substring(0, 100)}...`, 'WARN');
+                  this.log(
+                    `Error detected: ${line.substring(0, 100)}...`,
+                    'WARN'
+                  );
                 }
               });
             });
           }
         }
       });
-      
+
       this.lastErrorCheck = Date.now();
     }, 60 * 1000); // Every minute
-    
+
     this.daemons.set('error-monitor', monitorInterval);
   }
 
@@ -260,30 +275,30 @@ class ClaudeAutoStartManager {
    */
   startWebhookListener() {
     this.log('Starting Webhook Listener...');
-    
+
     const express = require('express');
     const app = express();
     app.use(express.json());
-    
+
     const PORT = process.env.WEBHOOK_PORT || 3456;
-    
+
     app.post('/webhooks/linear', (req, res) => {
       const { action, data } = req.body;
       this.log(`Linear webhook: ${action} - ${data.identifier || data.id}`);
-      
+
       // Process webhook
       if (action === 'create' || action === 'update') {
         // Trigger sync
         this.triggerLinearSync();
       }
-      
+
       res.status(200).send('OK');
     });
-    
+
     const server = app.listen(PORT, () => {
       this.log(`Webhook listener on port ${PORT}`);
     });
-    
+
     this.daemons.set('webhook-listener', server);
   }
 
@@ -292,7 +307,7 @@ class ClaudeAutoStartManager {
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
-      
+
       await execAsync(
         `cd ${this.projectRoot} && node scripts/sync-linear-graphql.js`
       );
@@ -308,47 +323,57 @@ class ClaudeAutoStartManager {
    */
   startQualityGates() {
     this.log('Starting Quality Gates Monitor...');
-    
+
     // Watch for task completion patterns
     const taskWatcher = chokidar.watch(
       path.join(this.projectRoot, '.stackmemory', 'tasks.jsonl'),
       { persistent: true }
     );
-    
+
     taskWatcher.on('change', async () => {
       // Check last task status
       try {
-        const tasksFile = path.join(this.projectRoot, '.stackmemory', 'tasks.jsonl');
-        const lines = fs.readFileSync(tasksFile, 'utf8').split('\n').filter(Boolean);
+        const tasksFile = path.join(
+          this.projectRoot,
+          '.stackmemory',
+          'tasks.jsonl'
+        );
+        const lines = fs
+          .readFileSync(tasksFile, 'utf8')
+          .split('\n')
+          .filter(Boolean);
         const lastTask = JSON.parse(lines[lines.length - 1]);
-        
-        if (lastTask.status === 'completed' && 
-            lastTask.timestamp > Date.now() - 60000) { // Within last minute
+
+        if (
+          lastTask.status === 'completed' &&
+          lastTask.timestamp > Date.now() - 60000
+        ) {
+          // Within last minute
           await this.runQualityChecks();
         }
       } catch (error) {
         // Silent fail
       }
     });
-    
+
     this.watchers.set('quality-gates', taskWatcher);
   }
 
   async runQualityChecks() {
     this.log('Running quality checks...');
-    
+
     const checks = [
       { name: 'Lint', cmd: 'npm run lint' },
       { name: 'Tests', cmd: 'npm test' },
-      { name: 'Build', cmd: 'npm run build' }
+      { name: 'Build', cmd: 'npm run build' },
     ];
-    
+
     for (const check of checks) {
       try {
         const { exec } = await import('child_process');
         const { promisify } = await import('util');
         const execAsync = promisify(exec);
-        
+
         await execAsync(`cd ${this.projectRoot} && ${check.cmd}`);
         this.log(`✅ ${check.name} passed`);
       } catch (error) {
@@ -363,42 +388,46 @@ class ClaudeAutoStartManager {
    */
   startAutoHandoff() {
     this.log('Starting Auto-handoff Monitor...');
-    
+
     // Monitor for session end signals
     process.on('SIGINT', () => this.prepareHandoff('interrupt'));
     process.on('SIGTERM', () => this.prepareHandoff('terminate'));
-    
+
     // Also monitor for idle time
     let lastActivity = Date.now();
-    
-    const idleChecker = setInterval(() => {
-      const idleTime = Date.now() - lastActivity;
-      if (idleTime > 30 * 60 * 1000) { // 30 minutes idle
-        this.prepareHandoff('idle');
-      }
-    }, 5 * 60 * 1000); // Check every 5 minutes
-    
+
+    const idleChecker = setInterval(
+      () => {
+        const idleTime = Date.now() - lastActivity;
+        if (idleTime > 30 * 60 * 1000) {
+          // 30 minutes idle
+          this.prepareHandoff('idle');
+        }
+      },
+      5 * 60 * 1000
+    ); // Check every 5 minutes
+
     // Update activity on any file change
     this.watchers.get('file-watcher')?.on('all', () => {
       lastActivity = Date.now();
     });
-    
+
     this.daemons.set('auto-handoff', idleChecker);
   }
 
   async prepareHandoff(reason) {
     this.log(`Preparing handoff (${reason})...`);
-    
+
     try {
       const { exec } = await import('child_process');
       const { promisify } = await import('util');
       const execAsync = promisify(exec);
-      
+
       // Generate handoff
       await execAsync(
-        `cd ${this.projectRoot} && ~/.stackmemory/bin/stackmemory handoff generate`
+        `cd ${this.projectRoot} && ~/.stackmemory/bin/stackmemory capture`
       );
-      
+
       this.log('Handoff prepared successfully');
     } catch (error) {
       this.log(`Handoff error: ${error.message}`, 'ERROR');
@@ -411,37 +440,37 @@ class ClaudeAutoStartManager {
   async start() {
     this.log('🚀 Claude StackMemory Auto-Start Manager');
     this.log('=========================================\n');
-    
+
     // Save PID for management
     fs.writeFileSync(this.pidFile, process.pid.toString());
-    
+
     // Start all daemons
     this.startContextMonitor();
     this.startLinearSync();
     this.startFileWatcher();
     this.startErrorMonitor();
-    
+
     // Optional daemons (only if configured)
     if (process.env.ENABLE_WEBHOOKS === 'true') {
       this.startWebhookListener();
     }
-    
+
     if (process.env.ENABLE_QUALITY_GATES === 'true') {
       this.startQualityGates();
     }
-    
+
     this.startAutoHandoff();
-    
+
     this.log('\n✅ All daemons started successfully');
     this.log('📊 Active daemons:');
     this.daemons.forEach((daemon, name) => {
       this.log(`  - ${name}`);
     });
-    
+
     // Handle shutdown
     process.on('SIGINT', () => this.stop());
     process.on('SIGTERM', () => this.stop());
-    
+
     // Keep process alive
     process.stdin.resume();
   }
@@ -451,7 +480,7 @@ class ClaudeAutoStartManager {
    */
   stop() {
     this.log('\n🛑 Stopping all daemons...');
-    
+
     // Clear intervals
     this.daemons.forEach((daemon, name) => {
       if (typeof daemon.kill === 'function') {
@@ -463,18 +492,18 @@ class ClaudeAutoStartManager {
       }
       this.log(`  - ${name} stopped`);
     });
-    
+
     // Close watchers
     this.watchers.forEach((watcher, name) => {
       watcher.close();
       this.log(`  - ${name} closed`);
     });
-    
+
     // Remove PID file
     if (fs.existsSync(this.pidFile)) {
       fs.unlinkSync(this.pidFile);
     }
-    
+
     this.log('👋 All daemons stopped');
     process.exit(0);
   }
@@ -483,22 +512,31 @@ class ClaudeAutoStartManager {
    * Check status
    */
   static status() {
-    const pidFile = path.join(process.env.HOME, '.stackmemory', 'claude-daemons.pid');
-    
+    const pidFile = path.join(
+      process.env.HOME,
+      '.stackmemory',
+      'claude-daemons.pid'
+    );
+
     if (fs.existsSync(pidFile)) {
       const pid = fs.readFileSync(pidFile, 'utf8').trim();
-      
+
       try {
         // Check if process is running
         process.kill(pid, 0);
         console.log(`✅ Claude daemons running (PID: ${pid})`);
-        
+
         // Show recent logs
-        const logFile = path.join(process.env.HOME, '.stackmemory', 'logs', 'claude-autostart.log');
+        const logFile = path.join(
+          process.env.HOME,
+          '.stackmemory',
+          'logs',
+          'claude-autostart.log'
+        );
         if (fs.existsSync(logFile)) {
           const logs = fs.readFileSync(logFile, 'utf8').split('\n').slice(-10);
           console.log('\nRecent activity:');
-          logs.forEach(line => console.log(line));
+          logs.forEach((line) => console.log(line));
         }
         return true;
       } catch (error) {
@@ -519,7 +557,11 @@ const command = process.argv[2];
 if (command === 'status') {
   ClaudeAutoStartManager.status();
 } else if (command === 'stop') {
-  const pidFile = path.join(process.env.HOME, '.stackmemory', 'claude-daemons.pid');
+  const pidFile = path.join(
+    process.env.HOME,
+    '.stackmemory',
+    'claude-daemons.pid'
+  );
   if (fs.existsSync(pidFile)) {
     const pid = fs.readFileSync(pidFile, 'utf8').trim();
     process.kill(pid, 'SIGTERM');

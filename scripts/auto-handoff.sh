@@ -218,7 +218,7 @@ cleanup_handoffs() {
 handle_termination() {
     echo -e "\n${YELLOW}⚠️  Session terminating...${NC}"
     capture_context
-    echo -e "${GREEN}✨ Handoff complete! Run 'auto-handoff restore' to continue${NC}"
+    echo -e "${GREEN}✨ Handoff complete! Run 'stackmemory restore' to continue${NC}"
     exit 0
 }
 

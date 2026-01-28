@@ -160,7 +160,7 @@ stackmemory monitor --activity 2>/dev/null || true
 echo "📦 Saving session state..."
 
 # Generate handoff
-stackmemory handoff --generate > /dev/null 2>&1 && echo "✅ Handoff saved"
+stackmemory capture --no-commit > /dev/null 2>&1 && echo "✅ Handoff saved"
 
 # Save ledger if context is significant
 CONTEXT_STATUS=$(stackmemory clear --check 2>/dev/null | grep -o '[0-9]\\+%' | head -1 | tr -d '%')
@@ -187,7 +187,7 @@ stackmemory clear --save > /dev/null 2>&1
 echo "✅ Continuity ledger saved"
 
 # Generate quick handoff
-stackmemory handoff --generate > /dev/null 2>&1
+stackmemory capture --no-commit > /dev/null 2>&1
 echo "✅ Handoff document saved"
 
 echo "✅ Ready for /clear - context will be restored automatically"
@@ -204,7 +204,7 @@ echo "💡 After /clear, run: stackmemory clear --restore"
 # Generates handoff after 5 minutes of inactivity
 
 echo "⏸️ Session idle - generating handoff..."
-stackmemory handoff --generate > /dev/null 2>&1
+stackmemory capture --no-commit > /dev/null 2>&1
 echo "✅ Handoff saved. Ready to resume anytime."
 `
     );
