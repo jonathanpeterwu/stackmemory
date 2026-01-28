@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.5.50",
+  "version": "0.5.51",
   "description": "Lossless memory runtime for AI coding tools - organizes context as a call stack instead of linear chat logs, with team collaboration and infinite retention",
   "engines": {
     "node": ">=20.0.0",
@@ -151,7 +151,6 @@
   "optionalDependencies": {
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
-    "chokidar": "^5.0.0",
-    "node-pty": "^1.1.0"
+    "chokidar": "^5.0.0"
   }
 }

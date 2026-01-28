@@ -1323,6 +1323,159 @@ configCmd
     console.log(chalk.green('Greptile disabled by default'));
   });
 
+configCmd
+  .command('setup')
+  .description('Interactive feature setup wizard')
+  .action(async () => {
+    const inquirer = await import('inquirer');
+    const ora = (await import('ora')).default;
+    const config = loadSMConfig();
+
+    console.log(chalk.cyan('\nClaude-SM Feature Setup\n'));
+
+    interface FeatureDef {
+      key: keyof ClaudeSMConfig;
+      name: string;
+      desc: string;
+    }
+
+    const features: FeatureDef[] = [
+      {
+        key: 'defaultSweep',
+        name: 'Sweep',
+        desc: 'Next-edit predictions via PTY wrapper (installs node-pty)',
+      },
+      {
+        key: 'defaultGreptile',
+        name: 'Greptile',
+        desc: 'AI code review MCP server (requires GREPTILE_API_KEY)',
+      },
+      {
+        key: 'defaultModelRouting',
+        name: 'Model Routing',
+        desc: 'Route tasks to Qwen/other providers',
+      },
+      {
+        key: 'defaultWorktree',
+        name: 'Worktree',
+        desc: 'Git worktree isolation per instance',
+      },
+      {
+        key: 'defaultWhatsApp',
+        name: 'WhatsApp',
+        desc: 'Notifications and remote control',
+      },
+      {
+        key: 'defaultTracing',
+        name: 'Tracing',
+        desc: 'Debug trace logging',
+      },
+      {
+        key: 'defaultNotifyOnDone',
+        name: 'Notify on Done',
+        desc: 'Notification when session ends',
+      },
+    ];
+
+    const choices = features.map((f) => ({
+      name: `${f.name} - ${f.desc}`,
+      value: f.key,
+      checked: config[f.key],
+    }));
+
+    const { selected } = await inquirer.default.prompt([
+      {
+        type: 'checkbox',
+        name: 'selected',
+        message: 'Select features to enable:',
+        choices,
+      },
+    ]);
+
+    const selectedKeys = selected as string[];
+
+    // Apply all toggles
+    for (const f of features) {
+      config[f.key] = selectedKeys.includes(f.key);
+    }
+    saveSMConfig(config);
+
+    // Post-install: Sweep -> install node-pty
+    if (config.defaultSweep) {
+      let hasPty = false;
+      try {
+        await import('node-pty');
+        hasPty = true;
+      } catch {
+        // not installed
+      }
+      if (!hasPty) {
+        const spinner = ora('Installing node-pty...').start();
+        try {
+          execSync('npm install node-pty', {
+            stdio: 'ignore',
+            cwd: process.cwd(),
+          });
+          spinner.succeed('node-pty installed');
+        } catch {
+          spinner.fail('Failed to install node-pty');
+          console.log(chalk.gray('  Install manually: npm install node-pty'));
+        }
+      }
+    }
+
+    // Post-install: Greptile -> prompt for API key, register MCP
+    if (config.defaultGreptile) {
+      const apiKey = process.env['GREPTILE_API_KEY'];
+      if (!apiKey) {
+        const { key } = await inquirer.default.prompt([
+          {
+            type: 'password',
+            name: 'key',
+            message: 'Enter your Greptile API key (from app.greptile.com):',
+            mask: '*',
+          },
+        ]);
+        if (key && key.trim()) {
+          // Append to .env
+          const envPath = path.join(process.cwd(), '.env');
+          const line = `\nGREPTILE_API_KEY=${key.trim()}\n`;
+          fs.appendFileSync(envPath, line);
+          process.env['GREPTILE_API_KEY'] = key.trim();
+          console.log(chalk.green('  API key saved to .env'));
+        }
+      }
+
+      // Register MCP server
+      const currentKey = process.env['GREPTILE_API_KEY'];
+      if (currentKey) {
+        try {
+          const result = execSync('claude mcp list 2>/dev/null', {
+            encoding: 'utf-8',
+          });
+          if (!result.includes('greptile')) {
+            execSync(
+              `claude mcp add --transport http greptile https://api.greptile.com/mcp --header "Authorization: Bearer ${currentKey}"`,
+              { stdio: 'ignore' }
+            );
+            console.log(chalk.green('  Greptile MCP server registered'));
+          }
+        } catch {
+          // ignore registration failures
+        }
+      }
+    }
+
+    // Summary
+    console.log(chalk.cyan('\nFeature summary:'));
+    for (const f of features) {
+      const on = config[f.key];
+      const mark = on ? chalk.green('ON') : chalk.gray('OFF');
+      console.log(`  ${mark}  ${f.name}`);
+    }
+    console.log(chalk.gray(`\nSaved to ${getConfigPath()}`));
+  });
+
 // Main command (default action when no subcommand)
 program
   .option('-w, --worktree', 'Create isolated worktree for this instance')

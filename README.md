@@ -1,6 +1,6 @@
 # StackMemory
 
-**Lossless, project-scoped memory for AI tools** • v0.5.50
+**Lossless, project-scoped memory for AI tools** • v0.5.51
 
 StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions:
 
@@ -488,7 +488,7 @@ stackmemory mcp-server [--port 3001]
 - Hosted: **Private beta**
 - OSS mirror: **Production ready**
 - MCP integration: **Stable**
-- CLI: **v0.5.50** - Zero-config setup, diagnostics, full task/context/Linear management
+- CLI: **v0.5.51** - Zero-config setup, diagnostics, full task/context/Linear management
 - Two-tier storage: **Complete**
 - Test Suite: **480 tests passing**
 
@@ -496,11 +496,14 @@ stackmemory mcp-server [--port 3001]
 
 ## Changelog
 
-### v0.5.50 (2026-01-28)
+### v0.5.51 (2026-01-28)
+- **Interactive feature setup**: `claude-sm config setup` wizard to toggle features and install deps on demand
+  - Checkbox prompt for all features (Sweep, Greptile, Model Routing, Worktree, WhatsApp, Tracing)
+  - Auto-installs `node-pty` when Sweep is enabled
+  - Prompts for `GREPTILE_API_KEY` and registers MCP server when Greptile is enabled
 - **Sweep next-edit predictions**: PTY wrapper displays predicted edits as a status bar in Claude Code sessions. Tab to accept, Esc to dismiss. Powered by llama-server via PostToolUse hooks.
   - `claude-sm --sweep` (default: on) or `stackmemory sweep wrap`
-  - Optional dependency: `npm install node-pty`
-  - Components: state-watcher, status-bar, tab-interceptor, pty-wrapper
+  - `node-pty` installed on demand via setup (no longer in optionalDependencies)
 - **Greptile AI code review**: Auto-registers Greptile MCP server for codebase-aware code review.
   - `claude-sm --greptile` (default: on)
   - Requires `GREPTILE_API_KEY` in `.env`
