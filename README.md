@@ -1,6 +1,6 @@
 # StackMemory
 
-**Lossless, project-scoped memory for AI tools** • v0.5.47
+**Lossless, project-scoped memory for AI tools** • v0.5.50
 
 StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions:
 
@@ -488,13 +488,24 @@ stackmemory mcp-server [--port 3001]
 - Hosted: **Private beta**
 - OSS mirror: **Production ready**
 - MCP integration: **Stable**
-- CLI: **v0.5.47** - Zero-config setup, diagnostics, full task/context/Linear management
+- CLI: **v0.5.50** - Zero-config setup, diagnostics, full task/context/Linear management
 - Two-tier storage: **Complete**
-- Test Suite: **490 tests passing**
+- Test Suite: **480 tests passing**
 
 ---
 
 ## Changelog
+
+### v0.5.50 (2026-01-28)
+- **Sweep next-edit predictions**: PTY wrapper displays predicted edits as a status bar in Claude Code sessions. Tab to accept, Esc to dismiss. Powered by llama-server via PostToolUse hooks.
+  - `claude-sm --sweep` (default: on) or `stackmemory sweep wrap`
+  - Optional dependency: `npm install node-pty`
+  - Components: state-watcher, status-bar, tab-interceptor, pty-wrapper
+- **Greptile AI code review**: Auto-registers Greptile MCP server for codebase-aware code review.
+  - `claude-sm --greptile` (default: on)
+  - Requires `GREPTILE_API_KEY` in `.env`
+  - Tools: `index_repository`, `query_repository`, `get_repository_info`
+- **Feature flags**: Added `greptile` feature flag to `feature-flags.ts`
 
 ### v0.5.47 (2026-01-27)
 - **Graceful database failures**: Handles native module version mismatches
