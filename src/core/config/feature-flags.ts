@@ -16,6 +16,7 @@ export interface FeatureFlags {
   aiSummaries: boolean;
   skills: boolean;
   ralph: boolean;
+  greptile: boolean;
 }
 
 /**
@@ -68,6 +69,12 @@ export function isFeatureEnabled(feature: keyof FeatureFlags): boolean {
       // Ralph enabled by default in development (unless explicitly disabled)
       // For npm package users, must be explicitly enabled
       return process.env['STACKMEMORY_RALPH'] !== 'false';
+    case 'greptile':
+      // Greptile enabled when API key is available
+      return (
+        process.env['STACKMEMORY_GREPTILE'] !== 'false' &&
+        !!process.env['GREPTILE_API_KEY']
+      );
     default:
       return false;
   }
@@ -85,6 +92,7 @@ export function getFeatureFlags(): FeatureFlags {
     aiSummaries: isFeatureEnabled('aiSummaries'),
     skills: isFeatureEnabled('skills'),
     ralph: isFeatureEnabled('ralph'),
+    greptile: isFeatureEnabled('greptile'),
   };
 }
 
@@ -114,6 +122,9 @@ export function logFeatureStatus(): void {
     );
     console.log(
       `  Ralph: ${flags.ralph ? 'enabled' : 'disabled (set STACKMEMORY_RALPH=true)'}`
+    );
+    console.log(
+      `  Greptile: ${flags.greptile ? 'enabled' : 'disabled (no GREPTILE_API_KEY)'}`
     );
   }
 }

@@ -11,6 +11,7 @@ import { join } from 'path';
 import {
   createServerManager,
   createPredictionClient,
+  launchWrapper,
   SweepServerConfig,
   DEFAULT_SERVER_CONFIG,
 } from '../../features/sweep/index.js';
@@ -282,6 +283,25 @@ Predictions are triggered after file edits via Claude Code hooks.
         } catch {
           // Ignore
         }
+      }
+    });
+
+  // Wrap command
+  cmd
+    .command('wrap')
+    .description('Launch Claude Code with Sweep prediction status bar')
+    .option('--claude-bin <path>', 'Path to claude binary')
+    .allowUnknownOption(true)
+    .action(async (options, command) => {
+      try {
+        const claudeArgs = command.args || [];
+        await launchWrapper({
+          claudeBin: options.claudeBin,
+          claudeArgs,
+        });
+      } catch (error) {
+        console.error(chalk.red((error as Error).message));
+        process.exit(1);
       }
     });
 

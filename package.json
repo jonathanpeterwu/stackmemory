@@ -151,6 +151,7 @@
   "optionalDependencies": {
     "blessed": "^0.1.81",
     "blessed-contrib": "^4.11.0",
-    "chokidar": "^5.0.0"
+    "chokidar": "^5.0.0",
+    "node-pty": "^1.1.0"
   }
 }

@@ -30,6 +30,7 @@ import {
   loadModelRouterConfig,
   type ModelProvider,
 } from '../core/models/model-router.js';
+import { launchWrapper } from '../features/sweep/pty-wrapper.js';
 import { FallbackMonitor } from '../core/models/fallback-monitor.js';
 
 // __filename and __dirname are provided by esbuild banner for ESM compatibility
@@ -43,6 +44,8 @@ interface ClaudeSMConfig {
   defaultNotifyOnDone: boolean;
   defaultWhatsApp: boolean;
   defaultModelRouting: boolean;
+  defaultSweep: boolean;
+  defaultGreptile: boolean;
 }
 
 interface ClaudeConfig {
@@ -65,6 +68,8 @@ interface ClaudeConfig {
   useModelRouting: boolean;
   forceProvider?: ModelProvider;
   useThinkingMode: boolean;
+  useSweep: boolean;
+  useGreptile: boolean;
 }
 
 const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
@@ -76,6 +81,8 @@ const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
   defaultNotifyOnDone: true,
   defaultWhatsApp: false,
   defaultModelRouting: false,
+  defaultSweep: true,
+  defaultGreptile: true,
 };
 
 function getConfigPath(): string {
@@ -129,6 +136,8 @@ class ClaudeSM {
       sessionStartTime: Date.now(),
       useModelRouting: this.smConfig.defaultModelRouting,
       useThinkingMode: false,
+      useSweep: this.smConfig.defaultSweep,
+      useGreptile: this.smConfig.defaultGreptile,
     };
 
     this.stackmemoryPath = this.findStackMemory();
@@ -211,6 +220,60 @@ class ClaudeSM {
       return 'claude';
     } catch {}
     return null;
+  }
+
+  private ensureGreptileMcp(): void {
+    const apiKey = process.env['GREPTILE_API_KEY'];
+    const ghToken = process.env['GITHUB_TOKEN'];
+
+    if (!apiKey) {
+      console.log(
+        chalk.gray('   Greptile: disabled (set GREPTILE_API_KEY in .env)')
+      );
+      return;
+    }
+
+    // Check if already registered
+    try {
+      const result = execSync('claude mcp list 2>/dev/null', {
+        encoding: 'utf-8',
+      });
+      if (result.includes('greptile')) {
+        console.log(chalk.gray('   Greptile: MCP server registered'));
+        return;
+      }
+    } catch {
+      // claude mcp list not available, try to add anyway
+    }
+
+    // Register Greptile MCP server via HTTP transport
+    try {
+      const cmd = [
+        'claude mcp add',
+        '--transport http',
+        'greptile',
+        'https://api.greptile.com/mcp',
+        `--header "Authorization: Bearer ${apiKey}"`,
+      ];
+      if (ghToken) {
+        cmd.push(`--header "X-GitHub-Token: ${ghToken}"`);
+      }
+      execSync(cmd.join(' '), { stdio: 'ignore' });
+      console.log(chalk.cyan('   Greptile: MCP server registered'));
+    } catch {
+      // Fallback: register via stdio transport with npx
+      try {
+        const envArgs = [`GREPTILE_API_KEY=${apiKey}`];
+        if (ghToken) envArgs.push(`GITHUB_TOKEN=${ghToken}`);
+        execSync(
+          `claude mcp add greptile -- env ${envArgs.join(' ')} npx greptile-mcp-server`,
+          { stdio: 'ignore' }
+        );
+        console.log(chalk.cyan('   Greptile: MCP server registered (stdio)'));
+      } catch {
+        console.log(chalk.gray('   Greptile: failed to register MCP server'));
+      }
+    }
   }
 
   private setupWorktree(): string | null {
@@ -674,6 +737,18 @@ class ClaudeSM {
         case '--no-model-routing':
           this.config.useModelRouting = false;
           break;
+        case '--sweep':
+          this.config.useSweep = true;
+          break;
+        case '--no-sweep':
+          this.config.useSweep = false;
+          break;
+        case '--greptile':
+          this.config.useGreptile = true;
+          break;
+        case '--no-greptile':
+          this.config.useGreptile = false;
+          break;
         default:
           claudeArgs.push(arg);
       }
@@ -856,6 +931,11 @@ class ClaudeSM {
       }
     }
 
+    // Ensure Greptile MCP server is registered if enabled
+    if (this.config.useGreptile) {
+      this.ensureGreptileMcp();
+    }
+
     // Start WhatsApp services if enabled
     if (this.config.useWhatsApp) {
       console.log(
@@ -865,6 +945,31 @@ class ClaudeSM {
     }
 
     console.log();
+
+    // Launch via Sweep PTY wrapper if enabled
+    if (this.config.useSweep) {
+      const claudeBin = this.resolveClaudeBin();
+      if (!claudeBin) {
+        console.error(chalk.red('Claude CLI not found.'));
+        process.exit(1);
+        return;
+      }
+      console.log(
+        chalk.cyan('[Sweep] Launching Claude with prediction bar...')
+      );
+      console.log(chalk.gray('─'.repeat(42)));
+      try {
+        await launchWrapper({
+          claudeBin,
+          claudeArgs,
+        });
+      } catch (error) {
+        console.error(chalk.red((error as Error).message));
+        process.exit(1);
+      }
+      return;
+    }
+
     console.log(chalk.gray('Starting Claude...'));
     console.log(chalk.gray('─'.repeat(42)));
 
@@ -1041,6 +1146,12 @@ configCmd
     console.log(
       `  defaultModelRouting: ${config.defaultModelRouting ? chalk.green('true') : chalk.gray('false')}`
     );
+    console.log(
+      `  defaultSweep:        ${config.defaultSweep ? chalk.green('true') : chalk.gray('false')}`
+    );
+    console.log(
+      `  defaultGreptile:     ${config.defaultGreptile ? chalk.green('true') : chalk.gray('false')}`
+    );
     console.log(chalk.gray(`\nConfig: ${getConfigPath()}`));
   });
 
@@ -1062,6 +1173,8 @@ configCmd
       whatsapp: 'defaultWhatsApp',
       'model-routing': 'defaultModelRouting',
       modelrouting: 'defaultModelRouting',
+      sweep: 'defaultSweep',
+      greptile: 'defaultGreptile',
     };
 
     const configKey = keyMap[key];
@@ -1069,7 +1182,7 @@ configCmd
       console.log(chalk.red(`Unknown key: ${key}`));
       console.log(
         chalk.gray(
-          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done, whatsapp'
+          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done, whatsapp, sweep, greptile'
         )
       );
       process.exit(1);
@@ -1185,6 +1298,31 @@ configCmd
     console.log(chalk.green('Model routing disabled by default'));
   });
 
+configCmd
+  .command('greptile-on')
+  .description(
+    'Enable Greptile AI code review by default (requires GREPTILE_API_KEY)'
+  )
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultGreptile = true;
+    saveSMConfig(config);
+    console.log(chalk.green('Greptile enabled by default'));
+    if (!process.env['GREPTILE_API_KEY']) {
+      console.log(chalk.gray('Set GREPTILE_API_KEY in .env to activate'));
+    }
+  });
+
+configCmd
+  .command('greptile-off')
+  .description('Disable Greptile AI code review by default')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultGreptile = false;
+    saveSMConfig(config);
+    console.log(chalk.green('Greptile disabled by default'));
+  });
+
 // Main command (default action when no subcommand)
 program
   .option('-w, --worktree', 'Create isolated worktree for this instance')
@@ -1215,6 +1353,10 @@ program
   .option('--ollama', 'Force Ollama provider for this session')
   .option('--model-routing', 'Enable model routing')
   .option('--no-model-routing', 'Disable model routing')
+  .option('--sweep', 'Enable Sweep next-edit predictions (PTY wrapper)')
+  .option('--no-sweep', 'Disable Sweep predictions')
+  .option('--greptile', 'Enable Greptile AI code review (MCP server)')
+  .option('--no-greptile', 'Disable Greptile integration')
   .helpOption('-h, --help', 'Display help')
   .allowUnknownOption(true)
   .action(async (_options) => {
