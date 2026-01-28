@@ -37,7 +37,6 @@ import {
   createMemoryCommand,
 } from './commands/decision.js';
 import clearCommand from './commands/clear.js';
-import createRalphCommand from './commands/ralph.js';
 import serviceCommand from './commands/service.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerSignupCommand } from './commands/signup.js';
@@ -687,7 +686,6 @@ program.addCommand(createHandoffCommand());
 program.addCommand(createDecisionCommand());
 program.addCommand(createMemoryCommand());
 program.addCommand(clearCommand);
-program.addCommand(createRalphCommand());
 program.addCommand(serviceCommand);
 program.addCommand(createHooksCommand());
 
@@ -699,6 +697,18 @@ if (isFeatureEnabled('skills')) {
     )
     .catch(() => {
       // Skills integration not available - silently skip
+    });
+}
+
+// Register ralph commands (feature-flagged, lazy-loaded)
+// Default ON for development, OFF for npm package users
+if (isFeatureEnabled('ralph')) {
+  import('./commands/ralph.js')
+    .then(({ default: createRalphCommand }) =>
+      program.addCommand(createRalphCommand())
+    )
+    .catch(() => {
+      // Ralph integration not available - silently skip
     });
 }
 program.addCommand(createDaemonCommand());

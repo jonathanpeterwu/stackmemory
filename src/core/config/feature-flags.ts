@@ -15,6 +15,7 @@ export interface FeatureFlags {
   chromadb: boolean;
   aiSummaries: boolean;
   skills: boolean;
+  ralph: boolean;
 }
 
 /**
@@ -63,6 +64,10 @@ export function isFeatureEnabled(feature: keyof FeatureFlags): boolean {
         process.env['STACKMEMORY_SKILLS'] === 'true' ||
         process.env['STACKMEMORY_SKILLS'] === '1'
       );
+    case 'ralph':
+      // Ralph enabled by default in development (unless explicitly disabled)
+      // For npm package users, must be explicitly enabled
+      return process.env['STACKMEMORY_RALPH'] !== 'false';
     default:
       return false;
   }
@@ -79,6 +84,7 @@ export function getFeatureFlags(): FeatureFlags {
     chromadb: isFeatureEnabled('chromadb'),
     aiSummaries: isFeatureEnabled('aiSummaries'),
     skills: isFeatureEnabled('skills'),
+    ralph: isFeatureEnabled('ralph'),
   };
 }
 
@@ -105,6 +111,9 @@ export function logFeatureStatus(): void {
     );
     console.log(
       `  Skills: ${flags.skills ? 'enabled' : 'disabled (set STACKMEMORY_SKILLS=true)'}`
+    );
+    console.log(
+      `  Ralph: ${flags.ralph ? 'enabled' : 'disabled (set STACKMEMORY_RALPH=true)'}`
     );
   }
 }
