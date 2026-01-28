@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.5.47",
+  "version": "0.5.48",
   "description": "Lossless memory runtime for AI coding tools - organizes context as a call stack instead of linear chat logs, with team collaboration and infinite retention",
   "engines": {
     "node": ">=20.0.0",
@@ -74,6 +74,9 @@
     "daemons:stop": "node scripts/claude-sm-autostart.js stop",
     "daemon:session": "node dist/daemon/session-daemon.js",
     "daemon:session:start": "node dist/daemon/session-daemon.js --session-id",
+    "daemon:start": "node dist/daemon/unified-daemon.js",
+    "daemon:stop": "node dist/cli/index.js daemon stop",
+    "daemon:status": "node dist/cli/index.js daemon status",
     "sync:start": "node scripts/background-sync-manager.js",
     "sync:setup": "./scripts/setup-background-sync.sh",
     "prepare": "echo 'Prepare step completed'"

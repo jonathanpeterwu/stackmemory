@@ -87,31 +87,4 @@ describe('CLI Integration', () => {
       expect(result).toContain('Context Usage');
     });
   });
-
-  describe('Workflow Command', () => {
-    it('should list available workflows', () => {
-      // Initialize first
-      execSync(`node ${cliPath} init`, { cwd: testDir });
-
-      const result = execSync(`node ${cliPath} workflow --list`, {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      expect(result).toContain('Available Workflows');
-    });
-
-    it('should show workflow status', () => {
-      // Initialize first
-      execSync(`node ${cliPath} init`, { cwd: testDir });
-
-      const result = execSync(`node ${cliPath} workflow --status`, {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      // Should show status (even if no workflow active)
-      expect(result).toBeDefined();
-    });
-  });
 });

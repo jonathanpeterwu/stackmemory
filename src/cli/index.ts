@@ -36,19 +36,14 @@ import {
   createDecisionCommand,
   createMemoryCommand,
 } from './commands/decision.js';
-import { createSkillsCommand } from './commands/skills.js';
-import { createTestCommand } from './commands/test.js';
 import clearCommand from './commands/clear.js';
-import createWorkflowCommand from './commands/workflow.js';
-import monitorCommand from './commands/monitor.js';
-import qualityCommand from './commands/quality.js';
 import createRalphCommand from './commands/ralph.js';
 import serviceCommand from './commands/service.js';
 import { registerLoginCommand } from './commands/login.js';
 import { registerSignupCommand } from './commands/signup.js';
 import { registerLogoutCommand, registerDbCommands } from './commands/db.js';
-import { createSweepCommand } from './commands/sweep.js';
 import { createHooksCommand } from './commands/hooks.js';
+import { createDaemonCommand } from './commands/daemon.js';
 import { createShellCommand } from './commands/shell.js';
 import { createAPICommand } from './commands/api.js';
 import { createCleanupProcessesCommand } from './commands/cleanup-processes.js';
@@ -170,17 +165,14 @@ program
 program
   .command('init')
   .description(
-    `Initialize StackMemory in current project (zero-config by default)
-
-Options:
-  --interactive    Ask configuration questions
-  --chromadb       Enable ChromaDB semantic search (prompts for API key)`
+    'Initialize StackMemory in current project (zero-config by default)'
   )
   .option('-i, --interactive', 'Interactive mode with configuration prompts')
   .option(
     '--chromadb',
     'Enable ChromaDB for semantic search (prompts for API key)'
   )
+  .option('--daemon', 'Start the background daemon after initialization')
   .action(async (options) => {
     try {
       const projectRoot = process.cwd();
@@ -235,6 +227,31 @@ Options:
       console.log(chalk.gray(`    Project: ${projectRoot}`));
       console.log(chalk.gray(`    Storage: SQLite (local)`));
 
+      db.close();
+
+      // Install daemon service if requested
+      if (options.daemon) {
+        console.log(chalk.cyan('\nInstalling background service...'));
+        try {
+          const { installServiceSilent } =
+            await import('./commands/service.js');
+          const success = await installServiceSilent();
+          if (success) {
+            console.log(chalk.green('[OK] Guardian service installed'));
+            console.log(chalk.gray('    Auto-starts on login'));
+            console.log(
+              chalk.gray('    Check status: stackmemory service status')
+            );
+          } else {
+            console.log(chalk.yellow('[WARN] Could not install service'));
+            console.log(chalk.gray('  Run: stackmemory service install'));
+          }
+        } catch {
+          console.log(chalk.yellow('[WARN] Could not install service'));
+          console.log(chalk.gray('  Run: stackmemory service install'));
+        }
+      }
+
       // Show next steps
       console.log(chalk.cyan('\nNext steps:'));
       console.log(
@@ -249,8 +266,6 @@ Options:
         chalk.white('  3. stackmemory doctor') +
           chalk.gray('     # Diagnose issues')
       );
-
-      db.close();
     } catch (error: unknown) {
       logger.error('Failed to initialize StackMemory', error as Error);
       console.error(chalk.red('\n[ERROR] Initialization failed'));
@@ -671,16 +686,22 @@ program.addCommand(createConfigCommand());
 program.addCommand(createHandoffCommand());
 program.addCommand(createDecisionCommand());
 program.addCommand(createMemoryCommand());
-program.addCommand(createSkillsCommand());
-program.addCommand(createTestCommand());
 program.addCommand(clearCommand);
-program.addCommand(createWorkflowCommand());
-program.addCommand(monitorCommand);
-program.addCommand(qualityCommand);
 program.addCommand(createRalphCommand());
 program.addCommand(serviceCommand);
-program.addCommand(createSweepCommand());
 program.addCommand(createHooksCommand());
+
+// Register skills commands (optional, lazy-loaded)
+if (isFeatureEnabled('skills')) {
+  import('./commands/skills.js')
+    .then(({ createSkillsCommand }) =>
+      program.addCommand(createSkillsCommand())
+    )
+    .catch(() => {
+      // Skills integration not available - silently skip
+    });
+}
+program.addCommand(createDaemonCommand());
 program.addCommand(createShellCommand());
 program.addCommand(createAPICommand());
 program.addCommand(createCleanupProcessesCommand());

@@ -14,6 +14,7 @@ export interface FeatureFlags {
   whatsapp: boolean;
   chromadb: boolean;
   aiSummaries: boolean;
+  skills: boolean;
 }
 
 /**
@@ -56,6 +57,12 @@ export function isFeatureEnabled(feature: keyof FeatureFlags): boolean {
         process.env['STACKMEMORY_AI'] !== 'false' &&
         (!!process.env['ANTHROPIC_API_KEY'] || !!process.env['OPENAI_API_KEY'])
       );
+    case 'skills':
+      // Skills enabled explicitly or when AI summaries available
+      return (
+        process.env['STACKMEMORY_SKILLS'] === 'true' ||
+        process.env['STACKMEMORY_SKILLS'] === '1'
+      );
     default:
       return false;
   }
@@ -71,6 +78,7 @@ export function getFeatureFlags(): FeatureFlags {
     whatsapp: isFeatureEnabled('whatsapp'),
     chromadb: isFeatureEnabled('chromadb'),
     aiSummaries: isFeatureEnabled('aiSummaries'),
+    skills: isFeatureEnabled('skills'),
   };
 }
 
@@ -94,6 +102,9 @@ export function logFeatureStatus(): void {
     console.log(`  ChromaDB: ${flags.chromadb ? 'enabled' : 'disabled'}`);
     console.log(
       `  AI Summaries: ${flags.aiSummaries ? 'enabled' : 'disabled (no API key)'}`
+    );
+    console.log(
+      `  Skills: ${flags.skills ? 'enabled' : 'disabled (set STACKMEMORY_SKILLS=true)'}`
     );
   }
 }

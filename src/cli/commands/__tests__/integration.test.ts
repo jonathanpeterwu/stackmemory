@@ -49,50 +49,6 @@ describe('CLI Integration Tests', () => {
     });
   });
 
-  describe('Workflow Commands', () => {
-    it('should list available workflows', () => {
-      const result = execSync(cli('workflow --list'), {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      // Updated to match actual output
-      expect(result).toContain('Available Workflows');
-      expect(result).toContain('tdd');
-      expect(result).toContain('feature');
-      expect(result).toContain('bugfix');
-      expect(result).toContain('refactor');
-    });
-
-    it('should start TDD workflow', () => {
-      const result = execSync(cli('workflow --start tdd'), {
-        cwd: testDir,
-        encoding: 'utf8',
-      });
-
-      // Updated to match actual output
-      expect(result).toContain('Started tdd workflow');
-      expect(result).toContain('Workflow ID:');
-    });
-
-    it('should show workflow status', { timeout: 30000 }, () => {
-      // Start a workflow first
-      execSync(cli('workflow --start feature'), {
-        cwd: testDir,
-        timeout: 15000,
-      });
-
-      const result = execSync(cli('workflow --status'), {
-        cwd: testDir,
-        encoding: 'utf8',
-        timeout: 15000,
-      });
-
-      // Updated to match actual output
-      expect(result).toContain('Active Workflows');
-    });
-  });
-
   describe('Handoff Commands', () => {
     it('should generate handoff document', () => {
       const result = execSync(cli('handoff capture'), {
