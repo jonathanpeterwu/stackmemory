@@ -1,6 +1,6 @@
 # StackMemory
 
-**Lossless, project-scoped memory for AI tools** • v0.5.40
+**Lossless, project-scoped memory for AI tools** • v0.5.47
 
 StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions:
 
@@ -30,7 +30,7 @@ StackMemory solves this by:
 
 - Storing all events, tool calls, and decisions
 - Smart retrieval of relevant context
-- Call stack organization (10,000+ frame depth)
+- Call stack organization for nested context
 - Configurable importance scoring
 - Team collaboration through shared stacks
 
@@ -92,25 +92,14 @@ The editor never manages memory directly; it asks StackMemory for the **context 
 
 ## Product Health Metrics
 
-### Current Status (v0.5.30)
+### Current Status (v0.5.47)
 
 | Metric | Current | Target | Status |
 |--------|---------|--------|--------|
 | **Test Coverage** | 85% | 90% | In Progress |
-| **Performance (p50)** | TBD | <50ms | Pending |
-| **Documentation** | 70% | 100% | In Progress |
-| **Active Issues** | 5 high | 0 high | In Progress |
-| **Code Quality** | 396 tests | 400+ | Done |
-| **npm Downloads** | Growing | 1K+/week | On Track |
-
-### Quality Score: 78/100
-
-**Formula:** (Test Coverage × 0.3) + (Performance × 0.3) + (Documentation × 0.2) + (Issues Resolution × 0.2)
-
-### Next Sprint Priorities
-
-1. **[STA-289] Performance Optimization** - Achieve SLA targets
-2. **[STA-291] Code Cleanup** - Zero TODOs, 90% coverage
+| **Tests Passing** | 490 | 500+ | On Track |
+| **Documentation** | 80% | 100% | In Progress |
+| **Active Issues** | 3 high | 0 high | In Progress |
 
 ---
 
@@ -260,40 +249,33 @@ Available MCP tools in Claude Code:
 
 ## 2. Open-Source Local Mode
 
-### Step 1: Clone
+### Step 1: Clone & Build
 
 ```bash
-git clone https://github.com/stackmemory/stackmemory
+git clone https://github.com/stackmemoryai/stackmemory
 cd stackmemory
+npm install
+npm run build
 ```
 
 ### Step 2: Run local MCP server
 
 ```bash
-cargo run --bin stackmemory-mcp
-# or
-npm run dev
+npm run mcp:start
+# or for development
+npm run mcp:dev
 ```
 
-This creates:
-
-```
-.memory/
-  └── memory.db   # SQLite
-```
-
-All project memory lives locally.
-
----
+This creates `.stackmemory/` with SQLite storage.
 
 ### Step 3: Point your editor to local MCP
 
 ```json
 {
-  "tools": {
+  "mcpServers": {
     "stackmemory": {
-      "command": "stackmemory-mcp",
-      "args": ["--local"]
+      "command": "node",
+      "args": ["dist/integrations/mcp/server.js"]
     }
   }
 }
@@ -506,7 +488,7 @@ stackmemory mcp-server [--port 3001]
 - Hosted: **Private beta**
 - OSS mirror: **Production ready**
 - MCP integration: **Stable**
-- CLI: **v0.5.40** - Zero-config setup, diagnostics, full task/context/Linear management
+- CLI: **v0.5.47** - Zero-config setup, diagnostics, full task/context/Linear management
 - Two-tier storage: **Complete**
 - Test Suite: **490 tests passing**
 
@@ -514,13 +496,18 @@ stackmemory mcp-server [--port 3001]
 
 ## Changelog
 
+### v0.5.47 (2026-01-27)
+- **Graceful database failures**: Handles native module version mismatches
+- **Suppress dotenv logs**: Cleaner terminal output
+- **TTY preservation**: Fixes interactive mode for claude-sm/claude-smd
+- **Silent Linear auth**: No spam when API key not configured
+
 ### v0.5.40 (2026-01-27)
 - **Zero-config onboarding**: `stackmemory init` now works without any prompts
 - **New `setup-mcp` command**: Auto-configures Claude Code MCP integration
 - **New `doctor` command**: Diagnoses issues and suggests fixes
 - **Interactive postinstall**: Asks for consent before modifying ~/.claude
 - **Better error messages**: Shows reason + fix + next step
-- 490 tests passing
 
 ### v0.5.39 (2026-01-27)
 - **AsyncMutex**: Thread-safe Linear sync with stale lock detection
@@ -567,9 +554,8 @@ stackmemory mcp-server [--port 3001]
 ## Roadmap
 
 **Phase 4 (Completed):** Two-tier storage system with local tiers and infinite remote storage
-**Phase 5 (Next):** PostgreSQL production adapter, enhanced team collaboration, advanced analytics  
-**Phase 3:** Team collaboration, shared stacks, frame handoff  
-**Phase 4:** Two-tier storage, enterprise features, cost optimization
+**Phase 5 (Current):** PostgreSQL production adapter, enhanced team collaboration, advanced analytics
+**Phase 6 (Next):** Enterprise features, multi-org support, cost optimization
 
 ---
 
