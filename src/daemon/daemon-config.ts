@@ -1,0 +1,221 @@
+/**
+ * Daemon Configuration Management
+ * Handles loading, saving, and validating daemon configuration
+ */
+
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { join } from 'path';
+import { homedir } from 'os';
+
+export interface DaemonServiceConfig {
+  enabled: boolean;
+  interval: number; // minutes
+}
+
+export interface ContextServiceConfig extends DaemonServiceConfig {
+  checkpointMessage?: string;
+}
+
+export interface LinearServiceConfig extends DaemonServiceConfig {
+  quietHours?: {
+    start: number; // hour 0-23
+    end: number;
+  };
+  retryAttempts: number;
+  retryDelay: number; // ms
+}
+
+export interface FileWatchConfig extends DaemonServiceConfig {
+  paths: string[];
+  extensions: string[];
+  ignore: string[];
+  debounceMs: number;
+}
+
+export interface DaemonConfig {
+  version: string;
+  context: ContextServiceConfig;
+  linear: LinearServiceConfig;
+  fileWatch: FileWatchConfig;
+  heartbeatInterval: number; // seconds
+  inactivityTimeout: number; // minutes, 0 = disabled
+  logLevel: 'debug' | 'info' | 'warn' | 'error';
+}
+
+export const DEFAULT_DAEMON_CONFIG: DaemonConfig = {
+  version: '1.0.0',
+  context: {
+    enabled: true,
+    interval: 15, // 15 minutes
+    checkpointMessage: 'Auto-checkpoint',
+  },
+  linear: {
+    enabled: false, // Disabled by default, requires setup
+    interval: 60, // 60 minutes
+    quietHours: { start: 22, end: 7 },
+    retryAttempts: 3,
+    retryDelay: 30000,
+  },
+  fileWatch: {
+    enabled: false, // Disabled by default
+    interval: 0, // Not interval-based
+    paths: ['.'],
+    extensions: ['.ts', '.js', '.tsx', '.jsx', '.py', '.go', '.rs'],
+    ignore: ['node_modules', '.git', 'dist', 'build', '.stackmemory'],
+    debounceMs: 2000,
+  },
+  heartbeatInterval: 60, // 1 minute
+  inactivityTimeout: 0, // Disabled by default
+  logLevel: 'info',
+};
+
+export interface DaemonStatus {
+  running: boolean;
+  pid?: number;
+  startTime?: number;
+  uptime?: number;
+  services: {
+    context: { enabled: boolean; lastRun?: number; saveCount?: number };
+    linear: { enabled: boolean; lastRun?: number; syncCount?: number };
+    fileWatch: { enabled: boolean; eventsProcessed?: number };
+  };
+  errors: string[];
+}
+
+/**
+ * Get the daemon directory path
+ */
+export function getDaemonDir(): string {
+  const dir = join(homedir(), '.stackmemory', 'daemon');
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+/**
+ * Get the logs directory path
+ */
+export function getLogsDir(): string {
+  const dir = join(homedir(), '.stackmemory', 'logs');
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true });
+  }
+  return dir;
+}
+
+/**
+ * Get daemon file paths
+ */
+export function getDaemonPaths() {
+  const daemonDir = getDaemonDir();
+  const logsDir = getLogsDir();
+  return {
+    pidFile: join(daemonDir, 'daemon.pid'),
+    statusFile: join(daemonDir, 'daemon.status'),
+    configFile: join(daemonDir, 'config.json'),
+    logFile: join(logsDir, 'daemon.log'),
+  };
+}
+
+/**
+ * Load daemon configuration
+ */
+export function loadDaemonConfig(): DaemonConfig {
+  const { configFile } = getDaemonPaths();
+
+  if (!existsSync(configFile)) {
+    return { ...DEFAULT_DAEMON_CONFIG };
+  }
+
+  try {
+    const content = readFileSync(configFile, 'utf8');
+    const config = JSON.parse(content) as Partial<DaemonConfig>;
+    return {
+      ...DEFAULT_DAEMON_CONFIG,
+      ...config,
+      context: { ...DEFAULT_DAEMON_CONFIG.context, ...config.context },
+      linear: { ...DEFAULT_DAEMON_CONFIG.linear, ...config.linear },
+      fileWatch: { ...DEFAULT_DAEMON_CONFIG.fileWatch, ...config.fileWatch },
+    };
+  } catch {
+    return { ...DEFAULT_DAEMON_CONFIG };
+  }
+}
+
+/**
+ * Save daemon configuration
+ */
+export function saveDaemonConfig(config: Partial<DaemonConfig>): void {
+  const { configFile } = getDaemonPaths();
+  const currentConfig = loadDaemonConfig();
+  const newConfig = {
+    ...currentConfig,
+    ...config,
+    context: { ...currentConfig.context, ...config.context },
+    linear: { ...currentConfig.linear, ...config.linear },
+    fileWatch: { ...currentConfig.fileWatch, ...config.fileWatch },
+  };
+  writeFileSync(configFile, JSON.stringify(newConfig, null, 2));
+}
+
+/**
+ * Read daemon status
+ */
+export function readDaemonStatus(): DaemonStatus {
+  const { statusFile, pidFile } = getDaemonPaths();
+
+  const defaultStatus: DaemonStatus = {
+    running: false,
+    services: {
+      context: { enabled: false },
+      linear: { enabled: false },
+      fileWatch: { enabled: false },
+    },
+    errors: [],
+  };
+
+  // Check PID file first
+  if (!existsSync(pidFile)) {
+    return defaultStatus;
+  }
+
+  try {
+    const pidContent = readFileSync(pidFile, 'utf8').trim();
+    const pid = parseInt(pidContent, 10);
+
+    // Check if process is running
+    try {
+      process.kill(pid, 0);
+    } catch {
+      // Process not running
+      return defaultStatus;
+    }
+
+    // Read status file
+    if (!existsSync(statusFile)) {
+      return { ...defaultStatus, running: true, pid };
+    }
+
+    const content = readFileSync(statusFile, 'utf8');
+    const status = JSON.parse(content) as DaemonStatus;
+    return {
+      ...status,
+      running: true,
+      pid,
+      uptime: status.startTime ? Date.now() - status.startTime : undefined,
+    };
+  } catch {
+    return defaultStatus;
+  }
+}
+
+/**
+ * Write daemon status
+ */
+export function writeDaemonStatus(status: Partial<DaemonStatus>): void {
+  const { statusFile } = getDaemonPaths();
+  const currentStatus = readDaemonStatus();
+  const newStatus = { ...currentStatus, ...status };
+  writeFileSync(statusFile, JSON.stringify(newStatus, null, 2));
+}

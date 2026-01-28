@@ -667,6 +667,74 @@ async function showServiceLogs(
   }
 }
 
+/**
+ * Install service silently (for use by init --daemon)
+ * Returns true on success, false on failure
+ */
+export async function installServiceSilent(): Promise<boolean> {
+  try {
+    const config = getServiceConfig();
+
+    if (config.platform === 'unsupported') {
+      return false;
+    }
+
+    const home = process.env.HOME || '';
+
+    // Create directories
+    await fs.mkdir(config.serviceDir, { recursive: true });
+    await fs.mkdir(config.logDir, { recursive: true });
+
+    // Write guardian script
+    const guardianPath = path.join(home, '.stackmemory', 'guardian.js');
+    await fs.writeFile(guardianPath, generateGuardianScript(), 'utf-8');
+    await fs.chmod(guardianPath, 0o755);
+
+    if (config.platform === 'darwin') {
+      const plistContent = generateMacOSPlist(config);
+      await fs.writeFile(config.serviceFile, plistContent, 'utf-8');
+
+      try {
+        execSync(`launchctl load -w "${config.serviceFile}"`, {
+          stdio: 'pipe',
+        });
+      } catch {
+        try {
+          execSync(`launchctl unload "${config.serviceFile}"`, {
+            stdio: 'pipe',
+          });
+          execSync(`launchctl load -w "${config.serviceFile}"`, {
+            stdio: 'pipe',
+          });
+        } catch {
+          return false;
+        }
+      }
+      return true;
+    } else if (config.platform === 'linux') {
+      const serviceContent = generateLinuxSystemdService(config);
+      await fs.writeFile(config.serviceFile, serviceContent, 'utf-8');
+
+      try {
+        execSync('systemctl --user daemon-reload', { stdio: 'pipe' });
+        execSync(`systemctl --user enable ${config.serviceName}`, {
+          stdio: 'pipe',
+        });
+        execSync(`systemctl --user start ${config.serviceName}`, {
+          stdio: 'pipe',
+        });
+      } catch {
+        return false;
+      }
+      return true;
+    }
+
+    return false;
+  } catch {
+    return false;
+  }
+}
+
 export function createServiceCommand(): Command {
   const cmd = new Command('service')
     .description('Manage StackMemory guardian OS service (auto-start on login)')
