@@ -89,7 +89,6 @@
       "linear_sync": "src/integrations/linear/sync-service.ts",
       "database_adapter": "src/core/database/database-adapter.ts",
       "sqlite_adapter": "src/core/database/sqlite-adapter.ts",
-      "paradedb_adapter": "src/core/database/paradedb-adapter.ts",
       "connection_pool": "src/core/database/connection-pool.ts",
       "query_router": "src/core/database/query-router.ts",
       "migration_manager": "src/core/database/migration-manager.ts",
@@ -97,8 +96,7 @@
       "hybrid_digest_generator": "src/core/digest/hybrid-digest-generator.ts",
       "dual_stack_manager": "src/core/context/dual-stack-manager.ts",
       "frame_handoff_manager": "src/core/context/frame-handoff-manager.ts",
-      "stack_merge_resolver": "src/core/context/stack-merge-resolver.ts",
-      "team_analytics": "src/core/analytics/team-analytics.ts"
+      "stack_merge_resolver": "src/core/context/stack-merge-resolver.ts"
     },
     "database": {
       "hot_tier": "SQLite (<24h, high-frequency operations)",
