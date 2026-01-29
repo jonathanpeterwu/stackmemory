@@ -15,9 +15,6 @@ import {
   StartMergeSessionSchema,
   CreateMergePolicySchema,
   ConflictResolutionSchema,
-  type StartMergeSessionInput,
-  type CreateMergePolicyInput,
-  type ConflictResolutionInput,
 } from './validation.js';
 
 export interface MergeConflict {
