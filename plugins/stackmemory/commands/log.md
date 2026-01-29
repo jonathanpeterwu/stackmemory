@@ -1,6 +1,6 @@
 ---
 description: "View recent activity log"
-argument-hint: "[--limit N] [--type <type>]"
+argument-hint: "[-n N] [--type <type>]"
 allowed-tools: ["Bash(stackmemory log:*)", "Bash(stackmemory history:*)"]
 ---
 
@@ -8,23 +8,28 @@ allowed-tools: ["Bash(stackmemory log:*)", "Bash(stackmemory history:*)"]
 
 View recent activity:
 
-## Recent activity (default 10 items)
+## Recent activity (default 20 items)
 ```!
-stackmemory log recent
+stackmemory log
 ```
 
 ## More items
 ```!
-stackmemory log recent --limit 20
+stackmemory log -n 50
 ```
 
 ## Filter by type
 ```!
-stackmemory log recent --type decision
+stackmemory log --type task
+```
+
+## Follow in real-time
+```!
+stackmemory log --follow
 ```
 
 Types:
-- `decision` - Recorded decisions
-- `observation` - Observations
 - `task` - Task changes
-- `context` - Context operations
+- `frame` - Frame operations
+- `event` - Events
+- `sync` - Sync operations
