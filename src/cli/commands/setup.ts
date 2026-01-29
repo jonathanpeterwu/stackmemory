@@ -397,9 +397,149 @@ export function createDoctorCommand(): Command {
 }
 
 /**
+ * Create setup-plugins command
+ */
+export function createSetupPluginsCommand(): Command {
+  const cmd = new Command('setup-plugins');
+
+  cmd
+    .description('Install StackMemory plugins for Claude Code')
+    .option('--force', 'Overwrite existing plugins')
+    .action(async (options) => {
+      console.log(
+        chalk.cyan('Installing StackMemory plugins for Claude Code...\n')
+      );
+
+      const pluginsDir = join(CLAUDE_DIR, 'plugins');
+
+      // Ensure plugins directory exists
+      if (!existsSync(pluginsDir)) {
+        mkdirSync(pluginsDir, { recursive: true });
+        console.log(chalk.gray(`Created: ${pluginsDir}`));
+      }
+
+      // Find the plugins source directory
+      // Check multiple locations: local dev, global npm, local npm
+      const possiblePaths = [
+        join(process.cwd(), 'plugins'),
+        join(__dirname, '..', '..', '..', 'plugins'),
+        join(homedir(), '.stackmemory', 'plugins'),
+      ];
+
+      // Try to find via npm root
+      try {
+        const globalRoot = execSync('npm root -g', {
+          encoding: 'utf-8',
+        }).trim();
+        possiblePaths.push(
+          join(globalRoot, '@stackmemoryai', 'stackmemory', 'plugins')
+        );
+      } catch {
+        // npm not available or failed
+      }
+
+      let sourcePluginsDir: string | undefined;
+      for (const p of possiblePaths) {
+        if (existsSync(p) && existsSync(join(p, 'stackmemory'))) {
+          sourcePluginsDir = p;
+          break;
+        }
+      }
+
+      if (!sourcePluginsDir) {
+        console.log(chalk.red('Could not find StackMemory plugins directory'));
+        console.log(chalk.gray('Searched:'));
+        possiblePaths.forEach((p) => console.log(chalk.gray(`  - ${p}`)));
+        process.exit(1);
+      }
+
+      console.log(chalk.gray(`Source: ${sourcePluginsDir}\n`));
+
+      // List of plugins to install
+      const plugins = ['stackmemory', 'ralph-wiggum'];
+      let installed = 0;
+
+      for (const plugin of plugins) {
+        const sourcePath = join(sourcePluginsDir, plugin);
+        const targetPath = join(pluginsDir, plugin);
+
+        if (!existsSync(sourcePath)) {
+          console.log(chalk.yellow(`  [SKIP] ${plugin} - not found in source`));
+          continue;
+        }
+
+        if (existsSync(targetPath)) {
+          if (options.force) {
+            // Remove existing
+            try {
+              execSync(`rm -rf "${targetPath}"`, { encoding: 'utf-8' });
+            } catch {
+              console.log(
+                chalk.red(`  [ERROR] ${plugin} - could not remove existing`)
+              );
+              continue;
+            }
+          } else {
+            console.log(
+              chalk.gray(`  [EXISTS] ${plugin} - use --force to overwrite`)
+            );
+            continue;
+          }
+        }
+
+        // Create symlink
+        try {
+          execSync(`ln -s "${sourcePath}" "${targetPath}"`, {
+            encoding: 'utf-8',
+          });
+          console.log(chalk.green(`  [OK] ${plugin}`));
+          installed++;
+        } catch (err) {
+          console.log(
+            chalk.red(`  [ERROR] ${plugin} - ${(err as Error).message}`)
+          );
+        }
+      }
+
+      console.log('');
+      if (installed > 0) {
+        console.log(chalk.green(`Installed ${installed} plugin(s)`));
+        console.log(chalk.gray('\nAvailable commands in Claude Code:'));
+        console.log(
+          chalk.white('  /sm-status    ') +
+            chalk.gray('Show StackMemory status')
+        );
+        console.log(
+          chalk.white('  /sm-capture   ') +
+            chalk.gray('Capture work for handoff')
+        );
+        console.log(
+          chalk.white('  /sm-restore   ') +
+            chalk.gray('Restore from last handoff')
+        );
+        console.log(
+          chalk.white('  /sm-decision  ') + chalk.gray('Record a decision')
+        );
+        console.log(
+          chalk.white('  /sm-help      ') + chalk.gray('Show all commands')
+        );
+        console.log(
+          chalk.white('  /ralph-loop   ') +
+            chalk.gray('Start Ralph iteration loop')
+        );
+      } else {
+        console.log(chalk.yellow('No plugins installed'));
+      }
+    });
+
+  return cmd;
+}
+
+/**
  * Register setup commands
  */
 export function registerSetupCommands(program: Command): void {
   program.addCommand(createSetupMCPCommand());
   program.addCommand(createDoctorCommand());
+  program.addCommand(createSetupPluginsCommand());
 }

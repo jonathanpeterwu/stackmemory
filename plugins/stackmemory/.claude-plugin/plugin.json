@@ -1,0 +1,9 @@
+{
+  "name": "stackmemory",
+  "version": "1.0.0",
+  "description": "StackMemory integration for Claude Code - context persistence, session handoffs, and memory management",
+  "author": {
+    "name": "StackMemory",
+    "url": "https://github.com/stackmemoryai/stackmemory"
+  }
+}
