@@ -3,7 +3,7 @@
  */
 
 import { Command } from 'commander';
-import { execSync, execFileSync } from 'child_process';
+import { execSync, execFileSync, spawn, ChildProcess } from 'child_process';
 import {
   existsSync,
   readFileSync,
@@ -13,6 +13,7 @@ import {
   unlinkSync,
 } from 'fs';
 import { join } from 'path';
+import { homedir } from 'os';
 import Database from 'better-sqlite3';
 import { z } from 'zod';
 import { FrameManager } from '../../core/context/index.js';
@@ -480,84 +481,275 @@ export function createRestoreCommand(): Command {
   return cmd;
 }
 
+interface AutoCaptureMetadata {
+  timestamp: string;
+  reason: string;
+  exit_code: number;
+  command: string;
+  pid: number;
+  cwd: string;
+  user: string;
+  session_duration: number;
+}
+
+async function captureHandoff(
+  reason: string,
+  exitCode: number,
+  wrappedCommand: string,
+  sessionStart: number,
+  quiet: boolean
+): Promise<void> {
+  const projectRoot = process.cwd();
+  const handoffDir = join(homedir(), '.stackmemory', 'handoffs');
+  const logFile = join(handoffDir, 'auto-handoff.log');
+
+  // Ensure handoff directory exists
+  if (!existsSync(handoffDir)) {
+    mkdirSync(handoffDir, { recursive: true });
+  }
+
+  const logMessage = (msg: string): void => {
+    const timestamp = new Date().toISOString().slice(0, 19).replace('T', ' ');
+    const logLine = `[${timestamp}] ${msg}\n`;
+    try {
+      writeFileSync(logFile, logLine, { flag: 'a' });
+    } catch {
+      // Logging failed, continue anyway
+    }
+  };
+
+  if (!quiet) {
+    console.log('\nCapturing handoff context...');
+  }
+  logMessage(`Capturing handoff: reason=${reason}, exit_code=${exitCode}`);
+
+  try {
+    // Run stackmemory capture --no-commit
+    execFileSync(
+      process.execPath,
+      [process.argv[1], 'capture', '--no-commit'],
+      {
+        cwd: projectRoot,
+        stdio: quiet ? 'pipe' : 'inherit',
+      }
+    );
+
+    // Save metadata
+    const metadata: AutoCaptureMetadata = {
+      timestamp: new Date().toISOString(),
+      reason,
+      exit_code: exitCode,
+      command: wrappedCommand,
+      pid: process.pid,
+      cwd: projectRoot,
+      user: process.env['USER'] || 'unknown',
+      session_duration: Math.floor((Date.now() - sessionStart) / 1000),
+    };
+
+    const metadataPath = join(handoffDir, 'last-handoff-meta.json');
+    writeFileSync(metadataPath, JSON.stringify(metadata, null, 2));
+
+    if (!quiet) {
+      console.log('Handoff captured successfully');
+      logMessage(`Handoff captured: ${metadataPath}`);
+
+      // Show session summary
+      console.log('\nSession Summary:');
+      console.log(`  Duration: ${metadata.session_duration} seconds`);
+      console.log(`  Exit reason: ${reason}`);
+
+      // Check for uncommitted changes
+      try {
+        const gitStatus = execSync('git status --short', {
+          encoding: 'utf-8',
+          cwd: projectRoot,
+        }).trim();
+        if (gitStatus) {
+          console.log('\nYou have uncommitted changes');
+          console.log('  Run "git status" to review');
+        }
+      } catch {
+        // Not a git repo or git not available
+      }
+
+      console.log('\nRun "stackmemory restore" in your next session');
+    }
+  } catch (err) {
+    if (!quiet) {
+      console.error('Failed to capture handoff:', (err as Error).message);
+    }
+    logMessage(`ERROR: ${(err as Error).message}`);
+  }
+}
+
 export function createAutoCaptureCommand(): Command {
   const cmd = new Command('auto-capture');
 
   cmd
-    .description('Enable auto-capture on session termination')
-    .option('--command <command>', 'Command to wrap with auto-handoff')
-    .action(async (options) => {
-      const scriptPath = join(
-        __dirname,
-        '..',
-        '..',
-        '..',
-        'scripts',
-        'stackmemory-auto-handoff.sh'
-      );
+    .description('Wrap a command with automatic handoff capture on termination')
+    .option('-a, --auto', 'Auto-capture on normal exit (no prompt)')
+    .option('-q, --quiet', 'Suppress output')
+    .option('-t, --tag <tag>', 'Tag this session')
+    .argument('[command...]', 'Command to wrap with auto-handoff')
+    .action(async (commandArgs: string[], options) => {
+      const autoCapture = options.auto || false;
+      const quiet = options.quiet || false;
+      const tag = options.tag || '';
 
-      if (!existsSync(scriptPath)) {
-        console.error('❌ Auto-handoff script not found');
-        console.log('📦 Please ensure StackMemory is properly installed');
+      // If no command provided, show usage
+      if (!commandArgs || commandArgs.length === 0) {
+        console.log('StackMemory Auto-Handoff');
+        console.log('-'.repeat(50));
+        console.log('');
+        console.log(
+          'Wraps a command with automatic handoff capture on termination.'
+        );
+        console.log('');
+        console.log('Usage:');
+        console.log('  stackmemory auto-capture [options] <command> [args...]');
+        console.log('');
+        console.log('Examples:');
+        console.log('  stackmemory auto-capture claude');
+        console.log('  stackmemory auto-capture -a npm run dev');
+        console.log('  stackmemory auto-capture -t "feature-work" vim');
+        console.log('');
+        console.log('Options:');
+        console.log(
+          '  -a, --auto       Auto-capture on normal exit (no prompt)'
+        );
+        console.log('  -q, --quiet      Suppress output');
+        console.log('  -t, --tag <tag>  Tag this session');
         return;
       }
 
-      console.log('🛡️  StackMemory Auto-Handoff');
-      console.log('─'.repeat(50));
+      const wrappedCommand = commandArgs.join(' ');
+      const sessionStart = Date.now();
+      let capturedAlready = false;
 
-      if (options.command) {
-        // Validate and wrap specific command
-        const commandSchema = z
-          .string()
-          .min(1, 'Command cannot be empty')
-          .max(200, 'Command too long')
-          .regex(
-            /^[a-zA-Z0-9\s\-_./:]+$/,
-            'Command contains invalid characters'
-          )
-          .refine((cmd) => !cmd.includes(';'), 'Command cannot contain ";"')
-          .refine((cmd) => !cmd.includes('&'), 'Command cannot contain "&"')
-          .refine((cmd) => !cmd.includes('|'), 'Command cannot contain "|"')
-          .refine((cmd) => !cmd.includes('$'), 'Command cannot contain "$"')
-          .refine((cmd) => !cmd.includes('`'), 'Command cannot contain "`"');
+      if (!quiet) {
+        console.log('StackMemory Auto-Handoff Wrapper');
+        console.log(`Wrapping: ${wrappedCommand}`);
+        if (tag) {
+          console.log(`Tag: ${tag}`);
+        }
+        console.log('Handoff will be captured on termination');
+        console.log('');
+      }
 
-        try {
-          const validatedCommand = commandSchema.parse(options.command);
-          console.log(`Wrapping command: ${validatedCommand}`);
-          execFileSync(scriptPath, [validatedCommand], {
-            stdio: 'inherit',
-            env: { ...process.env, AUTO_CAPTURE_ON_EXIT: 'true' },
-          });
-        } catch (validationError) {
-          if (validationError instanceof z.ZodError) {
-            console.error('❌ Invalid command:');
-            validationError.errors.forEach((err) => {
-              console.error(`  ${err.message}`);
-            });
-          } else {
-            console.error(
-              '❌ Failed to execute command:',
-              (validationError as Error).message
+      // Spawn the wrapped command
+      const [cmd, ...args] = commandArgs;
+      let childProcess: ChildProcess;
+
+      try {
+        childProcess = spawn(cmd, args, {
+          stdio: 'inherit',
+          shell: false,
+          cwd: process.cwd(),
+          env: process.env,
+        });
+      } catch (err) {
+        console.error(`Failed to start command: ${(err as Error).message}`);
+        process.exit(1);
+        return;
+      }
+
+      // Handle signals - forward to child and capture on termination
+      const handleSignal = async (
+        signal: NodeJS.Signals,
+        exitCode: number
+      ): Promise<void> => {
+        if (capturedAlready) return;
+        capturedAlready = true;
+
+        if (!quiet) {
+          console.log(`\nReceived ${signal}`);
+        }
+
+        // Kill the child process if still running
+        if (childProcess.pid && !childProcess.killed) {
+          childProcess.kill(signal);
+        }
+
+        await captureHandoff(
+          signal,
+          exitCode,
+          wrappedCommand,
+          sessionStart,
+          quiet
+        );
+        process.exit(exitCode);
+      };
+
+      process.on('SIGINT', () => handleSignal('SIGINT', 130));
+      process.on('SIGTERM', () => handleSignal('SIGTERM', 143));
+      process.on('SIGHUP', () => handleSignal('SIGHUP', 129));
+
+      // Handle child process exit
+      childProcess.on('exit', async (code, signal) => {
+        if (capturedAlready) return;
+        capturedAlready = true;
+
+        const exitCode = code ?? (signal ? 128 : 0);
+
+        if (signal) {
+          // Child was killed by a signal
+          await captureHandoff(
+            signal,
+            exitCode,
+            wrappedCommand,
+            sessionStart,
+            quiet
+          );
+        } else if (exitCode !== 0) {
+          // Unexpected exit
+          if (!quiet) {
+            console.log(`\nCommand exited with code: ${exitCode}`);
+          }
+          await captureHandoff(
+            'unexpected_exit',
+            exitCode,
+            wrappedCommand,
+            sessionStart,
+            quiet
+          );
+        } else if (autoCapture) {
+          // Normal exit with auto-capture enabled
+          await captureHandoff(
+            'normal_exit',
+            0,
+            wrappedCommand,
+            sessionStart,
+            quiet
+          );
+        } else {
+          // Normal exit - prompt for capture (simplified for CLI, auto-capture)
+          // In non-interactive contexts, default to capturing
+          if (process.stdin.isTTY) {
+            // Interactive - we could prompt but keeping it simple
+            console.log(
+              '\nSession ending. Use -a flag for auto-capture on normal exit.'
             );
           }
-          return;
         }
-      } else {
-        // Interactive mode
-        console.log('To enable auto-handoff for your current session:');
-        console.log('');
-        console.log('  For bash/zsh:');
-        console.log(`    source <(${scriptPath} --shell)`);
-        console.log('');
-        console.log('  Or wrap a command:');
-        console.log(`    ${scriptPath} claude`);
-        console.log(`    ${scriptPath} npm run dev`);
-        console.log('');
-        console.log('  Add to your shell profile for permanent setup:');
-        console.log(
-          `    echo 'alias claude="${scriptPath} claude"' >> ~/.bashrc`
+
+        process.exit(exitCode);
+      });
+
+      // Handle spawn errors
+      childProcess.on('error', async (err) => {
+        if (capturedAlready) return;
+        capturedAlready = true;
+
+        console.error(`Command error: ${err.message}`);
+        await captureHandoff(
+          'spawn_error',
+          1,
+          wrappedCommand,
+          sessionStart,
+          quiet
         );
-      }
+        process.exit(1);
+      });
     });
 
   return cmd;

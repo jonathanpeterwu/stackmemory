@@ -49,6 +49,10 @@ npm run lint:fix       # Auto-fix lint issues
 npm test               # Run Vitest (watch)
 npm run test:run       # Run tests once
 npm run linear:sync    # Sync with Linear
+
+# StackMemory CLI
+stackmemory capture    # Save session state for handoff
+stackmemory restore    # Restore from captured state
 ```
 
 ## Working Directory
