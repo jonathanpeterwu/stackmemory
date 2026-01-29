@@ -536,10 +536,333 @@ export function createSetupPluginsCommand(): Command {
 }
 
 /**
+ * Create setup-remote command for remote MCP server auto-start
+ */
+export function createSetupRemoteCommand(): Command {
+  const cmd = new Command('setup-remote');
+
+  cmd
+    .description('Configure remote MCP server to auto-start on boot')
+    .option('--port <number>', 'Port for remote server', '3847')
+    .option('--project <path>', 'Project root directory')
+    .option('--uninstall', 'Remove the auto-start service')
+    .option('--status', 'Check service status')
+    .action(async (options) => {
+      const home = homedir();
+      const platform = process.platform;
+
+      // Service configuration
+      const serviceName =
+        platform === 'darwin'
+          ? 'com.stackmemory.remote-mcp'
+          : 'stackmemory-remote-mcp';
+      const serviceDir =
+        platform === 'darwin'
+          ? join(home, 'Library', 'LaunchAgents')
+          : join(home, '.config', 'systemd', 'user');
+      const serviceFile =
+        platform === 'darwin'
+          ? join(serviceDir, `${serviceName}.plist`)
+          : join(serviceDir, `${serviceName}.service`);
+      const logDir = join(home, '.stackmemory', 'logs');
+      const pidFile = join(home, '.stackmemory', 'remote-mcp.pid');
+
+      // Handle status check
+      if (options.status) {
+        console.log(chalk.cyan('\nRemote MCP Server Status\n'));
+
+        if (platform === 'darwin') {
+          try {
+            const result = execSync(
+              `launchctl list | grep ${serviceName} || true`,
+              { encoding: 'utf-8' }
+            );
+            if (result.includes(serviceName)) {
+              console.log(chalk.green('[RUNNING]') + ' Service is active');
+              try {
+                const health = execSync(
+                  `curl -s http://localhost:${options.port}/health 2>/dev/null`,
+                  { encoding: 'utf-8' }
+                );
+                const data = JSON.parse(health);
+                console.log(chalk.gray(`  Project: ${data.projectId}`));
+                console.log(
+                  chalk.gray(`  URL: http://localhost:${options.port}/sse`)
+                );
+              } catch {
+                console.log(
+                  chalk.yellow('  Server not responding to health check')
+                );
+              }
+            } else {
+              console.log(chalk.yellow('[STOPPED]') + ' Service not running');
+            }
+          } catch {
+            console.log(chalk.yellow('[UNKNOWN]') + ' Could not check status');
+          }
+        } else if (platform === 'linux') {
+          try {
+            execSync(`systemctl --user is-active ${serviceName}`, {
+              stdio: 'pipe',
+            });
+            console.log(chalk.green('[RUNNING]') + ' Service is active');
+          } catch {
+            console.log(chalk.yellow('[STOPPED]') + ' Service not running');
+          }
+        }
+
+        console.log(chalk.gray(`\nService file: ${serviceFile}`));
+        console.log(chalk.gray(`Logs: ${logDir}/remote-mcp.log`));
+        return;
+      }
+
+      // Handle uninstall
+      if (options.uninstall) {
+        console.log(chalk.cyan('\nUninstalling Remote MCP Server Service\n'));
+
+        if (platform === 'darwin') {
+          try {
+            execSync(`launchctl unload "${serviceFile}"`, { stdio: 'pipe' });
+            console.log(chalk.green('[OK]') + ' Service unloaded');
+          } catch {
+            console.log(chalk.gray('[SKIP]') + ' Service was not loaded');
+          }
+
+          if (existsSync(serviceFile)) {
+            const fs = await import('fs/promises');
+            await fs.unlink(serviceFile);
+            console.log(chalk.green('[OK]') + ' Service file removed');
+          }
+        } else if (platform === 'linux') {
+          try {
+            execSync(`systemctl --user stop ${serviceName}`, { stdio: 'pipe' });
+            execSync(`systemctl --user disable ${serviceName}`, {
+              stdio: 'pipe',
+            });
+            console.log(chalk.green('[OK]') + ' Service stopped and disabled');
+          } catch {
+            console.log(chalk.gray('[SKIP]') + ' Service was not running');
+          }
+
+          if (existsSync(serviceFile)) {
+            const fs = await import('fs/promises');
+            await fs.unlink(serviceFile);
+            execSync('systemctl --user daemon-reload', { stdio: 'pipe' });
+            console.log(chalk.green('[OK]') + ' Service file removed');
+          }
+        }
+
+        console.log(chalk.green('\nRemote MCP service uninstalled'));
+        return;
+      }
+
+      // Install service
+      console.log(chalk.cyan('\nSetting up Remote MCP Server Auto-Start\n'));
+
+      if (platform !== 'darwin' && platform !== 'linux') {
+        console.log(
+          chalk.red('Auto-start is only supported on macOS and Linux')
+        );
+        console.log(chalk.gray('\nManual start: stackmemory mcp-remote'));
+        return;
+      }
+
+      // Create directories
+      if (!existsSync(serviceDir)) {
+        mkdirSync(serviceDir, { recursive: true });
+      }
+      if (!existsSync(logDir)) {
+        mkdirSync(logDir, { recursive: true });
+      }
+
+      // Find node and stackmemory paths
+      let nodePath: string;
+      try {
+        nodePath = execSync('which node', { encoding: 'utf-8' }).trim();
+      } catch {
+        nodePath = '/usr/local/bin/node';
+      }
+
+      // Find stackmemory CLI path
+      let stackmemoryPath: string;
+      try {
+        stackmemoryPath = execSync('which stackmemory', {
+          encoding: 'utf-8',
+        }).trim();
+      } catch {
+        // Try npm global path
+        try {
+          const npmRoot = execSync('npm root -g', { encoding: 'utf-8' }).trim();
+          stackmemoryPath = join(
+            npmRoot,
+            '@stackmemoryai',
+            'stackmemory',
+            'dist',
+            'cli',
+            'index.js'
+          );
+        } catch {
+          stackmemoryPath = 'npx stackmemory';
+        }
+      }
+
+      const projectPath = options.project || home;
+      const port = options.port || '3847';
+
+      if (platform === 'darwin') {
+        // Generate macOS launchd plist
+        const plist = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>Label</key>
+    <string>${serviceName}</string>
+
+    <key>ProgramArguments</key>
+    <array>
+        <string>${stackmemoryPath.includes('npx') ? 'npx' : nodePath}</string>
+        ${stackmemoryPath.includes('npx') ? '<string>stackmemory</string>' : `<string>${stackmemoryPath}</string>`}
+        <string>mcp-remote</string>
+        <string>--port</string>
+        <string>${port}</string>
+        <string>--project</string>
+        <string>${projectPath}</string>
+    </array>
+
+    <key>RunAtLoad</key>
+    <true/>
+
+    <key>KeepAlive</key>
+    <dict>
+        <key>SuccessfulExit</key>
+        <false/>
+    </dict>
+
+    <key>WorkingDirectory</key>
+    <string>${projectPath}</string>
+
+    <key>StandardOutPath</key>
+    <string>${logDir}/remote-mcp.log</string>
+
+    <key>StandardErrorPath</key>
+    <string>${logDir}/remote-mcp.error.log</string>
+
+    <key>EnvironmentVariables</key>
+    <dict>
+        <key>HOME</key>
+        <string>${home}</string>
+        <key>PATH</key>
+        <string>/usr/local/bin:/opt/homebrew/bin:/usr/bin:/bin</string>
+        <key>NODE_ENV</key>
+        <string>production</string>
+    </dict>
+
+    <key>ThrottleInterval</key>
+    <integer>10</integer>
+</dict>
+</plist>`;
+
+        writeFileSync(serviceFile, plist);
+        console.log(chalk.green('[OK]') + ' Created launchd service file');
+
+        // Unload if already loaded
+        try {
+          execSync(`launchctl unload "${serviceFile}" 2>/dev/null`, {
+            stdio: 'pipe',
+          });
+        } catch {
+          // Not loaded, ignore
+        }
+
+        // Load the service
+        try {
+          execSync(`launchctl load -w "${serviceFile}"`, { stdio: 'pipe' });
+          console.log(chalk.green('[OK]') + ' Service loaded and started');
+        } catch (err) {
+          console.log(chalk.red('[ERROR]') + ` Failed to load service: ${err}`);
+          return;
+        }
+      } else if (platform === 'linux') {
+        // Generate systemd service
+        const service = `[Unit]
+Description=StackMemory Remote MCP Server
+Documentation=https://github.com/stackmemoryai/stackmemory
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=${stackmemoryPath.includes('npx') ? 'npx stackmemory' : `${nodePath} ${stackmemoryPath}`} mcp-remote --port ${port} --project ${projectPath}
+Restart=on-failure
+RestartSec=10
+WorkingDirectory=${projectPath}
+
+Environment=HOME=${home}
+Environment=PATH=/usr/local/bin:/usr/bin:/bin
+Environment=NODE_ENV=production
+
+StandardOutput=append:${logDir}/remote-mcp.log
+StandardError=append:${logDir}/remote-mcp.error.log
+
+[Install]
+WantedBy=default.target`;
+
+        writeFileSync(serviceFile, service);
+        console.log(chalk.green('[OK]') + ' Created systemd service file');
+
+        try {
+          execSync('systemctl --user daemon-reload', { stdio: 'pipe' });
+          execSync(`systemctl --user enable ${serviceName}`, { stdio: 'pipe' });
+          execSync(`systemctl --user start ${serviceName}`, { stdio: 'pipe' });
+          console.log(chalk.green('[OK]') + ' Service enabled and started');
+        } catch (err) {
+          console.log(
+            chalk.red('[ERROR]') + ` Failed to start service: ${err}`
+          );
+          return;
+        }
+      }
+
+      // Verify it's running
+      console.log(chalk.cyan('\nVerifying server...\n'));
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+
+      try {
+        const health = execSync(
+          `curl -s http://localhost:${port}/health 2>/dev/null`,
+          { encoding: 'utf-8' }
+        );
+        const data = JSON.parse(health);
+        console.log(chalk.green('[OK]') + ' Server is running');
+        console.log(chalk.gray(`  Project: ${data.projectId}`));
+      } catch {
+        console.log(
+          chalk.yellow('[WARN]') +
+            ' Server not responding yet (may still be starting)'
+        );
+      }
+
+      console.log(
+        chalk.green('\nRemote MCP Server configured for auto-start!')
+      );
+      console.log(chalk.cyan('\nConnection info:'));
+      console.log(chalk.white(`  URL: http://localhost:${port}/sse`));
+      console.log(chalk.white(`  Health: http://localhost:${port}/health`));
+      console.log(chalk.gray(`\nLogs: ${logDir}/remote-mcp.log`));
+      console.log(chalk.gray(`Service: ${serviceFile}`));
+      console.log(chalk.cyan('\nFor external access (ngrok):'));
+      console.log(chalk.white(`  ngrok http ${port}`));
+      console.log(chalk.gray('  Then use the ngrok URL + /sse in Claude.ai'));
+    });
+
+  return cmd;
+}
+
+/**
  * Register setup commands
  */
 export function registerSetupCommands(program: Command): void {
   program.addCommand(createSetupMCPCommand());
   program.addCommand(createDoctorCommand());
   program.addCommand(createSetupPluginsCommand());
+  program.addCommand(createSetupRemoteCommand());
 }

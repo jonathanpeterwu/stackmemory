@@ -7,8 +7,9 @@
 // Set environment flag for CLI usage to skip async context bridge
 process.env['STACKMEMORY_CLI'] = 'true';
 
-// Load environment variables
-import 'dotenv/config';
+// Load environment variables (quiet mode to suppress logging)
+import { config as loadDotenv } from 'dotenv';
+loadDotenv({ quiet: true });
 
 // Initialize tracing system early
 import { initializeTracing, trace } from '../core/trace/index.js';
@@ -584,6 +585,41 @@ program
     } catch (error: unknown) {
       logger.error('Failed to start MCP server', error as Error);
       console.error('❌ MCP server failed:', (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+program
+  .command('mcp-remote')
+  .description(
+    'Start StackMemory Remote MCP server (HTTP/SSE) for Claude.ai web'
+  )
+  .option('-p, --port <number>', 'Port to listen on', '3847')
+  .option('-d, --project <path>', 'Project root directory', process.cwd())
+  .action(async (options) => {
+    try {
+      const { runRemoteMCPServer } =
+        await import('../integrations/mcp/remote-server.js');
+
+      const port = parseInt(options.port, 10);
+
+      console.log('Starting StackMemory Remote MCP Server...');
+      console.log(`   Project: ${options.project}`);
+      console.log(`   Version: ${VERSION}`);
+      console.log('');
+
+      await runRemoteMCPServer(port, options.project);
+
+      console.log('');
+      console.log('For Claude.ai web connector:');
+      console.log(`  URL: http://localhost:${port}/sse`);
+      console.log('');
+      console.log('For external access (ngrok):');
+      console.log(`  ngrok http ${port}`);
+      console.log('  Then use the ngrok URL + /sse in Claude.ai');
+    } catch (error: unknown) {
+      logger.error('Failed to start remote MCP server', error as Error);
+      console.error('Remote MCP server failed:', (error as Error).message);
       process.exit(1);
     }
   });
