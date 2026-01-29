@@ -3,7 +3,7 @@
  * Advanced conflict resolution for frame merging between individual and shared stacks
  */
 
-import type { Frame, Event, Anchor } from './frame-types.js';
+import type { Frame, Anchor } from './frame-types.js';
 import {
   DualStackManager,
   type StackSyncResult,
@@ -655,20 +655,109 @@ export class StackMergeResolver {
     }
 
     try {
-      // Build resolution map
       const resolutionMap = new Map(
         session.resolutions.map((r) => [r.conflictId, r])
       );
 
-      // Execute sync with custom conflict resolution
-      const result = await this.dualStackManager.syncStacks(
-        session.sourceStackId,
-        session.targetStackId,
-        {
-          conflictResolution: 'merge', // Will be overridden by our resolution map
-          frameIds: session.conflicts.map((c) => c.frameId),
+      const result: StackSyncResult = {
+        success: true,
+        conflictFrames: [],
+        mergedFrames: [],
+        errors: [],
+      };
+
+      const sourceStack = this.getStackManager(session.sourceStackId);
+      const targetStack = this.getStackManager(session.targetStackId);
+
+      // Group conflicts by frameId
+      const conflictsByFrame = new Map<string, MergeConflict[]>();
+      for (const conflict of session.conflicts) {
+        const existing = conflictsByFrame.get(conflict.frameId) || [];
+        existing.push(conflict);
+        conflictsByFrame.set(conflict.frameId, existing);
+      }
+
+      // Process each frame according to its resolution
+      for (const [frameId] of conflictsByFrame) {
+        try {
+          const resolution = resolutionMap.get(frameId);
+          if (!resolution) {
+            result.errors.push({
+              frameId,
+              error: 'No resolution found',
+              resolution: 'skipped',
+            });
+            result.conflictFrames.push(frameId);
+            continue;
+          }
+
+          const sourceFrame = await sourceStack.getFrame(frameId);
+          const targetFrame = await targetStack.getFrame(frameId);
+
+          if (!sourceFrame) {
+            result.errors.push({
+              frameId,
+              error: 'Source frame not found',
+              resolution: 'skipped',
+            });
+            continue;
+          }
+
+          switch (resolution.strategy) {
+            case 'source_wins':
+              if (targetFrame) await targetStack.deleteFrame(frameId);
+              await this.copyFrameToStack(
+                sourceFrame,
+                sourceStack,
+                targetStack
+              );
+              result.mergedFrames.push(frameId);
+              break;
+
+            case 'target_wins':
+              result.mergedFrames.push(frameId);
+              break;
+
+            case 'merge_both':
+              if (targetFrame) {
+                await this.mergeFrameContents(
+                  sourceFrame,
+                  targetFrame,
+                  sourceStack,
+                  targetStack
+                );
+              } else {
+                await this.copyFrameToStack(
+                  sourceFrame,
+                  sourceStack,
+                  targetStack
+                );
+              }
+              result.mergedFrames.push(frameId);
+              break;
+
+            case 'skip':
+              result.conflictFrames.push(frameId);
+              break;
+
+            case 'manual':
+              result.errors.push({
+                frameId,
+                error: 'Manual resolution not applied',
+                resolution: 'skipped',
+              });
+              result.conflictFrames.push(frameId);
+              break;
+          }
+        } catch (error: unknown) {
+          result.errors.push({
+            frameId,
+            error: error instanceof Error ? error.message : String(error),
+            resolution: 'skipped',
+          });
+          result.success = false;
         }
-      );
+      }
 
       logger.info(`Merge executed: ${sessionId}`, {
         mergedFrames: result.mergedFrames.length,
@@ -685,6 +774,94 @@ export class StackMergeResolver {
         error instanceof Error ? error : undefined
       );
     }
+  }
+
+  private async copyFrameToStack(
+    frame: Frame,
+    sourceStack: any,
+    targetStack: any
+  ): Promise<void> {
+    await targetStack.createFrame({
+      frame_id: frame.frame_id,
+      name: frame.name,
+      type: frame.type,
+      parent_frame_id: frame.parent_frame_id,
+      inputs: frame.inputs,
+      outputs: frame.outputs,
+    });
+
+    const events = await sourceStack.getFrameEvents(frame.frame_id);
+    for (const event of events) {
+      await targetStack.addEvent(frame.frame_id, {
+        type: event.type,
+        text: event.text,
+        metadata: event.metadata,
+      });
+    }
+
+    const anchors = await sourceStack.getFrameAnchors(frame.frame_id);
+    for (const anchor of anchors) {
+      await targetStack.addAnchor(frame.frame_id, {
+        type: anchor.type,
+        text: anchor.text,
+        priority: anchor.priority,
+        metadata: anchor.metadata,
+      });
+    }
+  }
+
+  private async mergeFrameContents(
+    sourceFrame: Frame,
+    targetFrame: Frame,
+    sourceStack: any,
+    targetStack: any
+  ): Promise<void> {
+    // Merge events with deduplication
+    const sourceEvents = await sourceStack.getFrameEvents(sourceFrame.frame_id);
+    const targetEvents = await targetStack.getFrameEvents(targetFrame.frame_id);
+
+    const existingSignatures = new Set(
+      targetEvents.map((e: any) => `${e.type}:${e.text}`)
+    );
+
+    for (const event of sourceEvents) {
+      const sig = `${event.type}:${event.text}`;
+      if (!existingSignatures.has(sig)) {
+        await targetStack.addEvent(targetFrame.frame_id, {
+          type: event.type,
+          text: event.text,
+          metadata: { ...event.metadata, merged: true },
+        });
+        existingSignatures.add(sig);
+      }
+    }
+
+    // Merge anchors with deduplication
+    const sourceAnchors = await sourceStack.getFrameAnchors(
+      sourceFrame.frame_id
+    );
+    const targetAnchors = await targetStack.getFrameAnchors(
+      targetFrame.frame_id
+    );
+
+    const existingAnchorSigs = new Set(
+      targetAnchors.map((a: any) => `${a.type}:${a.text}:${a.priority}`)
+    );
+
+    for (const anchor of sourceAnchors) {
+      const sig = `${anchor.type}:${anchor.text}:${anchor.priority}`;
+      if (!existingAnchorSigs.has(sig)) {
+        await targetStack.addAnchor(targetFrame.frame_id, {
+          type: anchor.type,
+          text: anchor.text,
+          priority: anchor.priority,
+          metadata: { ...anchor.metadata, merged: true },
+        });
+        existingAnchorSigs.add(sig);
+      }
+    }
+
+    logger.debug(`Merged frame contents: ${sourceFrame.frame_id}`);
   }
 
   /**
