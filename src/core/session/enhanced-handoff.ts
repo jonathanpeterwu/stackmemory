@@ -13,7 +13,7 @@ import {
   writeFileSync,
   mkdirSync,
 } from 'fs';
-import { join, basename } from 'path';
+import { basename, join } from 'path';
 import { homedir, tmpdir } from 'os';
 import { globSync } from 'glob';
 
@@ -825,7 +825,7 @@ export class EnhancedHandoffGenerator {
   }
 
   /**
-   * Convert handoff to markdown
+   * Convert handoff to markdown (verbose format)
    */
   toMarkdown(handoff: EnhancedHandoff): string {
     const lines: string[] = [];
@@ -932,6 +932,93 @@ export class EnhancedHandoffGenerator {
     lines.push('---');
     lines.push(`*Estimated tokens: ~${handoff.estimatedTokens}*`);
     lines.push(`*Generated at ${handoff.timestamp}*`);
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Convert handoff to compact format (~50% smaller)
+   * Optimized for minimal context window usage
+   */
+  toCompact(handoff: EnhancedHandoff): string {
+    const lines: string[] = [];
+
+    // Header: single line
+    lines.push(`# Handoff: ${handoff.project}@${handoff.branch}`);
+
+    // Active Work: condensed
+    const status =
+      handoff.activeWork.status === 'in_progress'
+        ? 'WIP'
+        : handoff.activeWork.status;
+    lines.push(`## Work: ${handoff.activeWork.description} [${status}]`);
+    if (handoff.activeWork.keyFiles.length > 0) {
+      // Use basenames only, limit to 5
+      const files = handoff.activeWork.keyFiles
+        .slice(0, 5)
+        .map((f) => basename(f))
+        .join(', ');
+      const progress = handoff.activeWork.progress
+        ? ` (${handoff.activeWork.progress.replace(' in current session', '')})`
+        : '';
+      lines.push(`Files: ${files}${progress}`);
+    }
+
+    // Decisions: single line each with arrow notation
+    if (handoff.decisions.length > 0) {
+      lines.push('');
+      lines.push('## Decisions');
+      for (const d of handoff.decisions.slice(0, 7)) {
+        // Truncate long decisions
+        const what = d.what.length > 40 ? d.what.slice(0, 37) + '...' : d.what;
+        const why = d.why ? ` → ${d.why.slice(0, 50)}` : '';
+        lines.push(`- ${what}${why}`);
+      }
+    }
+
+    // Blockers: terse format
+    if (handoff.blockers.length > 0) {
+      lines.push('');
+      lines.push('## Blockers');
+      for (const b of handoff.blockers) {
+        const status = b.status === 'open' ? '!' : '✓';
+        const tried = b.attempted.length > 0 ? ` → ${b.attempted[0]}` : '';
+        lines.push(`${status} ${b.issue}${tried}`);
+      }
+    }
+
+    // Review Feedback: only if present, condensed
+    if (handoff.reviewFeedback && handoff.reviewFeedback.length > 0) {
+      lines.push('');
+      lines.push('## Feedback');
+      for (const r of handoff.reviewFeedback.slice(0, 2)) {
+        lines.push(`[${r.source}]`);
+        for (const p of r.keyPoints.slice(0, 3)) {
+          lines.push(`- ${p.slice(0, 60)}`);
+        }
+        for (const a of r.actionItems.slice(0, 2)) {
+          lines.push(`→ ${a.slice(0, 60)}`);
+        }
+      }
+    }
+
+    // Next Actions: only top 3
+    if (handoff.nextActions.length > 0) {
+      lines.push('');
+      lines.push('## Next');
+      for (const a of handoff.nextActions.slice(0, 3)) {
+        lines.push(`- ${a.slice(0, 60)}`);
+      }
+    }
+
+    // Skip: Architecture, Patterns (can be inferred from codebase)
+
+    // Compact footer
+    lines.push('');
+    lines.push(`---`);
+    lines.push(
+      `~${handoff.estimatedTokens} tokens | ${handoff.timestamp.split('T')[0]}`
+    );
 
     return lines.join('\n');
   }
