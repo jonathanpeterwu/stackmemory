@@ -1,21 +1,84 @@
 /**
  * Structured logging utility for StackMemory CLI
+ * Includes automatic sensitive data redaction for security
  */
 
 import * as fs from 'fs';
 import * as path from 'path';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
+
+/**
+ * Sensitive data patterns that should be redacted from logs
+ */
+const SENSITIVE_PATTERNS = [
+  /\b(api[_-]?key|apikey)\s*[:=]\s*['"]?[\w-]+['"]?/gi,
+  /\b(secret|password|token|credential|auth)\s*[:=]\s*['"]?[\w-]+['"]?/gi,
+  /\b(lin_api_[\w]+)/gi,
+  /\b(lin_oauth_[\w]+)/gi,
+  /\b(sk-[\w]+)/gi,
+  /\b(npm_[\w]+)/gi,
+  /\b(ghp_[\w]+)/gi,
+  /\b(ghs_[\w]+)/gi,
+  /Bearer\s+[\w.-]+/gi,
+  /Basic\s+[\w=]+/gi,
+  /postgres(ql)?:\/\/[^@\s]+:[^@\s]+@/gi,
+];
+
+const SENSITIVE_FIELD_NAMES = [
+  'password',
+  'token',
+  'apikey',
+  'api_key',
+  'secret',
+  'credential',
+  'authorization',
+  'auth',
+  'accesstoken',
+  'access_token',
+  'refreshtoken',
+  'refresh_token',
+];
+
+/**
+ * Redact sensitive data from a string
+ */
+function redactString(input: string): string {
+  let result = input;
+  for (const pattern of SENSITIVE_PATTERNS) {
+    pattern.lastIndex = 0;
+    result = result.replace(pattern, '[REDACTED]');
   }
-  return value;
+  return result;
 }
 
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
+/**
+ * Recursively sanitize an object for logging
+ */
+function sanitizeForLogging(obj: unknown): unknown {
+  if (obj === null || obj === undefined) {
+    return obj;
+  }
+
+  if (typeof obj === 'string') {
+    return redactString(obj);
+  }
+
+  if (Array.isArray(obj)) {
+    return obj.map(sanitizeForLogging);
+  }
+
+  if (typeof obj === 'object') {
+    const sanitized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (SENSITIVE_FIELD_NAMES.some((sf) => key.toLowerCase().includes(sf))) {
+        sanitized[key] = '[REDACTED]';
+      } else {
+        sanitized[key] = sanitizeForLogging(value);
+      }
+    }
+    return sanitized;
+  }
+
+  return obj;
 }
 
 export enum LogLevel {
@@ -103,7 +166,15 @@ export class Logger {
   }
 
   private writeLog(entry: LogEntry): void {
-    const logLine = JSON.stringify(entry) + '\n';
+    // Sanitize context and message to prevent logging sensitive data
+    const sanitizedEntry: LogEntry = {
+      ...entry,
+      message: redactString(entry.message),
+      context: entry.context
+        ? (sanitizeForLogging(entry.context) as Record<string, unknown>)
+        : undefined,
+    };
+    const logLine = JSON.stringify(sanitizedEntry) + '\n';
 
     // Always write to file if configured
     if (this.logFile) {
