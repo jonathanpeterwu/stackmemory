@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.5.57",
+  "version": "0.5.58",
   "description": "Lossless memory runtime for AI coding tools - organizes context as a call stack instead of linear chat logs, with team collaboration and infinite retention",
   "engines": {
     "node": ">=20.0.0",
@@ -11,6 +11,7 @@
   "bin": {
     "stackmemory": "dist/cli/index.js",
     "codex-sm": "dist/cli/codex-sm.js",
+    "codex-smd": "bin/codex-smd",
     "claude-sm": "bin/claude-sm",
     "claude-smd": "bin/claude-smd",
     "opencode-sm": "bin/opencode-sm"
