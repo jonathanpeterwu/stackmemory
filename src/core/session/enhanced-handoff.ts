@@ -1022,4 +1022,130 @@ export class EnhancedHandoffGenerator {
 
     return lines.join('\n');
   }
+
+  /**
+   * Convert handoff to ultra-compact pipe-delimited format (~90% smaller)
+   * Optimized for minimal token usage while preserving critical context
+   * Target: ~100-150 tokens
+   */
+  toUltraCompact(handoff: EnhancedHandoff): string {
+    const lines: string[] = [];
+
+    // Header: [H]project@branch|status|commits
+    const status =
+      handoff.activeWork.status === 'in_progress'
+        ? 'WIP'
+        : handoff.activeWork.status;
+    const commitCount = handoff.activeWork.progress?.match(/(\d+)/)?.[1] || '0';
+    lines.push(
+      `[H]${handoff.project}@${handoff.branch}|${status}|${commitCount}c`
+    );
+
+    // Files: [F]file1,file2,file3 (basenames only, max 5)
+    if (handoff.activeWork.keyFiles.length > 0) {
+      const files = handoff.activeWork.keyFiles
+        .slice(0, 5)
+        .map((f) => basename(f).replace(/\.(ts|js|tsx|jsx)$/, ''))
+        .join(',');
+      lines.push(`[F]${files}`);
+    }
+
+    // Decisions: [D]decision1→why|decision2→why (max 5, truncated)
+    if (handoff.decisions.length > 0) {
+      const decisions = handoff.decisions
+        .slice(0, 5)
+        .map((d) => {
+          const what = d.what.slice(0, 25).replace(/\|/g, '/');
+          const why = d.why ? `→${d.why.slice(0, 20)}` : '';
+          return `${what}${why}`;
+        })
+        .join('|');
+      lines.push(`[D]${decisions}`);
+    }
+
+    // Blockers: [B]!issue1→tried|!issue2 (! = open, ✓ = resolved)
+    if (handoff.blockers.length > 0) {
+      const blockers = handoff.blockers
+        .slice(0, 3)
+        .map((b) => {
+          const marker = b.status === 'open' ? '!' : '✓';
+          const issue = b.issue.slice(0, 20).replace(/\|/g, '/');
+          const tried =
+            b.attempted.length > 0 ? `→${b.attempted[0].slice(0, 15)}` : '';
+          return `${marker}${issue}${tried}`;
+        })
+        .join('|');
+      lines.push(`[B]${blockers}`);
+    }
+
+    // Next actions: [N]action1|action2 (max 3)
+    if (handoff.nextActions.length > 0) {
+      const actions = handoff.nextActions
+        .slice(0, 3)
+        .map((a) => a.slice(0, 25).replace(/\|/g, '/'))
+        .join('|');
+      lines.push(`[N]${actions}`);
+    }
+
+    // Footer: ~tokens|date
+    const ultraCompactContent = lines.join('\n');
+    const tokens = countTokens(ultraCompactContent);
+    lines.push(`~${tokens}t|${handoff.timestamp.split('T')[0]}`);
+
+    return lines.join('\n');
+  }
+
+  /**
+   * Auto-select format based on context budget and content complexity
+   * Returns: 'ultra' | 'compact' | 'verbose'
+   */
+  selectFormat(
+    handoff: EnhancedHandoff,
+    contextBudget?: number
+  ): 'ultra' | 'compact' | 'verbose' {
+    // If explicit budget provided, use thresholds
+    if (contextBudget !== undefined) {
+      if (contextBudget < 500) return 'ultra';
+      if (contextBudget < 2000) return 'compact';
+      return 'verbose';
+    }
+
+    // Auto-select based on content complexity
+    const complexity =
+      handoff.decisions.length +
+      handoff.blockers.length +
+      (handoff.reviewFeedback?.length || 0) * 2 +
+      handoff.nextActions.length;
+
+    // Simple sessions: ultra-compact is sufficient
+    if (complexity <= 3 && handoff.activeWork.keyFiles.length <= 3) {
+      return 'ultra';
+    }
+
+    // Complex sessions: need more detail
+    if (
+      complexity > 8 ||
+      (handoff.reviewFeedback && handoff.reviewFeedback.length > 1)
+    ) {
+      return 'verbose';
+    }
+
+    // Default: compact
+    return 'compact';
+  }
+
+  /**
+   * Generate handoff in auto-selected format
+   */
+  toAutoFormat(handoff: EnhancedHandoff, contextBudget?: number): string {
+    const format = this.selectFormat(handoff, contextBudget);
+    switch (format) {
+      case 'ultra':
+        return this.toUltraCompact(handoff);
+      case 'verbose':
+        return this.toMarkdown(handoff);
+      default:
+        return this.toCompact(handoff);
+    }
+  }
 }
