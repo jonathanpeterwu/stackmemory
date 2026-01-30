@@ -69,6 +69,11 @@ After code changes:
 3. `npm run build` - ensure compilation
 4. Run code to verify it works
 
+Test coverage:
+- New features require tests in `src/**/__tests__/`
+- Maintain or improve coverage (no untested code paths)
+- Critical paths: context management, handoff, Linear sync
+
 Never: Assume success | Skip testing | Use mock data as fallback
 
 ## Git Rules (CRITICAL)
@@ -78,6 +83,13 @@ Never: Assume success | Skip testing | Use mock data as fallback
 - If pre-push hooks fail, fix the underlying issue
 - Run `npm run lint && npm run test:run` before pushing
 - Commit message format: `type(scope): message`
+- Branch naming: `feature/STA-XXX-description` | `fix/STA-XXX-description` | `chore/description`
+
+## Task Management
+
+- Use TodoWrite for 3+ steps or multiple requests
+- Keep one task in_progress at a time
+- Update task status immediately on completion
 
 ## Security
 

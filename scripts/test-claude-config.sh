@@ -56,7 +56,7 @@ run_test() {
 
     # Run claude with prompt, capture output
     # Using --print flag for non-interactive mode
-    timeout 30 claude --print "$prompt" > "$output_dir/prompt_$i.txt" 2>&1 || true
+    claude --print "$prompt" > "$output_dir/prompt_$i.txt" 2>&1 || true
 
     # Brief pause to avoid rate limiting
     sleep 1
