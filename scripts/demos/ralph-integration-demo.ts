@@ -113,10 +113,14 @@ class RalphIntegrationDemo {
       console.log('🔧 Running worker iteration...');
       const iteration = await this.bridge.runWorkerIteration();
 
-      console.log(`✓ Analysis: ${iteration.analysis.filesCount} files, tests ${iteration.analysis.testsPass ? 'pass' : 'fail'}`);
+      console.log(
+        `✓ Analysis: ${iteration.analysis.filesCount} files, tests ${iteration.analysis.testsPass ? 'pass' : 'fail'}`
+      );
       console.log(`✓ Plan: ${iteration.plan.summary}`);
       console.log(`✓ Changes: ${iteration.changes.length} modifications`);
-      console.log(`✓ Validation: ${iteration.validation.testsPass ? 'pass' : 'fail'}`);
+      console.log(
+        `✓ Validation: ${iteration.validation.testsPass ? 'pass' : 'fail'}`
+      );
 
       // Run reviewer iteration
       console.log('👀 Running reviewer iteration...');
@@ -131,7 +135,9 @@ class RalphIntegrationDemo {
 
       // Show context budget usage
       const usage = this.bridge.getPerformanceMetrics();
-      console.log(`📊 Token usage: ${usage.tokenCount} / Context load: ${usage.contextLoadTime}ms`);
+      console.log(
+        `📊 Token usage: ${usage.tokenCount} / Context load: ${usage.contextLoadTime}ms`
+      );
 
       // Create checkpoint every few iterations
       if ((i + 1) % 3 === 0) {
@@ -141,7 +147,7 @@ class RalphIntegrationDemo {
       }
 
       // Small delay for demo
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      await new Promise((resolve) => setTimeout(resolve, 1000));
     }
   }
 
@@ -157,7 +163,7 @@ class RalphIntegrationDemo {
 
     try {
       console.log('🔄 Simulating session rehydration...');
-      
+
       // This would normally rehydrate from a real StackMemory session
       // For demo, we'll show the concept
       console.log('✓ Loading context from StackMemory...');
@@ -171,7 +177,6 @@ class RalphIntegrationDemo {
       console.log('  - State reconciled: 0.3s');
       console.log('  - Memory usage: 45MB');
       console.log('  - Cache hit rate: 78%');
-
     } catch (error: any) {
       console.log(`⚠️  Recovery simulation: ${error.message}`);
     }
@@ -190,7 +195,9 @@ class RalphIntegrationDemo {
     console.log(`  Iteration Time: ${metrics.iterationTime}ms avg`);
     console.log(`  Context Load Time: ${metrics.contextLoadTime}ms avg`);
     console.log(`  State Save Time: ${metrics.stateSaveTime}ms avg`);
-    console.log(`  Memory Usage: ${Math.round(metrics.memoryUsage / 1024 / 1024)}MB`);
+    console.log(
+      `  Memory Usage: ${Math.round(metrics.memoryUsage / 1024 / 1024)}MB`
+    );
     console.log(`  Token Count: ${metrics.tokenCount}`);
     console.log(`  Cache Hit Rate: ${Math.round(metrics.cacheHitRate * 100)}%`);
 
