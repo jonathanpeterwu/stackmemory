@@ -2,12 +2,11 @@
 builder = "nixpacks"
 
 [deploy]
-startCommand = "npm run start"
+startCommand = "node dist/integrations/mcp/remote-server.js $PORT ."
 healthcheckPath = "/health"
-healthcheckTimeout = 100
+healthcheckTimeout = 300
 restartPolicyType = "on_failure"
 restartPolicyMaxRetries = 3
 
 [env]
 NODE_ENV = "production"
-PORT = "3000"
