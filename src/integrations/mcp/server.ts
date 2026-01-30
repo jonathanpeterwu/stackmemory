@@ -1533,12 +1533,14 @@ class LocalStackMemoryMCP {
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Linear sync failed', { error: message });
       return {
         content: [
           {
             type: 'text',
-            text: `❌ Linear sync failed: ${error.message}`,
+            text: `❌ Linear sync failed: ${message}`,
           },
         ],
       };
@@ -1648,12 +1650,14 @@ class LocalStackMemoryMCP {
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to update Linear task', { error: message });
       return {
         content: [
           {
             type: 'text',
-            text: `❌ Failed to update Linear task: ${error.message}`,
+            text: `❌ Failed to update Linear task: ${message}`,
           },
         ],
       };
@@ -1731,12 +1735,14 @@ class LocalStackMemoryMCP {
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to get Linear tasks', { error: message });
       return {
         content: [
           {
             type: 'text',
-            text: `❌ Failed to get Linear tasks: ${error.message}`,
+            text: `❌ Failed to get Linear tasks: ${message}`,
           },
         ],
       };
@@ -1781,22 +1787,25 @@ class LocalStackMemoryMCP {
             },
           ],
         };
-      } catch (error: any) {
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : String(error);
         return {
           content: [
             {
               type: 'text',
-              text: `⚠️ Linear configured but connection failed: ${error.message}`,
+              text: `⚠️ Linear configured but connection failed: ${message}`,
             },
           ],
         };
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Linear status check failed', { error: message });
       return {
         content: [
           {
             type: 'text',
-            text: `❌ Linear status check failed: ${error.message}`,
+            text: `❌ Linear status check failed: ${message}`,
           },
         ],
       };
@@ -1941,12 +1950,14 @@ ${typeBreakdown}`,
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Context retrieval failed', { error: message });
       return {
         content: [
           {
             type: 'text',
-            text: `❌ Context retrieval failed: ${error.message}`,
+            text: `❌ Context retrieval failed: ${message}`,
           },
         ],
       };
@@ -2025,12 +2036,14 @@ ${typeBreakdown}`,
           },
         ],
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Failed to get summary', { error: message });
       return {
         content: [
           {
             type: 'text',
-            text: `❌ Failed to get summary: ${error.message}`,
+            text: `❌ Failed to get summary: ${message}`,
           },
         ],
       };
@@ -2214,12 +2227,14 @@ ${typeBreakdown}`,
         ],
         metadata: { results, query, scope },
       };
-    } catch (error: any) {
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      logger.error('Search failed', { error: message, query, scope });
       return {
         content: [
           {
             type: 'text',
-            text: `❌ Search failed: ${error.message}`,
+            text: `❌ Search failed: ${message}`,
           },
         ],
       };

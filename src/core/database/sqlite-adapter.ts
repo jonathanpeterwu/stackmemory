@@ -112,7 +112,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     try {
       this.db.prepare('SELECT 1').get();
       return true;
-    } catch {
+    } catch (error: unknown) {
+      // Database may be closed or corrupted
+      logger.debug('Database ping failed', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return false;
     }
   }
@@ -306,7 +310,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
         .prepare('SELECT MAX(version) as version FROM schema_version')
         .get() as VersionResult;
       return result?.version || 0;
-    } catch {
+    } catch (error: unknown) {
+      // Table may not exist yet in a fresh database
+      logger.debug('Schema version table not found, returning 0', {
+        error: error instanceof Error ? error.message : String(error),
+      });
       return 0;
     }
   }
@@ -835,7 +843,13 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     try {
       const fileStats = await fs.stat(this.dbPath);
       stats.diskUsage = fileStats.size;
-    } catch {}
+    } catch (error: unknown) {
+      // File may not exist yet or be inaccessible - disk usage remains 0
+      logger.debug('Failed to get database file size', {
+        dbPath: this.dbPath,
+        error: error instanceof Error ? error.message : String(error),
+      });
+    }
 
     return stats;
   }

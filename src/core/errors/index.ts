@@ -502,9 +502,14 @@ export class ErrorHandler {
           { operation }
         );
       } else {
-        stackMemoryError = wrapError(error, error.message, ErrorCode.OPERATION_FAILED, {
-          operation,
-        });
+        stackMemoryError = wrapError(
+          error,
+          error.message,
+          ErrorCode.OPERATION_FAILED,
+          {
+            operation,
+          }
+        );
       }
 
       const userMessage = getUserFriendlyMessage(stackMemoryError.code);
@@ -624,7 +629,10 @@ export class ErrorHandler {
       }
     }
 
-    ErrorHandler.handle(lastError, `${operationName} (after ${maxRetries} attempts)`);
+    ErrorHandler.handle(
+      lastError,
+      `${operationName} (after ${maxRetries} attempts)`
+    );
   }
 
   /**
@@ -704,3 +712,6 @@ export const validatePath = (filePath: string): asserts filePath is string => {
     );
   }
 };
+
+// Re-export error utilities
+export * from './error-utils.js';

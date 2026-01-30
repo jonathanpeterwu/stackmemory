@@ -836,7 +836,13 @@ export class LinearClient {
         issue: LinearIssue & { team: { id: string; name: string } };
       }>(query, { issueId });
       return result.issue;
-    } catch {
+    } catch (error: unknown) {
+      // Log the error but return null for graceful degradation
+      // This allows callers to handle missing issues without crashing
+      logger.debug('Failed to fetch issue by ID', {
+        issueId,
+        error: error instanceof Error ? error.message : String(error),
+      });
       return null;
     }
   }
