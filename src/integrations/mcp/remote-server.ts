@@ -7,11 +7,12 @@
 import express from 'express';
 import cors from 'cors';
 import { Server } from '@modelcontextprotocol/sdk/server/index.js';
-import { SSEServerTransport } from '@modelcontextprotocol/sdk/server/sse.js';
+import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { z } from 'zod';
 import Database from 'better-sqlite3';
 import { validateInput, StartFrameSchema, AddAnchorSchema } from './schemas.js';
 import { readFileSync, existsSync, mkdirSync } from 'fs';
+import { randomUUID } from 'crypto';
 import { join, dirname } from 'path';
 import { execSync } from 'child_process';
 import { FrameManager, FrameType } from '../../core/context/index.js';
@@ -36,7 +37,7 @@ class RemoteStackMemoryMCP {
   private linearSync: LinearSyncEngine | null = null;
   private projectId: string;
   private contexts: Map<string, any> = new Map();
-  private transports: Map<string, SSEServerTransport> = new Map();
+  private transport: StreamableHTTPServerTransport | null = null;
 
   constructor(projectRoot?: string) {
     this.projectRoot = projectRoot || this.findProjectRoot();
@@ -692,66 +693,48 @@ class RemoteStackMemoryMCP {
       });
     });
 
-    // SSE endpoint - establishes the connection
-    app.get('/sse', async (req, res) => {
-      logger.info('New SSE connection request');
-
-      // Create SSE transport
-      const transport = new SSEServerTransport('/message', res);
-      const sessionId = transport.sessionId;
-
-      // Store transport for message routing
-      this.transports.set(sessionId, transport);
-
-      // Clean up on close
-      transport.onclose = () => {
-        this.transports.delete(sessionId);
-        logger.info('SSE connection closed', { sessionId });
-      };
-
-      transport.onerror = (error) => {
-        logger.error('SSE transport error', { sessionId, error });
-        this.transports.delete(sessionId);
-      };
-
-      // Connect the MCP server to this transport
-      await this.server.connect(transport);
-
-      // Start the SSE stream
-      await transport.start();
-
-      logger.info('SSE connection established', { sessionId });
+    // Create StreamableHTTP transport (replaces SSE)
+    this.transport = new StreamableHTTPServerTransport({
+      sessionIdGenerator: () => randomUUID(),
     });
 
-    // Message endpoint - receives client messages
-    app.post('/message', async (req, res) => {
-      const sessionId = req.query.sessionId as string;
+    // Connect server to transport
+    await this.server.connect(this.transport);
 
-      if (!sessionId) {
-        res.status(400).json({ error: 'Missing sessionId' });
-        return;
+    // MCP endpoint - handles all MCP requests (GET for SSE, POST for messages)
+    app.all('/mcp', async (req, res) => {
+      logger.info('MCP request', { method: req.method });
+      try {
+        await this.transport!.handleRequest(req, res, req.body);
+      } catch (error) {
+        logger.error('MCP request error', { error });
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Internal server error' });
+        }
       }
+    });
 
-      const transport = this.transports.get(sessionId);
-      if (!transport) {
-        res.status(404).json({ error: 'Session not found' });
-        return;
-      }
+    // Legacy SSE endpoint - redirect to /mcp
+    app.get('/sse', (req, res) => {
+      res.redirect(307, '/mcp');
+    });
 
-      await transport.handlePostMessage(req, res);
+    // Legacy message endpoint - redirect to /mcp
+    app.post('/message', (req, res) => {
+      res.redirect(307, '/mcp');
     });
 
     // Server info endpoint
     app.get('/info', (req, res) => {
       res.json({
         name: 'stackmemory-remote',
-        version: '0.1.0',
+        version: '0.2.0',
         protocol: 'mcp',
-        transport: 'sse',
+        transport: 'streamable-http',
         endpoints: {
-          sse: '/sse',
-          message: '/message',
+          mcp: '/mcp',
           health: '/health',
+          info: '/info',
         },
         project: {
           id: this.projectId,
@@ -767,8 +750,7 @@ class RemoteStackMemoryMCP {
           `StackMemory Remote MCP Server running on http://localhost:${port}`
         );
         console.log(`\nEndpoints:`);
-        console.log(`  SSE:     http://localhost:${port}/sse`);
-        console.log(`  Message: http://localhost:${port}/message`);
+        console.log(`  MCP:     http://localhost:${port}/mcp`);
         console.log(`  Health:  http://localhost:${port}/health`);
         console.log(`  Info:    http://localhost:${port}/info`);
         console.log(
