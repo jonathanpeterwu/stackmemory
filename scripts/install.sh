@@ -43,10 +43,12 @@ mkdir -p "$INSTALL_DIR"
 
 # Copy all necessary files
 cp -r "$CURRENT_DIR/src" "$INSTALL_DIR/" 2>/dev/null || true
-cp -r "$CURRENT_DIR/attention-scoring" "$INSTALL_DIR/" 2>/dev/null || true  
+cp -r "$CURRENT_DIR/scripts" "$INSTALL_DIR/" 2>/dev/null || true
+cp -r "$CURRENT_DIR/attention-scoring" "$INSTALL_DIR/" 2>/dev/null || true
 cp -r "$CURRENT_DIR/p2p-sync" "$INSTALL_DIR/" 2>/dev/null || true
 cp "$CURRENT_DIR/package.json" "$INSTALL_DIR/"
 cp "$CURRENT_DIR/tsconfig.json" "$INSTALL_DIR/"
+cp "$CURRENT_DIR/esbuild.config.js" "$INSTALL_DIR/"
 
 # 2. Install dependencies
 echo -e "${GREEN}[2/5]${NC} Installing dependencies..."
@@ -90,7 +92,7 @@ for CONFIG_DIR in "$MCP_CONFIG_DIR" "$ALT_MCP_DIR"; do
         
         config.mcpServers.stackmemory = {
             command: 'node',
-            args: ['$INSTALL_DIR/dist/src/mcp-server.js'],
+            args: ['$INSTALL_DIR/dist/integrations/mcp/server.js'],
             env: {
                 STACKMEMORY_GLOBAL: 'true'
             }
@@ -106,7 +108,7 @@ for CONFIG_DIR in "$MCP_CONFIG_DIR" "$ALT_MCP_DIR"; do
   "mcpServers": {
     "stackmemory": {
       "command": "node",
-      "args": ["$INSTALL_DIR/dist/src/mcp-server.js"],
+      "args": ["$INSTALL_DIR/dist/integrations/mcp/server.js"],
       "env": {
         "STACKMEMORY_GLOBAL": "true"
       }
@@ -124,75 +126,25 @@ echo -e "${GREEN}[5/5]${NC} Creating global command..."
 # Create bin directory if it doesn't exist
 mkdir -p "$HOME/.local/bin"
 
-# Create the global stackmemory command
+# Create the global stackmemory command - delegates to the real CLI
 cat > "$HOME/.local/bin/stackmemory" << 'EOF'
 #!/usr/bin/env node
 
 const { spawn } = require('child_process');
 const path = require('path');
-const fs = require('fs');
 const os = require('os');
 
 const installDir = path.join(os.homedir(), '.stackmemory');
-const mcpServer = path.join(installDir, 'dist', 'src', 'mcp-server.js');
+const cliPath = path.join(installDir, 'dist', 'cli', 'index.js');
 
-// Check if we're in a git repo
-function isGitRepo() {
-    try {
-        require('child_process').execSync('git rev-parse --git-dir', { stdio: 'ignore' });
-        return true;
-    } catch (e) {
-        return false;
-    }
-}
+// Pass all arguments to the real CLI
+const args = process.argv.slice(2);
+const child = spawn('node', [cliPath, ...args], {
+    env: { ...process.env, PROJECT_ROOT: process.cwd() },
+    stdio: 'inherit'
+});
 
-// Auto-initialize if in git repo
-if (isGitRepo() && !fs.existsSync('.stackmemory')) {
-    console.log('🎯 Initializing StackMemory in this repository...');
-    
-    fs.mkdirSync('.stackmemory', { recursive: true });
-    
-    const config = {
-        projectId: path.basename(process.cwd()),
-        userId: process.env.USER || 'default',
-        initialized: new Date().toISOString()
-    };
-    
-    fs.writeFileSync('.stackmemory/config.json', JSON.stringify(config, null, 2));
-    fs.writeFileSync('.stackmemory/frames.jsonl', '');
-    
-    // Add to .gitignore
-    if (fs.existsSync('.gitignore')) {
-        const gitignore = fs.readFileSync('.gitignore', 'utf8');
-        if (!gitignore.includes('.stackmemory')) {
-            fs.appendFileSync('.gitignore', '\n# StackMemory\n.stackmemory/*.db\n.stackmemory/*.db-*\n');
-        }
-    }
-    
-    console.log('✅ StackMemory initialized!');
-}
-
-// Handle commands
-const command = process.argv[2];
-
-switch(command) {
-    case 'init':
-        // Already handled above
-        break;
-    case 'status':
-        require(path.join(installDir, 'dist', 'scripts', 'status.js'));
-        break;
-    case 'test':
-        require(path.join(installDir, 'dist', 'test', 'test-framework.js'));
-        break;
-    default:
-        // Start MCP server
-        const child = spawn('node', [mcpServer], {
-            env: { ...process.env, PROJECT_ROOT: process.cwd() },
-            stdio: 'inherit'
-        });
-        child.on('exit', code => process.exit(code));
-}
+child.on('exit', code => process.exit(code || 0));
 EOF
 
 chmod +x "$HOME/.local/bin/stackmemory"

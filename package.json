@@ -64,7 +64,7 @@
     "prepublishOnly": "npm run build && npm run test:pre-publish",
     "quality": "npm run lint && npm run test:run && npm run build",
     "dev": "tsx watch src/mcp/mcp-server.ts",
-    "mcp:start": "node dist/src/integrations/mcp/server.js",
+    "mcp:start": "node dist/integrations/mcp/server.js",
     "mcp:dev": "tsx src/mcp/mcp-server.ts",
     "status": "node dist/scripts/status.js",
     "linear:sync": "node scripts/sync-linear-graphql.js",

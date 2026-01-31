@@ -3,9 +3,16 @@ import esbuild from 'esbuild';
 import { glob } from 'glob';
 
 // Get all TypeScript files except tests
-const entryPoints = glob.sync('src/**/*.ts', {
+const srcEntries = glob.sync('src/**/*.ts', {
   ignore: ['**/*.test.ts', '**/*.spec.ts', '**/__tests__/**'],
 });
+
+// Get script files
+const scriptEntries = glob.sync('scripts/*.ts', {
+  ignore: ['**/*.test.ts', '**/*.spec.ts'],
+});
+
+const entryPoints = [...srcEntries, ...scriptEntries];
 
 // ESM polyfill for __dirname and __filename
 const esmBanner = `import { fileURLToPath as __fileURLToPath } from 'url';

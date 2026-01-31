@@ -83,19 +83,28 @@ if (!existsSync(jsonlPath)) {
 }
 
 // 5. Create MCP config for Claude Code
-const mcpConfigPath = join(
-  process.env['HOME'] || '~',
-  '.config',
-  'claude',
-  'mcp.json'
-);
+const isMacOS = process.platform === 'darwin';
+const mcpConfigPath = isMacOS
+  ? join(
+      process.env['HOME'] || '~',
+      'Library',
+      'Application Support',
+      'Claude',
+      'claude_desktop_config.json'
+    )
+  : join(
+      process.env['HOME'] || '~',
+      '.config',
+      'claude',
+      'claude_desktop_config.json'
+    );
 console.log(chalk.blue('\n📝 MCP Configuration for Claude Code:\n'));
 
 const mcpConfig = {
   mcpServers: {
     stackmemory: {
       command: 'node',
-      args: [join(projectRoot, 'dist', 'mcp-server.js')],
+      args: [join(projectRoot, 'dist', 'integrations', 'mcp', 'server.js')],
       env: {
         PROJECT_ROOT: projectRoot,
       },
