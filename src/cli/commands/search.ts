@@ -7,6 +7,22 @@ import { Command } from 'commander';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { z } from 'zod';
+
+// Input validation schemas
+const SearchQuerySchema = z
+  .string()
+  .min(1, 'Search query is required')
+  .max(500, 'Search query too long (max 500 characters)')
+  .transform((val) => {
+    // Escape SQL LIKE special characters to prevent injection
+    return val.replace(/[%_\\]/g, '\\$&');
+  });
+
+const LimitSchema = z
+  .string()
+  .transform((val) => parseInt(val, 10))
+  .pipe(z.number().int().min(1).max(100).default(20));
 
 export function createSearchCommand(): Command {
   const search = new Command('search')
@@ -16,7 +32,7 @@ export function createSearchCommand(): Command {
     .option('-t, --tasks', 'Search only tasks')
     .option('-c, --context', 'Search only context')
     .option('-l, --limit <n>', 'Limit results', '20')
-    .action(async (query, options) => {
+    .action(async (rawQuery, options) => {
       const projectRoot = process.cwd();
       const dbPath = join(projectRoot, '.stackmemory', 'context.db');
 
@@ -27,12 +43,28 @@ export function createSearchCommand(): Command {
         return;
       }
 
+      // Validate inputs
+      let query: string;
+      let limit: number;
+
+      try {
+        query = SearchQuerySchema.parse(rawQuery);
+        limit = LimitSchema.parse(options.limit);
+      } catch (error) {
+        if (error instanceof z.ZodError) {
+          console.error('❌ Invalid input:', error.errors[0].message);
+        } else {
+          console.error('❌ Invalid input');
+        }
+        return;
+      }
+
       const db = new Database(dbPath);
-      const limit = parseInt(options.limit);
       const searchTasks = !options.context || options.tasks;
       const searchContext = !options.tasks || options.context;
 
-      console.log(`\n🔍 Searching for "${query}"...\n`);
+      // Display the original query (not the escaped one) for user
+      console.log(`\n🔍 Searching for "${rawQuery}"...\n`);
 
       let totalResults = 0;
 
