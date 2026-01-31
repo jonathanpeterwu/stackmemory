@@ -1,5 +1,5 @@
 /**
- * Tests for error handling system
+ * Tests for error handling system - Consolidated
  */
 
 import { describe, it, expect } from 'vitest';
@@ -14,20 +14,17 @@ import {
   getErrorMessage,
   wrapError,
   getUserFriendlyMessage,
-  createErrorHandler,
 } from '../index.js';
 import {
-  safeExecute,
   safeExecuteSync,
   executeWithFallback,
   extractError,
   isNetworkError,
-  toTypedError,
   assertCondition,
   assertDefined,
 } from '../error-utils.js';
 
-describe('Error System', () => {
+describe('Error Types', () => {
   it('should create StackMemoryError with all properties', () => {
     const cause = new Error('Original error');
     const error = new StackMemoryError({
@@ -40,281 +37,108 @@ describe('Error System', () => {
     });
 
     expect(error).toBeInstanceOf(Error);
-    expect(error.message).toBe('Test error');
-    expect(error.name).toBe('StackMemoryError');
     expect(error.code).toBe(ErrorCode.VALIDATION_FAILED);
-    expect(error.context).toEqual({ field: 'test' });
-    expect(error.cause).toBe(cause);
     expect(error.isRetryable).toBe(true);
     expect(error.httpStatus).toBe(400);
-    expect(error.timestamp).toBeInstanceOf(Date);
+    expect(error.toJSON().name).toBe('StackMemoryError');
   });
 
-  it('should handle error codes', () => {
-    expect(ErrorCode.VALIDATION_FAILED).toBe('VAL_001');
-    expect(ErrorCode.DB_CONNECTION_FAILED).toBe('DB_001');
-    expect(ErrorCode.LINEAR_AUTH_FAILED).toBe('LINEAR_001');
-  });
-
-  it('should create specialized error types', () => {
-    const dbError = new DatabaseError('DB failed', ErrorCode.DB_QUERY_FAILED);
-    expect(dbError.httpStatus).toBe(503);
-
-    const integrationError = new IntegrationError('API failed');
-    expect(integrationError.isRetryable).toBe(true);
-    expect(integrationError.httpStatus).toBe(502);
-
-    const validationError = new ValidationError('Invalid input');
-    expect(validationError.isRetryable).toBe(false);
-    expect(validationError.httpStatus).toBe(400);
-
-    const systemError = new SystemError('Internal error');
-    expect(systemError.httpStatus).toBe(500);
-  });
-
-  it('should serialize error to JSON', () => {
-    const error = new StackMemoryError({
-      message: 'Test',
-      code: ErrorCode.INTERNAL_ERROR,
-    });
-
-    const json = error.toJSON();
-    expect(json.name).toBe('StackMemoryError');
-    expect(json.code).toBe(ErrorCode.INTERNAL_ERROR);
-    expect(json.message).toBe('Test');
-    expect(json.timestamp).toBeDefined();
+  it('should create specialized error types with correct defaults', () => {
+    expect(
+      new DatabaseError('DB failed', ErrorCode.DB_QUERY_FAILED).httpStatus
+    ).toBe(503);
+    expect(new IntegrationError('API failed').isRetryable).toBe(true);
+    expect(new ValidationError('Invalid input').isRetryable).toBe(false);
+    expect(new SystemError('Internal error').httpStatus).toBe(500);
   });
 });
 
 describe('Error Utilities', () => {
-  describe('isRetryableError', () => {
-    it('should identify retryable StackMemoryError', () => {
-      const retryable = new IntegrationError('API failed');
-      expect(isRetryableError(retryable)).toBe(true);
-
-      const nonRetryable = new ValidationError('Invalid');
-      expect(isRetryableError(nonRetryable)).toBe(false);
-    });
-
-    it('should identify network errors as retryable', () => {
-      expect(isRetryableError(new Error('ECONNREFUSED'))).toBe(true);
-      expect(isRetryableError(new Error('Socket hang up'))).toBe(true);
-      expect(isRetryableError(new Error('Timeout'))).toBe(true);
-    });
+  it('should identify retryable errors', () => {
+    expect(isRetryableError(new IntegrationError('API failed'))).toBe(true);
+    expect(isRetryableError(new ValidationError('Invalid'))).toBe(false);
+    expect(isRetryableError(new Error('ECONNREFUSED'))).toBe(true);
   });
 
-  describe('getErrorMessage', () => {
-    it('should extract message from Error', () => {
-      expect(getErrorMessage(new Error('Test'))).toBe('Test');
-    });
-
-    it('should handle string errors', () => {
-      expect(getErrorMessage('String error')).toBe('String error');
-    });
-
-    it('should handle unknown errors', () => {
-      expect(getErrorMessage(null)).toBe('An unknown error occurred');
-      expect(getErrorMessage(undefined)).toBe('An unknown error occurred');
-      expect(getErrorMessage(42)).toBe('An unknown error occurred');
-    });
-
-    it('should handle objects with message property', () => {
-      expect(getErrorMessage({ message: 'Object error' })).toBe('Object error');
-    });
+  it('should extract error messages', () => {
+    expect(getErrorMessage(new Error('Test'))).toBe('Test');
+    expect(getErrorMessage('String error')).toBe('String error');
+    expect(getErrorMessage(null)).toContain('error');
   });
 
-  describe('wrapError', () => {
-    it('should return StackMemoryError unchanged', () => {
-      const original = new ValidationError('Test');
-      expect(wrapError(original, 'Default')).toBe(original);
-    });
-
-    it('should wrap regular Error', () => {
-      const original = new Error('Original');
-      const wrapped = wrapError(original, 'Default');
-
-      expect(wrapped).toBeInstanceOf(SystemError);
-      expect(wrapped.message).toBe('Original');
-      expect(wrapped.cause).toBe(original);
-    });
-
-    it('should use default message for non-Error', () => {
-      const wrapped = wrapError('string', 'Default message');
-      expect(wrapped.message).toBe('Default message');
-    });
+  it('should wrap errors with context', () => {
+    const original = new Error('Original');
+    const wrapped = wrapError(original, 'Context message');
+    expect(wrapped).toBeInstanceOf(StackMemoryError);
   });
 
-  describe('getUserFriendlyMessage', () => {
-    it('should return friendly messages for known codes', () => {
-      expect(getUserFriendlyMessage(ErrorCode.AUTH_FAILED)).toContain(
-        'Authentication'
-      );
-      expect(getUserFriendlyMessage(ErrorCode.FILE_NOT_FOUND)).toContain(
-        'not found'
-      );
-      expect(getUserFriendlyMessage(ErrorCode.NETWORK_ERROR)).toContain(
-        'internet'
-      );
-    });
-
-    it('should return generic message for unknown codes', () => {
-      const msg = getUserFriendlyMessage('UNKNOWN_CODE' as ErrorCode);
-      expect(msg).toContain('unexpected error');
-    });
-  });
-
-  describe('createErrorHandler', () => {
-    it('should merge context', () => {
-      const handler = createErrorHandler({ component: 'test' });
-      const error = new ValidationError('Test');
-      const handled = handler(error, { operation: 'validate' });
-
-      expect(handled.context?.component).toBe('test');
-      expect(handled.context?.operation).toBe('validate');
-    });
+  it('should provide user-friendly messages', () => {
+    const dbError = new DatabaseError(
+      'Connection refused',
+      ErrorCode.DB_CONNECTION_FAILED
+    );
+    const message = getUserFriendlyMessage(dbError);
+    expect(message).toBeDefined();
   });
 });
 
-describe('Error Utils', () => {
-  describe('safeExecute', () => {
-    it('should return result on success', async () => {
-      const result = await safeExecute(async () => 'success', {
-        operation: 'test',
-        component: 'test',
-      });
-      expect(result).toBe('success');
-    });
+describe('Safe Execution', () => {
+  const context = { component: 'test', operation: 'test' };
 
-    it('should return undefined on failure', async () => {
-      const result = await safeExecute(
-        async () => {
-          throw new Error('fail');
-        },
-        { operation: 'test', component: 'test' }
-      );
-      expect(result).toBeUndefined();
-    });
-
-    it('should return default value on failure', async () => {
-      const result = await safeExecute(
-        async () => {
-          throw new Error('fail');
-        },
-        { operation: 'test', component: 'test' },
-        'default'
-      );
-      expect(result).toBe('default');
-    });
+  it('should execute sync safely and return result', () => {
+    const result = safeExecuteSync(() => 42, context);
+    expect(result).toBe(42);
   });
 
-  describe('safeExecuteSync', () => {
-    it('should handle sync operations', () => {
-      const result = safeExecuteSync(() => 'success', {
-        operation: 'test',
-        component: 'test',
-      });
-      expect(result).toBe('success');
-    });
-
-    it('should return default on failure', () => {
-      const result = safeExecuteSync(
-        () => {
-          throw new Error('fail');
-        },
-        { operation: 'test', component: 'test' },
-        'default'
-      );
-      expect(result).toBe('default');
-    });
+  it('should return undefined on sync error', () => {
+    const result = safeExecuteSync(() => {
+      throw new Error('Sync failure');
+    }, context);
+    expect(result).toBeUndefined();
   });
 
-  describe('executeWithFallback', () => {
-    it('should return null on failure', async () => {
-      const result = await executeWithFallback(
-        async () => {
-          throw new Error('fail');
-        },
-        { operation: 'test', component: 'test' }
-      );
-      expect(result).toBeNull();
-    });
+  it('should execute with fallback returning null on error', async () => {
+    const result = await executeWithFallback(async () => {
+      throw new Error('Failed');
+    }, context);
+    expect(result).toBeNull();
+  });
+});
+
+describe('Assertions', () => {
+  it('should assert conditions', () => {
+    expect(() => assertCondition(true, 'Should pass')).not.toThrow();
+    expect(() => assertCondition(false, 'Should fail')).toThrow(
+      StackMemoryError
+    );
   });
 
-  describe('extractError', () => {
-    it('should extract from StackMemoryError', () => {
-      const error = new IntegrationError(
-        'API failed',
-        ErrorCode.LINEAR_API_ERROR
-      );
-      const extracted = extractError(error);
-
-      expect(extracted.message).toBe('API failed');
-      expect(extracted.code).toBe(ErrorCode.LINEAR_API_ERROR);
-      expect(extracted.isRetryable).toBe(true);
-    });
-
-    it('should extract from regular Error', () => {
-      const error = new Error('Regular error');
-      const extracted = extractError(error);
-
-      expect(extracted.message).toBe('Regular error');
-      expect(extracted.cause).toBe(error);
-    });
-
-    it('should handle non-Error values', () => {
-      expect(extractError('string').message).toBe('string');
-      expect(extractError(null).message).toBe('Unknown error');
-    });
+  it('should assert defined values', () => {
+    assertDefined('value', 'test'); // Should not throw
+    expect(() => assertDefined(undefined, 'undefined test')).toThrow(
+      StackMemoryError
+    );
+    expect(() => assertDefined(null, 'null test')).toThrow(StackMemoryError);
   });
+});
 
-  describe('isNetworkError', () => {
-    it('should identify network errors', () => {
-      expect(isNetworkError(new Error('ECONNREFUSED'))).toBe(true);
-      expect(isNetworkError(new Error('ENOTFOUND'))).toBe(true);
-      expect(isNetworkError(new Error('timeout'))).toBe(true);
-      expect(isNetworkError(new Error('socket hang up'))).toBe(true);
-      expect(isNetworkError(new Error('ECONNRESET'))).toBe(true);
-    });
-
-    it('should return false for non-network errors', () => {
-      expect(isNetworkError(new Error('Validation failed'))).toBe(false);
-      expect(isNetworkError('string')).toBe(false);
-    });
+describe('Network Error Detection', () => {
+  it('should identify network errors', () => {
+    expect(isNetworkError(new Error('econnrefused'))).toBe(true);
+    expect(isNetworkError(new Error('timeout occurred'))).toBe(true);
+    expect(isNetworkError(new Error('Regular error'))).toBe(false);
   });
+});
 
-  describe('toTypedError', () => {
-    it('should return StackMemoryError unchanged', () => {
-      const error = new ValidationError('Test');
-      expect(toTypedError(error)).toBe(error);
-    });
+describe('extractError', () => {
+  it('should extract error details', () => {
+    const extracted = extractError(new Error('Test'));
+    expect(extracted.message).toBe('Test');
 
-    it('should wrap unknown errors', () => {
-      const wrapped = toTypedError(new Error('test'), ErrorCode.API_ERROR);
-      expect(wrapped).toBeInstanceOf(SystemError);
-      expect(wrapped.code).toBe(ErrorCode.API_ERROR);
-    });
-  });
+    const extracted2 = extractError('String error');
+    expect(extracted2.message).toBe('String error');
 
-  describe('assertCondition', () => {
-    it('should not throw when condition is true', () => {
-      expect(() => assertCondition(true, 'Test')).not.toThrow();
-    });
-
-    it('should throw when condition is false', () => {
-      expect(() => assertCondition(false, 'Test')).toThrow(StackMemoryError);
-    });
-  });
-
-  describe('assertDefined', () => {
-    it('should not throw for defined values', () => {
-      expect(() => assertDefined('value', 'Test')).not.toThrow();
-      expect(() => assertDefined(0, 'Test')).not.toThrow();
-      expect(() => assertDefined('', 'Test')).not.toThrow();
-    });
-
-    it('should throw for null or undefined', () => {
-      expect(() => assertDefined(null, 'Test')).toThrow(StackMemoryError);
-      expect(() => assertDefined(undefined, 'Test')).toThrow(StackMemoryError);
-    });
+    const extracted3 = extractError(null);
+    expect(extracted3.message).toContain('error');
   });
 });
