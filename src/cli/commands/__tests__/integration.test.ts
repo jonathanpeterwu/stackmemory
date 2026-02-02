@@ -10,7 +10,7 @@ import * as os from 'os';
 
 // Use the development CLI (built version)
 const projectRoot = path.join(__dirname, '..', '..', '..', '..');
-const cliPath = path.join(projectRoot, 'dist', 'cli', 'index.js');
+const cliPath = path.join(projectRoot, 'dist', 'src', 'cli', 'index.js');
 const cli = (cmd: string) => `node ${cliPath} ${cmd}`;
 
 // NOTE: These tests have implementation dependencies

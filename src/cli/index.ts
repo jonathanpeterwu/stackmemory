@@ -68,11 +68,28 @@ import { enableChromaDB } from '../core/config/storage-config.js';
 import { spawn } from 'child_process';
 import { homedir } from 'os';
 
-// Read version from package.json
+// Read version from package.json - works from both src/ and dist/src/
 import { createRequire } from 'module';
-const require = createRequire(import.meta.url);
-const pkg = require('../../package.json');
-const VERSION = pkg.version;
+import { fileURLToPath } from 'url';
+import * as pathModule from 'path';
+const localRequire = createRequire(import.meta.url);
+const currentFilePath = fileURLToPath(import.meta.url);
+const currentDirPath = pathModule.dirname(currentFilePath);
+
+// Find package.json by walking up directories
+function findPackageJson(): { version: string } {
+  let dir = currentDirPath;
+  for (let i = 0; i < 5; i++) {
+    const pkgPath = pathModule.join(dir, 'package.json');
+    try {
+      return localRequire(pkgPath);
+    } catch {
+      dir = pathModule.dirname(dir);
+    }
+  }
+  return { version: '0.0.0' };
+}
+const VERSION = findPackageJson().version;
 
 // Check for updates on CLI startup
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {

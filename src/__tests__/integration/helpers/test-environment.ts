@@ -65,7 +65,7 @@ export class TestEnvironment {
       'db',
       'stackmemory.db'
     );
-    this.cliPath = path.join(process.cwd(), 'dist', 'cli', 'index.js');
+    this.cliPath = path.join(process.cwd(), 'dist', 'src', 'cli', 'index.js');
 
     // Adapter will be created after directories are set up
     this.adapter = null as any; // Will be initialized in setup()

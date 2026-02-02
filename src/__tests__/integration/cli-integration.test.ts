@@ -11,7 +11,7 @@ import * as os from 'os';
 
 // Use the built CLI
 const projectRoot = path.join(__dirname, '..', '..', '..');
-const cliPath = path.join(projectRoot, 'dist', 'cli', 'index.js');
+const cliPath = path.join(projectRoot, 'dist', 'src', 'cli', 'index.js');
 
 describe('CLI Integration', () => {
   let testDir: string;
