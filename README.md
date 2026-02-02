@@ -1,6 +1,6 @@
 # StackMemory
 
-**Lossless, project-scoped memory for AI tools** • v0.5.51
+**Lossless, project-scoped memory for AI tools** • v0.5.59
 
 StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions:
 
@@ -33,6 +33,110 @@ StackMemory solves this by:
 - Call stack organization for nested context
 - Configurable importance scoring
 - Team collaboration through shared stacks
+
+---
+
+## Features
+
+StackMemory includes powerful features to enhance your AI coding workflow. Enable/disable with `claude-sm config setup`.
+
+### Predictive Edit
+
+Anticipates your next edit and displays suggestions as a status bar overlay. Powered by llama-server and Claude Code's PostToolUse hooks.
+
+```bash
+claude-sm --sweep          # Enable (default: on)
+claude-sm --no-sweep       # Disable
+```
+
+- **How it works**: Analyzes tool outputs and predicts likely follow-up edits
+- **Interface**: Tab to accept, Esc to dismiss
+- **Requirement**: Installs `node-pty` on first use
+
+### Code Review
+
+AI-powered code review using Greptile's codebase-aware analysis. Automatically registers the Greptile MCP server for deep repository understanding.
+
+```bash
+claude-sm --greptile       # Enable (default: on)
+claude-sm --no-greptile    # Disable
+```
+
+- **Tools provided**: `index_repository`, `query_repository`, `get_repository_info`
+- **Requirement**: `GREPTILE_API_KEY` in `.env`
+
+### Prompt Forge
+
+Genetic Eval-driven Prompt Algorithm (GEPA) for automatic system prompt optimization. Evolves your `CLAUDE.md` through mutation, evaluation, and selection.
+
+```bash
+claude-sm --gepa           # Enable
+claude-sm --no-gepa        # Disable (default)
+```
+
+- **Auto-optimize**: Watches `CLAUDE.md` and runs optimization on changes
+- **Strategies**: rephrase, add_examples, remove_redundancy, restructure, add_constraints, simplify
+- **Output**: Before/after comparison with metrics (lines, tokens, rules)
+
+### Model Switcher
+
+Dynamic model routing based on task complexity. Automatically selects the optimal model (Haiku/Sonnet/Opus) for each request.
+
+```bash
+claude-sm --model-routing  # Enable
+claude-sm --no-model-routing  # Disable (default)
+```
+
+- **Cost optimization**: Uses cheaper models for simple tasks
+- **Quality preservation**: Routes complex tasks to more capable models
+
+### Safe Branch
+
+Git worktree isolation for experimental changes. Each session operates in an isolated branch, preventing accidental commits to main.
+
+```bash
+claude-sm --worktree       # Enable
+claude-sm --no-worktree    # Disable (default)
+```
+
+- **Isolation**: Changes happen in a separate worktree
+- **Safety**: Main branch remains untouched until explicit merge
+
+### Mobile Sync
+
+WhatsApp notifications for session updates and task completion. Stay informed even when away from your terminal.
+
+```bash
+claude-sm --whatsapp       # Enable
+claude-sm --no-whatsapp    # Disable (default)
+```
+
+- **Notifications**: Session start, task completion, errors
+- **Interactive**: Reply to trigger actions remotely
+
+### Session Insights
+
+Detailed tracing of session activity for debugging and optimization. Tracks tool calls, timing, and decision paths.
+
+```bash
+claude-sm --tracing        # Enable
+claude-sm --no-tracing     # Disable (default)
+```
+
+- **Visibility**: Full execution trace
+- **Analytics**: Performance metrics and patterns
+
+### Task Alert
+
+Desktop/terminal notifications when long-running tasks complete. Never miss a completed build or test run.
+
+```bash
+claude-sm --notify-on-done # Enable (default: on)
+claude-sm --no-notify-on-done  # Disable
+```
+
+- **Platforms**: macOS notifications, terminal bell
+- **Smart**: Only notifies for tasks taking >10 seconds
 
 ---
 

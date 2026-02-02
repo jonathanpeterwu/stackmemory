@@ -46,6 +46,7 @@ interface ClaudeSMConfig {
   defaultModelRouting: boolean;
   defaultSweep: boolean;
   defaultGreptile: boolean;
+  defaultGEPA: boolean;
 }
 
 interface ClaudeConfig {
@@ -70,6 +71,7 @@ interface ClaudeConfig {
   useThinkingMode: boolean;
   useSweep: boolean;
   useGreptile: boolean;
+  useGEPA: boolean;
 }
 
 const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
@@ -83,6 +85,7 @@ const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
   defaultModelRouting: false,
   defaultSweep: true,
   defaultGreptile: true,
+  defaultGEPA: false,
 };
 
 function getConfigPath(): string {
@@ -138,6 +141,7 @@ class ClaudeSM {
       useThinkingMode: false,
       useSweep: this.smConfig.defaultSweep,
       useGreptile: this.smConfig.defaultGreptile,
+      useGEPA: this.smConfig.defaultGEPA,
     };
 
     this.stackmemoryPath = this.findStackMemory();
@@ -220,6 +224,83 @@ class ClaudeSM {
       return 'claude';
     } catch {}
     return null;
+  }
+
+  private gepaProcess: ReturnType<typeof spawn> | null = null;
+
+  private startGEPAWatcher(): void {
+    // Find CLAUDE.md in current directory or project root
+    const claudeMdPath = fs.existsSync(path.join(process.cwd(), 'CLAUDE.md'))
+      ? path.join(process.cwd(), 'CLAUDE.md')
+      : null;
+
+    if (!claudeMdPath) {
+      console.log(chalk.gray('   Prompt Forge: disabled (no CLAUDE.md found)'));
+      return;
+    }
+
+    // Find GEPA scripts directory (check multiple locations)
+    const gepaPaths = [
+      // From dist/src/cli -> scripts/gepa (3 levels up)
+      path.join(__dirname, '../../../scripts/gepa/hooks/auto-optimize.js'),
+      // From src/cli -> scripts/gepa (2 levels up, for dev mode)
+      path.join(__dirname, '../../scripts/gepa/hooks/auto-optimize.js'),
+      // Global install location
+      path.join(
+        os.homedir(),
+        '.stackmemory',
+        'scripts',
+        'gepa',
+        'hooks',
+        'auto-optimize.js'
+      ),
+      // npm global install
+      path.join(
+        __dirname,
+        '..',
+        '..',
+        'scripts',
+        'gepa',
+        'hooks',
+        'auto-optimize.js'
+      ),
+    ];
+
+    const gepaScript = gepaPaths.find((p) => fs.existsSync(p));
+    if (!gepaScript) {
+      console.log(chalk.gray('   Prompt Forge: disabled (scripts not found)'));
+      return;
+    }
+
+    // Start GEPA watcher in background
+    this.gepaProcess = spawn('node', [gepaScript, 'watch', claudeMdPath], {
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      env: { ...process.env, GEPA_SILENT: '1' },
+    });
+
+    this.gepaProcess.unref();
+
+    // Log output from GEPA (non-blocking)
+    this.gepaProcess.stdout?.on('data', (data: Buffer) => {
+      const output = data.toString().trim();
+      if (output && !output.includes('Watching')) {
+        console.log(chalk.magenta(`[GEPA] ${output}`));
+      }
+    });
+
+    console.log(
+      chalk.cyan(
+        `   Prompt Forge: watching ${path.basename(claudeMdPath)} for optimization`
+      )
+    );
+  }
+
+  private stopGEPAWatcher(): void {
+    if (this.gepaProcess) {
+      this.gepaProcess.kill('SIGTERM');
+      this.gepaProcess = null;
+    }
   }
 
   private ensureGreptileMcp(): void {
@@ -749,6 +830,12 @@ class ClaudeSM {
         case '--no-greptile':
           this.config.useGreptile = false;
           break;
+        case '--gepa':
+          this.config.useGEPA = true;
+          break;
+        case '--no-gepa':
+          this.config.useGEPA = false;
+          break;
         default:
           claudeArgs.push(arg);
       }
@@ -936,6 +1023,11 @@ class ClaudeSM {
       this.ensureGreptileMcp();
     }
 
+    // Start GEPA auto-optimizer if enabled
+    if (this.config.useGEPA) {
+      this.startGEPAWatcher();
+    }
+
     // Start WhatsApp services if enabled
     if (this.config.useWhatsApp) {
       console.log(
@@ -1045,6 +1137,9 @@ class ClaudeSM {
 
     // Handle exit
     claude.on('exit', async (code) => {
+      // Stop GEPA watcher if running
+      this.stopGEPAWatcher();
+
       // Check if we were in fallback mode
       const status = fallbackMonitor.getStatus();
       if (status.inFallback) {
@@ -1122,37 +1217,23 @@ configCmd
   .action(() => {
     const config = loadSMConfig();
     console.log(chalk.blue('claude-sm defaults:'));
-    console.log(
-      `  defaultWorktree: ${config.defaultWorktree ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(
-      `  defaultSandbox:  ${config.defaultSandbox ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(
-      `  defaultChrome:   ${config.defaultChrome ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(
-      `  defaultTracing:  ${config.defaultTracing ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(
-      `  defaultRemote:   ${config.defaultRemote ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(
-      `  defaultNotifyOnDone: ${config.defaultNotifyOnDone ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(
-      `  defaultWhatsApp: ${config.defaultWhatsApp ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(
-      `  defaultModelRouting: ${config.defaultModelRouting ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(
-      `  defaultSweep:        ${config.defaultSweep ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(
-      `  defaultGreptile:     ${config.defaultGreptile ? chalk.green('true') : chalk.gray('false')}`
-    );
-    console.log(chalk.gray(`\nConfig: ${getConfigPath()}`));
+    const on = chalk.green('ON ');
+    const off = chalk.gray('OFF');
+    console.log(chalk.cyan('\n  Feature           Status'));
+    console.log(chalk.gray('  ──────────────────────────'));
+    console.log(`  Predictive Edit   ${config.defaultSweep ? on : off}`);
+    console.log(`  Code Review       ${config.defaultGreptile ? on : off}`);
+    console.log(`  Prompt Forge      ${config.defaultGEPA ? on : off}`);
+    console.log(`  Model Switcher    ${config.defaultModelRouting ? on : off}`);
+    console.log(`  Safe Branch       ${config.defaultWorktree ? on : off}`);
+    console.log(`  Mobile Sync       ${config.defaultWhatsApp ? on : off}`);
+    console.log(`  Session Insights  ${config.defaultTracing ? on : off}`);
+    console.log(`  Task Alert        ${config.defaultNotifyOnDone ? on : off}`);
+    console.log(chalk.gray('  ──────────────────────────'));
+    console.log(`  Sandbox           ${config.defaultSandbox ? on : off}`);
+    console.log(`  Chrome            ${config.defaultChrome ? on : off}`);
+    console.log(`  Remote            ${config.defaultRemote ? on : off}`);
+    console.log(chalk.gray(`\n  Config: ${getConfigPath()}`));
   });
 
 configCmd
@@ -1175,6 +1256,7 @@ configCmd
       modelrouting: 'defaultModelRouting',
       sweep: 'defaultSweep',
       greptile: 'defaultGreptile',
+      gepa: 'defaultGEPA',
     };
 
     const configKey = keyMap[key];
@@ -1182,7 +1264,7 @@ configCmd
       console.log(chalk.red(`Unknown key: ${key}`));
       console.log(
         chalk.gray(
-          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done, whatsapp, sweep, greptile'
+          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done, whatsapp, sweep, greptile, gepa'
         )
       );
       process.exit(1);
@@ -1324,6 +1406,29 @@ configCmd
   });
 
 configCmd
+  .command('gepa-on')
+  .description('Enable GEPA auto-optimization of CLAUDE.md on changes')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultGEPA = true;
+    saveSMConfig(config);
+    console.log(chalk.green('GEPA auto-optimization enabled by default'));
+    console.log(
+      chalk.gray('CLAUDE.md changes will trigger evolutionary optimization')
+    );
+  });
+
+configCmd
+  .command('gepa-off')
+  .description('Disable GEPA auto-optimization')
+  .action(() => {
+    const config = loadSMConfig();
+    config.defaultGEPA = false;
+    saveSMConfig(config);
+    console.log(chalk.green('GEPA auto-optimization disabled by default'));
+  });
+
+configCmd
   .command('setup')
   .description('Interactive feature setup wizard')
   .action(async () => {
@@ -1342,38 +1447,43 @@ configCmd
     const features: FeatureDef[] = [
       {
         key: 'defaultSweep',
-        name: 'Sweep',
-        desc: 'Next-edit predictions via PTY wrapper (installs node-pty)',
+        name: 'Predictive Edit',
+        desc: 'AI-powered next-edit suggestions in real-time',
       },
       {
         key: 'defaultGreptile',
-        name: 'Greptile',
-        desc: 'AI code review MCP server (requires GREPTILE_API_KEY)',
+        name: 'Code Review',
+        desc: 'Automated code review with deep codebase intelligence',
+      },
+      {
+        key: 'defaultGEPA',
+        name: 'Prompt Forge',
+        desc: 'Evolutionary optimization of system prompts',
       },
       {
         key: 'defaultModelRouting',
-        name: 'Model Routing',
-        desc: 'Route tasks to Qwen/other providers',
+        name: 'Model Switcher',
+        desc: 'Smart routing across Claude, Qwen, and other models',
       },
       {
         key: 'defaultWorktree',
-        name: 'Worktree',
-        desc: 'Git worktree isolation per instance',
+        name: 'Safe Branch',
+        desc: 'Isolated git worktrees for conflict-free parallel work',
       },
       {
         key: 'defaultWhatsApp',
-        name: 'WhatsApp',
-        desc: 'Notifications and remote control',
+        name: 'Mobile Sync',
+        desc: 'Remote control and notifications via WhatsApp',
       },
       {
         key: 'defaultTracing',
-        name: 'Tracing',
-        desc: 'Debug trace logging',
+        name: 'Session Insights',
+        desc: 'Deep execution tracing and performance analytics',
       },
       {
         key: 'defaultNotifyOnDone',
-        name: 'Notify on Done',
-        desc: 'Notification when session ends',
+        name: 'Task Alert',
+        desc: 'Instant notification when sessions complete',
       },
     ];
 
@@ -1510,6 +1620,8 @@ program
   .option('--no-sweep', 'Disable Sweep predictions')
   .option('--greptile', 'Enable Greptile AI code review (MCP server)')
   .option('--no-greptile', 'Disable Greptile integration')
+  .option('--gepa', 'Enable GEPA auto-optimization of CLAUDE.md')
+  .option('--no-gepa', 'Disable GEPA auto-optimization')
   .helpOption('-h, --help', 'Display help')
   .allowUnknownOption(true)
   .action(async (_options) => {

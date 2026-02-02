@@ -2,9 +2,15 @@
  * Repository Ingestion Skill for ChromaDB
  *
  * Ingests and maintains code repositories in ChromaDB for enhanced code search and context
+ *
+ * NOTE: chromadb is an optional dependency. This skill gracefully handles
+ * the case when chromadb is not installed.
  */
 
-import { ChromaDBAdapter } from '../core/storage/chromadb-adapter.js';
+// Dynamic import type for optional chromadb dependency
+type ChromaDBAdapter =
+  import('../core/storage/chromadb-adapter.js').ChromaDBAdapter;
+
 import { Logger } from '../core/monitoring/logger.js';
 import {
   isChromaDBEnabled,
@@ -15,6 +21,19 @@ import * as path from 'path';
 import * as crypto from 'crypto';
 import { execSync } from 'child_process';
 import ignore from 'ignore';
+
+// Helper to dynamically import ChromaDBAdapter
+async function getChromaDBAdapter(): Promise<
+  typeof import('../core/storage/chromadb-adapter.js')
+> {
+  try {
+    return await import('../core/storage/chromadb-adapter.js');
+  } catch {
+    throw new Error(
+      'chromadb is not installed. Install it with: npm install chromadb'
+    );
+  }
+}
 
 export interface RepoIngestionOptions {
   incremental?: boolean;
@@ -55,6 +74,12 @@ export class RepoIngestionSkill {
   private metadataCache: Map<string, RepoMetadata> = new Map();
   private fileHashCache: Map<string, string> = new Map();
   private chromaEnabled: boolean = false;
+  private adapterConfig: {
+    apiKey: string;
+    tenant: string;
+    database: string;
+    collectionName: string;
+  } | null = null;
 
   constructor(
     private config: {
@@ -74,17 +99,14 @@ export class RepoIngestionSkill {
     if (this.chromaEnabled) {
       const chromaConfig = getChromaDBConfig();
       if (chromaConfig && chromaConfig.apiKey) {
-        this.adapter = new ChromaDBAdapter(
-          {
-            apiKey: config?.apiKey || chromaConfig.apiKey,
-            tenant: config?.tenant || chromaConfig.tenant || 'default_tenant',
-            database:
-              config?.database || chromaConfig.database || 'default_database',
-            collectionName: config?.collectionName || 'stackmemory_repos',
-          },
-          userId,
-          teamId
-        );
+        // Store config for lazy initialization in initialize()
+        this.adapterConfig = {
+          apiKey: config?.apiKey || chromaConfig.apiKey,
+          tenant: config?.tenant || chromaConfig.tenant || 'default_tenant',
+          database:
+            config?.database || chromaConfig.database || 'default_database',
+          collectionName: config?.collectionName || 'stackmemory_repos',
+        };
       }
     }
   }
@@ -97,12 +119,32 @@ export class RepoIngestionSkill {
   }
 
   async initialize(): Promise<void> {
-    if (!this.isAvailable()) {
+    if (!this.chromaEnabled || !this.adapterConfig) {
       this.logger.warn(
         'ChromaDB not enabled. Repository ingestion features are unavailable.'
       );
       this.logger.warn('Run "stackmemory init --chromadb" to enable ChromaDB.');
       return;
+    }
+
+    // Create adapter using dynamic import (chromadb is optional)
+    if (!this.adapter && this.adapterConfig) {
+      try {
+        const { ChromaDBAdapter } = await getChromaDBAdapter();
+        this.adapter = await ChromaDBAdapter.create(
+          this.adapterConfig,
+          this.userId,
+          this.teamId
+        );
+      } catch (error) {
+        this.logger.warn(
+          `Failed to initialize ChromaDB: ${error instanceof Error ? error.message : String(error)}`
+        );
+        this.logger.warn(
+          'chromadb is optional. Install it with: npm install chromadb'
+        );
+        return;
+      }
     }
 
     if (this.adapter) {

@@ -3,10 +3,16 @@
  *
  * Provides vector storage and semantic search capabilities for context data
  * using ChromaDB cloud service with user and team segmentation.
+ *
+ * NOTE: chromadb is an optional dependency. This adapter gracefully handles
+ * the case when chromadb is not installed.
  */
 
-import { CloudClient, Collection } from 'chromadb';
 import { v4 as uuidv4 } from 'uuid';
+
+// Dynamic import types for optional chromadb dependency
+type CloudClient = import('chromadb').CloudClient;
+type Collection = import('chromadb').Collection;
 import { Frame } from '../context/index.js';
 import { Logger } from '../monitoring/logger.js';
 
@@ -33,8 +39,24 @@ interface ChromaConfig {
   collectionName?: string;
 }
 
+// Check if chromadb is available
+let chromadbModule: typeof import('chromadb') | null = null;
+
+async function getChromaDB(): Promise<typeof import('chromadb')> {
+  if (!chromadbModule) {
+    try {
+      chromadbModule = await import('chromadb');
+    } catch {
+      throw new Error(
+        'chromadb is not installed. Install it with: npm install chromadb'
+      );
+    }
+  }
+  return chromadbModule;
+}
+
 export class ChromaDBAdapter {
-  private client: CloudClient;
+  private client: CloudClient | null = null;
   private collection: Collection | null = null;
   private logger: Logger;
   private config: ChromaConfig;
@@ -46,22 +68,41 @@ export class ChromaDBAdapter {
     this.userId = userId;
     this.teamId = teamId;
     this.logger = new Logger('ChromaDBAdapter');
+  }
 
-    // Initialize ChromaDB client
-    this.client = new CloudClient({
-      apiKey: config.apiKey,
-      tenant: config.tenant,
-      database: config.database,
+  /**
+   * Factory method to create and initialize the adapter
+   */
+  static async create(
+    config: ChromaConfig,
+    userId: string,
+    teamId?: string
+  ): Promise<ChromaDBAdapter> {
+    const adapter = new ChromaDBAdapter(config, userId, teamId);
+    await adapter.initClient();
+    return adapter;
+  }
+
+  private async initClient(): Promise<void> {
+    const chromadb = await getChromaDB();
+    this.client = new chromadb.CloudClient({
+      apiKey: this.config.apiKey,
+      tenant: this.config.tenant,
+      database: this.config.database,
     });
   }
 
   async initialize(): Promise<void> {
     try {
+      if (!this.client) {
+        await this.initClient();
+      }
+
       const collectionName =
         this.config.collectionName || 'stackmemory_contexts';
 
       // Get or create collection with metadata for filtering
-      this.collection = await this.client.getOrCreateCollection({
+      this.collection = await this.client!.getOrCreateCollection({
         name: collectionName,
         metadata: {
           description: 'StackMemory context storage',

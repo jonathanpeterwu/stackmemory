@@ -1,0 +1,53 @@
+{
+  "name": "GEPA - Genetic Eval-driven Prompt Algorithm",
+  "version": "1.0.0",
+
+  "target": {
+    "file": "CLAUDE.md",
+    "scope": "project",
+    "backup": true
+  },
+
+  "evolution": {
+    "populationSize": 4,
+    "generations": 10,
+    "selectionRate": 0.5,
+    "mutationStrategies": [
+      "rephrase",
+      "add_examples",
+      "remove_redundancy",
+      "restructure",
+      "add_constraints",
+      "simplify"
+    ]
+  },
+
+  "evals": {
+    "directory": "./evals",
+    "minSamplesPerVariant": 5,
+    "timeout": 120000,
+    "metrics": [
+      "task_completion",
+      "code_quality",
+      "instruction_following",
+      "efficiency"
+    ]
+  },
+
+  "scoring": {
+    "weights": {
+      "task_completion": 0.4,
+      "code_quality": 0.25,
+      "instruction_following": 0.25,
+      "efficiency": 0.1
+    },
+    "threshold": 0.7
+  },
+
+  "hooks": {
+    "trackToolCalls": true,
+    "trackTokenUsage": true,
+    "trackErrors": true,
+    "trackUserFeedback": true
+  }
+}

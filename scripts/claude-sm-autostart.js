@@ -4,14 +4,16 @@
  * StackMemory Claude Auto-Start Daemon Manager
  * Automatically starts essential daemons when Claude loads the project
  *
- * Daemons managed:
+ * Core daemons (always started):
  * 1. Context Monitor - Saves context every 15 min
- * 2. Linear Sync - Syncs tasks hourly
- * 3. File Watcher - Auto-syncs on file changes
- * 4. Error Monitor - Tracks and logs errors
- * 5. Webhook Listener - Receives Linear webhooks
- * 6. Quality Gates - Post-task validation
- * 7. Auto-handoff - Session transition helper
+ * 2. File Watcher - Auto-syncs on file changes
+ * 3. Error Monitor - Tracks and logs errors
+ * 4. Auto-handoff - Session transition helper
+ *
+ * Optional daemons (set env var to enable):
+ * - ENABLE_LINEAR_SYNC=true  - Linear task sync (hourly)
+ * - ENABLE_WEBHOOKS=true     - Linear webhook listener
+ * - ENABLE_QUALITY_GATES=true - Post-task validation
  */
 
 import fs from 'fs';
@@ -129,8 +131,8 @@ class ClaudeAutoStartManager {
   }
 
   /**
-   * 2. Linear Sync Daemon
-   * Already created, just ensure it's running
+   * Linear Sync Daemon (opt-in)
+   * Requires ENABLE_LINEAR_SYNC=true and LINEAR_API_KEY
    */
   startLinearSync() {
     if (
@@ -444,13 +446,16 @@ class ClaudeAutoStartManager {
     // Save PID for management
     fs.writeFileSync(this.pidFile, process.pid.toString());
 
-    // Start all daemons
+    // Start core daemons
     this.startContextMonitor();
-    this.startLinearSync();
     this.startFileWatcher();
     this.startErrorMonitor();
 
-    // Optional daemons (only if configured)
+    // Optional daemons (only if explicitly enabled)
+    if (process.env.ENABLE_LINEAR_SYNC === 'true') {
+      this.startLinearSync();
+    }
+
     if (process.env.ENABLE_WEBHOOKS === 'true') {
       this.startWebhookListener();
     }
