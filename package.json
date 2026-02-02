@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.5.59",
+  "version": "0.5.60",
   "description": "Lossless memory runtime for AI coding tools - call stack context, predictive edits, AI code review, prompt optimization, model switching, and mobile sync",
   "engines": {
     "node": ">=20.0.0",
@@ -100,7 +100,7 @@
     "@types/pg": "^8.16.0",
     "better-sqlite3": "^9.2.2",
     "chalk": "^5.3.0",
-        "cli-table3": "^0.6.5",
+    "cli-table3": "^0.6.5",
     "commander": "^11.1.0",
     "compression": "^1.8.1",
     "cors": "^2.8.5",
