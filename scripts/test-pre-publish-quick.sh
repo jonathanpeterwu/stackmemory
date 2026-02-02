@@ -31,7 +31,7 @@ log_success "Build succeeds"
 # Essential CLI test
 log_info "Testing CLI functionality..."
 # Skip CLI test due to database initialization requirements
-if [ -f "dist/cli/index.js" ]; then
+if [ -f "dist/src/cli/index.js" ]; then
     log_success "CLI is executable"
 else
     log_error "CLI execution failed"
