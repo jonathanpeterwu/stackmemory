@@ -41,6 +41,7 @@ import { TraceDetector } from '../../core/trace/trace-detector.js';
 import { ToolCall, Trace } from '../../core/trace/types.js';
 import { LLMContextRetrieval } from '../../core/retrieval/index.js';
 import { DiscoveryHandlers } from './handlers/discovery-handlers.js';
+import { DiffMemHandlers } from './handlers/diffmem-handlers.js';
 import { v4 as uuidv4 } from 'uuid';
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
@@ -74,6 +75,7 @@ class LocalStackMemoryMCP {
   private traceDetector: TraceDetector;
   private contextRetrieval: LLMContextRetrieval;
   private discoveryHandlers: DiscoveryHandlers;
+  private diffMemHandlers: DiffMemHandlers;
 
   constructor() {
     // Find project root (where .git is)
@@ -133,6 +135,9 @@ class LocalStackMemoryMCP {
       db: this.db,
       projectRoot: this.projectRoot,
     });
+
+    // Initialize DiffMem Handlers
+    this.diffMemHandlers = new DiffMemHandlers();
 
     this.setupHandlers();
     this.loadInitialContext();
@@ -834,6 +839,115 @@ class LocalStackMemoryMCP {
                 required: ['query'],
               },
             },
+            // DiffMem tools for user memory management
+            {
+              name: 'diffmem_get_user_context',
+              description:
+                'Fetch user knowledge and preferences from memory. Use to personalize responses based on learned user patterns.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  categories: {
+                    type: 'array',
+                    items: {
+                      type: 'string',
+                      enum: [
+                        'preference',
+                        'expertise',
+                        'project_knowledge',
+                        'pattern',
+                        'correction',
+                      ],
+                    },
+                    description: 'Filter by memory categories',
+                  },
+                  limit: {
+                    type: 'number',
+                    default: 10,
+                    description: 'Maximum memories to return',
+                  },
+                },
+              },
+            },
+            {
+              name: 'diffmem_store_learning',
+              description:
+                'Store a new insight about the user (preference, expertise, pattern, or correction)',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  content: {
+                    type: 'string',
+                    description: 'The insight to store',
+                  },
+                  category: {
+                    type: 'string',
+                    enum: [
+                      'preference',
+                      'expertise',
+                      'project_knowledge',
+                      'pattern',
+                      'correction',
+                    ],
+                    description: 'Category of the insight',
+                  },
+                  confidence: {
+                    type: 'number',
+                    minimum: 0,
+                    maximum: 1,
+                    default: 0.7,
+                    description: 'Confidence level (0-1)',
+                  },
+                  context: {
+                    type: 'object',
+                    description: 'Additional context for the insight',
+                  },
+                },
+                required: ['content', 'category'],
+              },
+            },
+            {
+              name: 'diffmem_search',
+              description:
+                'Semantic search across user memories. Find relevant past insights and preferences.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  query: {
+                    type: 'string',
+                    description: 'Search query',
+                  },
+                  timeRange: {
+                    type: 'string',
+                    enum: ['day', 'week', 'month', 'all'],
+                    default: 'all',
+                    description: 'Time range filter',
+                  },
+                  minConfidence: {
+                    type: 'number',
+                    minimum: 0,
+                    maximum: 1,
+                    default: 0.5,
+                    description: 'Minimum confidence threshold',
+                  },
+                  limit: {
+                    type: 'number',
+                    default: 10,
+                    description: 'Maximum results',
+                  },
+                },
+                required: ['query'],
+              },
+            },
+            {
+              name: 'diffmem_status',
+              description:
+                'Check DiffMem connection status and memory statistics',
+              inputSchema: {
+                type: 'object',
+                properties: {},
+              },
+            },
           ],
         };
       }
@@ -975,6 +1089,23 @@ class LocalStackMemoryMCP {
 
             case 'sm_search':
               result = await this.handleSmSearch(args);
+              break;
+
+            // DiffMem handlers
+            case 'diffmem_get_user_context':
+              result = await this.diffMemHandlers.handleGetUserContext(args);
+              break;
+
+            case 'diffmem_store_learning':
+              result = await this.diffMemHandlers.handleStoreLearning(args);
+              break;
+
+            case 'diffmem_search':
+              result = await this.diffMemHandlers.handleSearch(args);
+              break;
+
+            case 'diffmem_status':
+              result = await this.diffMemHandlers.handleStatus();
               break;
 
             default:

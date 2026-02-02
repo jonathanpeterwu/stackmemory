@@ -79,6 +79,8 @@
     "daemons:stop": "node scripts/claude-sm-autostart.js stop",
     "daemon:session": "node dist/daemon/session-daemon.js",
     "daemon:session:start": "node dist/daemon/session-daemon.js --session-id",
+    "diffmem:start": "PYTHONPATH=packages/diffmem/src packages/diffmem/.venv/bin/uvicorn diffmem.server:app --host 127.0.0.1 --port 8000",
+    "diffmem:setup": "cd packages/diffmem && python3 -m venv .venv && .venv/bin/pip install -r requirements-server.txt -e .",
     "daemon:start": "node dist/daemon/unified-daemon.js",
     "daemon:stop": "node dist/cli/index.js daemon stop",
     "daemon:status": "node dist/cli/index.js daemon status",

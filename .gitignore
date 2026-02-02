@@ -115,3 +115,7 @@ service-account.json
 # Claude settings with secrets
 .claude/settings.local.json
 external/
+
+# DiffMem subpackage (cloned repo)
+packages/diffmem/
+.env.diffmem
