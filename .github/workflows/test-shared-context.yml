@@ -12,6 +12,7 @@ on:
       - 'src/core/context/**'
       - 'src/core/session/**'
       - 'src/cli/**'
+  workflow_dispatch:
 
 jobs:
   test:
@@ -36,6 +37,9 @@ jobs:
     - name: Build project
       run: npm run build
     
+    - name: Verify dist artifacts
+      run: npm run verify:dist
+    
     - name: Run shared context tests
       run: npm run test:shared-context
       env:
@@ -45,6 +49,22 @@ jobs:
       run: npm run test:run
       env:
         CI: true
+
+    - name: Generate coverage (Node 20 only)
+      if: matrix.node-version == '20.x'
+      run: npm run test:run -- --coverage
+      env:
+        CI: true
+
+    - name: Upload coverage reports to Codecov
+      if: matrix.node-version == '20.x'
+      uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        files: ./coverage/coverage-final.json
+        flags: unit
+        fail_ci_if_error: false
+        verbose: true
     
     - name: Upload test results
       if: always()
@@ -73,6 +93,9 @@ jobs:
     
     - name: Build project
       run: npm run build
+    
+    - name: Verify dist artifacts
+      run: npm run verify:dist
     
     - name: Test CLI integration
       run: |

@@ -3,4 +3,4 @@
  * Claude-SM CLI Launcher (ESM)
  * Delegates to built CLI in dist without requiring tsx.
  */
-import('../dist/cli/claude-sm.js');
+import('../dist/src/cli/claude-sm.js');

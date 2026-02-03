@@ -1,6 +1,11 @@
 # StackMemory
 
-**Lossless, project-scoped memory for AI tools** • v0.5.59
+[![Test Shared Context](https://github.com/stackmemoryai/stackmemory/actions/workflows/test-shared-context.yml/badge.svg?branch=main)](https://github.com/stackmemoryai/stackmemory/actions/workflows/test-shared-context.yml)
+[![Publish to NPM](https://github.com/stackmemoryai/stackmemory/actions/workflows/npm-publish.yml/badge.svg?branch=main)](https://github.com/stackmemoryai/stackmemory/actions/workflows/npm-publish.yml)
+[![Coverage](https://codecov.io/gh/stackmemoryai/stackmemory/branch/main/graph/badge.svg)](https://codecov.io/gh/stackmemoryai/stackmemory)
+[![npm version](https://img.shields.io/npm/v/@stackmemoryai/stackmemory)](https://www.npmjs.com/package/@stackmemoryai/stackmemory)
+
+Lossless, project-scoped memory for AI tools
 
 StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions:
 
@@ -19,124 +24,46 @@ Instead of a linear chat log, StackMemory organizes memory as a **call stack** o
 
 ## Why StackMemory exists
 
-Development tools lose context between sessions:
+Tools forget decisions and constraints between sessions. StackMemory makes context durable and actionable.
 
-- Previous decisions aren't tracked
-- Constraints get forgotten
-- Changes lack history
-- Tool execution isn't recorded
-
-StackMemory solves this by:
-
-- Storing all events, tool calls, and decisions
-- Smart retrieval of relevant context
-- Call stack organization for nested context
-- Configurable importance scoring
-- Team collaboration through shared stacks
+- Records: events, tool calls, decisions, and anchors
+- Retrieves: high-signal context tailored to the current task
+- Organizes: nested frames with importance scoring and shared stacks
 
 ---
 
-## Features
+## Features (at a glance)
 
-StackMemory includes powerful features to enhance your AI coding workflow. Enable/disable with `claude-sm config setup`.
+- MCP tools for Claude Code: 26+ tools; context on every request
+- Safe branches: worktree isolation with `--worktree` or `-w`
+- Persistent context: frames, anchors, decisions, retrieval
+- Optional boosts: model routing, prompt optimization (GEPA)
+- Integrations: Linear, Greptile, DiffMem, Browser MCP
 
-### Predictive Edit
+See the docs directory for deeper feature guides.
 
-Anticipates your next edit and displays suggestions as a status bar overlay. Powered by llama-server and Claude Code's PostToolUse hooks.
+---
 
-```bash
-claude-sm --sweep          # Enable (default: on)
-claude-sm --no-sweep       # Disable
-```
+## Quick Start
 
-- **How it works**: Analyzes tool outputs and predicts likely follow-up edits
-- **Interface**: Tab to accept, Esc to dismiss
-- **Requirement**: Installs `node-pty` on first use
-
-### Code Review
-
-AI-powered code review using Greptile's codebase-aware analysis. Automatically registers the Greptile MCP server for deep repository understanding.
+Requirements: Node >= 20
 
 ```bash
-claude-sm --greptile       # Enable (default: on)
-claude-sm --no-greptile    # Disable
+# Install globally
+npm install -g @stackmemoryai/stackmemory
+
+# Initialize in your project (zero-config, just works)
+cd your-project
+stackmemory init
+
+# Configure Claude Code integration
+stackmemory setup-mcp
+
+# Minimal usage
+stackmemory init && stackmemory setup-mcp && stackmemory doctor
 ```
 
-- **Tools provided**: `index_repository`, `query_repository`, `get_repository_info`
-- **Requirement**: `GREPTILE_API_KEY` in `.env`
-
-### Prompt Forge
-
-Genetic Eval-driven Prompt Algorithm (GEPA) for automatic system prompt optimization. Evolves your `CLAUDE.md` through mutation, evaluation, and selection.
-
-```bash
-claude-sm --gepa           # Enable
-claude-sm --no-gepa        # Disable (default)
-```
-
-- **Auto-optimize**: Watches `CLAUDE.md` and runs optimization on changes
-- **Strategies**: rephrase, add_examples, remove_redundancy, restructure, add_constraints, simplify
-- **Output**: Before/after comparison with metrics (lines, tokens, rules)
-
-### Model Switcher
-
-Dynamic model routing based on task complexity. Automatically selects the optimal model (Haiku/Sonnet/Opus) for each request.
-
-```bash
-claude-sm --model-routing  # Enable
-claude-sm --no-model-routing  # Disable (default)
-```
-
-- **Cost optimization**: Uses cheaper models for simple tasks
-- **Quality preservation**: Routes complex tasks to more capable models
-
-### Safe Branch
-
-Git worktree isolation for experimental changes. Each session operates in an isolated branch, preventing accidental commits to main.
-
-```bash
-claude-sm --worktree       # Enable
-claude-sm --no-worktree    # Disable (default)
-```
-
-- **Isolation**: Changes happen in a separate worktree
-- **Safety**: Main branch remains untouched until explicit merge
-
-### Mobile Sync
-
-WhatsApp notifications for session updates and task completion. Stay informed even when away from your terminal.
-
-```bash
-claude-sm --whatsapp       # Enable
-claude-sm --no-whatsapp    # Disable (default)
-```
-
-- **Notifications**: Session start, task completion, errors
-- **Interactive**: Reply to trigger actions remotely
-
-### Session Insights
-
-Detailed tracing of session activity for debugging and optimization. Tracks tool calls, timing, and decision paths.
-
-```bash
-claude-sm --tracing        # Enable
-claude-sm --no-tracing     # Disable (default)
-```
-
-- **Visibility**: Full execution trace
-- **Analytics**: Performance metrics and patterns
-
-### Task Alert
-
-Desktop/terminal notifications when long-running tasks complete. Never miss a completed build or test run.
-
-```bash
-claude-sm --notify-on-done # Enable (default: on)
-claude-sm --no-notify-on-done  # Disable
-```
-
-- **Platforms**: macOS notifications, terminal bell
-- **Smart**: Only notifies for tasks taking >10 seconds
+Restart Claude Code and StackMemory MCP tools will be available.
 
 ---
 
@@ -161,72 +88,20 @@ Frames can span:
 
 ## Hosted vs Open Source
 
-### Hosted (default)
-
-- Cloud-backed memory runtime
-- Fast indexing + retrieval
-- Durable storage
-- Per-project pricing
-- Works out-of-the-box
-
-### Open-source local mirror
-
-- SQLite-based
-- Fully inspectable
-- Offline / air-gapped
-- Intentionally **N versions behind**
-- No sync, no org features
-
-> OSS is for trust and inspection.
-> Hosted is for scale, performance, and teams.
+- Hosted: cloud-backed, fast retrieval, durable, team features — works out of the box.
+- OSS local: SQLite, offline, inspectable — intentionally behind; no sync/org features.
 
 ---
 
 ## How it integrates
 
-StackMemory integrates as an **MCP tool** and is invoked on **every interaction** in:
-
-- Claude Code
-- compatible editors
-- future MCP-enabled tools
-
-The editor never manages memory directly; it asks StackMemory for the **context bundle**.
+Runs as an MCP server. Editors (e.g., Claude Code) call StackMemory on each interaction to fetch a compiled context bundle; editors don’t store memory themselves.
 
 ---
 
-## Product Health Metrics
+## Quick Start
 
-### Current Status (v0.5.47)
-
-| Metric | Current | Target | Status |
-|--------|---------|--------|--------|
-| **Test Coverage** | 85% | 90% | In Progress |
-| **Tests Passing** | 490 | 500+ | On Track |
-| **Documentation** | 80% | 100% | In Progress |
-| **Active Issues** | 3 high | 0 high | In Progress |
-
----
-
-# QuickStart
-
-## 1. Install & Initialize (30 seconds)
-
-```bash
-# Install globally
-npm install -g @stackmemoryai/stackmemory
-
-# Initialize in your project (zero-config, just works)
-cd your-project
-stackmemory init
-
-# Configure Claude Code integration
-stackmemory setup-mcp
-
-# Verify everything works
-stackmemory doctor
-```
-
-That's it! Restart Claude Code and StackMemory MCP tools are available.
+See above for install and minimal usage. For advanced options, see Setup.
 
 ---
 
@@ -277,77 +152,7 @@ Checks project initialization, database integrity, MCP config, and suggests fixe
 
 ## 3. Advanced Setup
 
-<details>
-<summary>Manual MCP configuration</summary>
-
-Create MCP configuration:
-
-```bash
-mkdir -p ~/.claude
-cat > ~/.claude/stackmemory-mcp.json << 'EOF'
-{
-  "mcpServers": {
-    "stackmemory": {
-      "command": "stackmemory",
-      "args": ["mcp-server"],
-      "env": { "NODE_ENV": "production" }
-    }
-  }
-}
-EOF
-```
-
-Update Claude config.json:
-
-```json
-{
-  "mcp": {
-    "configFiles": ["~/.claude/stackmemory-mcp.json"]
-  }
-}
-```
-
-</details>
-
-<details>
-<summary>Hosted mode (cloud storage)</summary>
-
-```bash
-stackmemory onboard
-# Select "Hosted" when prompted
-# Or set DATABASE_URL environment variable
-```
-
-</details>
-
-<details>
-<summary>ChromaDB for semantic search</summary>
-
-```bash
-stackmemory init --chromadb
-# Prompts for ChromaDB API key
-```
-
-</details>
-
-Claude Code sessions automatically capture tool calls, maintain context across sessions, and sync with Linear when configured.
-
-Available MCP tools in Claude Code:
-
-| Tool                 | Description                                |
-| -------------------- | ------------------------------------------ |
-| `get_context`        | Retrieve relevant context for current work |
-| `add_decision`       | Record a decision with rationale           |
-| `start_frame`        | Begin a new context frame                  |
-| `close_frame`        | Close current frame with summary           |
-| `create_task`        | Create a new task                          |
-| `update_task_status` | Update task status                         |
-| `get_active_tasks`   | List active tasks (with filters)           |
-| `get_task_metrics`   | Get task analytics                         |
-| `linear_sync`        | Sync with Linear                           |
-| `linear_update_task` | Update Linear issue                        |
-| `linear_get_tasks`   | Get tasks from Linear                      |
-
+See https://github.com/stackmemoryai/stackmemory/blob/main/docs/setup.md for advanced options (hosted mode, ChromaDB, manual MCP config, and available tools).
 
 ---
 
@@ -379,7 +184,7 @@ This creates `.stackmemory/` with SQLite storage.
   "mcpServers": {
     "stackmemory": {
       "command": "node",
-      "args": ["dist/integrations/mcp/server.js"]
+      "args": ["dist/src/integrations/mcp/server.js"]
     }
   }
 }
@@ -540,140 +345,25 @@ stackmemory skills rlm "Build, test, and publish version 2.0.0"
 
 ## CLI Commands
 
-```bash
-# Setup & Diagnostics
-stackmemory init                          # Initialize project (zero-config)
-stackmemory init --interactive            # Interactive setup with options
-stackmemory setup-mcp                     # Configure Claude Code MCP
-stackmemory doctor                        # Diagnose issues and suggest fixes
-
-# Status
-stackmemory status                        # Current status
-stackmemory progress                      # Recent activity
-
-# Tasks
-stackmemory tasks list [--status pending] # List tasks
-stackmemory task add "title" --priority high
-stackmemory task done <id>
-
-# Search & Logs
-stackmemory search "query" [--tasks|--context]
-stackmemory log [--follow] [--type task]
-```
-
-```bash
-# Context
-stackmemory context show [--verbose]
-stackmemory context push "name" --type task
-stackmemory context add decision "text"
-stackmemory context pop [--all]
-
-# Linear Integration
-stackmemory linear setup                  # OAuth setup
-stackmemory linear sync [--direction from_linear]
-stackmemory linear auto-sync --start
-stackmemory linear update ENG-123 --status done
-
-# Storage Management
-stackmemory storage status               # Show tier distribution
-stackmemory storage migrate [--tier young] # Trigger migration
-stackmemory storage cleanup --force      # Clean old data
-stackmemory storage config --show        # Show configuration
-
-# Analytics & Server
-stackmemory analytics [--view|--port 3000]
-stackmemory mcp-server [--port 3001]
-```
+See https://github.com/stackmemoryai/stackmemory/blob/main/docs/cli.md for the full command reference and examples.
 
 ---
 
 ## Status
 
-- Hosted: **Private beta**
-- OSS mirror: **Production ready**
-- MCP integration: **Stable**
-- CLI: **v0.5.51** - Zero-config setup, diagnostics, full task/context/Linear management
-- Two-tier storage: **Complete**
-- Test Suite: **480 tests passing**
+See https://github.com/stackmemoryai/stackmemory/blob/main/docs/status.md for current status.
 
 ---
 
 ## Changelog
 
-### v0.5.51 (2026-01-28)
-- **Interactive feature setup**: `claude-sm config setup` wizard to toggle features and install deps on demand
-  - Checkbox prompt for all features (Sweep, Greptile, Model Routing, Worktree, WhatsApp, Tracing)
-  - Auto-installs `node-pty` when Sweep is enabled
-  - Prompts for `GREPTILE_API_KEY` and registers MCP server when Greptile is enabled
-- **Sweep next-edit predictions**: PTY wrapper displays predicted edits as a status bar in Claude Code sessions. Tab to accept, Esc to dismiss. Powered by llama-server via PostToolUse hooks.
-  - `claude-sm --sweep` (default: on) or `stackmemory sweep wrap`
-  - `node-pty` installed on demand via setup (no longer in optionalDependencies)
-- **Greptile AI code review**: Auto-registers Greptile MCP server for codebase-aware code review.
-  - `claude-sm --greptile` (default: on)
-  - Requires `GREPTILE_API_KEY` in `.env`
-  - Tools: `index_repository`, `query_repository`, `get_repository_info`
-- **Feature flags**: Added `greptile` feature flag to `feature-flags.ts`
-
-### v0.5.47 (2026-01-27)
-- **Graceful database failures**: Handles native module version mismatches
-- **Suppress dotenv logs**: Cleaner terminal output
-- **TTY preservation**: Fixes interactive mode for claude-sm/claude-smd
-- **Silent Linear auth**: No spam when API key not configured
-
-### v0.5.40 (2026-01-27)
-- **Zero-config onboarding**: `stackmemory init` now works without any prompts
-- **New `setup-mcp` command**: Auto-configures Claude Code MCP integration
-- **New `doctor` command**: Diagnoses issues and suggests fixes
-- **Interactive postinstall**: Asks for consent before modifying ~/.claude
-- **Better error messages**: Shows reason + fix + next step
-
-### v0.5.39 (2026-01-27)
-- **AsyncMutex**: Thread-safe Linear sync with stale lock detection
-- **Action timeout**: 60s timeout for SMS action execution
-- **Persistent rate limiting**: Survives server restarts
-- **Atomic file writes**: Prevents corruption on crash
-
-### v0.5.30 (2026-01-26)
-- Standardized error handling with `IntegrationError`, `DatabaseError`, `ValidationError`
-- Adopted error classes across Linear integration (12 files)
-- Adopted error classes across database layer (6 files)
-- WhatsApp notifications with session ID and interactive options
-
-### v0.5.28 (2026-01-25)
-- WhatsApp flag for claude-sm automatic notifications
-- Incoming request queue for WhatsApp triggers
-- SMS webhook /send endpoint for outgoing notifications
-
-### v0.5.26 (2026-01-24)
-- OpenCode wrapper (opencode-sm) with context integration
-- Discovery CLI and MCP tools
-- Real LLM provider and retrieval audit system
-- Linear issue management and task picker
-
-### v0.5.21 (2026-01-23)
-- Claude-sm remote mode and configurable defaults
-- Context loading command improvements
-- Session summary features
-
-### v0.3.16 (2026-01-15)
-- Fixed critical error handling - getFrame() returns undefined instead of throwing
-- Improved test coverage and fixed StackMemoryError constructor usage
-- Removed dangerous secret-cleaning scripts from repository
-- All tests passing, lint clean, build successful
-
-### v0.3.15 (2026-01-14)
-- Two-tier storage system implementation complete
-- Smart compression with LZ4/ZSTD support
-- Background migration with configurable triggers
-- Improved Linear integration with bidirectional sync
+See https://github.com/stackmemoryai/stackmemory/blob/main/docs/changelog.md for detailed release notes.
 
 ---
 
 ## Roadmap
 
-**Phase 4 (Completed):** Two-tier storage system with local tiers and infinite remote storage
-**Phase 5 (Current):** PostgreSQL production adapter, enhanced team collaboration, advanced analytics
-**Phase 6 (Next):** Enterprise features, multi-org support, cost optimization
+See https://github.com/stackmemoryai/stackmemory/blob/main/docs/roadmap.md for our current roadmap.
 
 ---
 

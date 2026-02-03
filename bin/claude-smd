@@ -3,4 +3,4 @@
  * Claude-SM-Danger CLI Launcher (ESM)
  * Delegates to built CLI in dist without requiring tsx.
  */
-import('../dist/cli/claude-sm-danger.js');
+import('../dist/src/cli/claude-sm-danger.js');
