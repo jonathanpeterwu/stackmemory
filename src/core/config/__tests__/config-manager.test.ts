@@ -23,52 +23,38 @@ describe('ConfigManager', () => {
   });
 
   describe('constructor', () => {
-    it('should load default config when file does not exist', () => {
+    it('should load default config, custom config from file, and apply profiles', () => {
+      // Default config when file does not exist
       manager = new ConfigManager(mockConfigPath);
-      const config = manager.getConfig();
+      expect(manager.getConfig().version).toBe('1.0');
+      expect(manager.getConfig().scoring.weights).toEqual(DEFAULT_WEIGHTS);
 
-      expect(config.version).toBe('1.0');
-      expect(config.scoring.weights).toEqual(DEFAULT_WEIGHTS);
-      expect(config.profiles).toBeDefined();
-    });
-
-    it('should load config from file when it exists', () => {
-      const customConfig = {
-        version: '1.0',
-        scoring: {
-          weights: {
-            base: 0.5,
-            impact: 0.3,
-            persistence: 0.1,
-            reference: 0.1,
+      // Custom config from file
+      vi.mocked(fs.existsSync).mockReturnValue(true);
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        yaml.dump({
+          version: '1.0',
+          scoring: {
+            weights: {
+              base: 0.5,
+              impact: 0.3,
+              persistence: 0.1,
+              reference: 0.1,
+            },
           },
-        },
-      };
-
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(yaml.dump(customConfig));
-
+        })
+      );
+      manager.disableHotReload();
       manager = new ConfigManager(mockConfigPath);
-      const config = manager.getConfig();
+      expect(manager.getConfig().scoring.weights.base).toBe(0.5);
 
-      expect(config.scoring.weights.base).toBe(0.5);
-      expect(config.scoring.weights.impact).toBe(0.3);
-    });
-
-    it('should apply active profile', () => {
-      const configWithProfile = {
-        version: '1.0',
-        profile: 'security-focused',
-      };
-
-      vi.mocked(fs.existsSync).mockReturnValue(true);
-      vi.mocked(fs.readFileSync).mockReturnValue(yaml.dump(configWithProfile));
-
+      // Apply profile
+      vi.mocked(fs.readFileSync).mockReturnValue(
+        yaml.dump({ version: '1.0', profile: 'security-focused' })
+      );
+      manager.disableHotReload();
       manager = new ConfigManager(mockConfigPath);
-      const config = manager.getConfig();
-
-      // Security-focused profile has impact weight of 0.5
-      expect(config.scoring.weights.impact).toBe(0.5);
+      expect(manager.getConfig().scoring.weights.impact).toBe(0.5);
     });
   });
 

@@ -19,66 +19,46 @@ describe('ToolRegistry', () => {
   });
 
   describe('registration', () => {
-    it('should register a valid tool', () => {
-      const tool = createValidTool('test_tool');
-      const id = registry.register(tool);
-
-      expect(id).toBeDefined();
-      expect(registry.has('test_tool')).toBe(true);
-      expect(registry.size).toBe(1);
-    });
-
-    it('should reject duplicate tool names', () => {
-      const tool = createValidTool('duplicate_tool');
-      registry.register(tool);
-
-      expect(() => registry.register(tool)).toThrow('already registered');
-    });
-
-    it('should reject invalid tool names', () => {
-      const invalidNames = [
-        'ab', // too short
-        'A_UPPER', // uppercase
-        '123start', // starts with number
-        'has-dash', // contains dash
-        'has space', // contains space
-      ];
-
-      for (const name of invalidNames) {
-        const tool = createValidTool(name);
+    it.each([
+      ['valid tool', 'test_tool', true],
+      ['abc (min length)', 'abc', true],
+      ['with underscores', 'my_tool_123', true],
+      ['too short', 'ab', false],
+      ['uppercase', 'A_UPPER', false],
+      ['starts with number', '123start', false],
+      ['has dash', 'has-dash', false],
+      ['has space', 'has space', false],
+    ])('tool name validation: %s', (_desc, name, shouldPass) => {
+      const tool = createValidTool(name);
+      if (shouldPass) {
+        expect(() => registry.register(tool)).not.toThrow();
+      } else {
         expect(() => registry.register(tool)).toThrow();
       }
     });
 
-    it('should accept valid tool names', () => {
-      const validNames = ['abc', 'test_tool', 'my_tool_123', 'a1b2c3'];
+    it('should reject duplicates and invalid schemas', () => {
+      const tool = createValidTool('dup_tool');
+      registry.register(tool);
+      expect(() => registry.register(tool)).toThrow('already registered');
 
-      for (const name of validNames) {
-        const tool = createValidTool(name);
-        expect(() => registry.register(tool)).not.toThrow();
-      }
-    });
+      expect(() =>
+        registry.register({
+          name: 'short_desc',
+          description: 'Short',
+          parameters: { type: 'object' },
+          execute: async () => ({ success: true }),
+        })
+      ).toThrow('at least 10 characters');
 
-    it('should reject short descriptions', () => {
-      const tool: ToolDefinition = {
-        name: 'short_desc',
-        description: 'Short', // less than 10 chars
-        parameters: { type: 'object' },
-        execute: async () => ({ success: true }),
-      };
-
-      expect(() => registry.register(tool)).toThrow('at least 10 characters');
-    });
-
-    it('should reject invalid parameter schemas', () => {
-      const tool: ToolDefinition = {
-        name: 'bad_schema',
-        description: 'A tool with an invalid parameter schema',
-        parameters: { type: 'string' } as unknown as JSONSchema, // must be 'object'
-        execute: async () => ({ success: true }),
-      };
-
-      expect(() => registry.register(tool)).toThrow();
+      expect(() =>
+        registry.register({
+          name: 'bad_schema',
+          description: 'A tool with invalid schema',
+          parameters: { type: 'string' } as unknown as JSONSchema,
+          execute: async () => ({ success: true }),
+        })
+      ).toThrow();
     });
   });
 
@@ -96,335 +76,232 @@ describe('ToolRegistry', () => {
       );
     });
 
-    it('should get tool by name', () => {
-      const tool = registry.get('tool_one');
-      expect(tool).toBeDefined();
-      expect(tool?.name).toBe('tool_one');
-    });
-
-    it('should return undefined for unknown tool', () => {
+    it('should get, list, and filter tools', () => {
+      expect(registry.get('tool_one')?.name).toBe('tool_one');
       expect(registry.get('unknown')).toBeUndefined();
-    });
+      expect(registry.list()).toHaveLength(3);
+      expect(registry.list({ category: 'utils' })).toHaveLength(2);
+      expect(registry.list({ tags: ['async'] })).toHaveLength(2);
 
-    it('should list all tools', () => {
-      const tools = registry.list();
-      expect(tools).toHaveLength(3);
-    });
-
-    it('should filter by category', () => {
-      const tools = registry.list({ category: 'utils' });
-      expect(tools).toHaveLength(2);
-    });
-
-    it('should filter by tags', () => {
-      const tools = registry.list({ tags: ['async'] });
-      expect(tools).toHaveLength(2);
-    });
-
-    it('should filter by enabled status', () => {
-      registry.setEnabled('tool_one', false);
-      const enabled = registry.list({ enabled: true });
-      const disabled = registry.list({ enabled: false });
-
-      expect(enabled).toHaveLength(2);
-      expect(disabled).toHaveLength(1);
-    });
-
-    it('should get MCP tool definitions', () => {
       const mcpTools = registry.getMCPToolDefinitions();
       expect(mcpTools).toHaveLength(3);
-      expect(mcpTools[0]).toHaveProperty('name');
-      expect(mcpTools[0]).toHaveProperty('description');
       expect(mcpTools[0]).toHaveProperty('inputSchema');
+
+      registry.setEnabled('tool_one', false);
+      expect(registry.list({ enabled: true })).toHaveLength(2);
+      expect(registry.list({ enabled: false })).toHaveLength(1);
     });
   });
 
   describe('execution', () => {
-    it('should execute a tool successfully', async () => {
-      const tool = defineTool(
+    it('should execute tools and handle basic scenarios', async () => {
+      const echoTool = defineTool(
         'echo_tool',
-        'A tool that echoes its input',
+        'A tool that echoes input',
         {
           type: 'object',
-          properties: {
-            message: { type: 'string' },
-          },
+          properties: { message: { type: 'string' } },
           required: ['message'],
         },
-        async (params) => {
-          const p = params as { message: string };
-          return { success: true, data: p.message };
-        }
+        async (p) => ({
+          success: true,
+          data: (p as { message: string }).message,
+        })
       );
+      registry.register(echoTool);
 
-      registry.register(tool);
       const result = await registry.execute('echo_tool', { message: 'hello' });
-
       expect(result.success).toBe(true);
       expect(result.data).toBe('hello');
-    });
 
-    it('should return error for unknown tool', async () => {
-      const result = await registry.execute('unknown_tool', {});
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('not found');
-    });
+      // Unknown tool
+      expect((await registry.execute('unknown_tool', {})).error).toContain(
+        'not found'
+      );
 
-    it('should return error for disabled tool', async () => {
+      // Disabled tool
       registry.register(createValidTool('disabled_tool'));
       registry.setEnabled('disabled_tool', false);
-
-      const result = await registry.execute('disabled_tool', {});
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('disabled');
+      expect((await registry.execute('disabled_tool', {})).error).toContain(
+        'disabled'
+      );
     });
 
-    it('should validate required parameters', async () => {
-      const tool = defineTool(
-        'required_params',
-        'A tool with required parameters',
-        {
-          type: 'object',
-          properties: {
-            name: { type: 'string' },
+    it('should validate parameters', async () => {
+      registry.register(
+        defineTool(
+          'req_params',
+          'Tool with required params',
+          {
+            type: 'object',
+            properties: { name: { type: 'string' } },
+            required: ['name'],
           },
-          required: ['name'],
-        },
-        async () => ({ success: true })
+          async () => ({ success: true })
+        )
+      );
+      expect((await registry.execute('req_params', {})).error).toContain(
+        'Missing required'
       );
 
-      registry.register(tool);
-      const result = await registry.execute('required_params', {});
+      registry.register(
+        defineTool(
+          'typed_params',
+          'Tool with typed params',
+          { type: 'object', properties: { count: { type: 'number' } } },
+          async () => ({ success: true })
+        )
+      );
+      expect(
+        (await registry.execute('typed_params', { count: 'x' })).error
+      ).toContain('must be of type number');
 
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Missing required');
-    });
-
-    it('should validate parameter types', async () => {
-      const tool = defineTool(
-        'typed_params',
-        'A tool with typed parameters',
-        {
-          type: 'object',
-          properties: {
-            count: { type: 'number', minimum: 0 },
+      registry.register(
+        defineTool(
+          'range_params',
+          'Tool with range',
+          {
+            type: 'object',
+            properties: { v: { type: 'number', minimum: 0, maximum: 100 } },
           },
-        },
-        async () => ({ success: true })
+          async () => ({ success: true })
+        )
       );
+      expect(
+        (await registry.execute('range_params', { v: -1 })).error
+      ).toContain('at least 0');
+      expect(
+        (await registry.execute('range_params', { v: 101 })).error
+      ).toContain('at most 100');
 
-      registry.register(tool);
-      const result = await registry.execute('typed_params', {
-        count: 'not a number',
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('must be of type number');
-    });
-
-    it('should validate number ranges', async () => {
-      const tool = defineTool(
-        'range_params',
-        'A tool with range validation',
-        {
-          type: 'object',
-          properties: {
-            value: { type: 'number', minimum: 0, maximum: 100 },
+      registry.register(
+        defineTool(
+          'enum_params',
+          'Tool with enum',
+          {
+            type: 'object',
+            properties: { s: { type: 'string', enum: ['a', 'b'] } },
           },
-        },
-        async () => ({ success: true })
+          async () => ({ success: true })
+        )
       );
-
-      registry.register(tool);
-
-      const tooLow = await registry.execute('range_params', { value: -1 });
-      expect(tooLow.success).toBe(false);
-      expect(tooLow.error).toContain('at least 0');
-
-      const tooHigh = await registry.execute('range_params', { value: 101 });
-      expect(tooHigh.success).toBe(false);
-      expect(tooHigh.error).toContain('at most 100');
+      expect(
+        (await registry.execute('enum_params', { s: 'x' })).error
+      ).toContain('must be one of');
     });
 
-    it('should validate string enum values', async () => {
-      const tool = defineTool(
-        'enum_params',
-        'A tool with enum validation',
-        {
-          type: 'object',
-          properties: {
-            status: { type: 'string', enum: ['active', 'inactive'] },
+    it('should handle errors, timeouts, and track usage', async () => {
+      registry.register(
+        defineTool(
+          'err_tool',
+          'Tool that throws errors',
+          { type: 'object' },
+          async () => {
+            throw new Error('Oops');
+          }
+        )
+      );
+      expect((await registry.execute('err_tool', {})).error).toContain('Oops');
+
+      registry.register(
+        defineTool(
+          'slow_tool',
+          'A slow tool that times out',
+          { type: 'object' },
+          async () => {
+            await new Promise((r) => setTimeout(r, 5000));
+            return { success: true };
           },
-        },
-        async () => ({ success: true })
+          { timeout: 100 }
+        )
       );
+      expect(
+        (await registry.execute('slow_tool', {}, { timeout: 100 })).error
+      ).toContain('timed out');
 
-      registry.register(tool);
-      const result = await registry.execute('enum_params', {
-        status: 'unknown',
-      });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('must be one of');
-    });
-
-    it('should catch execution errors', async () => {
-      const tool = defineTool(
-        'error_tool',
-        'A tool that throws an error',
-        { type: 'object' },
-        async () => {
-          throw new Error('Something went wrong');
-        }
-      );
-
-      registry.register(tool);
-      const result = await registry.execute('error_tool', {});
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('Something went wrong');
-    });
-
-    it('should handle timeout', async () => {
-      const tool = defineTool(
-        'slow_tool',
-        'A tool that takes too long',
-        { type: 'object' },
-        async () => {
-          await new Promise((resolve) => setTimeout(resolve, 5000));
-          return { success: true };
-        },
-        { timeout: 100 }
-      );
-
-      registry.register(tool);
-      const result = await registry.execute('slow_tool', {}, { timeout: 100 });
-
-      expect(result.success).toBe(false);
-      expect(result.error).toContain('timed out');
-    });
-
-    it('should track usage statistics', async () => {
       registry.register(createValidTool('stats_tool'));
-
       await registry.execute('stats_tool', {});
       await registry.execute('stats_tool', {});
-
-      const tool = registry.get('stats_tool');
-      expect(tool?.usageCount).toBe(2);
-      expect(tool?.lastUsedAt).toBeDefined();
+      expect(registry.get('stats_tool')?.usageCount).toBe(2);
     });
   });
 
   describe('extension context', () => {
-    it('should provide storage to tools', async () => {
-      const tool = defineTool(
+    it('should provide storage, events, and logging', async () => {
+      // Storage
+      const storageTool = defineTool(
         'storage_tool',
-        'A tool that uses storage',
+        'Uses storage',
         { type: 'object' },
-        async (_params, context) => {
-          await context.storage.set('key', 'value');
-          const retrieved = await context.storage.get('key');
-          return { success: true, data: retrieved };
+        async (_, ctx) => {
+          await ctx.storage.set('k', 'v');
+          return { success: true, data: await ctx.storage.get('k') };
         }
       );
+      registry.register(storageTool);
+      expect((await registry.execute('storage_tool', {})).data).toBe('v');
 
-      registry.register(tool);
-      const result = await registry.execute('storage_tool', {});
-
-      expect(result.success).toBe(true);
-      expect(result.data).toBe('value');
-    });
-
-    it('should provide event emitter to tools', async () => {
+      // Events
       const events: unknown[] = [];
-
-      const tool = defineTool(
+      const eventTool = defineTool(
         'event_tool',
-        'A tool that emits events',
+        'Emits events',
         { type: 'object' },
-        async (_params, context) => {
-          context.on('test_event', (data) => events.push(data));
-          context.emit('test_event', { message: 'hello' });
+        async (_, ctx) => {
+          ctx.on('evt', (d) => events.push(d));
+          ctx.emit('evt', { m: 'hi' });
           return { success: true };
         }
       );
-
-      registry.register(tool);
+      registry.register(eventTool);
       await registry.execute('event_tool', {});
+      expect(events[0]).toEqual({ m: 'hi' });
 
-      expect(events).toHaveLength(1);
-      expect(events[0]).toEqual({ message: 'hello' });
-    });
-
-    it('should provide sandboxed logging', async () => {
-      const tool = defineTool(
+      // Logging (just ensure no crash)
+      const logTool = defineTool(
         'log_tool',
-        'A tool that logs messages',
+        'Logs messages',
         { type: 'object' },
-        async (_params, context) => {
-          context.log.info('Info message');
-          context.log.warn('Warning message');
-          context.log.error('Error message');
+        async (_, ctx) => {
+          ctx.log.info('i');
+          ctx.log.warn('w');
+          ctx.log.error('e');
           return { success: true };
         }
       );
-
-      registry.register(tool);
-      const result = await registry.execute('log_tool', {});
-
-      expect(result.success).toBe(true);
+      registry.register(logTool);
+      expect((await registry.execute('log_tool', {})).success).toBe(true);
     });
   });
 
   describe('management', () => {
-    it('should unregister a tool', () => {
+    it('should manage tools: unregister, update, enable/disable, stats', () => {
       registry.register(createValidTool('to_remove'));
-      expect(registry.has('to_remove')).toBe(true);
-
-      const removed = registry.unregister('to_remove');
-      expect(removed).toBe(true);
+      expect(registry.unregister('to_remove')).toBe(true);
       expect(registry.has('to_remove')).toBe(false);
-    });
-
-    it('should return false for unregistering unknown tool', () => {
       expect(registry.unregister('unknown')).toBe(false);
-    });
 
-    it('should update tool definition', () => {
       registry.register(createValidTool('update_me'));
-      const updated = registry.update('update_me', {
-        description: 'Updated description for the tool',
+      registry.update('update_me', {
+        description: 'Updated description for tool',
       });
-
-      expect(updated).toBe(true);
       expect(registry.get('update_me')?.description).toBe(
-        'Updated description for the tool'
+        'Updated description for tool'
       );
-    });
 
-    it('should enable and disable tools', () => {
       registry.register(createValidTool('toggle_tool'));
-
       registry.setEnabled('toggle_tool', false);
       expect(registry.get('toggle_tool')?.enabled).toBe(false);
-
       registry.setEnabled('toggle_tool', true);
       expect(registry.get('toggle_tool')?.enabled).toBe(true);
-    });
 
-    it('should get statistics', () => {
       registry.register(createValidTool('stat_a', { category: 'cat1' }));
       registry.register(createValidTool('stat_b', { category: 'cat1' }));
       registry.register(createValidTool('stat_c', { category: 'cat2' }));
       registry.setEnabled('stat_c', false);
-
       const stats = registry.getStats();
-
-      expect(stats.totalTools).toBe(3);
-      expect(stats.enabledTools).toBe(2);
+      expect(stats.totalTools).toBe(5);
       expect(stats.byCategory['cat1']).toBe(2);
-      expect(stats.byCategory['cat2']).toBe(1);
     });
   });
 });

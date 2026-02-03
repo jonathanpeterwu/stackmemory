@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.5.62",
+  "version": "0.5.63",
   "description": "Lossless memory runtime for AI coding tools - call stack context, predictive edits, AI code review, prompt optimization, model switching, and mobile sync",
   "engines": {
     "node": ">=20.0.0",
