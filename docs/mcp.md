@@ -69,14 +69,14 @@ Response content is a single `text` item containing a JSON string:
 
 ## Notes
 - Implementer `codex` calls `codex-sm` (must be on PATH). Use `--execute` in CLI, or `execute: true` in MCP, to actually run it; otherwise it’s a dry‑run.
-- Audit files are saved to `.stackmemory/mm-spike/spike-<timestamp>.json` to support review/debugging.
+- Audit files are saved to `.stackmemory/build/spike-<timestamp>.json` to support review/debugging.
 - You can compare models:
   - Planner/critic: override with `STACKMEMORY_MM_PLANNER_MODEL` / `STACKMEMORY_MM_REVIEWER_MODEL`.
   - Implementer: set to `claude` to A/B against Codex, or keep `codex` (default).
 
 ## CLI equivalents (for quick checks)
 - Quiet JSON output:
-  - `stackmemory mm-spike --task "Refactor config loader" --json`
+  - `stackmemory build "Refactor config loader" --json`
   - `stackmemory skills spike --task "Refactor config loader" --json`
 - Execute implementer and record as frame:
   - `stackmemory skills spike --task "Refactor" --execute --max-iters 3 --json --record-frame`
@@ -154,7 +154,7 @@ Response (content[0].text is a JSON string):
 Notes:
 - `recordFrame: true` creates a real StackMemory frame + anchors (plan summary, commands, issues, suggestions).
 - `execute: true` actually invokes the implementer; otherwise it’s a dry‑run.
-- Approval IDs are persisted to `.stackmemory/mm-spike/pending.json` so editor restarts don’t lose pending approvals.
+- Approval IDs are persisted to `.stackmemory/build/pending.json` so editor restarts don’t lose pending approvals.
 
 ### Optional helper tools
 - `plan_only`: Returns a plan JSON without running code.

@@ -97,7 +97,7 @@ CLI equivalents for quick checks:
 
 ```bash
 # Quiet JSON (UI-friendly)
-stackmemory mm-spike --task "Refactor config loader" --json
+stackmemory build --task "Refactor config loader" --json
 
 # Execute implementer and record as frame
 stackmemory skills spike --task "Refactor" --execute --max-iters 3 --json --record-frame

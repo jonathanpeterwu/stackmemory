@@ -13,37 +13,38 @@ import type {
 } from './types.js';
 
 function heuristicPlan(input: PlanningInput): ImplementationPlan {
+  // Generic fallback plan when Claude API is unavailable
   return {
     summary: `Plan for: ${input.task}`,
     steps: [
       {
-        id: 'plan-1',
-        title: 'Understand requirements',
-        rationale: 'Clarify task definition and constraints',
-        acceptanceCriteria: ['Inputs/outputs documented', 'Edge cases listed'],
-      },
-      {
-        id: 'plan-2',
-        title: 'Add minimal harness modules',
-        rationale: 'Create planner, implementer, critic adapters',
+        id: 'step-1',
+        title: 'Analyze requirements',
+        rationale: 'Understand the task scope and constraints',
         acceptanceCriteria: [
-          'Planner returns JSON plan',
-          'Implementer can spawn codex-sm',
+          'Requirements clearly defined',
+          'Edge cases identified',
         ],
       },
       {
-        id: 'plan-3',
-        title: 'Wire CLI spike',
-        rationale: 'Expose mm-spike entry for E2E flow',
+        id: 'step-2',
+        title: 'Implement core changes',
+        rationale: 'Make the minimal changes needed to complete the task',
         acceptanceCriteria: [
-          'CLI prints plan',
-          'Dry-run shows implementer command',
+          'Code compiles without errors',
+          'Core functionality works',
         ],
+      },
+      {
+        id: 'step-3',
+        title: 'Verify and test',
+        rationale: 'Ensure changes work correctly',
+        acceptanceCriteria: ['Tests pass', 'No regressions introduced'],
       },
     ],
     risks: [
-      'Native module issues (sqlite) in dev env',
-      'Provider quota or auth failures',
+      'API key not configured - using heuristic plan',
+      'May need manual review of generated code',
     ],
   };
 }
@@ -89,9 +90,11 @@ export async function runSpike(
   };
 
   for (let i = 0; i < maxIters; i++) {
-    const stepTitle =
-      plan.steps[1]?.title || plan.steps[0]?.title || 'Initial step';
-    const basePrompt = `Implement: ${stepTitle}. Keep changes minimal and focused. Avoid unrelated edits.`;
+    // Build implementation prompt from all plan steps
+    const stepsList = plan.steps
+      .map((s, idx) => `${idx + 1}. ${s.title}`)
+      .join('\n');
+    const basePrompt = `Implement the following plan:\n${stepsList}\n\nKeep changes minimal and focused. Avoid unrelated edits.`;
     const refine =
       i === 0
         ? ''
@@ -150,7 +153,7 @@ export async function runSpike(
   // Persist audit
   try {
     const dir =
-      options.auditDir || path.join(input.repoPath, '.stackmemory', 'mm-spike');
+      options.auditDir || path.join(input.repoPath, '.stackmemory', 'build');
     fs.mkdirSync(dir, { recursive: true });
     const stamp = new Date().toISOString().replace(/[:.]/g, '-');
     const file = path.join(dir, `spike-${stamp}.json`);
@@ -258,7 +261,7 @@ function recordAsFrame(
     });
 
     // Anchors: decision (plan summary), fact (implementer commands), risk/todo (critique)
-    fm.addAnchor('DECISION', plan.summary, 8, { source: 'mm-spike' }, frameId);
+    fm.addAnchor('DECISION', plan.summary, 8, { source: 'build' }, frameId);
     const commands = iterations.map((it) => it.command).filter(Boolean);
     if (commands.length) {
       fm.addAnchor(

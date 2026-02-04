@@ -1532,7 +1532,7 @@ class LocalStackMemoryMCP {
 
   // Pending plan persistence (best-effort)
   private getPendingStoreDir(): string {
-    return join(this.projectRoot, '.stackmemory', 'mm-spike');
+    return join(this.projectRoot, '.stackmemory', 'build');
   }
 
   private getPendingStorePath(): string {
@@ -1542,13 +1542,26 @@ class LocalStackMemoryMCP {
   private loadPendingPlans(): void {
     try {
       const file = this.getPendingStorePath();
-      if (!existsSync(file)) return;
-      const data = JSON.parse(readFileSync(file, 'utf-8')) as Record<
+      let sourceFile = file;
+      if (!existsSync(file)) {
+        // Back-compat: migrate from old mm-spike path if present
+        const legacy = join(
+          this.projectRoot,
+          '.stackmemory',
+          'mm-spike',
+          'pending.json'
+        );
+        if (existsSync(legacy)) sourceFile = legacy;
+        else return;
+      }
+      const data = JSON.parse(readFileSync(sourceFile, 'utf-8')) as Record<
         string,
         any
       >;
       if (data && typeof data === 'object') {
         this.pendingPlans = new Map(Object.entries(data));
+        // If loaded from legacy, persist to new location
+        if (sourceFile !== file) this.savePendingPlans();
       }
     } catch {
       // ignore

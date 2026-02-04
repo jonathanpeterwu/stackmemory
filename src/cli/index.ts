@@ -67,9 +67,12 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import inquirer from 'inquirer';
-import chalk from 'chalk';
 import { enableChromaDB } from '../core/config/storage-config.js';
 import { spawn } from 'child_process';
+import type {
+  HarnessResult,
+  PlanStep,
+} from '../orchestrators/multimodal/types.js';
 import { homedir } from 'os';
 
 // Read version from package.json - works from both src/ and dist/src/
@@ -903,16 +906,124 @@ program
     }
   });
 
-function printInteractionLog(
-  meta: {
-    task: string;
-    plannerModel: string;
-    reviewerModel: string;
-    implementer: string;
-    execute: boolean;
-  },
-  result: any
-) {
+// Alias: build (same behavior as mm-spike)
+program
+  .command('build')
+  .description(
+    'Plan + code: planner (Claude), implementer (Codex/Claude), critic (Claude) with optional log/json output'
+  )
+  .argument('[task]', 'Task description (positional)')
+  .option(
+    '-t, --task <desc>',
+    'Task description (required if no positional arg)'
+  )
+  .option(
+    '--planner-model <name>',
+    'Claude model for planning',
+    'claude-3-5-sonnet-latest'
+  )
+  .option(
+    '--reviewer-model <name>',
+    'Claude model for review',
+    'claude-3-5-sonnet-latest'
+  )
+  .option('--execute', 'Execute implementer (default: true)', true)
+  .option('--dry-run', 'Skip execution, show commands only')
+  .option('--implementer <name>', 'codex|claude', 'codex')
+  .option('--max-iters <n>', 'Retry loop iterations', '2')
+  .option('--audit-dir <path>', 'Persist spike results to directory')
+  .option('--record-frame', 'Record as real frame with anchors')
+  .option('--record', 'Record plan & critique into StackMemory context')
+  .option('--json', 'Emit single JSON result (UI-friendly)')
+  .option('--quiet', 'Minimal output')
+  .option('--verbose', 'Verbose sectioned output')
+  .option('--log', 'Pretty print interaction log (default: true)', true)
+  .action(async (taskArg, opts) => {
+    try {
+      // Resolve task from positional arg or --task option
+      const task =
+        typeof taskArg === 'string' && taskArg.length > 0 ? taskArg : opts.task;
+
+      if (!task) {
+        console.error(
+          chalk.red(
+            'Error: Task description required. Provide as argument or --task option.'
+          )
+        );
+        console.error(
+          chalk.gray('  Example: stackmemory build "Add user authentication"')
+        );
+        process.exit(1);
+      }
+
+      const { runSpike } =
+        await import('../orchestrators/multimodal/harness.js');
+      const dryRun = opts.dryRun === true || opts.execute === false;
+      const result = await runSpike(
+        { task, repoPath: process.cwd() },
+        {
+          plannerModel: opts.plannerModel,
+          reviewerModel: opts.reviewerModel,
+          implementer: opts.implementer,
+          maxIters: parseInt(opts.maxIters),
+          dryRun,
+          auditDir: opts.auditDir,
+          recordFrame: Boolean(opts.recordFrame),
+          record: Boolean(opts.record),
+        }
+      );
+
+      if (opts.log) {
+        printInteractionLog(
+          {
+            task,
+            plannerModel: opts.plannerModel,
+            reviewerModel: opts.reviewerModel,
+            implementer: opts.implementer,
+            execute: !dryRun,
+          },
+          result
+        );
+        return;
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify(result));
+        return;
+      }
+      if (opts.verbose) {
+        console.log('\n=== Plan ===');
+        console.log(JSON.stringify(result.plan, null, 2));
+        console.log('\n=== Iterations ===');
+        (result.iterations || []).forEach((it, i) => {
+          console.log(`\n[Attempt ${i + 1}] ${it.command}`);
+          console.log('OK:', it.ok);
+          console.log('Critique:', JSON.stringify(it.critique));
+        });
+        console.log('\n=== Implementation ===');
+        console.log(JSON.stringify(result.implementation, null, 2));
+        console.log('\n=== Critique ===');
+        console.log(JSON.stringify(result.critique, null, 2));
+      } else if (!opts.quiet) {
+        console.log(
+          `Plan steps: ${result.plan.steps.length}, Approved: ${result.critique.approved}`
+        );
+      }
+    } catch (error) {
+      console.error('build failed:', (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+interface BuildLogMeta {
+  task: string;
+  plannerModel: string;
+  reviewerModel: string;
+  implementer: string;
+  execute: boolean;
+}
+
+function printInteractionLog(meta: BuildLogMeta, result: HarnessResult): void {
   const divider = chalk.gray(
     '────────────────────────────────────────────────'
   );
@@ -928,65 +1039,55 @@ function printInteractionLog(
   console.log(divider);
 
   // Plan summary
-  if (result?.plan) {
+  if (result.plan) {
     console.log(
       chalk.bold('Plan Summary: '),
       result.plan.summary || '(no summary)'
     );
-    const steps = Array.isArray(result.plan.steps)
-      ? result.plan.steps.slice(0, 6)
-      : [];
+    const steps: PlanStep[] = result.plan.steps.slice(0, 6);
     if (steps.length) {
       console.log(chalk.bold('\nSteps:'));
-      steps.forEach((s: any, idx: number) => {
+      steps.forEach((s, idx) => {
         console.log(`${chalk.gray(String(idx + 1) + '.')} ${s.title || s.id}`);
-        const ac = Array.isArray(s.acceptanceCriteria)
-          ? s.acceptanceCriteria
-          : [];
+        const ac = s.acceptanceCriteria || [];
         if (ac.length) {
-          ac.slice(0, 3).forEach((c: string) =>
-            console.log(chalk.gray(`   - ${c}`))
-          );
+          ac.slice(0, 3).forEach((c) => console.log(chalk.gray(`   - ${c}`)));
           if (ac.length > 3) console.log(chalk.gray('   - ...'));
         }
       });
     }
-    if (Array.isArray(result.plan.risks) && result.plan.risks.length) {
+    if (result.plan.risks?.length) {
       console.log(chalk.bold('\nRisks:'));
       result.plan.risks
         .slice(0, 5)
-        .forEach((r: string) => console.log(chalk.gray(` - ${r}`)));
+        .forEach((r) => console.log(chalk.gray(` - ${r}`)));
     }
   }
 
   console.log(`\n${divider}`);
-  const iters = Array.isArray(result?.iterations) ? result.iterations : [];
+  const iters = result.iterations || [];
   if (iters.length) {
-    iters.forEach((it: any, i: number) => {
+    iters.forEach((it, i) => {
       console.log(chalk.magenta(`Attempt ${i + 1}`));
       console.log(`${chalk.gray('Command:')} ${it.command}`);
       console.log(
         `${chalk.gray('OK:')} ${it.ok ? chalk.green('true') : chalk.red('false')}`
       );
-      const issues = it?.critique?.issues || [];
-      const sugg = it?.critique?.suggestions || [];
+      const issues = it.critique?.issues || [];
+      const sugg = it.critique?.suggestions || [];
       if (issues.length) {
         console.log(chalk.bold('Issues:'));
-        issues
-          .slice(0, 5)
-          .forEach((x: string) => console.log(chalk.red(` - ${x}`)));
+        issues.slice(0, 5).forEach((x) => console.log(chalk.red(` - ${x}`)));
       }
       if (sugg.length) {
         console.log(chalk.bold('Suggestions:'));
-        sugg
-          .slice(0, 5)
-          .forEach((x: string) => console.log(chalk.yellow(` - ${x}`)));
+        sugg.slice(0, 5).forEach((x) => console.log(chalk.yellow(` - ${x}`)));
       }
       console.log(divider);
     });
   }
 
-  const approved = !!result?.critique?.approved;
+  const approved = result.critique?.approved ?? false;
   console.log(
     `${chalk.bold('Final:')} ${
       approved ? chalk.green('Approved') : chalk.yellow('Needs changes')
@@ -999,7 +1100,7 @@ function printInteractionLog(
 program
   .command('pending:list')
   .description(
-    'List pending approval-gated plans (from .stackmemory/mm-spike/pending.json)'
+    'List pending approval-gated plans (from .stackmemory/build/pending.json)'
   )
   .option('--task-contains <substr>', 'Filter tasks containing this substring')
   .option('--older-than-ms <number>', 'Only items older than this age (ms)')
@@ -1012,7 +1113,7 @@ program
       const storePath = path.join(
         process.cwd(),
         '.stackmemory',
-        'mm-spike',
+        'build',
         'pending.json'
       );
       let pending: Record<string, any> = {};
