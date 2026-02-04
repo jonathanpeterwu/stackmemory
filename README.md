@@ -97,6 +97,38 @@ Frames can span:
 
 Runs as an MCP server. Editors (e.g., Claude Code) call StackMemory on each interaction to fetch a compiled context bundle; editors don’t store memory themselves.
 
+### MCP Quick Usage
+
+Use these JSON snippets with Claude Code’s MCP “tools/call”. Responses are returned as a single text item containing JSON.
+
+- Plan only (no code):
+  ```json
+  {"method":"tools/call","params":{"name":"plan_only","arguments":{"task":"Refactor config loader","plannerModel":"claude-3-5-sonnet-latest"}}}
+  ```
+
+- Approval‑gated plan (phase 1):
+  ```json
+  {"method":"tools/call","params":{"name":"plan_gate","arguments":{"task":"Refactor config loader","compact":true}}}
+  ```
+
+- Approve + execute (phase 2):
+  ```json
+  {"method":"tools/call","params":{"name":"approve_plan","arguments":{"approvalId":"<copy from plan_gate>","implementer":"codex","execute":true,"recordFrame":true,"compact":true}}}
+  ```
+
+- Manage approvals:
+  ```json
+  {"method":"tools/call","params":{"name":"pending_list","arguments":{}}}
+  {"method":"tools/call","params":{"name":"pending_show","arguments":{"approvalId":"<id>","compact":true}}}
+  {"method":"tools/call","params":{"name":"pending_clear","arguments":{"approvalId":"<id>"}}}
+  ```
+
+Env defaults (optional):
+- `STACKMEMORY_MM_PLANNER_MODEL` (e.g., `claude-3-5-sonnet-latest` or `claude-3-opus-latest`)
+- `STACKMEMORY_MM_REVIEWER_MODEL` (defaults to planner if unset)
+- `STACKMEMORY_MM_IMPLEMENTER` (`codex` or `claude`)
+- `STACKMEMORY_MM_MAX_ITERS` (e.g., `2`)
+
 ---
 
 ## Quick Start
@@ -386,5 +418,6 @@ See https://github.com/stackmemoryai/stackmemory/blob/main/docs/roadmap.md for o
 - [Product Requirements](./PRD.md) - Detailed product specifications
 - [Technical Architecture](./TECHNICAL_ARCHITECTURE.md) - System design and database schemas
 - [Beads Integration](./BEADS_INTEGRATION.md) - Git-native memory patterns from Beads ecosystem
+ - [MCP: plan_and_code](https://github.com/stackmemoryai/stackmemory/blob/main/docs/mcp.md) - Trigger planning + coding via MCP with JSON results
 
 ---

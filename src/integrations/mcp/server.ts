@@ -18,7 +18,9 @@ import {
   AddDecisionSchema,
   GetContextSchema,
 } from './schemas.js';
-import { readFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from 'fs';
+import { compactPlan } from '../../orchestrators/multimodal/utils.js';
+import { filterPending } from './pending-utils.js';
 import { join, dirname } from 'path';
 import { execSync } from 'child_process';
 import { FrameManager, FrameType } from '../../core/context/index.js';
@@ -76,6 +78,7 @@ class LocalStackMemoryMCP {
   private contextRetrieval: LLMContextRetrieval;
   private discoveryHandlers: DiscoveryHandlers;
   private diffMemHandlers: DiffMemHandlers;
+  private pendingPlans: Map<string, any> = new Map();
 
   constructor() {
     // Find project root (where .git is)
@@ -141,6 +144,9 @@ class LocalStackMemoryMCP {
 
     this.setupHandlers();
     this.loadInitialContext();
+
+    // Load any pending approval-gated plans from disk (best-effort)
+    this.loadPendingPlans();
 
     // Initialize Browser MCP with this server
     this.browserMCP.initialize(this.server).catch((error) => {
@@ -346,6 +352,208 @@ class LocalStackMemoryMCP {
                     description: 'Max contexts to return',
                   },
                 },
+              },
+            },
+            {
+              name: 'plan_and_code',
+              description:
+                'Generate a plan (Claude), attempt implementation (Codex/Claude), and return JSON result. Quiet by default.',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  task: { type: 'string', description: 'Task description' },
+                  implementer: {
+                    type: 'string',
+                    enum: ['codex', 'claude'],
+                    default: 'codex',
+                    description: 'Which agent implements code',
+                  },
+                  maxIters: {
+                    type: 'number',
+                    default: 2,
+                    description: 'Retry loop iterations',
+                  },
+                  execute: {
+                    type: 'boolean',
+                    default: false,
+                    description:
+                      'Actually call implementer (otherwise dry-run)',
+                  },
+                  record: {
+                    type: 'boolean',
+                    default: false,
+                    description:
+                      'Record plan & critique into StackMemory context',
+                  },
+                  recordFrame: {
+                    type: 'boolean',
+                    default: false,
+                    description: 'Record as real frame with anchors',
+                  },
+                },
+                required: ['task'],
+              },
+            },
+            {
+              name: 'plan_gate',
+              description:
+                'Phase 1: Generate a plan and return an approvalId for later execution',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  task: { type: 'string', description: 'Task description' },
+                  plannerModel: {
+                    type: 'string',
+                    description: 'Claude model (optional)',
+                  },
+                },
+                required: ['task'],
+              },
+            },
+            {
+              name: 'approve_plan',
+              description:
+                'Phase 2: Execute a previously generated plan by approvalId (runs implement + critique)',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  approvalId: {
+                    type: 'string',
+                    description: 'Id from plan_gate',
+                  },
+                  implementer: {
+                    type: 'string',
+                    enum: ['codex', 'claude'],
+                    default: 'codex',
+                    description: 'Which agent implements code',
+                  },
+                  maxIters: { type: 'number', default: 2 },
+                  recordFrame: { type: 'boolean', default: true },
+                  execute: { type: 'boolean', default: true },
+                },
+                required: ['approvalId'],
+              },
+            },
+            {
+              name: 'pending_list',
+              description:
+                'List pending approval-gated plans (supports filters)',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  taskContains: {
+                    type: 'string',
+                    description: 'Filter tasks containing this substring',
+                  },
+                  olderThanMs: {
+                    type: 'number',
+                    description: 'Only items older than this age (ms)',
+                  },
+                  newerThanMs: {
+                    type: 'number',
+                    description: 'Only items newer than this age (ms)',
+                  },
+                  sort: {
+                    type: 'string',
+                    enum: ['asc', 'desc'],
+                    description: 'Sort by createdAt',
+                  },
+                  limit: { type: 'number', description: 'Max items to return' },
+                },
+              },
+            },
+            {
+              name: 'pending_clear',
+              description:
+                'Clear pending approval-gated plans (by id, all, or olderThanMs)',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  approvalId: {
+                    type: 'string',
+                    description: 'Clear a single approval by id',
+                  },
+                  all: {
+                    type: 'boolean',
+                    description: 'Clear all pending approvals',
+                    default: false,
+                  },
+                  olderThanMs: {
+                    type: 'number',
+                    description: 'Clear approvals older than this age (ms)',
+                  },
+                },
+              },
+            },
+            {
+              name: 'pending_show',
+              description: 'Show a pending plan by approvalId',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  approvalId: {
+                    type: 'string',
+                    description: 'Approval id from plan_gate',
+                  },
+                },
+                required: ['approvalId'],
+              },
+            },
+            {
+              name: 'plan_only',
+              description:
+                'Generate an implementation plan (Claude) and return JSON only',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  task: { type: 'string', description: 'Task description' },
+                  plannerModel: {
+                    type: 'string',
+                    description: 'Claude model for planning (optional)',
+                  },
+                },
+                required: ['task'],
+              },
+            },
+            {
+              name: 'call_codex',
+              description:
+                'Invoke Codex via codex-sm with a prompt and args; dry-run by default',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  prompt: { type: 'string', description: 'Prompt for Codex' },
+                  args: {
+                    type: 'array',
+                    items: { type: 'string' },
+                    description: 'Additional CLI args for codex-sm',
+                  },
+                  execute: {
+                    type: 'boolean',
+                    default: false,
+                    description: 'Actually run codex-sm (otherwise dry-run)',
+                  },
+                },
+                required: ['prompt'],
+              },
+            },
+            {
+              name: 'call_claude',
+              description: 'Invoke Claude with a prompt (Anthropic SDK)',
+              inputSchema: {
+                type: 'object',
+                properties: {
+                  prompt: { type: 'string', description: 'Prompt for Claude' },
+                  model: {
+                    type: 'string',
+                    description: 'Claude model (optional)',
+                  },
+                  system: {
+                    type: 'string',
+                    description: 'System prompt (optional)',
+                  },
+                },
+                required: ['prompt'],
               },
             },
             {
@@ -1066,6 +1274,38 @@ class LocalStackMemoryMCP {
               result = await this.handleCompressOldTraces(args);
               break;
 
+            case 'plan_only':
+              result = await this.handlePlanOnly(args);
+              break;
+
+            case 'call_codex':
+              result = await this.handleCallCodex(args);
+              break;
+
+            case 'call_claude':
+              result = await this.handleCallClaude(args);
+              break;
+
+            case 'plan_gate':
+              result = await this.handlePlanGate(args);
+              break;
+
+            case 'approve_plan':
+              result = await this.handleApprovePlan(args);
+              break;
+
+            case 'pending_list':
+              result = await this.handlePendingList();
+              break;
+
+            case 'pending_clear':
+              result = await this.handlePendingClear(args);
+              break;
+
+            case 'pending_show':
+              result = await this.handlePendingShow(args);
+              break;
+
             case 'smart_context':
               result = await this.handleSmartContext(args);
               break;
@@ -1154,6 +1394,408 @@ class LocalStackMemoryMCP {
         return result;
       }
     );
+  }
+
+  // Handle plan_and_code tool by invoking the mm harness
+  private async handlePlanAndCode(args: any) {
+    const { runSpike } =
+      await import('../../orchestrators/multimodal/harness.js');
+
+    // Read defaults from env for planner/implementer config
+    const plannerModel =
+      process.env['STACKMEMORY_MM_PLANNER_MODEL'] || 'claude-3-5-sonnet-latest';
+    const reviewerModel =
+      process.env['STACKMEMORY_MM_REVIEWER_MODEL'] || plannerModel;
+    const implementer =
+      (args.implementer as string) ||
+      process.env['STACKMEMORY_MM_IMPLEMENTER'] ||
+      'codex';
+    const maxIters = Number(
+      args.maxIters ?? process.env['STACKMEMORY_MM_MAX_ITERS'] ?? 2
+    );
+    const execute = Boolean(args.execute);
+    const record = Boolean(args.record);
+    const recordFrame = Boolean(args.recordFrame);
+    const compact = Boolean(args.compact);
+
+    const task = String(args.task || 'Plan and implement change');
+
+    const result = await runSpike(
+      {
+        task,
+        repoPath: this.projectRoot,
+      },
+      {
+        plannerModel,
+        reviewerModel,
+        implementer: implementer === 'claude' ? 'claude' : 'codex',
+        maxIters: isFinite(maxIters) ? Math.max(1, maxIters) : 2,
+        dryRun: !execute,
+        auditDir: undefined,
+        recordFrame,
+      }
+    );
+
+    // Optionally record result into StackMemory context as decisions/anchors
+    if (record || recordFrame) {
+      try {
+        const planSummary = result.plan.summary || task;
+        this.addContext('decision', `Plan: ${planSummary}`, 0.8);
+        const approved = result.critique?.approved
+          ? 'approved'
+          : 'needs_changes';
+        this.addContext('decision', `Critique: ${approved}`, 0.6);
+      } catch {}
+    }
+
+    const payload = compact
+      ? { ...result, plan: compactPlan(result.plan) }
+      : result;
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ ok: true, result: payload }),
+        },
+      ],
+      isError: false,
+    };
+  }
+
+  private async handlePlanOnly(args: any) {
+    const { runPlanOnly } =
+      await import('../../orchestrators/multimodal/harness.js');
+    const task = String(args.task || 'Plan change');
+    const plannerModel =
+      (args.plannerModel as string) ||
+      process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
+      'claude-3-5-sonnet-latest';
+    const plan = await runPlanOnly(
+      { task, repoPath: this.projectRoot },
+      { plannerModel }
+    );
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ ok: true, plan }),
+        },
+      ],
+      isError: false,
+    };
+  }
+
+  private async handleCallCodex(args: any) {
+    const { callCodexCLI } =
+      await import('../../orchestrators/multimodal/providers.js');
+    const prompt = String(args.prompt || '');
+    const extraArgs = Array.isArray(args.args) ? (args.args as string[]) : [];
+    const execute = Boolean(args.execute);
+    const resp = callCodexCLI(prompt, extraArgs, !execute);
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            ok: resp.ok,
+            command: resp.command,
+            output: resp.output,
+          }),
+        },
+      ],
+      isError: false,
+    };
+  }
+
+  private async handleCallClaude(args: any) {
+    const { callClaude } =
+      await import('../../orchestrators/multimodal/providers.js');
+    const prompt = String(args.prompt || '');
+    const model =
+      (args.model as string) ||
+      process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
+      'claude-3-5-sonnet-latest';
+    const system =
+      (args.system as string) ||
+      'You are a precise assistant. Return plain text unless asked for JSON.';
+    const text = await callClaude(prompt, { model, system });
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ ok: true, text }),
+        },
+      ],
+      isError: false,
+    };
+  }
+
+  // Pending plan persistence (best-effort)
+  private getPendingStoreDir(): string {
+    return join(this.projectRoot, '.stackmemory', 'mm-spike');
+  }
+
+  private getPendingStorePath(): string {
+    return join(this.getPendingStoreDir(), 'pending.json');
+  }
+
+  private loadPendingPlans(): void {
+    try {
+      const file = this.getPendingStorePath();
+      if (!existsSync(file)) return;
+      const data = JSON.parse(readFileSync(file, 'utf-8')) as Record<
+        string,
+        any
+      >;
+      if (data && typeof data === 'object') {
+        this.pendingPlans = new Map(Object.entries(data));
+      }
+    } catch {
+      // ignore
+    }
+  }
+
+  private savePendingPlans(): void {
+    try {
+      const dir = this.getPendingStoreDir();
+      if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+      const file = this.getPendingStorePath();
+      const obj = Object.fromEntries(this.pendingPlans);
+      writeFileSync(file, JSON.stringify(obj, null, 2));
+    } catch {
+      // ignore
+    }
+  }
+
+  private async handlePlanGate(args: any) {
+    const { runPlanOnly } =
+      await import('../../orchestrators/multimodal/harness.js');
+    const task = String(args.task || 'Plan change');
+    const plannerModel =
+      (args.plannerModel as string) ||
+      process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
+      'claude-3-5-sonnet-latest';
+    const plan = await runPlanOnly(
+      { task, repoPath: this.projectRoot },
+      { plannerModel }
+    );
+    const approvalId = `appr_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+    this.pendingPlans.set(approvalId, { task, plan, createdAt: Date.now() });
+    this.savePendingPlans();
+    const compact = Boolean(args.compact);
+    const planOut = compact ? compactPlan(plan) : plan;
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ ok: true, approvalId, plan: planOut }),
+        },
+      ],
+      isError: false,
+    };
+  }
+
+  private async handleApprovePlan(args: any) {
+    const { runSpike } =
+      await import('../../orchestrators/multimodal/harness.js');
+    const approvalId = String(args.approvalId || '');
+    const pending = this.pendingPlans.get(approvalId);
+    if (!pending) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ ok: false, error: 'Invalid approvalId' }),
+          },
+        ],
+        isError: false,
+      };
+    }
+    const implementer =
+      (args.implementer as string) ||
+      process.env['STACKMEMORY_MM_IMPLEMENTER'] ||
+      'codex';
+    const maxIters = Number(
+      args.maxIters ?? process.env['STACKMEMORY_MM_MAX_ITERS'] ?? 2
+    );
+    const recordFrame = args.recordFrame !== false; // default true
+    const execute = args.execute !== false; // default true
+
+    const result = await runSpike(
+      { task: pending.task, repoPath: this.projectRoot },
+      {
+        plannerModel:
+          process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
+          'claude-3-5-sonnet-latest',
+        reviewerModel:
+          process.env['STACKMEMORY_MM_REVIEWER_MODEL'] ||
+          process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
+          'claude-3-5-sonnet-latest',
+        implementer: implementer === 'claude' ? 'claude' : 'codex',
+        maxIters: isFinite(maxIters) ? Math.max(1, maxIters) : 2,
+        dryRun: !execute,
+        recordFrame,
+      }
+    );
+    this.pendingPlans.delete(approvalId);
+    this.savePendingPlans();
+    const compact = Boolean(args.compact);
+    const payload = compact
+      ? { ...result, plan: compactPlan(result.plan) }
+      : result;
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({ ok: true, approvalId, result: payload }),
+        },
+      ],
+      isError: false,
+    };
+  }
+
+  private async handlePendingList(args?: unknown) {
+    const schema = z
+      .object({
+        taskContains: z.string().optional(),
+        olderThanMs: z.number().optional(),
+        newerThanMs: z.number().optional(),
+        sort: z.enum(['asc', 'desc']).optional(),
+        limit: z.number().int().positive().optional(),
+      })
+      .optional();
+    const parsed = schema.safeParse(args);
+    if (args && !parsed.success) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({
+              ok: false,
+              error: 'Invalid arguments',
+              details: parsed.error.issues,
+            }),
+          },
+        ],
+        isError: false,
+      };
+    }
+    const a = parsed.success && parsed.data ? parsed.data : ({} as any);
+    const now = Date.now();
+    let items = Array.from(this.pendingPlans.entries()).map(
+      ([approvalId, data]) => ({
+        approvalId,
+        task: data?.task as string,
+        createdAt: Number(data?.createdAt || 0) || null,
+      })
+    );
+    items = filterPending(items, a, now);
+    return {
+      content: [
+        { type: 'text', text: JSON.stringify({ ok: true, pending: items }) },
+      ],
+      isError: false,
+    };
+  }
+
+  private async handlePendingClear(args: any) {
+    const removed: string[] = [];
+    const now = Date.now();
+    const all = Boolean(args?.all);
+    const approvalId = args?.approvalId ? String(args.approvalId) : undefined;
+    const olderThanMs = Number.isFinite(Number(args?.olderThanMs))
+      ? Number(args.olderThanMs)
+      : undefined;
+
+    if (all) {
+      for (const id of this.pendingPlans.keys()) removed.push(id);
+      this.pendingPlans.clear();
+      this.savePendingPlans();
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ ok: true, removed }) },
+        ],
+        isError: false,
+      };
+    }
+
+    if (approvalId) {
+      if (this.pendingPlans.has(approvalId)) {
+        this.pendingPlans.delete(approvalId);
+        removed.push(approvalId);
+        this.savePendingPlans();
+      }
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ ok: true, removed }) },
+        ],
+        isError: false,
+      };
+    }
+
+    if (olderThanMs !== undefined && olderThanMs >= 0) {
+      for (const [id, data] of this.pendingPlans.entries()) {
+        const ts = Number(data?.createdAt || 0);
+        if (ts && now - ts > olderThanMs) {
+          this.pendingPlans.delete(id);
+          removed.push(id);
+        }
+      }
+      this.savePendingPlans();
+      return {
+        content: [
+          { type: 'text', text: JSON.stringify({ ok: true, removed }) },
+        ],
+        isError: false,
+      };
+    }
+
+    // Nothing specified
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            ok: false,
+            error: 'Specify approvalId, all=true, or olderThanMs',
+          }),
+        },
+      ],
+      isError: false,
+    };
+  }
+
+  private async handlePendingShow(args: any) {
+    const approvalId = String(args?.approvalId || '');
+    const data = this.pendingPlans.get(approvalId);
+    if (!data) {
+      return {
+        content: [
+          {
+            type: 'text',
+            text: JSON.stringify({ ok: false, error: 'Invalid approvalId' }),
+          },
+        ],
+        isError: false,
+      };
+    }
+    const compact = Boolean(args.compact);
+    const planOut = compact ? compactPlan(data.plan) : data.plan;
+    return {
+      content: [
+        {
+          type: 'text',
+          text: JSON.stringify({
+            ok: true,
+            approvalId,
+            task: data.task,
+            plan: planOut,
+            createdAt: data.createdAt || null,
+          }),
+        },
+      ],
+      isError: false,
+    };
   }
 
   private async handleGetContext(args: any) {

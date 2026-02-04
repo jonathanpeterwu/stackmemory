@@ -62,6 +62,47 @@ stackmemory init --chromadb
 | `linear_update_task` | Update Linear issue                        |
 | `linear_get_tasks`   | Get tasks from Linear                      |
 
+### Quick: plan_and_code (planning + coding)
+
+- Trigger a full plan → implement → critique loop and get a single JSON result.
+- Tool: `plan_and_code`
+- Args:
+  - `task`: short description
+  - `implementer`: `codex` (default) or `claude`
+  - `maxIters`: retries (default 2)
+  - `execute`: true to actually call the implementer (otherwise dry‑run)
+  - `record`: write plan/critique to simple context
+  - `recordFrame`: write a real frame + anchors
+- Env defaults: `STACKMEMORY_MM_PLANNER_MODEL`, `STACKMEMORY_MM_REVIEWER_MODEL`, `STACKMEMORY_MM_IMPLEMENTER`, `STACKMEMORY_MM_MAX_ITERS`
+
+Example request (tools/call):
+
+```json
+{
+  "method": "tools/call",
+  "params": {
+    "name": "plan_and_code",
+    "arguments": {
+      "task": "Refactor config loader into provider pattern",
+      "implementer": "codex",
+      "maxIters": 2,
+      "execute": true,
+      "recordFrame": true
+    }
+  }
+}
+```
+
+CLI equivalents for quick checks:
+
+```bash
+# Quiet JSON (UI-friendly)
+stackmemory mm-spike --task "Refactor config loader" --json
+
+# Execute implementer and record as frame
+stackmemory skills spike --task "Refactor" --execute --max-iters 3 --json --record-frame
+```
+
 ## Open-Source Local Mode
 
 ### Step 1: Clone & Build

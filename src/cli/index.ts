@@ -58,6 +58,10 @@ import { createRetrievalCommands } from './commands/retrieval.js';
 import { createDiscoveryCommands } from './commands/discovery.js';
 import { createModelCommand } from './commands/model.js';
 import { registerSetupCommands } from './commands/setup.js';
+import chalk from 'chalk';
+import * as fs from 'fs';
+import * as path from 'path';
+import { filterPending } from '../integrations/mcp/pending-utils.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
@@ -795,6 +799,306 @@ program.addCommand(createModelCommand());
 
 // Register setup and diagnostic commands
 registerSetupCommands(program);
+
+// Multi-modal spike: planner (Claude), implementer (Codex), critic (Claude)
+program
+  .command('mm-spike')
+  .description(
+    'Run multi-agent planning/implementation spike (planner/implementer/critic)'
+  )
+  .option(
+    '-t, --task <desc>',
+    'Task description',
+    'Add multi-agent spike harness'
+  )
+  .option(
+    '--planner-model <name>',
+    'Claude model for planning',
+    'claude-3-5-sonnet-latest'
+  )
+  .option(
+    '--reviewer-model <name>',
+    'Claude model for review',
+    'claude-3-5-sonnet-latest'
+  )
+  .option(
+    '--execute',
+    'Execute implementer (codex-sm) instead of dry-run',
+    false
+  )
+  .option('--implementer <name>', 'codex|claude', 'codex')
+  .option('--max-iters <n>', 'Retry loop iterations', '2')
+  .option('--audit-dir <path>', 'Persist spike results to directory')
+  .option('--record-frame', 'Record as real frame with anchors', false)
+  .option('--record', 'Record plan & critique into StackMemory context', false)
+  .option('--json', 'Emit single JSON result (UI-friendly)', false)
+  .option('--quiet', 'Minimal output (default)', true)
+  .option('--verbose', 'Verbose sectioned output', false)
+  .option(
+    '--log',
+    'Pretty print interaction log (planner/implementer/critic)',
+    false
+  )
+  .action(async (opts) => {
+    try {
+      const { runSpike } =
+        await import('../orchestrators/multimodal/harness.js');
+      const result = await runSpike(
+        {
+          task: opts.task,
+          repoPath: process.cwd(),
+        },
+        {
+          plannerModel: opts.plannerModel,
+          reviewerModel: opts.reviewerModel,
+          implementer: opts.implementer,
+          maxIters: parseInt(opts.maxIters),
+          dryRun: !opts.execute,
+          auditDir: opts.auditDir,
+          recordFrame: Boolean(opts.recordFrame),
+          record: Boolean(opts.record),
+        }
+      );
+
+      if (opts.log) {
+        printInteractionLog(
+          {
+            task: opts.task,
+            plannerModel: opts.plannerModel,
+            reviewerModel: opts.reviewerModel,
+            implementer: opts.implementer,
+            execute: Boolean(opts.execute),
+          },
+          result
+        );
+        return;
+      }
+
+      if (opts.json) {
+        console.log(JSON.stringify(result));
+        return;
+      }
+      if (opts.verbose) {
+        console.log('\n=== Plan ===');
+        console.log(JSON.stringify(result.plan, null, 2));
+        console.log('\n=== Iterations ===');
+        (result.iterations || []).forEach((it, i) => {
+          console.log(`\n[Attempt ${i + 1}] ${it.command}`);
+          console.log('OK:', it.ok);
+          console.log('Critique:', JSON.stringify(it.critique));
+        });
+        console.log('\n=== Implementation ===');
+        console.log(JSON.stringify(result.implementation, null, 2));
+        console.log('\n=== Critique ===');
+        console.log(JSON.stringify(result.critique, null, 2));
+      } else if (!opts.quiet) {
+        // brief human-readable summary
+        console.log(
+          `Plan steps: ${result.plan.steps.length}, Approved: ${result.critique.approved}`
+        );
+      }
+    } catch (error) {
+      console.error('mm-spike failed:', (error as Error).message);
+      process.exit(1);
+    }
+  });
+
+function printInteractionLog(
+  meta: {
+    task: string;
+    plannerModel: string;
+    reviewerModel: string;
+    implementer: string;
+    execute: boolean;
+  },
+  result: any
+) {
+  const divider = chalk.gray(
+    '────────────────────────────────────────────────'
+  );
+  console.log(chalk.cyan.bold('\nPlan & Code Session'));
+  console.log(`${chalk.gray('Task:')} ${meta.task}`);
+  console.log(`${chalk.gray('Planner:')} ${meta.plannerModel}`);
+  console.log(`${chalk.gray('Reviewer:')} ${meta.reviewerModel}`);
+  console.log(
+    `${chalk.gray('Implementer:')} ${meta.implementer} ${
+      meta.execute ? chalk.green('(execute)') : chalk.yellow('(dry-run)')
+    }`
+  );
+  console.log(divider);
+
+  // Plan summary
+  if (result?.plan) {
+    console.log(
+      chalk.bold('Plan Summary: '),
+      result.plan.summary || '(no summary)'
+    );
+    const steps = Array.isArray(result.plan.steps)
+      ? result.plan.steps.slice(0, 6)
+      : [];
+    if (steps.length) {
+      console.log(chalk.bold('\nSteps:'));
+      steps.forEach((s: any, idx: number) => {
+        console.log(`${chalk.gray(String(idx + 1) + '.')} ${s.title || s.id}`);
+        const ac = Array.isArray(s.acceptanceCriteria)
+          ? s.acceptanceCriteria
+          : [];
+        if (ac.length) {
+          ac.slice(0, 3).forEach((c: string) =>
+            console.log(chalk.gray(`   - ${c}`))
+          );
+          if (ac.length > 3) console.log(chalk.gray('   - ...'));
+        }
+      });
+    }
+    if (Array.isArray(result.plan.risks) && result.plan.risks.length) {
+      console.log(chalk.bold('\nRisks:'));
+      result.plan.risks
+        .slice(0, 5)
+        .forEach((r: string) => console.log(chalk.gray(` - ${r}`)));
+    }
+  }
+
+  console.log(`\n${divider}`);
+  const iters = Array.isArray(result?.iterations) ? result.iterations : [];
+  if (iters.length) {
+    iters.forEach((it: any, i: number) => {
+      console.log(chalk.magenta(`Attempt ${i + 1}`));
+      console.log(`${chalk.gray('Command:')} ${it.command}`);
+      console.log(
+        `${chalk.gray('OK:')} ${it.ok ? chalk.green('true') : chalk.red('false')}`
+      );
+      const issues = it?.critique?.issues || [];
+      const sugg = it?.critique?.suggestions || [];
+      if (issues.length) {
+        console.log(chalk.bold('Issues:'));
+        issues
+          .slice(0, 5)
+          .forEach((x: string) => console.log(chalk.red(` - ${x}`)));
+      }
+      if (sugg.length) {
+        console.log(chalk.bold('Suggestions:'));
+        sugg
+          .slice(0, 5)
+          .forEach((x: string) => console.log(chalk.yellow(` - ${x}`)));
+      }
+      console.log(divider);
+    });
+  }
+
+  const approved = !!result?.critique?.approved;
+  console.log(
+    `${chalk.bold('Final:')} ${
+      approved ? chalk.green('Approved') : chalk.yellow('Needs changes')
+    }`
+  );
+  console.log('');
+}
+
+// Pending approvals: list with optional filters (CLI helper)
+program
+  .command('pending:list')
+  .description(
+    'List pending approval-gated plans (from .stackmemory/mm-spike/pending.json)'
+  )
+  .option('--task-contains <substr>', 'Filter tasks containing this substring')
+  .option('--older-than-ms <number>', 'Only items older than this age (ms)')
+  .option('--newer-than-ms <number>', 'Only items newer than this age (ms)')
+  .option('--sort <asc|desc>', 'Sort by createdAt', 'desc')
+  .option('--limit <number>', 'Max items to return', '20')
+  .option('--pretty', 'Pretty-print JSON output', false)
+  .action(async (opts) => {
+    try {
+      const storePath = path.join(
+        process.cwd(),
+        '.stackmemory',
+        'mm-spike',
+        'pending.json'
+      );
+      let pending: Record<string, any> = {};
+      if (fs.existsSync(storePath)) {
+        try {
+          pending = JSON.parse(fs.readFileSync(storePath, 'utf-8'));
+        } catch {}
+      }
+      const items = Object.entries(pending).map(([approvalId, data]) => ({
+        approvalId,
+        task: (data as any)?.task as string,
+        createdAt: Number((data as any)?.createdAt || 0) || null,
+      }));
+      const filters = {
+        taskContains: opts.taskContains as string | undefined,
+        olderThanMs: opts.olderThanMs ? Number(opts.olderThanMs) : undefined,
+        newerThanMs: opts.newerThanMs ? Number(opts.newerThanMs) : undefined,
+        sort: (opts.sort as 'asc' | 'desc') || undefined,
+        limit: opts.limit ? Number(opts.limit) : undefined,
+      };
+      const out = filterPending(items, filters);
+      console.log(
+        JSON.stringify({ ok: true, pending: out }, null, opts.pretty ? 2 : 0)
+      );
+    } catch (error) {
+      console.error(
+        JSON.stringify({ ok: false, error: (error as Error).message })
+      );
+      process.exit(1);
+    }
+  });
+
+// Lightweight planner: output only plan (JSON-friendly)
+program
+  .command('plan')
+  .description('Generate an implementation plan (no code execution)')
+  .option('-t, --task <desc>', 'Task description', 'Plan a small change')
+  .option(
+    '--planner-model <name>',
+    'Claude model for planning',
+    'claude-3-5-sonnet-latest'
+  )
+  .option('--json', 'Emit JSON (default)', true)
+  .option('--pretty', 'Pretty-print JSON', false)
+  .option(
+    '--compact',
+    'Compact output (summary + step titles + criteria)',
+    false
+  )
+  .action(async (opts) => {
+    try {
+      const { runPlanOnly } =
+        await import('../orchestrators/multimodal/harness.js');
+      const plan = await runPlanOnly(
+        { task: opts.task, repoPath: process.cwd() },
+        { plannerModel: opts.plannerModel }
+      );
+      const typedPlan = plan as {
+        summary?: string;
+        steps?: Array<{
+          id: string;
+          title: string;
+          acceptanceCriteria: string[];
+        }>;
+        risks?: string[];
+      };
+      const compacted = opts.compact
+        ? {
+            summary: typedPlan?.summary,
+            steps: Array.isArray(typedPlan?.steps)
+              ? typedPlan.steps.map((s) => ({
+                  id: s.id,
+                  title: s.title,
+                  acceptanceCriteria: s.acceptanceCriteria,
+                }))
+              : [],
+            risks: typedPlan?.risks,
+          }
+        : plan;
+      const payload = JSON.stringify(compacted, null, opts.pretty ? 2 : 0);
+      console.log(payload);
+    } catch (error) {
+      console.error('plan failed:', (error as Error).message);
+      process.exit(1);
+    }
+  });
 
 // Register dashboard command
 program

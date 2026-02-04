@@ -87,7 +87,9 @@
     "sync:start": "node scripts/background-sync-manager.js",
     "sync:setup": "./scripts/setup-background-sync.sh",
     "prepare": "echo 'Prepare step completed'",
-    "verify:dist": "node scripts/verify-dist.cjs"
+    "verify:dist": "node scripts/verify-dist.cjs",
+    "rebuild:native": "npm rebuild better-sqlite3 || true",
+    "deps:reset": "rm -rf node_modules package-lock.json && npm ci"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.71.2",

@@ -6,33 +6,17 @@
 
 import {
   trace,
-  Trace,
-  TraceClass,
   enableVerboseTracing,
   createTracedDatabase,
   traceStep,
 } from './index.js';
-import { logger } from '../monitoring/logger.js';
-// Type-safe environment variable access
-function getEnv(key: string, defaultValue?: string): string {
-  const value = process.env[key];
-  if (value === undefined) {
-    if (defaultValue !== undefined) return defaultValue;
-    throw new Error(`Environment variable ${key} is required`);
-  }
-  return value;
-}
-
-function getOptionalEnv(key: string): string | undefined {
-  return process.env[key];
-}
 
 // Example class with tracing
 // @TraceClass() - decorators not enabled in tsconfig
 class ExampleService {
-  private data: Map<string, any> = new Map();
+  private data: Map<string, unknown> = new Map();
 
-  async fetchData(id: string): Promise<any> {
+  async fetchData(id: string): Promise<Record<string, unknown>> {
     // Simulate API call
     await this.delay(50);
 
@@ -43,7 +27,9 @@ class ExampleService {
     return { id, value: Math.random() };
   }
 
-  async processData(data: any): Promise<any> {
+  async processData(
+    data: Record<string, unknown>
+  ): Promise<Record<string, unknown>> {
     return traceStep('Data validation', async () => {
       await this.delay(20);
 
@@ -62,7 +48,7 @@ class ExampleService {
     });
   }
 
-  cacheData(key: string, value: any): void {
+  cacheData(key: string, value: unknown): void {
     trace.traceSync('function', 'cacheData', { key, value }, () => {
       this.data.set(key, value);
     });
@@ -161,7 +147,7 @@ async function runDemo() {
 
       try {
         await service.fetchData('error');
-      } catch (error: unknown) {
+      } catch {
         console.log('Error properly traced and handled\n');
       }
     });

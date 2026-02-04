@@ -5,7 +5,6 @@
  */
 
 import { RalphStackMemoryBridge } from './bridge/ralph-stackmemory-bridge.js';
-import { logger } from '../../core/monitoring/logger.js';
 import { RalphStackMemoryConfig } from './types.js';
 
 class RalphIntegrationDemo {
@@ -60,9 +59,12 @@ class RalphIntegrationDemo {
       await this.demonstrateMetrics();
 
       console.log('\n✅ Demo completed successfully!\n');
-    } catch (error: any) {
-      console.error('\n❌ Demo failed:', error.message);
-      throw error;
+    } catch (err: unknown) {
+      console.error(
+        '\n❌ Demo failed:',
+        err instanceof Error ? err.message : err
+      );
+      throw err;
     } finally {
       await this.cleanup();
     }
@@ -158,9 +160,6 @@ class RalphIntegrationDemo {
     console.log('\n🚑 Phase 3: Crash Recovery');
     console.log('===========================');
 
-    // Simulate getting session ID
-    const sessionId = 'demo-session-123';
-
     try {
       console.log('🔄 Simulating session rehydration...');
 
@@ -177,8 +176,10 @@ class RalphIntegrationDemo {
       console.log('  - State reconciled: 0.3s');
       console.log('  - Memory usage: 45MB');
       console.log('  - Cache hit rate: 78%');
-    } catch (error: any) {
-      console.log(`⚠️  Recovery simulation: ${error.message}`);
+    } catch (err: unknown) {
+      console.log(
+        `⚠️  Recovery simulation: ${err instanceof Error ? err.message : err}`
+      );
     }
   }
 
@@ -227,10 +228,10 @@ async function main() {
 
   try {
     await demo.run();
-  } catch (error: any) {
-    console.error('Demo failed:', error.message);
-    if (process.env.DEBUG) {
-      console.error(error.stack);
+  } catch (err: unknown) {
+    console.error('Demo failed:', err instanceof Error ? err.message : err);
+    if (process.env.DEBUG && err instanceof Error) {
+      console.error(err.stack);
     }
     process.exit(1);
   }

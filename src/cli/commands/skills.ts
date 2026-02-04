@@ -29,6 +29,7 @@ import {
   DatabaseError,
   ErrorCode,
 } from '../../core/errors/index.js';
+import { version as VERSION } from '../../version.js';
 
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
@@ -355,7 +356,145 @@ export function createSkillsCommand(): Command {
       }
     });
 
+  // Multi-modal spike (planner/implementer/critic)
+  skillsCmd
+    .command('spike')
+    .description(
+      'Run multi-agent spike (planner: Claude, implementer: Codex/Claude, critic: Claude)'
+    )
+    .option('-t, --task <desc>', 'Task description', 'Spike harness')
+    .option(
+      '--planner-model <name>',
+      'Claude model for planning',
+      'claude-3-5-sonnet-latest'
+    )
+    .option(
+      '--reviewer-model <name>',
+      'Claude model for review',
+      'claude-3-5-sonnet-latest'
+    )
+    .option('--implementer <name>', 'codex|claude', 'codex')
+    .option('--max-iters <n>', 'Retry loop iterations', '2')
+    .option(
+      '--execute',
+      'Execute implementer (codex-sm) instead of dry-run',
+      false
+    )
+    .option('--audit-dir <path>', 'Persist spike results to directory')
+    .option('--record-frame', 'Record as real frame with anchors', false)
+    .option(
+      '--record',
+      'Record plan & critique into StackMemory context',
+      false
+    )
+    .option('--json', 'Emit single JSON result (UI-friendly)', false)
+    .option('--quiet', 'Minimal output (default)', true)
+    .option('--verbose', 'Verbose sectioned output', false)
+    .action(async (options) => {
+      const spinner = ora('Planning with Claude...').start();
+
+      try {
+        const { runSpike } =
+          await import('../../orchestrators/multimodal/harness.js');
+        const result = await runSpike(
+          {
+            task: options.task,
+            repoPath: process.cwd(),
+          },
+          {
+            plannerModel: options.plannerModel,
+            reviewerModel: options.reviewerModel,
+            implementer: options.implementer,
+            maxIters: parseInt(options.maxIters),
+            dryRun: !options.execute,
+            auditDir: options.auditDir,
+            recordFrame: Boolean(options.recordFrame),
+            record: Boolean(options.record),
+          }
+        );
+
+        spinner.stop();
+
+        if (options.json) {
+          console.log(JSON.stringify(result));
+        } else if (options.verbose) {
+          console.log(chalk.gray(`StackMemory v${VERSION}`));
+          console.log(chalk.cyan('\n=== Plan ==='));
+          console.log(JSON.stringify(result.plan, null, 2));
+          console.log(chalk.cyan('\n=== Iterations ==='));
+          (result.iterations || []).forEach((it, idx) => {
+            console.log(chalk.gray(`\n-- Attempt ${idx + 1} --`));
+            console.log(`Command: ${it.command}`);
+            console.log(`OK: ${it.ok}`);
+            console.log('Critique:', JSON.stringify(it.critique));
+          });
+          console.log(chalk.cyan('\n=== Final ==='));
+          console.log(JSON.stringify(result.implementation, null, 2));
+          console.log(chalk.cyan('\n=== Critique ==='));
+          console.log(JSON.stringify(result.critique, null, 2));
+        } else if (!options.quiet) {
+          console.log(
+            `Plan steps: ${result.plan.steps.length}, Approved: ${result.critique.approved}`
+          );
+        }
+
+        if (!result.implementation.success) process.exitCode = 1;
+      } catch (error: any) {
+        spinner.stop();
+        console.error(chalk.red('Spike failed:'), error?.message || error);
+        process.exit(1);
+      }
+    });
+
   // Context Archaeologist skill command
+  // Lightweight planning helper
+  skillsCmd
+    .command('plan <task>')
+    .description('Generate an implementation plan (no code execution)')
+    .option(
+      '--planner-model <name>',
+      'Claude model for planning',
+      'claude-3-5-sonnet-latest'
+    )
+    .option('--json', 'Emit JSON (default)', true)
+    .option('--pretty', 'Pretty-print JSON', false)
+    .option(
+      '--compact',
+      'Compact output (summary + step titles + criteria)',
+      false
+    )
+    .action(async (task, options) => {
+      const spinner = ora('Planning with Claude...').start();
+      try {
+        const { runPlanOnly } =
+          await import('../../orchestrators/multimodal/harness.js');
+        const plan = await runPlanOnly(
+          { task, repoPath: process.cwd() },
+          { plannerModel: options.plannerModel }
+        );
+        spinner.stop();
+        const compacted = options.compact
+          ? {
+              summary: plan?.summary,
+              steps: Array.isArray((plan as any)?.steps)
+                ? (plan as any).steps.map((s: any) => ({
+                    id: s.id,
+                    title: s.title,
+                    acceptanceCriteria: s.acceptanceCriteria,
+                  }))
+                : [],
+              risks: (plan as any)?.risks,
+            }
+          : plan;
+        const payload = JSON.stringify(compacted, null, options.pretty ? 2 : 0);
+        console.log(payload);
+      } catch (error: any) {
+        spinner.stop();
+        console.error(chalk.red('Plan failed:'), error?.message || error);
+        process.exit(1);
+      }
+    });
+
   skillsCmd
     .command('dig <query>')
     .description('Deep historical context retrieval')

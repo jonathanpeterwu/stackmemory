@@ -3,19 +3,31 @@
  */
 
 import LocalStackMemoryMCP from './server';
-import { Server } from '@modelcontextprotocol/sdk/server/index.js';
+
+// Type for accessing private members in tests
+interface MCPTestInstance {
+  traceDetector: {
+    addToolCall: (call: {
+      id: string;
+      tool: string;
+      timestamp: number;
+      arguments: Record<string, unknown>;
+    }) => void;
+    flush: () => void;
+  };
+  handleGetTraceStatistics: (
+    args: Record<string, unknown>
+  ) => Promise<{ content: Array<{ text: string }> }>;
+  handleGetTraces: (args: {
+    limit: number;
+  }) => Promise<{ content: Array<{ text: string }> }>;
+}
 
 async function testTraceIntegration() {
   console.log('🧪 Testing Trace Detection in MCP Server\n');
 
-  // Mock minimal server setup
-  const mockServer = {
-    setRequestHandler: () => {},
-    connect: () => Promise.resolve(),
-  } as any;
-
   // Access the private methods through prototype
-  const MCPClass = LocalStackMemoryMCP as any;
+  const MCPClass = LocalStackMemoryMCP as unknown as new () => MCPTestInstance;
   const mcp = new MCPClass();
 
   // Simulate tool calls directly on the trace detector
