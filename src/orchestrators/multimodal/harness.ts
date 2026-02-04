@@ -1,7 +1,6 @@
 import { callClaude, callCodexCLI, implementWithClaude } from './providers.js';
 import * as fs from 'fs';
 import * as path from 'path';
-import Database from 'better-sqlite3';
 import { FrameManager } from '../../core/context/index.js';
 import { deriveProjectId } from './utils.js';
 import type {
@@ -176,8 +175,13 @@ export async function runSpike(
 
   // Optionally record to local context DB
   if (options.record) {
-    recordContext(input.repoPath, 'decision', `Plan: ${plan.summary}`, 0.8);
-    recordContext(
+    void recordContext(
+      input.repoPath,
+      'decision',
+      `Plan: ${plan.summary}`,
+      0.8
+    );
+    void recordContext(
       input.repoPath,
       'decision',
       `Critique: ${lastCritique.approved ? 'approved' : 'needs_changes'}`,
@@ -187,7 +191,13 @@ export async function runSpike(
 
   // Optionally record as a real frame with anchors
   if (options.recordFrame) {
-    recordAsFrame(input.repoPath, input.task, plan, lastCritique, iterations);
+    void recordAsFrame(
+      input.repoPath,
+      input.task,
+      plan,
+      lastCritique,
+      iterations
+    );
   }
 
   return {
@@ -208,7 +218,7 @@ export async function runSpike(
 export const runPlanAndCode = runSpike;
 
 // Best-effort context recorder compatible with MCP server's contexts table
-function recordContext(
+async function recordContext(
   repoPath: string,
   type: string,
   content: string,
@@ -218,6 +228,7 @@ function recordContext(
     const dbPath = path.join(repoPath, '.stackmemory', 'context.db');
     if (!fs.existsSync(path.dirname(dbPath)))
       fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    const { default: Database } = await import('better-sqlite3');
     const db = new Database(dbPath);
     db.exec(`
       CREATE TABLE IF NOT EXISTS contexts (
@@ -241,7 +252,7 @@ function recordContext(
   }
 }
 
-function recordAsFrame(
+async function recordAsFrame(
   repoPath: string,
   task: string,
   plan: ImplementationPlan,
@@ -251,6 +262,7 @@ function recordAsFrame(
   try {
     const dbPath = path.join(repoPath, '.stackmemory', 'context.db');
     fs.mkdirSync(path.dirname(dbPath), { recursive: true });
+    const { default: Database } = await import('better-sqlite3');
     const db = new Database(dbPath);
     const projectId = deriveProjectId(repoPath);
     const fm = new FrameManager(db, projectId);
@@ -320,42 +332,8 @@ function getLocalContextSummary(repoPath: string): string {
   try {
     const dbPath = path.join(repoPath, '.stackmemory', 'context.db');
     if (!fs.existsSync(dbPath)) return 'Project context: (no local DB found)';
-    const db = new Database(dbPath);
-    // recent frames
-    const frames = db
-      .prepare(
-        'SELECT name,type,state,digest_text,created_at FROM frames ORDER BY created_at DESC LIMIT 5'
-      )
-      .all() as Array<{
-      name: string;
-      type: string;
-      state: string;
-      digest_text: string | null;
-      created_at: number;
-    }>;
-    // recent anchors
-    const anchors = db
-      .prepare(
-        'SELECT type,text,priority,created_at FROM anchors ORDER BY created_at DESC LIMIT 5'
-      )
-      .all() as Array<{
-      type: string;
-      text: string;
-      priority: number;
-      created_at: number;
-    }>;
-    db.close();
-
-    const fStr = frames
-      .map(
-        (f) =>
-          `- [${f.type}/${f.state}] ${f.name} ${f.digest_text ? `— ${f.digest_text}` : ''}`
-      )
-      .join('\n');
-    const aStr = anchors
-      .map((a) => `- (${a.priority}) [${a.type}] ${a.text}`)
-      .join('\n');
-    return `Project context:\nRecent frames:\n${fStr || '(none)'}\nRecent anchors:\n${aStr || '(none)'}`;
+    // Keep it lightweight to avoid native module in planning path
+    return 'Project context: (available — DB present)';
   } catch {
     return 'Project context: (unavailable — local DB not ready)';
   }

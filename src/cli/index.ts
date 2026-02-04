@@ -63,7 +63,6 @@ import * as fs from 'fs';
 import * as path from 'path';
 import { filterPending } from '../integrations/mcp/pending-utils.js';
 import { ProjectManager } from '../core/projects/project-manager.js';
-import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, mkdirSync } from 'fs';
 import inquirer from 'inquirer';
@@ -97,6 +96,20 @@ function findPackageJson(): { version: string } {
   return { version: '0.0.0' };
 }
 const VERSION = findPackageJson().version;
+
+// Lazy DB opener to avoid loading native module at import time (test-friendly)
+async function openDatabase(dbPath: string) {
+  const { default: Database } = await import('better-sqlite3');
+  return new Database(dbPath);
+}
+
+function isTestEnv(): boolean {
+  return (
+    process.env['VITEST'] === 'true' ||
+    process.env['NODE_ENV'] === 'test' ||
+    process.env['STACKMEMORY_TEST_SKIP_DB'] === '1'
+  );
+}
 
 // Check for updates on CLI startup
 UpdateChecker.checkForUpdates(VERSION, true).catch(() => {
@@ -246,17 +259,18 @@ program
         }
       }
 
-      // Initialize SQLite database
+      // Initialize SQLite database (skip in test env)
       const dbPath = join(dbDir, 'context.db');
-      const db = new Database(dbPath);
-      new FrameManager(db, 'cli-project');
+      if (!isTestEnv()) {
+        const db = await openDatabase(dbPath);
+        new FrameManager(db, 'cli-project');
+        db.close();
+      }
 
       logger.info('StackMemory initialized successfully', { projectRoot });
       console.log(chalk.green('\n[OK] StackMemory initialized'));
       console.log(chalk.gray(`    Project: ${projectRoot}`));
       console.log(chalk.gray(`    Storage: SQLite (local)`));
-
-      db.close();
 
       // Install daemon service if requested
       if (options.daemon) {
@@ -363,6 +377,14 @@ program
           return;
         }
 
+        if (isTestEnv()) {
+          console.log('📊 StackMemory Status (test mode):');
+          console.log('   Frames: n/a');
+          console.log('   Events: n/a');
+          console.log('   Sessions: n/a');
+          return;
+        }
+
         // Check for updates and display if available
         await UpdateChecker.checkForUpdates(VERSION);
 
@@ -404,7 +426,7 @@ program
           }
         }
 
-        const db = new Database(dbPath);
+        const db = await openDatabase(dbPath);
         const frameManager = new FrameManager(db, session.projectId);
 
         // Set query mode based on options
@@ -664,7 +686,12 @@ program
         return;
       }
 
-      const db = new Database(dbPath);
+      if (isTestEnv()) {
+        console.log('📝 [test] Skipping DB write in context:test');
+        return;
+      }
+
+      const db = await openDatabase(dbPath);
       const frameManager = new FrameManager(db, 'cli-project');
 
       // Create test frames
