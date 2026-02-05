@@ -226,16 +226,18 @@ class ClaudeSM {
     return null;
   }
 
-  private gepaProcess: ReturnType<typeof spawn> | null = null;
+  private gepaProcesses: ReturnType<typeof spawn>[] = [];
 
   private startGEPAWatcher(): void {
-    // Find CLAUDE.md in current directory or project root
-    const claudeMdPath = fs.existsSync(path.join(process.cwd(), 'CLAUDE.md'))
-      ? path.join(process.cwd(), 'CLAUDE.md')
-      : null;
+    // Find CLAUDE.md and AGENT.md in current directory or project root
+    const watchFiles = ['CLAUDE.md', 'AGENT.md']
+      .map((f) => path.join(process.cwd(), f))
+      .filter((p) => fs.existsSync(p));
 
-    if (!claudeMdPath) {
-      console.log(chalk.gray('   Prompt Forge: disabled (no CLAUDE.md found)'));
+    if (watchFiles.length === 0) {
+      console.log(
+        chalk.gray('   Prompt Forge: disabled (no CLAUDE.md or AGENT.md found)')
+      );
       return;
     }
 
@@ -272,35 +274,37 @@ class ClaudeSM {
       return;
     }
 
-    // Start GEPA watcher in background
-    this.gepaProcess = spawn('node', [gepaScript, 'watch', claudeMdPath], {
-      detached: true,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      env: { ...process.env, GEPA_SILENT: '1' },
-    });
+    // Start GEPA watcher for each file
+    for (const filePath of watchFiles) {
+      const gepaProcess = spawn('node', [gepaScript, 'watch', filePath], {
+        detached: true,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: { ...process.env, GEPA_SILENT: '1' },
+      });
 
-    this.gepaProcess.unref();
+      gepaProcess.unref();
+      this.gepaProcesses.push(gepaProcess);
 
-    // Log output from GEPA (non-blocking)
-    this.gepaProcess.stdout?.on('data', (data: Buffer) => {
-      const output = data.toString().trim();
-      if (output && !output.includes('Watching')) {
-        console.log(chalk.magenta(`[GEPA] ${output}`));
-      }
-    });
+      // Log output from GEPA (non-blocking)
+      gepaProcess.stdout?.on('data', (data: Buffer) => {
+        const output = data.toString().trim();
+        if (output && !output.includes('Watching')) {
+          console.log(chalk.magenta(`[GEPA] ${output}`));
+        }
+      });
+    }
 
+    const fileNames = watchFiles.map((f) => path.basename(f)).join(', ');
     console.log(
-      chalk.cyan(
-        `   Prompt Forge: watching ${path.basename(claudeMdPath)} for optimization`
-      )
+      chalk.cyan(`   Prompt Forge: watching ${fileNames} for optimization`)
     );
   }
 
   private stopGEPAWatcher(): void {
-    if (this.gepaProcess) {
-      this.gepaProcess.kill('SIGTERM');
-      this.gepaProcess = null;
+    for (const proc of this.gepaProcesses) {
+      proc.kill('SIGTERM');
     }
+    this.gepaProcesses = [];
   }
 
   private ensureGreptileMcp(): void {
