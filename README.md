@@ -103,7 +103,7 @@ Use these JSON snippets with Claude Code’s MCP “tools/call”. Responses are
 
 - Plan only (no code):
   ```json
-  {"method":"tools/call","params":{"name":"plan_only","arguments":{"task":"Refactor config loader","plannerModel":"claude-3-5-sonnet-latest"}}}
+  {"method":"tools/call","params":{"name":"plan_only","arguments":{"task":"Refactor config loader","plannerModel":"claude-sonnet-4-20250514"}}}
   ```
 
 - Approval‑gated plan (phase 1):
@@ -124,7 +124,7 @@ Use these JSON snippets with Claude Code’s MCP “tools/call”. Responses are
   ```
 
 Env defaults (optional):
-- `STACKMEMORY_MM_PLANNER_MODEL` (e.g., `claude-3-5-sonnet-latest` or `claude-3-opus-latest`)
+- `STACKMEMORY_MM_PLANNER_MODEL` (e.g., `claude-sonnet-4-20250514`)
 - `STACKMEMORY_MM_REVIEWER_MODEL` (defaults to planner if unset)
 - `STACKMEMORY_MM_IMPLEMENTER` (`codex` or `claude`)
 - `STACKMEMORY_MM_MAX_ITERS` (e.g., `2`)
@@ -414,7 +414,7 @@ See https://github.com/stackmemoryai/stackmemory/blob/main/docs/roadmap.md for o
 - [Agent Instructions](./AGENTS.md) - Specific guidance for AI agents working with ML systems
 
 ### Documentation
-
+- [Vision](./vision.md) - Product vision, principles, roadmap, metrics
 - [Product Requirements](./PRD.md) - Detailed product specifications
 - [Technical Architecture](./TECHNICAL_ARCHITECTURE.md) - System design and database schemas
 - [Beads Integration](./BEADS_INTEGRATION.md) - Git-native memory patterns from Beads ecosystem

@@ -20,7 +20,7 @@ The `plan_and_code` MCP tool lets Claude Code trigger StackMemory’s multi‑ag
 
 ## Environment defaults
 If not specified in arguments, the MCP handler reads these env vars:
-- `STACKMEMORY_MM_PLANNER_MODEL` (e.g., `claude-3-5-sonnet-latest`)
+- `STACKMEMORY_MM_PLANNER_MODEL` (e.g., `claude-sonnet-4-20250514`)
 - `STACKMEMORY_MM_REVIEWER_MODEL` (defaults to planner model if unset)
 - `STACKMEMORY_MM_IMPLEMENTER` (`codex` or `claude`)
 - `STACKMEMORY_MM_MAX_ITERS` (e.g., `3`)
@@ -98,7 +98,7 @@ Request (tools/call):
     "name": "plan_gate",
     "arguments": {
       "task": "Refactor config loader into provider pattern",
-      "plannerModel": "claude-3-5-sonnet-latest"
+      "plannerModel": "claude-sonnet-4-20250514"
     }
   }
 }

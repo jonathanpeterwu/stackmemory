@@ -460,7 +460,7 @@ export function createRalphCommand(): Command {
     .option(
       '--workers <models>',
       'Comma-separated worker models',
-      'claude-3-haiku-20240307'
+      'claude-3-5-haiku-20241022'
     )
     .option('--budget <amount>', 'Cost budget in USD', '10.0')
     .option('--max-workers <count>', 'Maximum worker agents', '5')

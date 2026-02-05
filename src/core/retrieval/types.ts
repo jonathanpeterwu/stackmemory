@@ -285,7 +285,7 @@ export const DEFAULT_RETRIEVAL_CONFIG: RetrievalConfig = {
   enableFallback: true,
   llmConfig: {
     provider: 'anthropic',
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-3-5-haiku-20241022',
     maxTokens: 1024,
     temperature: 0.3,
   },

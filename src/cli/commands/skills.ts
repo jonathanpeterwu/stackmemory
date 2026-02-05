@@ -366,12 +366,12 @@ export function createSkillsCommand(): Command {
     .option(
       '--planner-model <name>',
       'Claude model for planning',
-      'claude-3-5-sonnet-latest'
+      'claude-sonnet-4-20250514'
     )
     .option(
       '--reviewer-model <name>',
       'Claude model for review',
-      'claude-3-5-sonnet-latest'
+      'claude-sonnet-4-20250514'
     )
     .option('--implementer <name>', 'codex|claude', 'codex')
     .option('--max-iters <n>', 'Retry loop iterations', '2')
@@ -454,7 +454,7 @@ export function createSkillsCommand(): Command {
     .option(
       '--planner-model <name>',
       'Claude model for planning',
-      'claude-3-5-sonnet-latest'
+      'claude-sonnet-4-20250514'
     )
     .option('--json', 'Emit JSON (default)', true)
     .option('--pretty', 'Pretty-print JSON', false)

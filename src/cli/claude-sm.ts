@@ -1056,10 +1056,17 @@ class ClaudeSM {
           claudeArgs,
         });
       } catch (error) {
-        console.error(chalk.red((error as Error).message));
-        process.exit(1);
+        // If PTY wrapper fails (e.g., node-pty missing), fall back to direct launch
+        const msg = (error as Error).message || 'Unknown PTY error';
+        console.error(chalk.yellow(`[Sweep disabled] ${msg}`));
+        console.log(
+          chalk.gray(
+            'Falling back to direct Claude launch (no prediction bar)...'
+          )
+        );
+        // Disable Sweep for this session and continue below
+        this.config.useSweep = false;
       }
-      return;
     }
 
     console.log(chalk.gray('Starting Claude...'));

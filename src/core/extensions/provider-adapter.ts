@@ -546,7 +546,7 @@ export class ClaudeAdapter implements ProviderAdapter {
           'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
-          model: 'claude-3-haiku-20240307',
+          model: 'claude-3-5-haiku-20241022',
           max_tokens: 1,
           messages: [{ role: 'user', content: 'hi' }],
         }),
@@ -561,11 +561,8 @@ export class ClaudeAdapter implements ProviderAdapter {
     return [
       'claude-opus-4-20250514',
       'claude-sonnet-4-20250514',
-      'claude-3-5-sonnet-20241022',
       'claude-3-5-haiku-20241022',
       'claude-3-opus-20240229',
-      'claude-3-sonnet-20240229',
-      'claude-3-haiku-20240307',
     ];
   }
 

@@ -32,7 +32,7 @@ oracle: {
 }
 
 workers: [{
-  model: 'claude-3-haiku-20240307', 
+  model: 'claude-3-5-haiku-20241022', 
   costPerToken: 0.00025, // $0.25/1M tokens
   capabilities: ['code_implementation', 'testing']
 }]

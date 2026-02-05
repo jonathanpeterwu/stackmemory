@@ -58,6 +58,7 @@ import { createRetrievalCommands } from './commands/retrieval.js';
 import { createDiscoveryCommands } from './commands/discovery.js';
 import { createModelCommand } from './commands/model.js';
 import { registerSetupCommands } from './commands/setup.js';
+import { createPingCommand } from './commands/ping.js';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -812,6 +813,7 @@ program.addCommand(createAPICommand());
 program.addCommand(createCleanupProcessesCommand());
 program.addCommand(createAutoBackgroundCommand());
 program.addCommand(createSettingsCommand());
+program.addCommand(createPingCommand());
 
 // Register WhatsApp/SMS commands (lazy-loaded, optional)
 if (isFeatureEnabled('whatsapp')) {
@@ -844,12 +846,12 @@ program
   .option(
     '--planner-model <name>',
     'Claude model for planning',
-    'claude-3-5-sonnet-latest'
+    'claude-sonnet-4-20250514'
   )
   .option(
     '--reviewer-model <name>',
     'Claude model for review',
-    'claude-3-5-sonnet-latest'
+    'claude-sonnet-4-20250514'
   )
   .option(
     '--execute',
@@ -947,12 +949,12 @@ program
   .option(
     '--planner-model <name>',
     'Claude model for planning',
-    'claude-3-5-sonnet-latest'
+    'claude-sonnet-4-20250514'
   )
   .option(
     '--reviewer-model <name>',
     'Claude model for review',
-    'claude-3-5-sonnet-latest'
+    'claude-sonnet-4-20250514'
   )
   .option('--execute', 'Execute implementer (default: true)', true)
   .option('--dry-run', 'Skip execution, show commands only')
@@ -965,6 +967,7 @@ program
   .option('--quiet', 'Minimal output')
   .option('--verbose', 'Verbose sectioned output')
   .option('--log', 'Pretty print interaction log (default: true)', true)
+  .option('-C, --cwd <path>', 'Working directory for implementation')
   .action(async (taskArg, opts) => {
     try {
       // Resolve task from positional arg or --task option
@@ -986,8 +989,25 @@ program
       const { runSpike } =
         await import('../orchestrators/multimodal/harness.js');
       const dryRun = opts.dryRun === true || opts.execute === false;
+
+      // Find git root for proper working directory
+      const findGitRoot = (startDir: string): string => {
+        let dir = startDir;
+        while (dir !== '/') {
+          if (existsSync(join(dir, '.git'))) {
+            return dir;
+          }
+          dir = path.dirname(dir);
+        }
+        return startDir;
+      };
+      // Use --cwd if provided, otherwise find git root from cwd
+      const repoPath = opts.cwd
+        ? path.resolve(opts.cwd)
+        : findGitRoot(process.cwd());
+
       const result = await runSpike(
-        { task, repoPath: process.cwd() },
+        { task, repoPath },
         {
           plannerModel: opts.plannerModel,
           reviewerModel: opts.reviewerModel,
@@ -1181,7 +1201,7 @@ program
   .option(
     '--planner-model <name>',
     'Claude model for planning',
-    'claude-3-5-sonnet-latest'
+    'claude-sonnet-4-20250514'
   )
   .option('--json', 'Emit JSON (default)', true)
   .option('--pretty', 'Pretty-print JSON', false)

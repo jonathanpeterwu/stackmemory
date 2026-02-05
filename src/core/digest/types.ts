@@ -150,7 +150,7 @@ export const DEFAULT_DIGEST_CONFIG: DigestConfig = {
   retryDelayMs: 1000,
   llmConfig: {
     provider: 'anthropic',
-    model: 'claude-3-haiku-20240307',
+    model: 'claude-3-5-haiku-20241022',
     temperature: 0.2, // Lower for more consistent output
   },
 };

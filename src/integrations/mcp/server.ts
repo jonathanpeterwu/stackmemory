@@ -45,6 +45,11 @@ import { LLMContextRetrieval } from '../../core/retrieval/index.js';
 import { DiscoveryHandlers } from './handlers/discovery-handlers.js';
 import { DiffMemHandlers } from './handlers/diffmem-handlers.js';
 import { v4 as uuidv4 } from 'uuid';
+import {
+  DEFAULT_PLANNER_MODEL,
+  DEFAULT_IMPLEMENTER,
+  DEFAULT_MAX_ITERS,
+} from '../../orchestrators/multimodal/constants.js';
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
@@ -1401,17 +1406,19 @@ class LocalStackMemoryMCP {
     const { runSpike } =
       await import('../../orchestrators/multimodal/harness.js');
 
-    // Read defaults from env for planner/implementer config
-    const plannerModel =
-      process.env['STACKMEMORY_MM_PLANNER_MODEL'] || 'claude-3-5-sonnet-latest';
+    // Read defaults for planner/implementer config
+    const envPlanner = process.env['STACKMEMORY_MM_PLANNER_MODEL'];
+    const plannerModel = envPlanner || DEFAULT_PLANNER_MODEL;
     const reviewerModel =
       process.env['STACKMEMORY_MM_REVIEWER_MODEL'] || plannerModel;
     const implementer =
       (args.implementer as string) ||
       process.env['STACKMEMORY_MM_IMPLEMENTER'] ||
-      'codex';
+      DEFAULT_IMPLEMENTER;
     const maxIters = Number(
-      args.maxIters ?? process.env['STACKMEMORY_MM_MAX_ITERS'] ?? 2
+      args.maxIters ??
+        process.env['STACKMEMORY_MM_MAX_ITERS'] ??
+        DEFAULT_MAX_ITERS
     );
     const execute = Boolean(args.execute);
     const record = Boolean(args.record);
@@ -1469,7 +1476,7 @@ class LocalStackMemoryMCP {
     const plannerModel =
       (args.plannerModel as string) ||
       process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
-      'claude-3-5-sonnet-latest';
+      DEFAULT_PLANNER_MODEL;
     const plan = await runPlanOnly(
       { task, repoPath: this.projectRoot },
       { plannerModel }
@@ -1514,7 +1521,7 @@ class LocalStackMemoryMCP {
     const model =
       (args.model as string) ||
       process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
-      'claude-3-5-sonnet-latest';
+      DEFAULT_PLANNER_MODEL;
     const system =
       (args.system as string) ||
       'You are a precise assistant. Return plain text unless asked for JSON.';
@@ -1587,7 +1594,7 @@ class LocalStackMemoryMCP {
     const plannerModel =
       (args.plannerModel as string) ||
       process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
-      'claude-3-5-sonnet-latest';
+      DEFAULT_PLANNER_MODEL;
     const plan = await runPlanOnly(
       { task, repoPath: this.projectRoot },
       { plannerModel }
@@ -1627,9 +1634,11 @@ class LocalStackMemoryMCP {
     const implementer =
       (args.implementer as string) ||
       process.env['STACKMEMORY_MM_IMPLEMENTER'] ||
-      'codex';
+      DEFAULT_IMPLEMENTER;
     const maxIters = Number(
-      args.maxIters ?? process.env['STACKMEMORY_MM_MAX_ITERS'] ?? 2
+      args.maxIters ??
+        process.env['STACKMEMORY_MM_MAX_ITERS'] ??
+        DEFAULT_MAX_ITERS
     );
     const recordFrame = args.recordFrame !== false; // default true
     const execute = args.execute !== false; // default true
@@ -1638,12 +1647,11 @@ class LocalStackMemoryMCP {
       { task: pending.task, repoPath: this.projectRoot },
       {
         plannerModel:
-          process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
-          'claude-3-5-sonnet-latest',
+          process.env['STACKMEMORY_MM_PLANNER_MODEL'] || DEFAULT_PLANNER_MODEL,
         reviewerModel:
           process.env['STACKMEMORY_MM_REVIEWER_MODEL'] ||
           process.env['STACKMEMORY_MM_PLANNER_MODEL'] ||
-          'claude-3-5-sonnet-latest',
+          DEFAULT_PLANNER_MODEL,
         implementer: implementer === 'claude' ? 'claude' : 'codex',
         maxIters: isFinite(maxIters) ? Math.max(1, maxIters) : 2,
         dryRun: !execute,

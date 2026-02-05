@@ -1,9 +1,9 @@
 /**
  * Oracle/Worker Pattern Implementation for StackMemory Swarms
- * 
+ *
  * Uses high-end model (Oracle) for planning, review, and coordination
  * Uses smaller models (Workers) for task execution and implementation
- * 
+ *
  * Cost-effective scaling: Intelligence where needed, efficiency for execution
  */
 
@@ -57,7 +57,7 @@ export class OracleWorkerCoordinator extends SwarmCoordinator {
     reviewerSpent: number;
     totalBudget: number;
   };
-  
+
   constructor(config: OracleWorkerConfig) {
     super({
       maxAgents: config.maxWorkers + 2, // Workers + Oracle + Reviewer
@@ -69,7 +69,7 @@ export class OracleWorkerCoordinator extends SwarmCoordinator {
     this.oracle = config.oracle;
     this.workerPool = config.workers;
     this.reviewerPool = config.reviewers;
-    
+
     this.costTracker = {
       oracleSpent: 0,
       workerSpent: 0,
@@ -101,29 +101,29 @@ export class OracleWorkerCoordinator extends SwarmCoordinator {
       projectDescription,
       taskHints
     );
-    
+
     const decomposition = await this.executeOracleTask(oracleTaskId);
-    
+
     // Phase 2: Worker Assignment
     const workerTasks = this.allocateTasksToWorkers(decomposition);
-    
+
     // Phase 3: Parallel Worker Execution
-    const workerPromises = workerTasks.map(task => 
+    const workerPromises = workerTasks.map((task) =>
       this.executeWorkerTask(task)
     );
-    
+
     // Phase 4: Oracle Review & Coordination
     const reviewTaskId = await this.scheduleOracleReview(decomposition);
-    
+
     // Execute workers in parallel, oracle coordinates
     const [workerResults, reviewResult] = await Promise.all([
       Promise.allSettled(workerPromises),
-      this.executeOracleTask(reviewTaskId)
+      this.executeOracleTask(reviewTaskId),
     ]);
 
     // Phase 5: Final Integration
     const swarmId = await this.integrateResults(workerResults, reviewResult);
-    
+
     this.logCostAnalysis();
     return swarmId;
   }
@@ -137,10 +137,10 @@ export class OracleWorkerCoordinator extends SwarmCoordinator {
     hints?: string[]
   ): Promise<string> {
     const taskId = uuidv4();
-    
+
     const oraclePrompt = this.buildOraclePrompt(type, description, hints);
     const estimatedTokens = this.estimateTokens(oraclePrompt);
-    
+
     logger.info('Oracle task created', {
       taskId,
       type,
@@ -172,7 +172,7 @@ You are the Oracle in an Oracle/Worker pattern. Your role:
 ## Project Context
 ${description}
 
-${hints ? `## Hints & Context\n${hints.map(h => `- ${h}`).join('\n')}` : ''}
+${hints ? `## Hints & Context\n${hints.map((h) => `- ${h}`).join('\n')}` : ''}
 
 ## Your Oracle Responsibilities
 1. **Decompose** this project into discrete, parallelizable tasks
@@ -222,9 +222,11 @@ Remember: Your intelligence is expensive. Focus on high-value strategic thinking
   /**
    * Execute Oracle task with high-end model
    */
-  private async executeOracleTask(taskId: string): Promise<TaskDecomposition[]> {
+  private async executeOracleTask(
+    taskId: string
+  ): Promise<TaskDecomposition[]> {
     logger.info('Executing Oracle task', { taskId });
-    
+
     // Create Ralph loop with Oracle model configuration
     const ralph = new RalphStackMemoryBridge({
       baseDir: `.oracle/${taskId}`,
@@ -234,12 +236,12 @@ Remember: Your intelligence is expensive. Focus on high-value strategic thinking
 
     // Execute with Oracle model (implementation would integrate with actual model APIs)
     const result = await ralph.run();
-    
+
     // Track Oracle costs
     const tokens = this.estimateTokens(result);
     const cost = tokens * this.oracle.costPerToken;
     this.costTracker.oracleSpent += cost;
-    
+
     logger.info('Oracle task completed', {
       taskId,
       tokensUsed: tokens,
@@ -260,10 +262,10 @@ Remember: Your intelligence is expensive. Focus on high-value strategic thinking
     for (const task of decomposition) {
       // Select optimal worker model based on task complexity
       const workerModel = this.selectWorkerForTask(task);
-      
+
       // Create worker-specific prompt
       const workerPrompt = this.buildWorkerPrompt(task, workerModel);
-      
+
       allocatedTasks.push({
         ...task,
         assignedModel: 'worker' as ModelTier,
@@ -289,7 +291,7 @@ Remember: Your intelligence is expensive. Focus on high-value strategic thinking
       return this.workerPool[0];
     } else {
       // Use cheapest worker for simple tasks
-      return this.workerPool.reduce((cheapest, current) => 
+      return this.workerPool.reduce((cheapest, current) =>
         current.costPerToken < cheapest.costPerToken ? current : cheapest
       );
     }
@@ -313,7 +315,7 @@ ${task.type}: ${task.title}
 ${task.description}
 
 ## Success Criteria
-${task.acceptanceCriteria.map(c => `- ${c}`).join('\n')}
+${task.acceptanceCriteria.map((c) => `- ${c}`).join('\n')}
 
 ## Worker Guidelines
 - FOCUS on this specific task only
@@ -336,9 +338,9 @@ Execute your task now.
    * Execute worker task with cost tracking
    */
   private async executeWorkerTask(task: TaskDecomposition): Promise<any> {
-    logger.info('Executing worker task', { 
+    logger.info('Executing worker task', {
       taskId: task.id,
-      complexity: task.complexity 
+      complexity: task.complexity,
     });
 
     const ralph = new RalphStackMemoryBridge({
@@ -348,7 +350,7 @@ Execute your task now.
     });
 
     const result = await ralph.run();
-    
+
     // Track worker costs
     const workerModel = this.selectWorkerForTask(task);
     const tokens = this.estimateTokens(result);
@@ -371,11 +373,11 @@ Execute your task now.
     decomposition: TaskDecomposition[]
   ): Promise<string> {
     const reviewTaskId = uuidv4();
-    
+
     // Oracle reviews worker outputs and coordinates integration
-    logger.info('Oracle review scheduled', { 
+    logger.info('Oracle review scheduled', {
       reviewTaskId,
-      tasksToReview: decomposition.length 
+      tasksToReview: decomposition.length,
     });
 
     return reviewTaskId;
@@ -389,16 +391,16 @@ Execute your task now.
     reviewResult: any
   ): Promise<string> {
     const swarmId = uuidv4();
-    
+
     const successfulTasks = workerResults.filter(
-      result => result.status === 'fulfilled'
+      (result) => result.status === 'fulfilled'
     ).length;
 
     logger.info('Integration completed', {
       swarmId,
       totalTasks: workerResults.length,
       successfulTasks,
-      successRate: (successfulTasks / workerResults.length * 100).toFixed(1),
+      successRate: ((successfulTasks / workerResults.length) * 100).toFixed(1),
     });
 
     return swarmId;
@@ -425,9 +427,10 @@ Execute your task now.
    * Log cost analysis and efficiency metrics
    */
   private logCostAnalysis(): void {
-    const total = this.costTracker.oracleSpent + 
-                 this.costTracker.workerSpent + 
-                 this.costTracker.reviewerSpent;
+    const total =
+      this.costTracker.oracleSpent +
+      this.costTracker.workerSpent +
+      this.costTracker.reviewerSpent;
 
     const savings = this.calculateTraditionalCost() - total;
 
@@ -435,9 +438,9 @@ Execute your task now.
       oracleSpent: `$${this.costTracker.oracleSpent.toFixed(4)}`,
       workerSpent: `$${this.costTracker.workerSpent.toFixed(4)}`,
       totalSpent: `$${total.toFixed(4)}`,
-      budgetUsed: `${(total / this.costTracker.totalBudget * 100).toFixed(1)}%`,
+      budgetUsed: `${((total / this.costTracker.totalBudget) * 100).toFixed(1)}%`,
       estimatedSavings: `$${savings.toFixed(4)}`,
-      efficiency: `${(this.costTracker.workerSpent / total * 100).toFixed(1)}% worker tasks`,
+      efficiency: `${((this.costTracker.workerSpent / total) * 100).toFixed(1)}% worker tasks`,
     });
   }
 
@@ -445,16 +448,19 @@ Execute your task now.
    * Calculate what this would cost with all-Oracle approach
    */
   private calculateTraditionalCost(): number {
-    const totalSpent = this.costTracker.oracleSpent + 
-                      this.costTracker.workerSpent + 
-                      this.costTracker.reviewerSpent;
-    
+    const totalSpent =
+      this.costTracker.oracleSpent +
+      this.costTracker.workerSpent +
+      this.costTracker.reviewerSpent;
+
     // Estimate if everything was done with Oracle model
     const avgWorkerCost = this.workerPool[0]?.costPerToken || 0.001;
     const workerTokensAsOracle = this.costTracker.workerSpent / avgWorkerCost;
-    
-    return this.costTracker.oracleSpent + 
-           (workerTokensAsOracle * this.oracle.costPerToken);
+
+    return (
+      this.costTracker.oracleSpent +
+      workerTokensAsOracle * this.oracle.costPerToken
+    );
   }
 }
 
@@ -473,55 +479,55 @@ export const defaultModelConfigs: Record<ModelTier, ModelConfig[]> = {
         'complex_reasoning',
         'task_decomposition',
         'quality_review',
-        'error_correction'
-      ]
-    }
+        'error_correction',
+      ],
+    },
   ],
-  
+
   worker: [
     {
       tier: 'worker',
-      provider: 'claude', 
-      model: 'claude-3-haiku-20240307',
+      provider: 'claude',
+      model: 'claude-3-5-haiku-20241022',
       costPerToken: 0.00025, // $0.25/1M input tokens
       capabilities: [
         'code_implementation',
         'unit_testing',
         'documentation',
         'simple_analysis',
-        'data_processing'
-      ]
+        'data_processing',
+      ],
     },
     {
       tier: 'worker',
       provider: 'openai',
       model: 'gpt-4o-mini',
-      costPerToken: 0.00015, // $0.15/1M input tokens  
+      costPerToken: 0.00015, // $0.15/1M input tokens
       capabilities: [
         'rapid_prototyping',
         'script_writing',
         'basic_testing',
         'formatting',
-        'simple_refactoring'
-      ]
-    }
+        'simple_refactoring',
+      ],
+    },
   ],
 
   reviewer: [
     {
       tier: 'reviewer',
       provider: 'claude',
-      model: 'claude-3-sonnet-20240229', 
+      model: 'claude-3-sonnet-20240229',
       costPerToken: 0.003, // $3/1M input tokens
       capabilities: [
         'code_review',
         'quality_assessment',
         'integration_testing',
         'performance_analysis',
-        'security_review'
-      ]
-    }
-  ]
+        'security_review',
+      ],
+    },
+  ],
 };
 
 export default OracleWorkerCoordinator;

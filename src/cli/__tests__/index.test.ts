@@ -344,6 +344,21 @@ describe('CLI Commands', () => {
     });
   });
 
+  describe('ping command', () => {
+    it('should respond with pong and timestamp', async () => {
+      const { program } = await import('../index.js');
+
+      process.argv = ['node', 'stackmemory', 'ping'];
+      await program.parseAsync(process.argv);
+
+      expect(consoleSpy.log).toHaveBeenCalledWith(
+        expect.stringMatching(
+          /^pong \d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/
+        )
+      );
+    });
+  });
+
   describe('mcp-server command', () => {
     it('should start MCP server with default options', async () => {
       const { program } = await import('../index.js');

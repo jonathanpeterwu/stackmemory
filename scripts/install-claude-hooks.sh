@@ -99,7 +99,7 @@ MAX_FILE_SIZE=100000            # Max size per file (100KB)
 MAX_TOTAL_SIZE=500000           # Max total size (500KB)
 
 # Claude CLI settings
-CLAUDE_MODEL=claude-3-opus      # Model to use
+CLAUDE_MODEL=claude-sonnet-4-20250514      # Model to use
 CLAUDE_MAX_TOKENS=4000          # Max tokens per request
 
 # File patterns to check (regex)

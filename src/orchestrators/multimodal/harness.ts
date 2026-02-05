@@ -52,7 +52,7 @@ export async function runSpike(
   input: PlanningInput,
   options: HarnessOptions = {}
 ): Promise<HarnessResult> {
-  const plannerSystem = `You write concise, actionable implementation plans with numbered steps, acceptance criteria, and explicit risks. Output JSON only.`;
+  const plannerSystem = `You write concise, actionable implementation plans. Output raw JSON only (no markdown code fences). Schema: { "summary": "string", "steps": [{ "id": "step-1", "title": "string", "rationale": "string", "acceptanceCriteria": ["string"] }], "risks": ["string"] }`;
 
   // Attempt to enrich planner prompt with local StackMemory context (best-effort)
   const contextSummary = getLocalContextSummary(input.repoPath);
@@ -65,7 +65,12 @@ export async function runSpike(
       system: plannerSystem,
     });
     try {
-      plan = JSON.parse(raw);
+      // Strip markdown code fences if present
+      const cleaned = raw
+        .replace(/^```(?:json)?\s*\n?/i, '')
+        .replace(/\n?```\s*$/i, '')
+        .trim();
+      plan = JSON.parse(cleaned);
     } catch {
       // Fall back to heuristic if model returned text
       plan = heuristicPlan(input);
@@ -104,8 +109,9 @@ export async function runSpike(
     if (implementer === 'codex') {
       const impl = callCodexCLI(
         implPrompt,
-        ['--no-trace'],
-        options.dryRun !== false
+        [],
+        options.dryRun !== false,
+        input.repoPath
       );
       ok = impl.ok;
       lastCommand = impl.command;
@@ -127,7 +133,12 @@ export async function runSpike(
         model: options.reviewerModel,
         system: criticSystem,
       });
-      lastCritique = JSON.parse(raw);
+      // Strip markdown code fences if present
+      const cleaned = raw
+        .replace(/^```(?:json)?\s*\n?/i, '')
+        .replace(/\n?```\s*$/i, '')
+        .trim();
+      lastCritique = JSON.parse(cleaned);
     } catch {
       lastCritique = {
         approved: ok,
@@ -309,7 +320,7 @@ export async function runPlanOnly(
   input: PlanningInput,
   options: { plannerModel?: string } = {}
 ): Promise<ImplementationPlan> {
-  const plannerSystem = `You write concise, actionable implementation plans with numbered steps, acceptance criteria, and explicit risks. Output JSON only.`;
+  const plannerSystem = `You write concise, actionable implementation plans. Output raw JSON only (no markdown code fences). Schema: { "summary": "string", "steps": [{ "id": "step-1", "title": "string", "rationale": "string", "acceptanceCriteria": ["string"] }], "risks": ["string"] }`;
   const contextSummary = getLocalContextSummary(input.repoPath);
   const plannerPrompt = `Task: ${input.task}\nRepo: ${input.repoPath}\nNotes: ${input.contextNotes || '(none)'}\n${contextSummary}\nConstraints: Keep the plan minimal and implementable in a single PR.`;
 

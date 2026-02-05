@@ -312,7 +312,8 @@ export function createRetrievalCommands(): Command {
     .description('Show current retrieval system status')
     .action(async () => {
       const hasApiKey = !!process.env['ANTHROPIC_API_KEY'];
-      const model = process.env['ANTHROPIC_MODEL'] || 'claude-3-haiku-20240307';
+      const model =
+        process.env['ANTHROPIC_MODEL'] || 'claude-3-5-haiku-20241022';
 
       console.log(chalk.blue('\nRetrieval System Status\n'));
 

@@ -38,7 +38,7 @@ export class AnthropicLLMProvider implements LLMProvider {
     this.client = new Anthropic({
       apiKey: config.apiKey,
     });
-    this.model = config.model || 'claude-3-haiku-20240307';
+    this.model = config.model || 'claude-3-5-haiku-20241022';
     this.temperature = config.temperature ?? 0.3;
     this.maxRetries = config.maxRetries ?? 2;
     this.timeout = config.timeout ?? 30000;
@@ -210,7 +210,7 @@ export function createLLMProvider(): LLMProvider | undefined {
 
   return new AnthropicLLMProvider({
     apiKey,
-    model: process.env['ANTHROPIC_MODEL'] || 'claude-3-haiku-20240307',
+    model: process.env['ANTHROPIC_MODEL'] || 'claude-3-5-haiku-20241022',
     temperature: parseFloat(process.env['ANTHROPIC_TEMPERATURE'] || '0.3'),
   });
 }

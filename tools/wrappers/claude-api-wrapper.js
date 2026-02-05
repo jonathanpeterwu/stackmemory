@@ -54,30 +54,31 @@ const anthropic = new Anthropic({
 async function callClaude() {
   try {
     const message = await anthropic.messages.create({
-      model: 'claude-3-5-sonnet-20241022',
+      model: 'claude-sonnet-4-20250514',
       max_tokens: 4096,
       messages: [
         {
           role: 'user',
-          content: prompt
-        }
-      ]
+          content: prompt,
+        },
+      ],
     });
 
     // Output based on format
     if (outputFormat === 'json' || outputFormat === 'stream-json') {
-      console.log(JSON.stringify({
-        structured_output: {
-          content: message.content[0].text,
-          model: message.model,
-          usage: message.usage
-        }
-      }));
+      console.log(
+        JSON.stringify({
+          structured_output: {
+            content: message.content[0].text,
+            model: message.model,
+            usage: message.usage,
+          },
+        })
+      );
     } else {
       // Text output
       console.log(message.content[0].text);
     }
-
   } catch (error) {
     console.error('Error calling Claude API:', error.message);
     process.exit(1);

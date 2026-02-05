@@ -36,9 +36,9 @@ export type SubagentType =
 export interface SubagentConfig {
   type: SubagentType;
   model:
-    | 'claude-3-5-sonnet-latest'
-    | 'claude-3-5-haiku-latest'
-    | 'claude-3-opus-latest';
+    | 'claude-sonnet-4-20250514'
+    | 'claude-3-5-haiku-20241022'
+    | 'claude-3-opus-20240229';
   maxTokens: number;
   temperature: number;
   systemPrompt: string;
@@ -164,7 +164,7 @@ export class RecursiveAgentOrchestrator {
     // Planning Agent - Task decomposer
     configs.set('planning', {
       type: 'planning',
-      model: 'claude-3-5-sonnet-latest',
+      model: 'claude-sonnet-4-20250514',
       maxTokens: 20000,
       temperature: 0.3,
       systemPrompt: `You are a Planning Agent specializing in task decomposition.
@@ -178,7 +178,7 @@ export class RecursiveAgentOrchestrator {
     // Code Agent - Implementation specialist
     configs.set('code', {
       type: 'code',
-      model: 'claude-3-5-sonnet-latest',
+      model: 'claude-sonnet-4-20250514',
       maxTokens: 30000,
       temperature: 0.2,
       systemPrompt: `You are a Code Agent specializing in implementation.
@@ -192,7 +192,7 @@ export class RecursiveAgentOrchestrator {
     // Testing Agent - Test generation and validation
     configs.set('testing', {
       type: 'testing',
-      model: 'claude-3-5-sonnet-latest', // High quality for test generation
+      model: 'claude-sonnet-4-20250514', // High quality for test generation
       maxTokens: 25000,
       temperature: 0.1,
       systemPrompt: `You are a Testing Agent specializing in test generation and validation.
@@ -214,7 +214,7 @@ export class RecursiveAgentOrchestrator {
     // Linting Agent - Code quality enforcer
     configs.set('linting', {
       type: 'linting',
-      model: 'claude-3-5-haiku-latest',
+      model: 'claude-3-5-haiku-20241022',
       maxTokens: 15000,
       temperature: 0,
       systemPrompt: `You are a Linting Agent specializing in code quality.
@@ -231,7 +231,7 @@ export class RecursiveAgentOrchestrator {
     // Review Agent - Multi-stage code reviewer
     configs.set('review', {
       type: 'review',
-      model: 'claude-3-5-sonnet-latest',
+      model: 'claude-sonnet-4-20250514',
       maxTokens: 25000,
       temperature: 0.2,
       systemPrompt: `You are a Review Agent specializing in multi-stage code review.
@@ -254,7 +254,7 @@ export class RecursiveAgentOrchestrator {
     // Improvement Agent - Code enhancer
     configs.set('improve', {
       type: 'improve',
-      model: 'claude-3-5-sonnet-latest',
+      model: 'claude-sonnet-4-20250514',
       maxTokens: 30000,
       temperature: 0.3,
       systemPrompt: `You are an Improvement Agent specializing in code enhancement.
@@ -271,7 +271,7 @@ export class RecursiveAgentOrchestrator {
     // Context Agent - Information retriever
     configs.set('context', {
       type: 'context',
-      model: 'claude-3-5-haiku-latest',
+      model: 'claude-3-5-haiku-20241022',
       maxTokens: 10000,
       temperature: 0,
       systemPrompt: `You are a Context Agent specializing in information retrieval.
@@ -287,7 +287,7 @@ export class RecursiveAgentOrchestrator {
     // Publish Agent - Release and deployment
     configs.set('publish', {
       type: 'publish',
-      model: 'claude-3-5-haiku-latest',
+      model: 'claude-3-5-haiku-20241022',
       maxTokens: 15000,
       temperature: 0,
       systemPrompt: `You are a Publish Agent specializing in release management.
@@ -795,9 +795,9 @@ export class RecursiveAgentOrchestrator {
   private calculateNodeCost(tokens: number, model: string): number {
     // Pricing per 1M tokens (approximate)
     const pricing: Record<string, number> = {
-      'claude-3-5-sonnet-latest': 15.0,
-      'claude-3-5-haiku-latest': 1.0,
-      'claude-3-opus-latest': 75.0,
+      'claude-sonnet-4-20250514': 15.0,
+      'claude-3-5-haiku-20241022': 1.0,
+      'claude-3-opus-20240229': 75.0,
     };
     return (tokens / 1000000) * (pricing[model] || 10);
   }
