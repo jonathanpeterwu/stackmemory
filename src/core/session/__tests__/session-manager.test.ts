@@ -36,14 +36,9 @@ describe('SessionManager', () => {
     vi.restoreAllMocks();
   });
 
-  describe('singleton', () => {
-    it('should return singleton instance', () => {
+  describe('singleton and query modes', () => {
+    it('should return singleton and have correct query mode values', () => {
       expect(SessionManager.getInstance()).toBe(SessionManager.getInstance());
-    });
-  });
-
-  describe('FrameQueryMode', () => {
-    it('should have correct query mode values', () => {
       expect(FrameQueryMode.CURRENT_SESSION).toBe('current');
       expect(FrameQueryMode.PROJECT_ACTIVE).toBe('project');
       expect(FrameQueryMode.ALL_ACTIVE).toBe('all');
@@ -51,7 +46,8 @@ describe('SessionManager', () => {
   });
 
   describe('session lifecycle', () => {
-    it('should create session with correct structure', async () => {
+    it('should create, load, and handle non-existent sessions', async () => {
+      // Create session with correct structure
       const session = await manager.createSession({
         projectId: 'test-project',
         branch: 'main',
@@ -66,9 +62,8 @@ describe('SessionManager', () => {
       });
       expect(session.metadata.tags).toContain('test');
       expect(fs.writeFile).toHaveBeenCalled();
-    });
 
-    it('should load existing session', async () => {
+      // Load existing session
       const mockSession: Session = {
         sessionId: 'test-session-id',
         runId: 'test-run-id',
@@ -82,9 +77,8 @@ describe('SessionManager', () => {
       vi.mocked(fs.readFile).mockResolvedValueOnce(JSON.stringify(mockSession));
       const loaded = await manager.loadSession('test-session-id');
       expect(loaded?.sessionId).toBe('test-session-id');
-    });
 
-    it('should return null for non-existent session', async () => {
+      // Non-existent session returns null
       vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
       expect(await manager.loadSession('nonexistent')).toBeNull();
     });

@@ -1163,7 +1163,7 @@ program
         'build',
         'pending.json'
       );
-      let pending: Record<string, any> = {};
+      let pending: Record<string, { task?: string; createdAt?: number }> = {};
       if (fs.existsSync(storePath)) {
         try {
           pending = JSON.parse(fs.readFileSync(storePath, 'utf-8'));
@@ -1171,8 +1171,8 @@ program
       }
       const items = Object.entries(pending).map(([approvalId, data]) => ({
         approvalId,
-        task: (data as any)?.task as string,
-        createdAt: Number((data as any)?.createdAt || 0) || null,
+        task: data?.task ?? '',
+        createdAt: Number(data?.createdAt || 0) || null,
       }));
       const filters = {
         taskContains: opts.taskContains as string | undefined,

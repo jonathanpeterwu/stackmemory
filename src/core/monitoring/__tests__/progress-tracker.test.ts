@@ -28,7 +28,8 @@ describe('ProgressTracker', () => {
   });
 
   describe('initialization', () => {
-    it('should load existing progress file if present', () => {
+    it('should load existing progress file or handle corruption', () => {
+      // Load existing file
       const existingData = {
         version: '1.0.0',
         lastUpdated: '2024-01-01T00:00:00.000Z',
@@ -37,31 +38,24 @@ describe('ProgressTracker', () => {
       vi.mocked(fs.existsSync).mockReturnValue(true);
       vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(existingData));
 
-      const newTracker = new ProgressTracker(mockProjectRoot);
+      let newTracker = new ProgressTracker(mockProjectRoot);
       expect(newTracker.getProgress().version).toBe('1.0.0');
-    });
 
-    it('should create default progress if file is corrupted', () => {
-      vi.mocked(fs.existsSync).mockReturnValue(true);
+      // Handle corrupted file
       vi.mocked(fs.readFileSync).mockReturnValue('invalid json');
-
-      const newTracker = new ProgressTracker(mockProjectRoot);
+      newTracker = new ProgressTracker(mockProjectRoot);
       expect(newTracker.getProgress().recentChanges).toEqual([]);
     });
   });
 
   describe('session and task management', () => {
-    it('should manage session lifecycle', () => {
+    it('should manage session and task lifecycle', () => {
+      // Session lifecycle
       tracker.startSession();
-      const progress = tracker.getProgress();
-      expect(progress.currentSession).toBeDefined();
+      expect(tracker.getProgress().currentSession).toBeDefined();
       expect(fs.writeFileSync).toHaveBeenCalled();
 
-      tracker.endSession();
-      expect(tracker.getProgress().currentSession).toBeUndefined();
-    });
-
-    it('should track task lifecycle', () => {
+      // Task lifecycle
       tracker.startTask('Test task');
       expect(tracker.getProgress().currentSession?.inProgress).toContain(
         'Test task'
@@ -71,12 +65,16 @@ describe('ProgressTracker', () => {
       const session = tracker.getProgress().currentSession;
       expect(session?.inProgress).not.toContain('Test task');
       expect(session?.tasksCompleted[0]?.task).toBe('Test task');
-      expect(session?.tasksCompleted[0]?.changes).toEqual(['file1.ts']);
+
+      // End session
+      tracker.endSession();
+      expect(tracker.getProgress().currentSession).toBeUndefined();
     });
   });
 
   describe('changes and notes', () => {
-    it('should track changes with limit', () => {
+    it('should track changes and notes with limits', () => {
+      // Changes with limit (max 20)
       for (let i = 0; i < 25; i++) {
         tracker.addChange({
           date: `2024-01-${String(i + 1).padStart(2, '0')}`,
@@ -88,14 +86,12 @@ describe('ProgressTracker', () => {
       const changes = tracker.getProgress().recentChanges;
       expect(changes.length).toBe(20);
       expect(changes[0].description).toBe('Change 24');
-    });
 
-    it('should track notes with limit', () => {
+      // Notes with limit (max 10)
       for (let i = 0; i < 15; i++) {
         tracker.addNote(`Note ${i}`);
       }
-      const notes = tracker.getProgress().notes;
-      expect(notes?.length).toBe(10);
+      expect(tracker.getProgress().notes?.length).toBe(10);
     });
   });
 

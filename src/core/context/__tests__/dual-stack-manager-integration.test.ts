@@ -46,7 +46,7 @@ describe('DualStackManager Integration', () => {
   });
 
   describe('Initialization', () => {
-    it('should initialize with individual stack as default', () => {
+    it('should initialize with individual stack and provide access', () => {
       const context = dualStackManager.getCurrentContext();
 
       expect(context.type).toBe('individual');
@@ -56,9 +56,7 @@ describe('DualStackManager Integration', () => {
       expect(context.permissions.canRead).toBe(true);
       expect(context.permissions.canWrite).toBe(true);
       expect(context.permissions.canHandoff).toBe(true);
-    });
 
-    it('should provide access to individual stack', () => {
       const activeStack = dualStackManager.getActiveStack();
       expect(activeStack).toBeDefined();
     });
@@ -170,24 +168,19 @@ describe('DualStackManager Integration', () => {
   });
 
   describe('Basic Error Handling', () => {
-    it('should handle invalid stack switching', async () => {
+    it('should handle invalid operations', async () => {
+      // Invalid stack switching
       await expect(
         dualStackManager.switchToStack('invalid-stack-id')
       ).rejects.toThrow();
-    });
 
-    it('should validate shared stack creation parameters', async () => {
-      // Test empty team ID
+      // Empty parameters for shared stack creation
       await expect(
         dualStackManager.createSharedStack('', 'Test Stack', userId)
       ).rejects.toThrow();
-
-      // Test empty stack name
       await expect(
         dualStackManager.createSharedStack(teamId, '', userId)
       ).rejects.toThrow();
-
-      // Test empty owner ID
       await expect(
         dualStackManager.createSharedStack(teamId, 'Test Stack', '')
       ).rejects.toThrow();
@@ -195,27 +188,23 @@ describe('DualStackManager Integration', () => {
   });
 
   describe('Stack Context Management', () => {
-    it('should track stack activity', async () => {
+    it('should track activity and manage metadata', async () => {
+      // Individual stack context
       const context = dualStackManager.getCurrentContext();
-
       expect(context.createdAt).toBeDefined();
       expect(context.lastActive).toBeDefined();
       expect(context.metadata).toBeDefined();
-    });
 
-    it('should manage stack metadata', async () => {
-      // Create shared stack with metadata
+      // Shared stack metadata
       const stackId = await dualStackManager.createSharedStack(
         teamId,
         'Test Stack',
         userId
       );
-
       await dualStackManager.switchToStack(stackId);
-      const context = dualStackManager.getCurrentContext();
-
-      expect(context.metadata).toBeDefined();
-      expect(context.teamId).toBe(teamId);
+      const sharedContext = dualStackManager.getCurrentContext();
+      expect(sharedContext.metadata).toBeDefined();
+      expect(sharedContext.teamId).toBe(teamId);
     });
   });
 });

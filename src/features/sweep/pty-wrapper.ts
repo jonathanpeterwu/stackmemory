@@ -15,7 +15,14 @@ import { StatusBar } from './status-bar.js';
 import { TabInterceptor } from './tab-interceptor.js';
 
 const HOME = process.env['HOME'] || '/tmp';
-const PENDING_FILE = join(HOME, '.stackmemory', 'sweep-pending.json');
+
+function getSweepDir(): string {
+  return process.env['SWEEP_STATE_DIR'] || join(HOME, '.stackmemory');
+}
+
+function getSweepPath(filename: string): string {
+  return join(getSweepDir(), filename);
+}
 
 // Alt screen buffer detection
 const ALT_SCREEN_ENTER = '\x1b[?1049h';
@@ -49,8 +56,7 @@ export class PtyWrapper {
     this.config = {
       claudeBin: config.claudeBin || this.findClaude(),
       claudeArgs: config.claudeArgs || [],
-      stateFile:
-        config.stateFile || join(HOME, '.stackmemory', 'sweep-state.json'),
+      stateFile: config.stateFile || getSweepPath('sweep-state.json'),
     };
 
     this.stateWatcher = new SweepStateWatcher(this.config.stateFile);
@@ -63,6 +69,12 @@ export class PtyWrapper {
   }
 
   async start(): Promise<void> {
+    // Ensure the sweep state directory exists
+    const sweepDir = getSweepDir();
+    if (!existsSync(sweepDir)) {
+      mkdirSync(sweepDir, { recursive: true });
+    }
+
     // Dynamic import for optional dependency
     let pty: typeof import('node-pty');
     try {
@@ -165,12 +177,13 @@ export class PtyWrapper {
     if (!this.currentPrediction || !this.ptyProcess) return;
 
     // Write prediction to pending file for Claude to read
-    const dir = join(HOME, '.stackmemory');
+    const dir = getSweepDir();
     if (!existsSync(dir)) {
       mkdirSync(dir, { recursive: true });
     }
+    const pendingFile = getSweepPath('sweep-pending.json');
     writeFileSync(
-      PENDING_FILE,
+      pendingFile,
       JSON.stringify(
         {
           file_path: this.currentPrediction.file_path,
@@ -183,10 +196,10 @@ export class PtyWrapper {
     );
 
     // Inject acceptance prompt into PTY stdin.
-    // SAFETY: PENDING_FILE is a constant path, not user-controlled.
-    // The prompt is written to Claude Code's input, which interprets
-    // it as a user message, not as a shell command.
-    const prompt = `Apply the Sweep prediction from ${PENDING_FILE}\n`;
+    // SAFETY: pendingFile is derived from env or a constant path, not
+    // arbitrary user input. The prompt is written to Claude Code's input,
+    // which interprets it as a user message, not as a shell command.
+    const prompt = `Apply the Sweep prediction from ${pendingFile}\n`;
     this.ptyProcess.write(prompt);
 
     this.dismissPrediction();

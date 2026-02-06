@@ -74,43 +74,24 @@ describe('StackMergeResolver', () => {
   });
 
   describe('Policy Initialization', () => {
-    it('should initialize default merge policies', async () => {
-      const session = await resolver.getMergeSession('non-existent');
-      expect(session).toBeNull();
+    it('should support default, conservative, aggressive policies and reject unknown', async () => {
+      // Non-existent session returns null
+      expect(await resolver.getMergeSession('non-existent')).toBeNull();
 
       mockManager.mockFrameManager.getActiveFrames.mockResolvedValue([]);
-      const sessionId = await resolver.startMergeSession(
-        'source-stack',
-        'target-stack',
-        [],
-        'default'
-      );
-      expect(sessionId).toMatch(/^merge-/);
-    });
 
-    it('should support conservative policy', async () => {
-      mockManager.mockFrameManager.getActiveFrames.mockResolvedValue([]);
-      const sessionId = await resolver.startMergeSession(
-        'source-stack',
-        'target-stack',
-        [],
-        'conservative'
-      );
-      expect(sessionId).toMatch(/^merge-/);
-    });
+      // All valid policies should create sessions
+      for (const policy of ['default', 'conservative', 'aggressive']) {
+        const sessionId = await resolver.startMergeSession(
+          'source-stack',
+          'target-stack',
+          [],
+          policy
+        );
+        expect(sessionId).toMatch(/^merge-/);
+      }
 
-    it('should support aggressive policy', async () => {
-      mockManager.mockFrameManager.getActiveFrames.mockResolvedValue([]);
-      const sessionId = await resolver.startMergeSession(
-        'source-stack',
-        'target-stack',
-        [],
-        'aggressive'
-      );
-      expect(sessionId).toMatch(/^merge-/);
-    });
-
-    it('should reject unknown policy', async () => {
+      // Unknown policy should be rejected
       await expect(
         resolver.startMergeSession(
           'source-stack',
@@ -123,102 +104,97 @@ describe('StackMergeResolver', () => {
   });
 
   describe('Conflict Detection', () => {
-    it('should detect name conflicts between frames', async () => {
-      const sourceFrame = createMockFrame({
+    it('should detect name and state conflicts, and skip source-only frames', async () => {
+      // Name conflicts
+      const sourceFrame1 = createMockFrame({
         frame_id: 'frame-1',
-        name: 'Frame Alpha',
+        name: 'Alpha',
       });
-      const targetFrame = createMockFrame({
+      const targetFrame1 = createMockFrame({
         frame_id: 'frame-1',
-        name: 'Frame Beta',
+        name: 'Beta',
       });
 
       mockManager.mockFrameManager.getFrame
-        .mockResolvedValueOnce(sourceFrame)
-        .mockResolvedValueOnce(targetFrame);
+        .mockResolvedValueOnce(sourceFrame1)
+        .mockResolvedValueOnce(targetFrame1);
       mockManager.mockFrameManager.getActiveFrames.mockResolvedValue([
-        sourceFrame,
+        sourceFrame1,
       ]);
 
-      const sessionId = await resolver.startMergeSession(
+      let sessionId = await resolver.startMergeSession(
         'source-stack',
         'target-stack',
         ['frame-1']
       );
-
-      const session = await resolver.getMergeSession(sessionId);
-      expect(session).not.toBeNull();
+      let session = await resolver.getMergeSession(sessionId);
       expect(session!.conflicts.length).toBeGreaterThan(0);
+      expect(
+        session!.conflicts.find(
+          (c) =>
+            c.conflictType === 'content' &&
+            c.conflictDetails.some((d) => d.field === 'name')
+        )
+      ).toBeDefined();
 
-      const nameConflict = session!.conflicts.find(
-        (c) =>
-          c.conflictType === 'content' &&
-          c.conflictDetails.some((d) => d.field === 'name')
-      );
-      expect(nameConflict).toBeDefined();
-    });
-
-    it('should detect state conflicts between frames', async () => {
-      const sourceFrame = createMockFrame({
-        frame_id: 'frame-1',
+      // State conflicts (auto-resolvable)
+      const sourceFrame2 = createMockFrame({
+        frame_id: 'frame-2',
         state: 'active',
       });
-      const targetFrame = createMockFrame({
-        frame_id: 'frame-1',
+      const targetFrame2 = createMockFrame({
+        frame_id: 'frame-2',
         state: 'closed',
       });
 
       mockManager.mockFrameManager.getFrame
-        .mockResolvedValueOnce(sourceFrame)
-        .mockResolvedValueOnce(targetFrame);
+        .mockResolvedValueOnce(sourceFrame2)
+        .mockResolvedValueOnce(targetFrame2);
       mockManager.mockFrameManager.getActiveFrames.mockResolvedValue([
-        sourceFrame,
+        sourceFrame2,
       ]);
 
-      const sessionId = await resolver.startMergeSession(
+      sessionId = await resolver.startMergeSession(
         'source-stack',
         'target-stack',
-        ['frame-1']
+        ['frame-2']
       );
-
-      const session = await resolver.getMergeSession(sessionId);
+      session = await resolver.getMergeSession(sessionId);
       const stateConflict = session!.conflicts.find(
         (c) => c.conflictType === 'metadata'
       );
       expect(stateConflict).toBeDefined();
       expect(stateConflict!.autoResolvable).toBe(true);
-    });
 
-    it('should skip frames that exist only in source', async () => {
-      const sourceFrame = createMockFrame({ frame_id: 'frame-1' });
-
+      // Source-only frames (no conflict)
+      const sourceFrame3 = createMockFrame({ frame_id: 'frame-3' });
       mockManager.mockFrameManager.getFrame
-        .mockResolvedValueOnce(sourceFrame)
+        .mockResolvedValueOnce(sourceFrame3)
         .mockResolvedValueOnce(null);
       mockManager.mockFrameManager.getActiveFrames.mockResolvedValue([
-        sourceFrame,
+        sourceFrame3,
       ]);
 
-      const sessionId = await resolver.startMergeSession(
+      sessionId = await resolver.startMergeSession(
         'source-stack',
         'target-stack',
-        ['frame-1']
+        ['frame-3']
       );
-
-      const session = await resolver.getMergeSession(sessionId);
+      session = await resolver.getMergeSession(sessionId);
       expect(session!.conflicts.length).toBe(0);
     });
   });
 
   describe('Manual Conflict Resolution', () => {
-    it('should allow manual resolution of conflicts', async () => {
+    it('should allow resolution and reject invalid sessions/conflicts', async () => {
+      // Valid manual resolution
       const sourceFrame = createMockFrame({
         frame_id: 'frame-1',
-        name: 'Source Name',
+        name: 'Source',
       });
       const targetFrame = createMockFrame({
         frame_id: 'frame-1',
-        name: 'Target Name',
+        name: 'Target',
       });
 
       mockManager.mockFrameManager.getFrame
@@ -239,31 +215,26 @@ describe('StackMergeResolver', () => {
         resolvedBy: 'test-user',
         notes: 'User chose source',
       });
-
       const session = await resolver.getMergeSession(sessionId);
       expect(session!.metadata.manualResolvedConflicts).toBe(1);
-    });
 
-    it('should reject resolution for unknown session', async () => {
+      // Reject unknown session
       await expect(
         resolver.resolveConflict('unknown-session', 'frame-1', {
           strategy: 'source_wins',
           resolvedBy: 'test-user',
         })
       ).rejects.toThrow('Merge session not found');
-    });
 
-    it('should reject resolution for unknown conflict', async () => {
+      // Reject unknown conflict
       mockManager.mockFrameManager.getActiveFrames.mockResolvedValue([]);
-
-      const sessionId = await resolver.startMergeSession(
-        'source-stack',
-        'target-stack',
+      const emptySession = await resolver.startMergeSession(
+        'source',
+        'target',
         []
       );
-
       await expect(
-        resolver.resolveConflict(sessionId, 'unknown-frame', {
+        resolver.resolveConflict(emptySession, 'unknown-frame', {
           strategy: 'source_wins',
           resolvedBy: 'test-user',
         })
@@ -272,30 +243,27 @@ describe('StackMergeResolver', () => {
   });
 
   describe('Merge Execution', () => {
-    it('should execute merge when all conflicts are resolved', async () => {
+    it('should execute completed merges and reject incomplete ones', async () => {
+      // Execute completed merge
       mockManager.mockFrameManager.getActiveFrames.mockResolvedValue([]);
 
-      const sessionId = await resolver.startMergeSession(
+      let sessionId = await resolver.startMergeSession(
         'source-stack',
         'target-stack',
         []
       );
-
-      const session = await resolver.getMergeSession(sessionId);
+      let session = await resolver.getMergeSession(sessionId);
       expect(session!.status).toBe('completed');
+      expect((await resolver.executeMerge(sessionId)).success).toBe(true);
 
-      const result = await resolver.executeMerge(sessionId);
-      expect(result.success).toBe(true);
-    });
-
-    it('should reject merge execution for incomplete sessions', async () => {
+      // Reject incomplete merge
       const sourceFrame = createMockFrame({
         frame_id: 'frame-1',
-        name: 'Source Name',
+        name: 'Source',
       });
       const targetFrame = createMockFrame({
         frame_id: 'frame-1',
-        name: 'Target Name',
+        name: 'Target',
       });
 
       mockManager.mockFrameManager.getFrame
@@ -305,13 +273,12 @@ describe('StackMergeResolver', () => {
         sourceFrame,
       ]);
 
-      const sessionId = await resolver.startMergeSession(
+      sessionId = await resolver.startMergeSession(
         'source-stack',
         'target-stack',
         ['frame-1']
       );
-
-      const session = await resolver.getMergeSession(sessionId);
+      session = await resolver.getMergeSession(sessionId);
       if (session!.status !== 'completed') {
         await expect(resolver.executeMerge(sessionId)).rejects.toThrow(
           'not ready for execution'

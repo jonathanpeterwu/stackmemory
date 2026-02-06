@@ -137,104 +137,64 @@ describe('Frame Manager - Stack and Closure Behavior', () => {
   });
 
   describe('Event and anchor operations', () => {
-    it('should add events to current frame', () => {
+    it('should add, retrieve, and preserve events and anchors', () => {
       const frameId = frameManager.createFrame({ type: 'task', name: 'Test' });
 
+      // Add events and anchors
       frameManager.addEvent('user_message', { text: 'Hello' });
       frameManager.addEvent('assistant_message', { text: 'Hi there' });
       frameManager.addEvent('decision', { choice: 'A' });
-
-      const events = frameManager.getFrameEvents(frameId);
-      expect(events.length).toBe(3);
-    });
-
-    it('should add anchors to current frame', () => {
-      const frameId = frameManager.createFrame({ type: 'task', name: 'Test' });
-
       frameManager.addAnchor('decision', 'Chose React', 8);
       frameManager.addAnchor('finding', 'Found bug', 6);
 
-      const anchors = frameManager.getFrameAnchors(frameId);
-      expect(anchors.length).toBe(2);
-    });
+      expect(frameManager.getFrameEvents(frameId).length).toBe(3);
+      expect(frameManager.getFrameAnchors(frameId).length).toBe(2);
 
-    it('should preserve events and anchors after close', () => {
-      const frameId = frameManager.createFrame({ type: 'task', name: 'Test' });
-
-      frameManager.addEvent('decision', { choice: 'X' });
-      frameManager.addAnchor('decision', 'Chose X', 9);
-
+      // Close and verify preservation
       frameManager.closeFrame(frameId);
-
-      // Events and anchors should still be retrievable
-      const events = frameManager.getFrameEvents(frameId);
-      const anchors = frameManager.getFrameAnchors(frameId);
-
-      expect(events.length).toBe(1);
-      expect(anchors.length).toBe(1);
+      expect(frameManager.getFrameEvents(frameId).length).toBe(3);
+      expect(frameManager.getFrameAnchors(frameId).length).toBe(2);
     });
   });
 
   describe('Frame depth limits', () => {
-    it('should create deep frame hierarchies', () => {
+    it('should handle deep frame hierarchies and close entire chains', () => {
       const frameIds: string[] = [];
 
+      // Create 10 nested frames
       for (let i = 0; i < 10; i++) {
-        const frameId = frameManager.createFrame({
-          type: 'task',
-          name: `Frame ${i}`,
-        });
-        frameIds.push(frameId);
+        frameIds.push(
+          frameManager.createFrame({ type: 'task', name: `Frame ${i}` })
+        );
       }
 
       expect(frameManager.getStackDepth()).toBe(10);
-
-      // Verify depths
       for (let i = 0; i < 10; i++) {
-        const frame = frameManager.getFrame(frameIds[i]);
-        expect(frame?.depth).toBe(i);
-      }
-    });
-
-    it('should close entire deep chain', () => {
-      const frameIds: string[] = [];
-
-      for (let i = 0; i < 5; i++) {
-        const frameId = frameManager.createFrame({
-          type: 'task',
-          name: `Frame ${i}`,
-        });
-        frameIds.push(frameId);
+        expect(frameManager.getFrame(frameIds[i])?.depth).toBe(i);
       }
 
-      // Close root
+      // Close root should unwind entire stack
       frameManager.closeFrame(frameIds[0]);
-
-      // Stack should be empty
       expect(frameManager.getStackDepth()).toBe(0);
-
-      // Root should be closed
       expect(frameManager.getFrame(frameIds[0])?.state).toBe('closed');
     });
   });
 
   describe('Edge cases', () => {
-    it('should throw when closing empty stack', () => {
+    it('should handle edge cases for frame closure', () => {
+      // Empty stack should throw
       expect(frameManager.getStackDepth()).toBe(0);
       expect(() => frameManager.closeFrame()).toThrow();
-    });
 
-    it('should warn but not throw when closing already-closed frame', () => {
+      // Create and close a frame
       const frameId = frameManager.createFrame({ type: 'task', name: 'Test' });
       frameManager.closeFrame(frameId);
 
-      // Should not throw
+      // Already-closed frame should not throw
       expect(() => frameManager.closeFrame(frameId)).not.toThrow();
-    });
 
-    it('should throw when closing non-existent frame', () => {
-      frameManager.createFrame({ type: 'task', name: 'Test' });
-
+      // Non-existent frame should throw
+      frameManager.createFrame({ type: 'task', name: 'Another' });
       expect(() => frameManager.closeFrame('non-existent-id')).toThrow();
     });
 
@@ -249,25 +209,21 @@ describe('Frame Manager - Stack and Closure Behavior', () => {
   });
 
   describe('Frame context', () => {
-    it('should get hot stack context with events and anchors', () => {
-      frameManager.createFrame({ type: 'task', name: 'Test' });
-
-      frameManager.addEvent('user_message', { text: 'Test event' });
-      frameManager.addAnchor('decision', 'Test anchor', 7);
-
-      const contexts = frameManager.getHotStackContext();
-
-      expect(contexts).toBeDefined();
-      expect(contexts.length).toBeGreaterThan(0);
-    });
-
-    it('should get active frame path', () => {
+    it('should get hot stack context and active frame path', () => {
       frameManager.createFrame({ type: 'task', name: 'Root' });
       frameManager.createFrame({ type: 'subtask', name: 'Child' });
       frameManager.createFrame({ type: 'tool_scope', name: 'Grandchild' });
 
-      const path = frameManager.getActiveFramePath();
+      frameManager.addEvent('user_message', { text: 'Test event' });
+      frameManager.addAnchor('decision', 'Test anchor', 7);
 
+      // Hot stack context
+      const contexts = frameManager.getHotStackContext();
+      expect(contexts).toBeDefined();
+      expect(contexts.length).toBeGreaterThan(0);
+
+      // Active frame path
+      const path = frameManager.getActiveFramePath();
       expect(path.length).toBe(3);
       expect(path[0].name).toBe('Root');
       expect(path[1].name).toBe('Child');

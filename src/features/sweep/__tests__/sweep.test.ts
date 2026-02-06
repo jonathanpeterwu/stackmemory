@@ -45,21 +45,18 @@ describe('SweepServerManager', () => {
     vi.restoreAllMocks();
   });
 
-  describe('initialization', () => {
-    it('should create with default or custom config', () => {
+  describe('initialization and status', () => {
+    it('should create with config and return correct status', async () => {
+      // Create with default or custom config
       expect(new SweepServerManager()).toBeDefined();
       expect(new SweepServerManager({ port: 9999 })).toBeDefined();
-    });
-  });
 
-  describe('getStatus', () => {
-    it('should return not running when no PID file', async () => {
+      // Not running when no PID file
       manager = new SweepServerManager();
-      const status = await manager.getStatus();
+      let status = await manager.getStatus();
       expect(status.running).toBe(false);
-    });
 
-    it('should return running when server is healthy', async () => {
+      // Running when server is healthy
       const pidData = {
         pid: 12345,
         port: 8766,
@@ -76,7 +73,7 @@ describe('SweepServerManager', () => {
       global.fetch = vi.fn().mockResolvedValue({ ok: true });
 
       manager = new SweepServerManager({ port: 8766, host: '127.0.0.1' });
-      const status = await manager.getStatus();
+      status = await manager.getStatus();
 
       expect(status.running).toBe(true);
       expect(status.pid).toBe(12345);
@@ -107,17 +104,12 @@ describe('SweepPredictionClient', () => {
     vi.clearAllMocks();
   });
 
-  describe('initialization', () => {
-    it('should use default or custom config', () => {
+  describe('initialization and factory', () => {
+    it('should use default or custom config and factory creates instance', () => {
       expect(new SweepPredictionClient()).toBeDefined();
       expect(
         new SweepPredictionClient({ host: 'localhost', port: 9999 })
       ).toBeDefined();
-    });
-  });
-
-  describe('factory function', () => {
-    it('should create client instance', () => {
       expect(createPredictionClient()).toBeInstanceOf(SweepPredictionClient);
     });
   });
@@ -125,16 +117,16 @@ describe('SweepPredictionClient', () => {
 
 describe('Prompt Builder', () => {
   describe('trimContentAroundCursor', () => {
-    it('should return unchanged when content fits', () => {
-      const lines = ['line1', 'line2', 'line3'];
-      const result = trimContentAroundCursor(lines, 1, 0, 1000);
+    it('should preserve or trim content based on size', () => {
+      // Unchanged when fits
+      const smallLines = ['line1', 'line2', 'line3'];
+      let result = trimContentAroundCursor(smallLines, 1, 0, 1000);
       expect(result.didTrim).toBe(false);
-      expect(result.lines).toEqual(lines);
-    });
+      expect(result.lines).toEqual(smallLines);
 
-    it('should trim content around cursor', () => {
-      const lines = Array(100).fill('x'.repeat(100));
-      const result = trimContentAroundCursor(lines, 50, 0, 100);
+      // Trim when too large
+      const largeLines = Array(100).fill('x'.repeat(100));
+      result = trimContentAroundCursor(largeLines, 50, 0, 100);
       expect(result.didTrim).toBe(true);
       expect(result.lines.length).toBeLessThan(100);
     });
@@ -154,20 +146,17 @@ describe('Prompt Builder', () => {
   });
 
   describe('parseCompletion', () => {
-    it('should return null for empty completion', () => {
-      const result = parseCompletion('', ['line1', 'line2'], 0, 2);
-      expect(result).toBeNull();
-    });
+    it('should handle empty, unchanged, and changed completions', () => {
+      // Empty returns null
+      expect(parseCompletion('', ['line1', 'line2'], 0, 2)).toBeNull();
 
-    it('should return null if no change', () => {
-      const lines = ['line1', 'line2'];
-      const result = parseCompletion('line1\nline2', lines, 0, 2);
-      expect(result).toBeNull();
-    });
+      // No change returns null
+      expect(
+        parseCompletion('line1\nline2', ['line1', 'line2'], 0, 2)
+      ).toBeNull();
 
-    it('should parse changed content', () => {
-      const lines = ['old1', 'old2'];
-      const result = parseCompletion('new1\nnew2', lines, 0, 2);
+      // Changed content returns parsed result
+      const result = parseCompletion('new1\nnew2', ['old1', 'old2'], 0, 2);
       expect(result).not.toBeNull();
       expect(result!.lines).toEqual(['new1', 'new2']);
     });
@@ -175,12 +164,9 @@ describe('Prompt Builder', () => {
 });
 
 describe('Types and Defaults', () => {
-  it('should export default configuration', () => {
+  it('should export default configuration and stop tokens', () => {
     expect(DEFAULT_SERVER_CONFIG).toBeDefined();
     expect(DEFAULT_SERVER_CONFIG.port).toBe(8766);
-  });
-
-  it('should export stop tokens', () => {
     expect(SWEEP_STOP_TOKENS.length).toBeGreaterThan(0);
   });
 });

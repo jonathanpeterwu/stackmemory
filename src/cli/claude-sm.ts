@@ -32,6 +32,24 @@ import {
 } from '../core/models/model-router.js';
 import { launchWrapper } from '../features/sweep/pty-wrapper.js';
 import { FallbackMonitor } from '../core/models/fallback-monitor.js';
+import {
+  ensureWorkerStateDir,
+  saveRegistry,
+  loadRegistry,
+  clearRegistry,
+  type WorkerEntry,
+  type WorkerSession,
+} from '../features/workers/worker-registry.js';
+import {
+  isTmuxAvailable,
+  createTmuxSession,
+  sendToPane,
+  killTmuxSession,
+  attachToSession,
+  listPanes,
+  sendCtrlC,
+  sessionExists,
+} from '../features/workers/tmux-manager.js';
 
 // __filename and __dirname are provided by esbuild banner for ESM compatibility
 
@@ -1059,6 +1077,10 @@ class ClaudeSM {
           claudeBin,
           claudeArgs,
         });
+        // PTY wrapper is now running — it calls process.exit() on child exit.
+        // Return to prevent falling through to the fallback-monitor path,
+        // which would spawn a second Claude instance.
+        return;
       } catch (error) {
         // If PTY wrapper fails (e.g., node-pty missing), fall back to direct launch
         const msg = (error as Error).message || 'Unknown PTY error';
@@ -1595,6 +1617,157 @@ configCmd
       console.log(`  ${mark}  ${f.name}`);
     }
     console.log(chalk.gray(`\nSaved to ${getConfigPath()}`));
+  });
+
+// Spawn subcommand: launch N parallel Claude workers in tmux panes
+program
+  .command('spawn <count>')
+  .description('Spawn N parallel Claude workers in tmux panes')
+  .option('-t, --task <desc>', 'Task description for each worker')
+  .option('--worktree', 'Create isolated git worktrees per worker')
+  .option('--no-sweep', 'Disable Sweep predictions')
+  .option('--no-attach', 'Do not attach to tmux session after creation')
+  .action(async (countStr: string, opts: Record<string, unknown>) => {
+    const count = parseInt(countStr, 10);
+    if (isNaN(count) || count < 1 || count > 8) {
+      console.error(chalk.red('Worker count must be between 1 and 8'));
+      process.exit(1);
+    }
+
+    if (!isTmuxAvailable()) {
+      console.error(chalk.red('tmux is required for parallel workers.'));
+      console.log(chalk.gray('Install with: brew install tmux'));
+      process.exit(1);
+    }
+
+    const sessionId = uuidv4().substring(0, 8);
+    const sessionName = `claude-sm-${sessionId}`;
+
+    console.log(
+      chalk.blue(`Spawning ${count} workers in tmux session: ${sessionName}`)
+    );
+
+    // Create tmux session with the right number of panes
+    createTmuxSession(sessionName, count);
+
+    const workers: WorkerEntry[] = [];
+    const panes = listPanes(sessionName);
+
+    for (let i = 0; i < count; i++) {
+      const workerId = `w${i}-${uuidv4().substring(0, 6)}`;
+      const stateDir = ensureWorkerStateDir(workerId);
+      const pane = panes[i] || String(i);
+
+      // Build claude-sm command with isolated sweep state
+      const parts = ['claude-sm'];
+      if (opts['sweep'] === false) parts.push('--no-sweep');
+      if (opts['worktree']) parts.push('--worktree');
+      if (opts['task']) parts.push('--task', `"${opts['task']}"`);
+      const cmd = parts.join(' ');
+
+      // Set env vars and launch in the pane
+      sendToPane(
+        sessionName,
+        pane,
+        `export SWEEP_INSTANCE_ID=${workerId} SWEEP_STATE_DIR=${stateDir} && ${cmd}`
+      );
+
+      workers.push({
+        id: workerId,
+        pane,
+        cwd: process.cwd(),
+        startedAt: new Date().toISOString(),
+        stateDir,
+        task: opts['task'] as string | undefined,
+      });
+
+      console.log(
+        chalk.gray(
+          `  Worker ${i}: ${workerId} (pane ${pane}, state: ${stateDir})`
+        )
+      );
+    }
+
+    // Save registry
+    const session: WorkerSession = {
+      sessionName,
+      workers,
+      createdAt: new Date().toISOString(),
+    };
+    saveRegistry(session);
+    console.log(chalk.green(`\nRegistry saved (${workers.length} workers)`));
+
+    // Attach unless --no-attach
+    if (opts['attach'] !== false) {
+      console.log(chalk.gray('Attaching to tmux session...'));
+      attachToSession(sessionName);
+    } else {
+      console.log(
+        chalk.gray(`Attach later with: tmux attach -t ${sessionName}`)
+      );
+    }
+  });
+
+// Workers subcommand: list/kill workers
+const workersCmd = program
+  .command('workers')
+  .description('List active workers (default) or manage them');
+
+workersCmd
+  .command('list', { isDefault: true })
+  .description('List active workers')
+  .action(() => {
+    const session = loadRegistry();
+    if (!session) {
+      console.log(chalk.gray('No active worker session.'));
+      return;
+    }
+
+    const alive = sessionExists(session.sessionName);
+    const status = alive ? chalk.green('ACTIVE') : chalk.red('DEAD');
+    console.log(chalk.blue(`Session: ${session.sessionName} [${status}]`));
+    console.log(chalk.gray(`Created: ${session.createdAt}`));
+    console.log();
+
+    for (const w of session.workers) {
+      const taskLabel = w.task ? ` task="${w.task}"` : '';
+      console.log(`  ${chalk.cyan(w.id)} pane=${w.pane}${taskLabel}`);
+      console.log(chalk.gray(`    state: ${w.stateDir}`));
+    }
+  });
+
+workersCmd
+  .command('kill [id]')
+  .description('Kill entire session or send Ctrl-C to a specific worker')
+  .action((id?: string) => {
+    const session = loadRegistry();
+    if (!session) {
+      console.log(chalk.gray('No active worker session.'));
+      return;
+    }
+
+    if (id) {
+      // Kill specific worker
+      const worker = session.workers.find((w) => w.id === id);
+      if (!worker) {
+        console.error(chalk.red(`Worker ${id} not found.`));
+        process.exit(1);
+      }
+      sendCtrlC(session.sessionName, worker.pane);
+      console.log(
+        chalk.yellow(`Sent Ctrl-C to worker ${id} (pane ${worker.pane})`)
+      );
+    } else {
+      // Kill entire session
+      if (sessionExists(session.sessionName)) {
+        killTmuxSession(session.sessionName);
+        console.log(
+          chalk.yellow(`Killed tmux session: ${session.sessionName}`)
+        );
+      }
+      clearRegistry();
+      console.log(chalk.gray('Registry cleared.'));
+    }
   });
 
 // Main command (default action when no subcommand)

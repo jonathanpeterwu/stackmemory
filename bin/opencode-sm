@@ -3,4 +3,4 @@
  * OpenCode-SM CLI Launcher (ESM)
  * Delegates to built CLI in dist without requiring tsx.
  */
-import('../dist/cli/opencode-sm.js');
+import('../dist/src/cli/opencode-sm.js');

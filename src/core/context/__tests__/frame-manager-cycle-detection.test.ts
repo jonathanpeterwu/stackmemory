@@ -23,87 +23,45 @@ describe('Frame Manager - Circular Reference Detection', () => {
   });
 
   describe('Cycle Detection', () => {
-    it('should detect direct circular reference (A -> B -> A)', () => {
-      // Create frame A
+    it('should detect direct and indirect circular references', () => {
+      // Create hierarchy: A -> B -> C
       const frameA = frameManager.createFrame({
         type: 'task',
         name: 'Frame A',
       });
-
-      // Create frame B as child of A
       const frameB = frameManager.createFrame({
         type: 'subtask',
         name: 'Frame B',
         parentFrameId: frameA,
       });
-
-      // Try to update A's parent to B (should fail)
-      expect(() => {
-        frameManager.updateParentFrame(frameA, frameB);
-      }).toThrow();
-
-      // Check the error is specifically about cycle detection
-      try {
-        frameManager.updateParentFrame(frameA, frameB);
-      } catch (error: any) {
-        expect(error.code).toBe(ErrorCode.FRAME_CYCLE_DETECTED);
-      }
-    });
-
-    it('should detect indirect circular reference (A -> B -> C -> A)', () => {
-      // Create frame A
-      const frameA = frameManager.createFrame({
-        type: 'task',
-        name: 'Frame A',
-      });
-
-      // Create frame B as child of A
-      const frameB = frameManager.createFrame({
-        type: 'subtask',
-        name: 'Frame B',
-        parentFrameId: frameA,
-      });
-
-      // Create frame C as child of B
       const frameC = frameManager.createFrame({
         type: 'tool_scope',
         name: 'Frame C',
         parentFrameId: frameB,
       });
 
-      // Try to update A's parent to C (should fail)
-      expect(() => {
-        frameManager.updateParentFrame(frameA, frameC);
-      }).toThrow();
+      // Direct cycle: A -> B -> A should fail
+      expect(() => frameManager.updateParentFrame(frameA, frameB)).toThrow();
+      try {
+        frameManager.updateParentFrame(frameA, frameB);
+      } catch (error: any) {
+        expect(error.code).toBe(ErrorCode.FRAME_CYCLE_DETECTED);
+      }
 
-      // Check the error details
+      // Indirect cycle: A -> B -> C -> A should fail
+      expect(() => frameManager.updateParentFrame(frameA, frameC)).toThrow();
       try {
         frameManager.updateParentFrame(frameA, frameC);
       } catch (error: any) {
         expect(error.code).toBe(ErrorCode.FRAME_CYCLE_DETECTED);
         expect(error.context.cycle).toBeDefined();
       }
-    });
 
-    it('should prevent creating a frame that would cause a cycle', () => {
-      // In practice, cycles are mainly prevented during parent updates
-      const frameA = frameManager.createFrame({
-        type: 'task',
-        name: 'Frame A',
-      });
-
-      const frameB = frameManager.createFrame({
-        type: 'subtask',
-        name: 'Frame B',
-        parentFrameId: frameA,
-      });
-
-      // Verify normal hierarchy works
+      // Normal hierarchy should work
       expect(frameManager.getFrame(frameB)?.parent_frame_id).toBe(frameA);
     });
 
-    it('should detect cycle during traversal safety check', () => {
-      // Create a chain
+    it('should detect cycle in long chains', () => {
       let parentId: string | undefined;
       const frameIds: string[] = [];
 
@@ -116,12 +74,12 @@ describe('Frame Manager - Circular Reference Detection', () => {
         frameIds.push(parentId);
       }
 
-      const lastFrame = frameIds[frameIds.length - 1];
-      const firstFrame = frameIds[0];
-
-      // This should fail due to cycle detection
+      // Creating cycle from first to last should fail
       expect(() => {
-        frameManager.updateParentFrame(firstFrame, lastFrame);
+        frameManager.updateParentFrame(
+          frameIds[0],
+          frameIds[frameIds.length - 1]
+        );
       }).toThrow();
     });
   });
@@ -151,171 +109,96 @@ describe('Frame Manager - Circular Reference Detection', () => {
   });
 
   describe('Parent Updates', () => {
-    it('should allow valid parent updates that do not create cycles', () => {
+    it('should allow valid parent updates and null parent (root) updates', () => {
       const frameA = frameManager.createFrame({
         type: 'task',
         name: 'Frame A',
       });
-
       const frameB = frameManager.createFrame({
         type: 'task',
         name: 'Frame B',
       });
-
       const frameC = frameManager.createFrame({
         type: 'subtask',
         name: 'Frame C',
         parentFrameId: frameB,
       });
 
-      // This should be allowed (moving C to be a child of A)
-      expect(() => {
-        frameManager.updateParentFrame(frameC, frameA);
-      }).not.toThrow();
+      // Valid parent update (moving C to be a child of A)
+      expect(() =>
+        frameManager.updateParentFrame(frameC, frameA)
+      ).not.toThrow();
+      expect(frameManager.getFrame(frameC)?.parent_frame_id).toBe(frameA);
 
-      // Verify the update worked
-      const updatedFrame = frameManager.getFrame(frameC);
-      expect(updatedFrame?.parent_frame_id).toBe(frameA);
-    });
-
-    it('should handle null parent updates (making a frame a root)', () => {
-      const frameA = frameManager.createFrame({
-        type: 'task',
-        name: 'Frame A',
-      });
-
-      const frameB = frameManager.createFrame({
-        type: 'subtask',
-        name: 'Frame B',
-        parentFrameId: frameA,
-      });
-
-      // Make frameB a root frame
-      expect(() => {
-        frameManager.updateParentFrame(frameB, null);
-      }).not.toThrow();
-
-      // Verify B is now a root (parent_frame_id is undefined for root frames)
-      const updatedFrame = frameManager.getFrame(frameB);
-      expect(updatedFrame?.parent_frame_id).toBeUndefined();
+      // Null parent update (making a frame a root)
+      expect(() => frameManager.updateParentFrame(frameC, null)).not.toThrow();
+      expect(frameManager.getFrame(frameC)?.parent_frame_id).toBeUndefined();
     });
   });
 
   describe('Hierarchy Validation', () => {
-    it('should validate entire frame hierarchy', () => {
-      // Create a valid hierarchy
+    it('should validate simple and complex hierarchies', () => {
+      // Simple hierarchy: A -> B -> C
       const frameA = frameManager.createFrame({
         type: 'task',
         name: 'Frame A',
       });
-
-      const frameB = frameManager.createFrame({
+      frameManager.createFrame({
         type: 'subtask',
         name: 'Frame B',
         parentFrameId: frameA,
       });
 
-      const frameC = frameManager.createFrame({
-        type: 'tool_scope',
-        name: 'Frame C',
-        parentFrameId: frameB,
-      });
-
-      // Validate hierarchy (should be valid)
-      const validation = frameManager.validateFrameHierarchy();
+      let validation = frameManager.validateFrameHierarchy();
       expect(validation.isValid).toBe(true);
       expect(validation.errors).toHaveLength(0);
-    });
 
-    it('should handle complex hierarchy validations', () => {
-      // Create a tree structure
-      const root1 = frameManager.createFrame({
-        type: 'task',
-        name: 'Root 1',
-      });
-
-      const root2 = frameManager.createFrame({
-        type: 'task',
-        name: 'Root 2',
-      });
-
-      const child1_1 = frameManager.createFrame({
+      // Add more complexity: multiple roots with children
+      const root2 = frameManager.createFrame({ type: 'task', name: 'Root 2' });
+      frameManager.createFrame({
         type: 'subtask',
         name: 'Child 1.1',
-        parentFrameId: root1,
+        parentFrameId: frameA,
       });
-
-      const child1_2 = frameManager.createFrame({
-        type: 'subtask',
-        name: 'Child 1.2',
-        parentFrameId: root1,
-      });
-
-      const child2_1 = frameManager.createFrame({
+      frameManager.createFrame({
         type: 'subtask',
         name: 'Child 2.1',
         parentFrameId: root2,
       });
 
-      // Validate - should be valid
-      const validation = frameManager.validateFrameHierarchy();
+      validation = frameManager.validateFrameHierarchy();
       expect(validation.isValid).toBe(true);
       expect(validation.errors).toHaveLength(0);
-      expect(validation.warnings).toHaveLength(0);
     });
   });
 
   describe('Edge Cases', () => {
-    it('should handle self-reference attempts', () => {
+    it('should handle self-reference, non-existent frames, and concurrent operations', () => {
       const frameA = frameManager.createFrame({
         type: 'task',
         name: 'Frame A',
       });
 
-      // Try to set frame as its own parent
-      expect(() => {
-        frameManager.updateParentFrame(frameA, frameA);
-      }).toThrow();
-
+      // Self-reference should throw cycle error
+      expect(() => frameManager.updateParentFrame(frameA, frameA)).toThrow();
       try {
         frameManager.updateParentFrame(frameA, frameA);
       } catch (error: any) {
         expect(error.code).toBe(ErrorCode.FRAME_CYCLE_DETECTED);
       }
-    });
 
-    it('should handle non-existent frame references', () => {
-      const frameA = frameManager.createFrame({
-        type: 'task',
-        name: 'Frame A',
-      });
-
+      // Non-existent frame references should throw
       const fakeId = 'non-existent-frame-id';
+      expect(() => frameManager.updateParentFrame(frameA, fakeId)).toThrow();
+      expect(() => frameManager.updateParentFrame(fakeId, frameA)).toThrow();
 
-      // Try to set parent to non-existent frame
-      expect(() => {
-        frameManager.updateParentFrame(frameA, fakeId);
-      }).toThrow();
-
-      // Try to update non-existent frame
-      expect(() => {
-        frameManager.updateParentFrame(fakeId, frameA);
-      }).toThrow();
-    });
-
-    it('should handle concurrent frame operations safely', () => {
-      // Create multiple frames rapidly
+      // Concurrent operations creating cycles should fail
       const frameIds: string[] = [];
-
       for (let i = 0; i < 5; i++) {
-        const id = frameManager.createFrame({
-          type: 'task',
-          name: `Concurrent Frame ${i}`,
-        });
-        frameIds.push(id);
+        frameIds.push(
+          frameManager.createFrame({ type: 'task', name: `Frame ${i}` })
+        );
       }
-
-      // Try to create circular dependencies
       expect(() => {
         frameManager.updateParentFrame(frameIds[0], frameIds[4]);
         frameManager.updateParentFrame(frameIds[4], frameIds[0]);

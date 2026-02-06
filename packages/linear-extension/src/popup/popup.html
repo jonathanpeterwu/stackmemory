@@ -1,0 +1,93 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Create Linear Ticket</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div id="app">
+    <!-- Auth Required State -->
+    <div id="auth-required" class="screen hidden">
+      <h2>Linear + StackMemory</h2>
+      <p>Connect your Linear account to create tickets.</p>
+      <button id="auth-btn" class="btn btn-primary">Connect Linear</button>
+    </div>
+
+    <!-- Create Ticket Form -->
+    <div id="create-form" class="screen hidden">
+      <h2>Create Ticket</h2>
+
+      <div class="form-group">
+        <label for="title">Title</label>
+        <input type="text" id="title" placeholder="Issue title" maxlength="200">
+      </div>
+
+      <div class="form-group">
+        <label for="project">Project</label>
+        <select id="project">
+          <option value="">Select project...</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="priority">Priority</label>
+        <select id="priority">
+          <option value="none">None</option>
+          <option value="low">Low</option>
+          <option value="medium" selected>Medium</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="description">Description</label>
+        <textarea id="description" rows="4" placeholder="Issue description"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>
+          <input type="checkbox" id="auto-agent" checked>
+          Spawn Claude Code agent
+        </label>
+      </div>
+
+      <div class="form-group source-info" id="source-info">
+        <small>Source: <span id="source-url"></span></small>
+      </div>
+
+      <div class="actions">
+        <button id="create-btn" class="btn btn-primary">Create Ticket</button>
+        <button id="cancel-btn" class="btn btn-secondary">Cancel</button>
+      </div>
+    </div>
+
+    <!-- Success State -->
+    <div id="success" class="screen hidden">
+      <div class="success-icon">✓</div>
+      <h2>Ticket Created</h2>
+      <p id="ticket-link"></p>
+      <button id="view-btn" class="btn btn-primary">View in Linear</button>
+      <button id="new-btn" class="btn btn-secondary">Create Another</button>
+    </div>
+
+    <!-- Loading State -->
+    <div id="loading" class="screen hidden">
+      <div class="spinner"></div>
+      <p id="loading-text">Creating ticket...</p>
+    </div>
+
+    <!-- Error State -->
+    <div id="error" class="screen hidden">
+      <div class="error-icon">✕</div>
+      <h2>Error</h2>
+      <p id="error-message"></p>
+      <button id="retry-btn" class="btn btn-primary">Try Again</button>
+    </div>
+  </div>
+
+  <script src="../dist/popup.js" type="module"></script>
+</body>
+</html>

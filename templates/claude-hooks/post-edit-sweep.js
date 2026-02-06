@@ -15,6 +15,10 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+const SWEEP_STATE_DIR =
+  process.env.SWEEP_STATE_DIR ||
+  path.join(process.env.HOME || '/tmp', '.stackmemory');
+
 const CONFIG = {
   enabled: process.env.SWEEP_ENABLED !== 'false',
   maxRecentDiffs: 5,
@@ -46,16 +50,9 @@ const CONFIG = {
     '.svelte',
     '.astro',
   ],
-  stateFile: path.join(
-    process.env.HOME || '/tmp',
-    '.stackmemory',
-    'sweep-state.json'
-  ),
-  logFile: path.join(
-    process.env.HOME || '/tmp',
-    '.stackmemory',
-    'sweep-predictions.log'
-  ),
+  stateFile: path.join(SWEEP_STATE_DIR, 'sweep-state.json'),
+  logFile: path.join(SWEEP_STATE_DIR, 'sweep-predictions.log'),
+  // Python script stays at shared location (shared server)
   pythonScript: path.join(
     process.env.HOME || '/tmp',
     '.stackmemory',

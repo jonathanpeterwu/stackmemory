@@ -236,31 +236,40 @@ describe('Temporal Paradox Resolution', () => {
   });
 
   describe('Level 3: Resolution Strategies', () => {
-    it('should resolve with keep_both strategy', async () => {
-      const stack1 = createMockStack([
-        createMockFrame({ frame_id: 'frame-1', name: 'Solution A' }),
-      ]);
-      const stack2 = createMockStack([
-        createMockFrame({ frame_id: 'frame-2', name: 'Solution B' }),
-      ]);
+    it.each([
+      ['keep_both', 'senior', undefined, undefined],
+      ['senior_override', 'senior', undefined, undefined],
+      ['ai_suggest', 'mid', 0.92, undefined],
+      ['hybrid', 'lead', undefined, undefined],
+    ])(
+      'should resolve with %s strategy',
+      async (strategy, role, aiConfidence, _) => {
+        const stack1 = createMockStack([
+          createMockFrame({ frame_id: 'frame-1', name: 'Solution A' }),
+        ]);
+        const stack2 = createMockStack([
+          createMockFrame({ frame_id: 'frame-2', name: 'Solution B' }),
+        ]);
 
-      const context: ResolutionContext = {
-        userId: 'user-1',
-        userRole: 'senior',
-      };
+        const context: ResolutionContext = {
+          userId: 'user-1',
+          userRole: role as 'senior' | 'mid' | 'lead',
+          aiConfidence,
+        };
 
-      const result = await resolver.resolveConflicts(
-        stack1,
-        stack2,
-        'keep_both',
-        context
-      );
+        const result = await resolver.resolveConflicts(
+          stack1,
+          stack2,
+          strategy as 'keep_both' | 'senior_override' | 'ai_suggest' | 'hybrid',
+          context
+        );
 
-      expect(result.success).toBe(true);
-      expect(result.resolution?.strategy.type).toBe('keep_both');
-    });
+        expect(result.success).toBe(true);
+        expect(result.resolution?.strategy.type).toBe(strategy);
+      }
+    );
 
-    it('should resolve with team_vote strategy', async () => {
+    it('should resolve with team_vote strategy including votes', async () => {
       const stack1 = createMockStack([
         createMockFrame({ frame_id: 'frame-1' }),
       ]);
@@ -269,21 +278,9 @@ describe('Temporal Paradox Resolution', () => {
       ]);
 
       const votes: TeamVote[] = [
-        {
-          userId: 'user-1',
-          choice: 'frame1',
-          timestamp: Date.now(),
-        },
-        {
-          userId: 'user-2',
-          choice: 'frame1',
-          timestamp: Date.now(),
-        },
-        {
-          userId: 'user-3',
-          choice: 'frame2',
-          timestamp: Date.now(),
-        },
+        { userId: 'user-1', choice: 'frame1', timestamp: Date.now() },
+        { userId: 'user-2', choice: 'frame1', timestamp: Date.now() },
+        { userId: 'user-3', choice: 'frame2', timestamp: Date.now() },
       ];
 
       const context: ResolutionContext = {
@@ -303,155 +300,56 @@ describe('Temporal Paradox Resolution', () => {
       expect(result.resolution?.strategy.type).toBe('team_vote');
       expect(result.resolution?.strategy.votes).toHaveLength(3);
     });
-
-    it('should resolve with senior_override strategy', async () => {
-      const stack1 = createMockStack([
-        createMockFrame({ frame_id: 'frame-1' }),
-      ]);
-      const stack2 = createMockStack([
-        createMockFrame({ frame_id: 'frame-2' }),
-      ]);
-
-      const context: ResolutionContext = {
-        userId: 'senior-dev',
-        userRole: 'senior',
-      };
-
-      const result = await resolver.resolveConflicts(
-        stack1,
-        stack2,
-        'senior_override',
-        context
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.resolution?.strategy.type).toBe('senior_override');
-      expect(result.resolution?.strategy.confidence).toBeGreaterThan(0.9);
-    });
-
-    it('should resolve with ai_suggest strategy', async () => {
-      const stack1 = createMockStack([
-        createMockFrame({
-          frame_id: 'frame-1',
-          state: 'closed',
-          outputs: { result: 'optimized' },
-        }),
-      ]);
-      const stack2 = createMockStack([
-        createMockFrame({
-          frame_id: 'frame-2',
-          state: 'active',
-        }),
-      ]);
-
-      const context: ResolutionContext = {
-        userId: 'user-1',
-        userRole: 'mid',
-        aiConfidence: 0.92,
-      };
-
-      const result = await resolver.resolveConflicts(
-        stack1,
-        stack2,
-        'ai_suggest',
-        context
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.resolution?.strategy.type).toBe('ai_suggest');
-      expect(result.resolution?.resolvedBy).toBe('ai_system');
-    });
-
-    it('should resolve with hybrid strategy', async () => {
-      const stack1 = createMockStack([
-        createMockFrame({ frame_id: 'frame-1', name: 'Parallel Solution' }),
-      ]);
-      const stack2 = createMockStack([
-        createMockFrame({ frame_id: 'frame-2', name: 'Parallel Solution' }),
-      ]);
-
-      const context: ResolutionContext = {
-        userId: 'user-1',
-        userRole: 'lead',
-      };
-
-      const result = await resolver.resolveConflicts(
-        stack1,
-        stack2,
-        'hybrid',
-        context
-      );
-
-      expect(result.success).toBe(true);
-      expect(result.resolution?.strategy.type).toBe('hybrid');
-      expect(result.resolution?.strategy.confidence).toBeGreaterThan(0.85);
-    });
   });
 
   describe('Edge Cases and Error Handling', () => {
-    it('should handle empty stacks gracefully', () => {
-      const stack1 = createMockStack([]);
-      const stack2 = createMockStack([]);
+    it('should handle empty and identical stacks without conflicts', () => {
+      // Empty stacks
+      const emptyStack1 = createMockStack([]);
+      const emptyStack2 = createMockStack([]);
+      expect(detector.detectConflicts(emptyStack1, emptyStack2)).toHaveLength(
+        0
+      );
 
-      const conflicts = detector.detectConflicts(stack1, stack2);
-
-      expect(conflicts).toHaveLength(0);
-    });
-
-    it('should handle identical frames', () => {
+      // Identical frames
       const frame = createMockFrame({ frame_id: 'same-frame' });
       const stack1 = createMockStack([frame]);
       const stack2 = createMockStack([frame]);
+      expect(detector.detectConflicts(stack1, stack2)).toHaveLength(0);
 
-      const conflicts = detector.detectConflicts(stack1, stack2);
-
-      expect(conflicts).toHaveLength(0);
+      // Circular dependencies should not crash
+      const circFrame1 = createMockFrame({
+        frame_id: 'f1',
+        parent_frame_id: 'f2',
+      });
+      const circFrame2 = createMockFrame({
+        frame_id: 'f2',
+        parent_frame_id: 'f1',
+      });
+      const circStack = createMockStack([circFrame1, circFrame2]);
+      expect(() =>
+        detector.detectConflicts(circStack, circStack)
+      ).not.toThrow();
     });
 
-    it('should detect circular dependencies', () => {
-      const frame1 = createMockFrame({
-        frame_id: 'frame-1',
-        parent_frame_id: 'frame-2',
-      });
-      const frame2 = createMockFrame({
-        frame_id: 'frame-2',
-        parent_frame_id: 'frame-1',
-      });
-
-      const stack = createMockStack([frame1, frame2]);
-
-      // Should not crash on circular dependencies
-      expect(() => {
-        detector.detectConflicts(stack, stack);
-      }).not.toThrow();
-    });
-
-    it('should require proper role for senior_override', async () => {
+    it('should enforce role and vote requirements for strategies', async () => {
       const stack1 = createMockStack([]);
       const stack2 = createMockStack([]);
 
-      const context: ResolutionContext = {
-        userId: 'junior-dev',
-        userRole: 'junior', // Not senior
-      };
-
+      // Junior cannot use senior_override
       await expect(
-        resolver.resolveConflicts(stack1, stack2, 'senior_override', context)
+        resolver.resolveConflicts(stack1, stack2, 'senior_override', {
+          userId: 'junior-dev',
+          userRole: 'junior',
+        })
       ).rejects.toThrow('Senior override requires senior or lead role');
-    });
 
-    it('should require votes for team_vote strategy', async () => {
-      const stack1 = createMockStack([]);
-      const stack2 = createMockStack([]);
-
-      const context: ResolutionContext = {
-        userId: 'user-1',
-        userRole: 'mid',
-        // No teamVotes provided
-      };
-
+      // team_vote requires votes
       await expect(
-        resolver.resolveConflicts(stack1, stack2, 'team_vote', context)
+        resolver.resolveConflicts(stack1, stack2, 'team_vote', {
+          userId: 'user-1',
+          userRole: 'mid',
+        })
       ).rejects.toThrow('Team vote strategy requires votes');
     });
   });

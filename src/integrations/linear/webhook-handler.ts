@@ -10,7 +10,11 @@ import { LinearAuthManager } from './auth.js';
 import { LinearClient } from './client.js';
 import { IntegrationError, ErrorCode } from '../../core/errors/index.js';
 import { logger } from '../../core/monitoring/logger.js';
+import { ClaudeCodeSubagentClient } from '../claude-code/subagent-client.js';
 import type { Request, Response } from 'express';
+
+/** Labels that trigger automated Claude Code subagent */
+const AUTOMATION_LABELS = ['automated', 'claude-code', 'stackmemory'];
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
   const value = process.env[key];
@@ -180,6 +184,106 @@ export class LinearWebhookHandler {
     await this.storeLinearMapping(taskId, issue.id, issue.identifier);
 
     logger.info(`Created task ${taskId} from Linear issue ${issue.identifier}`);
+
+    // Check if we should spawn a Claude Code subagent
+    if (this.shouldSpawnSubagent(issue)) {
+      await this.spawnSubagentForIssue(issue);
+    }
+  }
+
+  /**
+   * Check if issue should trigger subagent spawn
+   */
+  private shouldSpawnSubagent(issue: LinearWebhookPayload['data']): boolean {
+    if (!issue.labels) return false;
+    const labelNames = issue.labels.map((l) => l.name.toLowerCase());
+    return AUTOMATION_LABELS.some((label) => labelNames.includes(label));
+  }
+
+  /**
+   * Spawn a Claude Code subagent for the issue
+   */
+  private async spawnSubagentForIssue(
+    issue: LinearWebhookPayload['data']
+  ): Promise<void> {
+    logger.info(`Spawning subagent for ${issue.identifier}`);
+
+    try {
+      const client = new ClaudeCodeSubagentClient();
+      const agentType = this.determineAgentType(issue.labels || []);
+      const task = this.buildTaskPrompt(issue);
+      const sourceUrl = this.extractSourceUrl(issue.description);
+
+      const result = await client.executeSubagent({
+        type: agentType,
+        task,
+        context: {
+          linearIssueId: issue.id,
+          linearIdentifier: issue.identifier,
+          linearUrl: issue.url,
+          sourceUrl: sourceUrl || issue.url,
+        },
+        timeout: 5 * 60 * 1000, // 5 min
+      });
+
+      logger.info(`Subagent completed for ${issue.identifier}`, {
+        sessionId: result.sessionId,
+        status: result.status,
+      });
+    } catch (error) {
+      logger.error(`Failed to spawn subagent for ${issue.identifier}`, {
+        error: error instanceof Error ? error.message : 'Unknown error',
+      });
+    }
+  }
+
+  /**
+   * Determine agent type from issue labels
+   */
+  private determineAgentType(
+    labels: Array<{ name: string }>
+  ): 'code' | 'review' | 'context' {
+    const lowerLabels = labels.map((l) => l.name.toLowerCase());
+
+    if (lowerLabels.some((l) => l.includes('review') || l.includes('pr'))) {
+      return 'review';
+    }
+
+    if (
+      lowerLabels.some((l) => l.includes('explore') || l.includes('research'))
+    ) {
+      return 'context';
+    }
+
+    return 'code';
+  }
+
+  /**
+   * Build task prompt from Linear issue
+   */
+  private buildTaskPrompt(issue: LinearWebhookPayload['data']): string {
+    const parts = [`Linear Issue: ${issue.identifier} - ${issue.title}`];
+
+    if (issue.description) {
+      const quoteMatch = issue.description.match(/^>\s*(.+?)(?:\n\n|$)/s);
+      if (quoteMatch) {
+        parts.push('', 'Context:', quoteMatch[1].replace(/^>\s*/gm, ''));
+      } else {
+        parts.push('', 'Description:', issue.description);
+      }
+    }
+
+    parts.push('', `URL: ${issue.url}`);
+    return parts.join('\n');
+  }
+
+  /**
+   * Extract source URL from description
+   */
+  private extractSourceUrl(description?: string): string | undefined {
+    if (!description) return undefined;
+    const urlMatch = description.match(/\*\*Source:\*\*\s*\[.+?\]\((.+?)\)/);
+    return urlMatch?.[1];
   }
 
   /**

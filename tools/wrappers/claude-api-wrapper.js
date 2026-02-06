@@ -3,9 +3,8 @@
 // Simple Claude API wrapper that mimics the Claude CLI interface
 // but uses the Anthropic API directly with the API key from environment
 
-const Anthropic = require('@anthropic-ai/sdk');
-const fs = require('fs');
-const path = require('path');
+import Anthropic from '@anthropic-ai/sdk';
+import { readFileSync } from 'fs';
 
 // Get API key from environment
 const apiKey = process.env.ANTHROPIC_API_KEY;
@@ -37,7 +36,7 @@ for (let i = 0; i < args.length; i++) {
 
 // If no prompt provided, read from stdin
 if (!prompt) {
-  prompt = fs.readFileSync(0, 'utf-8');
+  prompt = readFileSync(0, 'utf-8');
 }
 
 if (!prompt) {

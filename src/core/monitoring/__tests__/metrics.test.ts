@@ -15,7 +15,8 @@ describe('Metrics', () => {
   });
 
   describe('recording metrics', () => {
-    it('should record, increment, and time metrics', async () => {
+    it('should record, increment, and time metrics with stats', async () => {
+      // Record metrics
       await Metrics.record('test.metric', 10);
       await Metrics.record('test.metric', 20);
       await Metrics.record('test.metric', 30);
@@ -26,22 +27,16 @@ describe('Metrics', () => {
       expect(stats['test.metric'].avg).toBe(20);
       expect(stats['test.metric'].min).toBe(10);
       expect(stats['test.metric'].max).toBe(30);
-    });
 
-    it('should increment counters', async () => {
+      // Increment counters
       await Metrics.increment('test.counter');
       await Metrics.increment('test.counter');
+      expect(Metrics.getStats('test.counter')['test.counter'].sum).toBe(2);
 
-      const stats = Metrics.getStats('test.counter');
-      expect(stats['test.counter'].sum).toBe(2);
-    });
-
-    it('should record timing with tags', async () => {
+      // Timing with tags
       await Metrics.timing('api.latency', 50, { endpoint: '/test' });
       await Metrics.timing('api.latency', 100);
-
-      const stats = Metrics.getStats('api.latency');
-      expect(stats['api.latency'].avg).toBe(75);
+      expect(Metrics.getStats('api.latency')['api.latency'].avg).toBe(75);
     });
   });
 
@@ -57,22 +52,16 @@ describe('Metrics', () => {
   });
 
   describe('events and reset', () => {
-    it('should emit metric events', async () => {
+    it('should emit events and clear on reset', async () => {
       const handler = vi.fn();
       Metrics.on('metric', handler);
 
       await Metrics.record('event.test', 100);
-
       expect(handler).toHaveBeenCalledWith(
-        expect.objectContaining({
-          metric: 'event.test',
-          value: 100,
-        })
+        expect.objectContaining({ metric: 'event.test', value: 100 })
       );
-    });
 
-    it('should clear all metrics on reset', async () => {
-      await Metrics.record('test.metric', 42);
+      // Reset should clear all metrics
       Metrics.reset();
       expect(Object.keys(Metrics.getStats()).length).toBe(0);
     });

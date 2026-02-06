@@ -21,14 +21,11 @@ describe('Logger', () => {
   });
 
   describe('log levels', () => {
-    it('should have correct log level values', () => {
+    it('should have correct log level values and return singleton', () => {
       expect(LogLevel.ERROR).toBe(0);
       expect(LogLevel.WARN).toBe(1);
       expect(LogLevel.INFO).toBe(2);
       expect(LogLevel.DEBUG).toBe(3);
-    });
-
-    it('should return singleton instance', () => {
       expect(Logger.getInstance()).toBe(Logger.getInstance());
     });
   });
@@ -69,23 +66,22 @@ describe('Logger level configuration', () => {
     vi.restoreAllMocks();
   });
 
-  it('should log debug when level is DEBUG', async () => {
+  it('should respect log level configuration', async () => {
+    // DEBUG level should log debug
     vi.resetModules();
     process.env['STACKMEMORY_LOG_LEVEL'] = 'DEBUG';
-    const { Logger } = await import('../logger.js');
+    let { Logger } = await import('../logger.js');
 
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    let logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     Logger.getInstance().debug('Debug message');
-
     expect(logSpy.mock.calls[0][0]).toContain('DEBUG');
-  });
 
-  it('should filter info/warn at ERROR level', async () => {
+    // ERROR level should filter info/warn
     vi.resetModules();
     process.env['STACKMEMORY_LOG_LEVEL'] = 'ERROR';
-    const { Logger } = await import('../logger.js');
+    ({ Logger } = await import('../logger.js'));
 
-    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
     const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
     const logger = Logger.getInstance();
 
