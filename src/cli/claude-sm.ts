@@ -248,13 +248,15 @@ class ClaudeSM {
 
   private startGEPAWatcher(): void {
     // Find CLAUDE.md and AGENT.md in current directory or project root
-    const watchFiles = ['CLAUDE.md', 'AGENT.md']
+    const watchFiles = ['CLAUDE.md', 'AGENT.md', 'AGENTS.md']
       .map((f) => path.join(process.cwd(), f))
       .filter((p) => fs.existsSync(p));
 
     if (watchFiles.length === 0) {
       console.log(
-        chalk.gray('   Prompt Forge: disabled (no CLAUDE.md or AGENT.md found)')
+        chalk.gray(
+          '   Prompt Forge: disabled (no CLAUDE.md, AGENT.md, or AGENTS.md found)'
+        )
       );
       return;
     }
