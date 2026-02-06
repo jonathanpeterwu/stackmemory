@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.5.66",
+  "version": "0.5.67",
   "description": "Project-scoped memory for AI coding tools. Durable context across sessions with MCP integration, frames, and smart retrieval.",
   "engines": {
     "node": ">=20.0.0",
