@@ -1231,6 +1231,152 @@ export function createRalphCommand(): Command {
       }
     });
 
+  // Linear task execution via RLM orchestrator
+  ralph
+    .command('linear')
+    .description(
+      'Execute Linear tasks via RLM orchestrator (pull → execute → update)'
+    )
+    .argument('[action]', 'Action: next, all, task <id>, preview [id]', 'next')
+    .argument('[taskId]', 'Task ID for task/preview actions')
+    .option(
+      '--priority <level>',
+      'Filter by priority: urgent, high, medium, low'
+    )
+    .option('--tag <tag>', 'Filter by tag')
+    .option('--dry-run', 'Show plan without executing')
+    .option(
+      '--max-concurrent <n>',
+      'Max parallel tasks (default: 1, sequential)',
+      '1'
+    )
+    .action(
+      async (action: string, taskId: string | undefined, options: any) => {
+        return trace.command(
+          'ralph-linear',
+          { action, taskId, ...options },
+          async () => {
+            try {
+              // Dynamically import and initialize dependencies
+              const { LinearTaskManager } =
+                await import('../../features/tasks/linear-task-manager.js');
+              const { RecursiveAgentOrchestrator } =
+                await import('../../skills/recursive-agent-orchestrator.js');
+              const { SpecGeneratorSkill } =
+                await import('../../skills/spec-generator-skill.js');
+              const { LinearTaskRunner } =
+                await import('../../skills/linear-task-runner.js');
+
+              console.log('🔌 Initializing Linear task runner...');
+
+              const taskManager = new LinearTaskManager();
+
+              // Load tasks from Linear
+              const loadedCount = await taskManager.loadFromLinear();
+              console.log(`📋 Loaded ${loadedCount} tasks from Linear`);
+
+              // We need a minimal context for the spec skill
+              const specSkill = new SpecGeneratorSkill({
+                projectId: 'cli',
+                userId: 'cli-user',
+              } as any);
+
+              // Get frame manager and context retriever for RLM
+              // For CLI usage, create a minimal orchestrator
+              const { DualStackManager } =
+                await import('../../core/context/dual-stack-manager.js');
+              const { ContextRetriever } =
+                await import('../../core/retrieval/context-retriever.js');
+              const { SQLiteAdapter } =
+                await import('../../core/database/sqlite-adapter.js');
+
+              const db = new SQLiteAdapter();
+              await db.initialize();
+
+              const dualStack = new DualStackManager(db);
+              const contextRetriever = new ContextRetriever(db);
+              const frameManager = dualStack.getActiveStack();
+
+              const rlm = new RecursiveAgentOrchestrator(
+                frameManager,
+                dualStack,
+                contextRetriever,
+                taskManager
+              );
+
+              const runner = new LinearTaskRunner(
+                taskManager,
+                rlm,
+                { projectId: 'cli', userId: 'cli-user' } as any,
+                specSkill
+              );
+
+              // Execute based on action
+              let result;
+              const runOpts = {
+                priority: options.priority,
+                tag: options.tag,
+                dryRun: options.dryRun,
+                maxConcurrent: parseInt(options.maxConcurrent),
+              };
+
+              switch (action) {
+                case 'next':
+                  console.log('🚀 Running next task...');
+                  result = await runner.runNext(runOpts);
+                  break;
+
+                case 'all':
+                  console.log('🚀 Running all tasks...');
+                  result = await runner.runAll(runOpts);
+                  break;
+
+                case 'task':
+                  if (!taskId) {
+                    console.error(
+                      '❌ Task ID required: ralph linear task <id>'
+                    );
+                    return;
+                  }
+                  console.log(`🚀 Running task ${taskId}...`);
+                  result = await runner.runTask(taskId, runOpts);
+                  break;
+
+                case 'preview':
+                  result = await runner.preview(taskId);
+                  break;
+
+                default:
+                  console.log('🚀 Running next task...');
+                  result = await runner.runNext(runOpts);
+                  break;
+              }
+
+              // Display result
+              if (result.success) {
+                console.log(`✅ ${result.message}`);
+              } else {
+                console.log(`❌ ${result.message}`);
+              }
+
+              if (result.data) {
+                console.log(JSON.stringify(result.data, null, 2));
+              }
+
+              // Cleanup
+              taskManager.destroy();
+            } catch (error: unknown) {
+              logger.error('Linear task execution failed', error as Error);
+              console.error(
+                '❌ Linear execution failed:',
+                (error as Error).message
+              );
+            }
+          }
+        );
+      }
+    );
+
   return ralph;
 }
 

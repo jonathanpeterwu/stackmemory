@@ -784,27 +784,33 @@ program.addCommand(clearCommand);
 program.addCommand(serviceCommand);
 program.addCommand(createHooksCommand());
 
-// Register skills commands (optional, lazy-loaded)
+// Register feature-flagged commands (awaited before parse)
+const lazyCommands: Promise<void>[] = [];
+
 if (isFeatureEnabled('skills')) {
-  import('./commands/skills.js')
-    .then(({ createSkillsCommand }) =>
-      program.addCommand(createSkillsCommand())
-    )
-    .catch(() => {
-      // Skills integration not available - silently skip
-    });
+  lazyCommands.push(
+    import('./commands/skills.js')
+      .then(({ createSkillsCommand }) =>
+        program.addCommand(createSkillsCommand())
+      )
+      .catch(() => {
+        // Skills integration not available - silently skip
+      })
+  );
 }
 
-// Register ralph commands (feature-flagged, lazy-loaded)
+// Register ralph commands (feature-flagged)
 // Default ON for development, OFF for npm package users
 if (isFeatureEnabled('ralph')) {
-  import('./commands/ralph.js')
-    .then(({ default: createRalphCommand }) =>
-      program.addCommand(createRalphCommand())
-    )
-    .catch(() => {
-      // Ralph integration not available - silently skip
-    });
+  lazyCommands.push(
+    import('./commands/ralph.js')
+      .then(({ default: createRalphCommand }) =>
+        program.addCommand(createRalphCommand())
+      )
+      .catch(() => {
+        // Ralph integration not available - silently skip
+      })
+  );
 }
 program.addCommand(createDaemonCommand());
 program.addCommand(createSweepCommand());
@@ -817,13 +823,15 @@ program.addCommand(createPingCommand());
 
 // Register WhatsApp/SMS commands (lazy-loaded, optional)
 if (isFeatureEnabled('whatsapp')) {
-  import('./commands/sms-notify.js')
-    .then(({ createSMSNotifyCommand }) =>
-      program.addCommand(createSMSNotifyCommand())
-    )
-    .catch(() => {
-      // WhatsApp integration not available - silently skip
-    });
+  lazyCommands.push(
+    import('./commands/sms-notify.js')
+      .then(({ createSMSNotifyCommand }) =>
+        program.addCommand(createSMSNotifyCommand())
+      )
+      .catch(() => {
+        // WhatsApp integration not available - silently skip
+      })
+  );
 }
 program.addCommand(createRetrievalCommands());
 program.addCommand(createDiscoveryCommands());
@@ -1279,7 +1287,7 @@ const isMainModule =
   process.argv[1]?.includes('tsx');
 
 if (isMainModule) {
-  program.parse();
+  Promise.all(lazyCommands).then(() => program.parse());
 }
 
 export { program };

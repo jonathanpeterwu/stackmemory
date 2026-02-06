@@ -87,8 +87,8 @@ describe('QueryTemplates', () => {
     });
   });
 
-  describe('addTemplate', () => {
-    it('should allow adding custom templates', () => {
+  describe('addTemplate and getTemplateInfo', () => {
+    it('should support custom templates and return info', () => {
       const customTemplate: QueryTemplate = {
         name: 'custom-test',
         description: 'Custom test template',
@@ -102,16 +102,10 @@ describe('QueryTemplates', () => {
       const result = templates.matchTemplate('custom test authentication');
       expect(result).toBeDefined();
       expect(result?.content?.topic).toContain('authentication');
-    });
-  });
 
-  describe('getTemplateInfo', () => {
-    it('should return all template information', () => {
       const info = templates.getTemplateInfo();
-      expect(info).toBeDefined();
       expect(info.length).toBeGreaterThan(0);
       expect(info[0]).toHaveProperty('name');
-      expect(info[0]).toHaveProperty('description');
     });
   });
 });

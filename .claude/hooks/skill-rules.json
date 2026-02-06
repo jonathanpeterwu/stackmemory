@@ -239,6 +239,36 @@
         ],
         "contentPatterns": ["performance\\.now", "console\\.time", "profiler"]
       }
+    },
+    "spec-generator": {
+      "description": "Iterative spec document generation (one-pager, dev-spec, prompt-plan, agents)",
+      "priority": 8,
+      "triggers": {
+        "keywords": ["spec", "one-pager", "dev-spec", "prompt-plan", "agents.md", "scaffold"],
+        "keywordPatterns": ["\\bspec\\b", "one.pager", "dev.spec", "prompt.plan"],
+        "pathPatterns": ["docs/specs/**", "**/AGENTS.md", "**/ONE_PAGER.md", "**/PROMPT_PLAN.md"],
+        "intentPatterns": [
+          "(?:generate|create).*(?:spec|one-pager|dev-spec)",
+          "(?:spec).*(?:generate|validate|update|list)"
+        ],
+        "contentPatterns": ["SpecGeneratorSkill", "ONE_PAGER", "DEV_SPEC", "PROMPT_PLAN"]
+      },
+      "relatedSkills": ["linear-task-runner"]
+    },
+    "linear-task-runner": {
+      "description": "Execute Linear tasks via RLM orchestrator",
+      "priority": 8,
+      "triggers": {
+        "keywords": ["linear-run", "run task", "execute task", "task runner", "ralph linear"],
+        "keywordPatterns": ["linear.run", "run.*task", "task.*runner"],
+        "pathPatterns": ["**/linear-task-runner.ts"],
+        "intentPatterns": [
+          "(?:run|execute).*(?:linear|task)",
+          "(?:linear).*(?:run|execute|next|all)"
+        ],
+        "contentPatterns": ["LinearTaskRunner", "runNext", "runAll", "runTask"]
+      },
+      "relatedSkills": ["spec-generator", "linear-integration"]
     }
   }
 }

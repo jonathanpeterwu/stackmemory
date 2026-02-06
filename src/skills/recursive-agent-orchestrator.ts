@@ -12,6 +12,8 @@
  * - Full operation transparency
  */
 
+import * as fs from 'fs';
+import * as path from 'path';
 import { logger } from '../core/monitoring/logger.js';
 import { FrameManager } from '../core/context/index.js';
 import { DualStackManager } from '../core/context/dual-stack-manager.js';
@@ -36,9 +38,9 @@ export type SubagentType =
 export interface SubagentConfig {
   type: SubagentType;
   model:
-    | 'claude-sonnet-4-20250514'
-    | 'claude-3-5-haiku-20241022'
-    | 'claude-3-opus-20240229';
+    | 'claude-sonnet-4-5-20250929'
+    | 'claude-haiku-4-5-20251001'
+    | 'claude-opus-4-6';
   maxTokens: number;
   temperature: number;
   systemPrompt: string;
@@ -164,45 +166,50 @@ export class RecursiveAgentOrchestrator {
     // Planning Agent - Task decomposer
     configs.set('planning', {
       type: 'planning',
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       maxTokens: 20000,
       temperature: 0.3,
-      systemPrompt: `You are a Planning Agent specializing in task decomposition.
-        Analyze complex tasks and break them into parallel and sequential subtasks.
-        Create detailed execution plans with clear dependencies.
-        Consider edge cases and potential failures.
-        Output structured task trees with agent assignments.`,
+      systemPrompt: `You decompose tasks into parallel/sequential subtask trees.
+Output JSON: { subtasks: [{ id, description, agent, dependencies[], parallel: bool }] }
+Rules:
+- Maximize parallelism — independent tasks run concurrently
+- Each subtask names its agent type: planning, code, testing, linting, review, improve, context, publish
+- Include failure modes and rollback steps for risky operations
+- Keep subtask descriptions actionable (verb + object + constraint)`,
       capabilities: ['decompose', 'analyze', 'strategize', 'prioritize'],
     });
 
     // Code Agent - Implementation specialist
     configs.set('code', {
       type: 'code',
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       maxTokens: 30000,
       temperature: 0.2,
-      systemPrompt: `You are a Code Agent specializing in implementation.
-        Write clean, maintainable, production-ready code.
-        Follow project conventions and best practices.
-        Include comprehensive error handling.
-        Document complex logic with clear comments.`,
+      systemPrompt: `You implement code changes. Read existing code before modifying.
+Output JSON: { success: bool, filesChanged: string[], changes: string[], notes: string[] }
+Rules:
+- Follow existing project conventions (naming, imports, patterns)
+- Add .js extensions to relative TypeScript imports (ESM)
+- Return undefined over throwing; log+continue over crash
+- No emojis, no unnecessary comments, functions under 20 lines
+- Validate inputs at system boundaries only`,
       capabilities: ['implement', 'refactor', 'optimize', 'document'],
     });
 
     // Testing Agent - Test generation and validation
     configs.set('testing', {
       type: 'testing',
-      model: 'claude-sonnet-4-20250514', // High quality for test generation
+      model: 'claude-sonnet-4-5-20250929',
       maxTokens: 25000,
       temperature: 0.1,
-      systemPrompt: `You are a Testing Agent specializing in test generation and validation.
-        Generate comprehensive test suites including:
-        - Unit tests for all functions/methods
-        - Integration tests for API endpoints
-        - E2E tests for critical user flows
-        - Edge cases and error scenarios
-        Ensure 100% code coverage where possible.
-        Validate that all tests pass and are meaningful.`,
+      systemPrompt: `You generate and run tests using the project's test framework.
+Output JSON: { success: bool, tests: [{ name, type, file }], coverage: string, notes: string[] }
+Rules:
+- Use vitest (describe/it/expect) — check existing tests for patterns
+- Prioritize: critical paths > edge cases > happy paths
+- Each test should assert meaningful behavior, not implementation details
+- Use parameterized tests (it.each) to consolidate similar cases
+- Run tests after writing: npm run test:run`,
       capabilities: [
         'generate-tests',
         'validate',
@@ -214,35 +221,33 @@ export class RecursiveAgentOrchestrator {
     // Linting Agent - Code quality enforcer
     configs.set('linting', {
       type: 'linting',
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-haiku-4-5-20251001',
       maxTokens: 15000,
       temperature: 0,
-      systemPrompt: `You are a Linting Agent specializing in code quality.
-        Check for:
-        - Syntax errors and type issues
-        - Code formatting and style violations
-        - Security vulnerabilities
-        - Performance anti-patterns
-        - Unused imports and dead code
-        Provide actionable fixes for all issues found.`,
+      systemPrompt: `You run lint checks and fix issues.
+Output JSON: { success: bool, issuesFound: number, issuesFixed: number, remaining: string[] }
+Rules:
+- Run: npm run lint (ESLint + Prettier)
+- Auto-fix: npm run lint:fix
+- ESM imports require .js extension on relative paths
+- Report unfixable issues with file:line format`,
       capabilities: ['lint', 'format', 'type-check', 'security-scan'],
     });
 
     // Review Agent - Multi-stage code reviewer
     configs.set('review', {
       type: 'review',
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       maxTokens: 25000,
       temperature: 0.2,
-      systemPrompt: `You are a Review Agent specializing in multi-stage code review.
-        Perform thorough reviews focusing on:
-        - Architecture and design patterns
-        - Code quality and maintainability
-        - Performance implications
-        - Security considerations
-        - Test coverage adequacy
-        Suggest specific improvements with examples.
-        Rate quality on a 0-1 scale.`,
+      systemPrompt: `You review code changes for quality, security, and correctness.
+Output JSON: { qualityScore: 0-1, issues: [{ severity, file, line, description, suggestion }], approved: bool }
+Rules:
+- Score 0.85+ = approved, below = needs improvement
+- Flag: SQL injection, XSS, secret exposure, command injection
+- Flag: functions > 20 lines, cyclomatic complexity > 5
+- Flag: missing error handling at system boundaries
+- Suggest specific fixes, not vague improvements`,
       capabilities: [
         'review',
         'critique',
@@ -254,50 +259,48 @@ export class RecursiveAgentOrchestrator {
     // Improvement Agent - Code enhancer
     configs.set('improve', {
       type: 'improve',
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-5-20250929',
       maxTokens: 30000,
       temperature: 0.3,
-      systemPrompt: `You are an Improvement Agent specializing in code enhancement.
-        Take reviewed code and implement suggested improvements:
-        - Refactor for better architecture
-        - Optimize performance bottlenecks
-        - Enhance error handling
-        - Improve code clarity and documentation
-        - Add missing test cases
-        Ensure all improvements maintain backward compatibility.`,
+      systemPrompt: `You implement review feedback and improve code quality.
+Output JSON: { success: bool, improvements: string[], filesChanged: string[] }
+Rules:
+- Apply only the specific improvements requested — no scope creep
+- Maintain backward compatibility unless explicitly breaking
+- Run lint + tests after changes to verify nothing regressed
+- Keep changes minimal and focused`,
       capabilities: ['enhance', 'refactor', 'optimize', 'polish'],
     });
 
     // Context Agent - Information retriever
     configs.set('context', {
       type: 'context',
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-haiku-4-5-20251001',
       maxTokens: 10000,
       temperature: 0,
-      systemPrompt: `You are a Context Agent specializing in information retrieval.
-        Search and retrieve relevant context from:
-        - Project codebase and documentation
-        - Previous frame history
-        - Similar implementations
-        - Best practices and patterns
-        Provide concise, relevant context for other agents.`,
+      systemPrompt: `You retrieve relevant context from the codebase and specs.
+Output JSON: { context: string, sources: string[], relevanceScore: 0-1 }
+Rules:
+- Check docs/specs/ for ONE_PAGER.md, DEV_SPEC.md, PROMPT_PLAN.md
+- Check CLAUDE.md and AGENTS.md for project conventions
+- Search src/ for relevant implementations
+- Return concise summaries, not full file contents`,
       capabilities: ['search', 'retrieve', 'summarize', 'contextualize'],
     });
 
     // Publish Agent - Release and deployment
     configs.set('publish', {
       type: 'publish',
-      model: 'claude-3-5-haiku-20241022',
+      model: 'claude-haiku-4-5-20251001',
       maxTokens: 15000,
       temperature: 0,
-      systemPrompt: `You are a Publish Agent specializing in release management.
-        Handle:
-        - NPM package publishing
-        - GitHub releases and tagging
-        - Documentation updates
-        - Changelog generation
-        - Deployment automation
-        Ensure all release steps are properly sequenced.`,
+      systemPrompt: `You handle releases and publishing.
+Output JSON: { success: bool, version: string, actions: string[] }
+Rules:
+- Verify lint + tests + build pass before any publish
+- Follow semver: breaking=major, feature=minor, fix=patch
+- Generate changelog from git log since last tag
+- Never force-push or skip pre-publish hooks`,
       capabilities: ['publish-npm', 'github-release', 'deploy', 'document'],
     });
 
@@ -736,25 +739,68 @@ export class RecursiveAgentOrchestrator {
     // Implementation would add review nodes at appropriate points
   }
 
+  private loadSpecContext(): string {
+    const specDir = path.join(process.cwd(), 'docs', 'specs');
+    if (!fs.existsSync(specDir)) return '';
+
+    const specFiles = ['ONE_PAGER.md', 'DEV_SPEC.md', 'PROMPT_PLAN.md'];
+    const sections: string[] = [];
+
+    for (const file of specFiles) {
+      const filePath = path.join(specDir, file);
+      if (fs.existsSync(filePath)) {
+        const content = fs.readFileSync(filePath, 'utf-8');
+        // Truncate to first 2000 chars to stay within token budgets
+        const truncated =
+          content.length > 2000
+            ? content.slice(0, 2000) + '\n...[truncated]'
+            : content;
+        sections.push(`### ${file}\n${truncated}`);
+      }
+    }
+
+    return sections.length > 0
+      ? `\n## Project Specs\n${sections.join('\n\n')}`
+      : '';
+  }
+
   private buildAgentPrompt(
     node: TaskNode,
     context: Record<string, unknown>
   ): string {
-    return `
-      Task: ${node.description}
-      
-      Context:
-      ${JSON.stringify(context, null, 2)}
-      
-      Previous Results:
-      ${JSON.stringify(
-        node.dependencies.map((id) => this.activeExecutions.get(id)?.result),
-        null,
-        2
-      )}
-      
-      Please complete this task following your specialized role.
-    `;
+    const depResults = node.dependencies
+      .map((id) => {
+        const dep = this.activeExecutions.get(id);
+        if (!dep?.result) return null;
+        return { id, agent: dep.agent, result: dep.result };
+      })
+      .filter(Boolean);
+
+    const specContext =
+      node.agent === 'planning' || node.agent === 'code'
+        ? this.loadSpecContext()
+        : '';
+
+    return [
+      `## Task`,
+      node.description,
+      '',
+      `## Agent Role: ${node.agent}`,
+      `Config: ${JSON.stringify(this.subagentConfigs.get(node.agent)?.capabilities || [])}`,
+      '',
+      `## Context`,
+      JSON.stringify(context, null, 2),
+      '',
+      ...(depResults.length > 0
+        ? [`## Dependency Results`, JSON.stringify(depResults, null, 2), '']
+        : []),
+      ...(specContext ? [specContext, ''] : []),
+      `## Constraints`,
+      `- ESM imports: use .js extensions on relative imports`,
+      `- Testing: vitest (not jest)`,
+      `- Lint: npm run lint (eslint + prettier)`,
+      `- Output structured JSON when possible`,
+    ].join('\n');
   }
 
   private estimateTokens(text: string): number {
@@ -793,11 +839,11 @@ export class RecursiveAgentOrchestrator {
   }
 
   private calculateNodeCost(tokens: number, model: string): number {
-    // Pricing per 1M tokens (approximate)
+    // Pricing per 1M tokens (input+output blended approximate)
     const pricing: Record<string, number> = {
-      'claude-sonnet-4-20250514': 15.0,
-      'claude-3-5-haiku-20241022': 1.0,
-      'claude-3-opus-20240229': 75.0,
+      'claude-sonnet-4-5-20250929': 15.0,
+      'claude-haiku-4-5-20251001': 1.0,
+      'claude-opus-4-6': 75.0,
     };
     return (tokens / 1000000) * (pricing[model] || 10);
   }

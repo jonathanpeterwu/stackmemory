@@ -22,6 +22,8 @@ import {
   type RLMOptions,
 } from './recursive-agent-orchestrator.js';
 import { getAPISkill, type APISkill } from './api-skill.js';
+import { SpecGeneratorSkill, type SpecType } from './spec-generator-skill.js';
+import { LinearTaskRunner } from './linear-task-runner.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
@@ -850,12 +852,15 @@ export class ClaudeSkillsManager {
   private repoIngestionSkill: RepoIngestionSkill | null = null;
   private rlmOrchestrator: RecursiveAgentOrchestrator | null = null;
   private apiSkill: APISkill;
+  private specGeneratorSkill: SpecGeneratorSkill;
+  private linearTaskRunner: LinearTaskRunner | null = null;
 
   constructor(private context: SkillContext) {
     this.handoffSkill = new HandoffSkill(context);
     this.checkpointSkill = new CheckpointSkill(context);
     this.archaeologistSkill = new ArchaeologistSkill(context);
     this.apiSkill = getAPISkill();
+    this.specGeneratorSkill = new SpecGeneratorSkill(context);
 
     // Initialize dashboard launcher (lazy import to avoid circular deps)
     import('./dashboard-launcher.js').then((module) => {
@@ -903,6 +908,14 @@ export class ClaudeSkillsManager {
           context.dualStackManager,
           context.contextRetriever,
           taskStore
+        );
+
+        // Initialize LinearTaskRunner now that we have both dependencies
+        this.linearTaskRunner = new LinearTaskRunner(
+          taskStore,
+          this.rlmOrchestrator,
+          context,
+          this.specGeneratorSkill
         );
 
         logger.info('RLM Orchestrator initialized');
@@ -1190,6 +1203,80 @@ export class ClaudeSkillsManager {
             };
         }
 
+      case 'spec': {
+        const specCmd = args[0];
+        switch (specCmd) {
+          case 'list':
+            return this.specGeneratorSkill.list();
+          case 'update':
+            return this.specGeneratorSkill.update(
+              args[1] || 'docs/specs/PROMPT_PLAN.md',
+              args.slice(2).join(' ') || args[1]
+            );
+          case 'validate':
+            return this.specGeneratorSkill.validate(
+              args[1] || 'docs/specs/PROMPT_PLAN.md'
+            );
+          case 'one-pager':
+          case 'dev-spec':
+          case 'prompt-plan':
+          case 'agents':
+            return this.specGeneratorSkill.generate(
+              specCmd as SpecType,
+              args.slice(1).join(' ') || 'Untitled',
+              { force: options?.force as boolean }
+            );
+          default:
+            // If first arg looks like a spec type, treat as generate
+            if (
+              specCmd &&
+              ['one-pager', 'dev-spec', 'prompt-plan', 'agents'].includes(
+                specCmd
+              )
+            ) {
+              return this.specGeneratorSkill.generate(
+                specCmd as SpecType,
+                args.slice(1).join(' ') || 'Untitled',
+                { force: options?.force as boolean }
+              );
+            }
+            return {
+              success: false,
+              message:
+                'Usage: spec <one-pager|dev-spec|prompt-plan|agents|list|update|validate> [args]',
+            };
+        }
+      }
+
+      case 'linear-run': {
+        if (!this.linearTaskRunner) {
+          return {
+            success: false,
+            message:
+              'Linear Task Runner not initialized. RLM Orchestrator may not be ready.',
+          };
+        }
+        const lrCmd = args[0];
+        switch (lrCmd) {
+          case 'next':
+            return this.linearTaskRunner.runNext(
+              options as Record<string, unknown>
+            );
+          case 'all':
+            return this.linearTaskRunner.runAll(
+              options as Record<string, unknown>
+            );
+          case 'task':
+            return this.linearTaskRunner.runTask(args[1]);
+          case 'preview':
+            return this.linearTaskRunner.preview(args[1]);
+          default:
+            return this.linearTaskRunner.runNext(
+              options as Record<string, unknown>
+            );
+        }
+      }
+
       default:
         return {
           success: false,
@@ -1199,12 +1286,15 @@ export class ClaudeSkillsManager {
   }
 
   getAvailableSkills(): string[] {
-    const skills = ['handoff', 'checkpoint', 'dig', 'dashboard', 'api'];
+    const skills = ['handoff', 'checkpoint', 'dig', 'dashboard', 'api', 'spec'];
     if (this.repoIngestionSkill) {
       skills.push('repo');
     }
     if (this.rlmOrchestrator) {
       skills.push('rlm', 'lint');
+    }
+    if (this.linearTaskRunner) {
+      skills.push('linear-run');
     }
     return skills;
   }
@@ -1349,6 +1439,43 @@ Examples:
 
       case 'api':
         return this.apiSkill.getHelp();
+
+      case 'spec':
+        return `
+/spec <type> [title] [--force]
+/spec list
+/spec update <path> <changes>
+/spec validate <path>
+
+Generate iterative spec documents (VibeScaffold 4-doc system):
+  one-pager   → docs/specs/ONE_PAGER.md
+  dev-spec    → docs/specs/DEV_SPEC.md (reads ONE_PAGER)
+  prompt-plan → docs/specs/PROMPT_PLAN.md (reads ONE_PAGER + DEV_SPEC)
+  agents      → AGENTS.md (reads all)
+
+Examples:
+  /spec one-pager "Photo Captioner"
+  /spec dev-spec
+  /spec update prompt-plan "Initialize repository and tooling"
+  /spec validate prompt-plan
+`;
+
+      case 'linear-run':
+        return `
+/linear-run next [--priority high] [--tag backend]
+/linear-run all [--dry-run] [--maxConcurrent 3]
+/linear-run task <id>
+/linear-run preview [id]
+
+Execute Linear tasks via RLM orchestrator:
+  next    — Pull next todo task, execute, update status
+  all     — Run all pending tasks iteratively
+  task    — Execute a specific task by ID
+  preview — Show execution plan without running
+
+Flow: Linear → RLM decompose → subagents execute → Linear status update
+Auto-updates PROMPT_PLAN checkboxes when tasks complete.
+`;
 
       default:
         return `Unknown skill: ${skillName}`;

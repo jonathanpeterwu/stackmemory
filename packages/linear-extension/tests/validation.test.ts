@@ -11,7 +11,7 @@ import {
 import type { LinearWebhookPayload } from '../src/types.js';
 
 describe('validateWebhookPayload', () => {
-  it('should reject non-object payloads', () => {
+  it('should reject invalid payloads', () => {
     expect(validateWebhookPayload(null)).toEqual({
       valid: false,
       error: 'Payload must be an object',
@@ -20,16 +20,10 @@ describe('validateWebhookPayload', () => {
       valid: false,
       error: 'Payload must be an object',
     });
-  });
-
-  it('should reject missing action', () => {
     expect(validateWebhookPayload({ type: 'Issue', data: {} })).toEqual({
       valid: false,
       error: 'Missing or invalid action',
     });
-  });
-
-  it('should reject invalid action', () => {
     expect(
       validateWebhookPayload({ action: 'invalid', type: 'Issue', data: {} })
     ).toEqual({
@@ -80,42 +74,34 @@ describe('shouldTriggerSubagent', () => {
     organizationId: 'org-1',
   };
 
-  it('should not trigger for update actions', () => {
+  it('should not trigger for non-create, non-Issue, or unlabeled payloads', () => {
     expect(shouldTriggerSubagent({ ...basePayload, action: 'update' })).toBe(
       false
     );
-  });
-
-  it('should not trigger for non-Issue types', () => {
     expect(shouldTriggerSubagent({ ...basePayload, type: 'Comment' })).toBe(
       false
     );
-  });
-
-  it('should not trigger without automation labels', () => {
     expect(shouldTriggerSubagent(basePayload)).toBe(false);
   });
 
-  it('should trigger with "automated" label', () => {
-    const payload = {
+  it('should trigger with automation labels', () => {
+    const automated = {
       ...basePayload,
       data: {
         ...basePayload.data,
         labels: [{ id: '1', name: 'automated' }],
       },
     };
-    expect(shouldTriggerSubagent(payload)).toBe(true);
-  });
+    expect(shouldTriggerSubagent(automated)).toBe(true);
 
-  it('should trigger with "claude-code" label (case insensitive)', () => {
-    const payload = {
+    const claudeCode = {
       ...basePayload,
       data: {
         ...basePayload.data,
         labels: [{ id: '1', name: 'Claude-Code' }],
       },
     };
-    expect(shouldTriggerSubagent(payload)).toBe(true);
+    expect(shouldTriggerSubagent(claudeCode)).toBe(true);
   });
 });
 
@@ -228,63 +214,57 @@ describe('validateTicketDraft', () => {
     timestamp: Date.now(),
   };
 
-  it('should reject empty title', () => {
-    const result = validateTicketDraft({
+  it('should validate title and accept valid drafts', () => {
+    // Reject empty title
+    const empty = validateTicketDraft({
       title: '',
       projectId: 'proj-1',
       captured: validCaptured,
     });
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.error.code).toBe('INVALID_INPUT');
+    expect(empty.ok).toBe(false);
+    if (!empty.ok) {
+      expect(empty.error.code).toBe('INVALID_INPUT');
     }
-  });
 
-  it('should reject title over 200 chars', () => {
-    const result = validateTicketDraft({
+    // Reject title over 200 chars
+    const long = validateTicketDraft({
       title: 'a'.repeat(201),
       projectId: 'proj-1',
       captured: validCaptured,
     });
-    expect(result.ok).toBe(false);
-  });
+    expect(long.ok).toBe(false);
 
-  it('should accept valid draft', () => {
-    const result = validateTicketDraft({
+    // Accept valid draft
+    const valid = validateTicketDraft({
       title: 'Valid title',
       projectId: 'proj-1',
       captured: validCaptured,
     });
-    expect(result.ok).toBe(true);
+    expect(valid.ok).toBe(true);
   });
 });
 
 describe('validateCapturedContent', () => {
-  it('should reject empty text', () => {
-    const result = validateCapturedContent({
-      text: '',
-      sourceUrl: 'https://example.com',
-    });
-    expect(result.ok).toBe(false);
-  });
+  it('should validate text, URL, and accept valid content', () => {
+    // Reject empty text
+    expect(
+      validateCapturedContent({ text: '', sourceUrl: 'https://example.com' }).ok
+    ).toBe(false);
 
-  it('should reject invalid URL', () => {
-    const result = validateCapturedContent({
-      text: 'Some text',
-      sourceUrl: 'not-a-url',
-    });
-    expect(result.ok).toBe(false);
-  });
+    // Reject invalid URL
+    expect(
+      validateCapturedContent({ text: 'Some text', sourceUrl: 'not-a-url' }).ok
+    ).toBe(false);
 
-  it('should accept valid content', () => {
-    const result = validateCapturedContent({
+    // Accept valid content
+    const valid = validateCapturedContent({
       text: 'Some text',
       sourceUrl: 'https://example.com',
     });
-    expect(result.ok).toBe(true);
-    if (result.ok) {
-      expect(result.value.text).toBe('Some text');
-      expect(result.value.timestamp).toBeDefined();
+    expect(valid.ok).toBe(true);
+    if (valid.ok) {
+      expect(valid.value.text).toBe('Some text');
+      expect(valid.value.timestamp).toBeDefined();
     }
   });
 });

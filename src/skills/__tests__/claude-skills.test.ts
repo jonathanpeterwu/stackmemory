@@ -516,6 +516,7 @@ describe('Claude Skills', () => {
         'dig',
         'dashboard',
         'api',
+        'spec',
         'repo',
       ]);
 

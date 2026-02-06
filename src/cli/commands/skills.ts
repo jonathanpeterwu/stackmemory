@@ -29,7 +29,31 @@ import {
   DatabaseError,
   ErrorCode,
 } from '../../core/errors/index.js';
-import { version as VERSION } from '../../version.js';
+import { readFileSync } from 'fs';
+import { fileURLToPath } from 'url';
+// VERSION is only used for verbose spike output — resolve lazily
+let _version: string | undefined;
+function getVersion(): string {
+  if (_version) return _version;
+  try {
+    const __dirname = path.dirname(fileURLToPath(import.meta.url));
+    // Walk up to project root from src/cli/commands/ (or dist/src/cli/commands/)
+    let dir = __dirname;
+    for (let i = 0; i < 6; i++) {
+      const candidate = path.join(dir, 'package.json');
+      try {
+        _version = JSON.parse(readFileSync(candidate, 'utf-8')).version;
+        return _version!;
+      } catch {
+        dir = path.dirname(dir);
+      }
+    }
+  } catch {
+    // fallback
+  }
+  _version = '0.0.0';
+  return _version;
+}
 
 // Type-safe environment variable access
 function getEnv(key: string, defaultValue?: string): string {
@@ -418,7 +442,7 @@ export function createSkillsCommand(): Command {
         if (options.json) {
           console.log(JSON.stringify(result));
         } else if (options.verbose) {
-          console.log(chalk.gray(`StackMemory v${VERSION}`));
+          console.log(chalk.gray(`StackMemory v${getVersion()}`));
           console.log(chalk.cyan('\n=== Plan ==='));
           console.log(JSON.stringify(result.plan, null, 2));
           console.log(chalk.cyan('\n=== Iterations ==='));
@@ -669,6 +693,215 @@ export function createSkillsCommand(): Command {
       }
     });
 
+  // Spec generator skill
+  const specCmd = skillsCmd
+    .command('spec')
+    .description('Generate iterative spec documents');
+
+  specCmd
+    .command('generate <type> <title>')
+    .description(
+      'Generate a spec document (one-pager, dev-spec, prompt-plan, agents)'
+    )
+    .action(async (type, title) => {
+      const spinner = ora(`Generating ${type}...`).start();
+      try {
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
+        const result = await unifiedOrchestrator.executeSkill(
+          'spec',
+          ['generate', type, title],
+          {}
+        );
+        spinner.stop();
+        if (result.success) {
+          console.log(chalk.green('✓'), result.message);
+        } else {
+          console.log(chalk.red('✗'), result.message);
+        }
+        await context.database.disconnect();
+      } catch (error: unknown) {
+        spinner.stop();
+        console.error(chalk.red('Error:'), (error as Error).message);
+        process.exit(1);
+      }
+    });
+
+  specCmd
+    .command('list')
+    .description('List existing spec documents')
+    .action(async () => {
+      try {
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
+        const result = await unifiedOrchestrator.executeSkill(
+          'spec',
+          ['list'],
+          {}
+        );
+        if (result.success) {
+          console.log(chalk.green('✓'), result.message);
+          if (result.data) {
+            console.log(JSON.stringify(result.data, null, 2));
+          }
+        } else {
+          console.log(chalk.red('✗'), result.message);
+        }
+        await context.database.disconnect();
+      } catch (error: unknown) {
+        console.error(chalk.red('Error:'), (error as Error).message);
+        process.exit(1);
+      }
+    });
+
+  specCmd
+    .command('validate <path>')
+    .description('Validate spec document completeness')
+    .action(async (filePath) => {
+      try {
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
+        const result = await unifiedOrchestrator.executeSkill(
+          'spec',
+          ['validate', filePath],
+          {}
+        );
+        if (result.success) {
+          console.log(chalk.green('✓'), result.message);
+        } else {
+          console.log(chalk.red('✗'), result.message);
+        }
+        await context.database.disconnect();
+      } catch (error: unknown) {
+        console.error(chalk.red('Error:'), (error as Error).message);
+        process.exit(1);
+      }
+    });
+
+  // Linear task runner skill
+  const linearRunCmd = skillsCmd
+    .command('linear-run')
+    .description('Execute Linear tasks via RLM orchestrator');
+
+  linearRunCmd
+    .command('next')
+    .description('Execute the next highest-priority Linear task')
+    .option('--priority <level>', 'Filter by priority')
+    .option('--tag <tag>', 'Filter by tag')
+    .option('--dry-run', 'Preview without executing')
+    .action(async (options) => {
+      const spinner = ora('Fetching next task...').start();
+      try {
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
+        const result = await unifiedOrchestrator.executeSkill(
+          'linear-run',
+          ['next'],
+          {
+            priority: options.priority,
+            tag: options.tag,
+            dryRun: options.dryRun,
+          }
+        );
+        spinner.stop();
+        if (result.success) {
+          console.log(chalk.green('✓'), result.message);
+          if (result.data) {
+            console.log(JSON.stringify(result.data, null, 2));
+          }
+        } else {
+          console.log(chalk.red('✗'), result.message);
+        }
+        await context.database.disconnect();
+      } catch (error: unknown) {
+        spinner.stop();
+        console.error(chalk.red('Error:'), (error as Error).message);
+        process.exit(1);
+      }
+    });
+
+  linearRunCmd
+    .command('all')
+    .description('Execute all active Linear tasks iteratively')
+    .option('--max-concurrent <n>', 'Max concurrent tasks', '1')
+    .option('--dry-run', 'Preview without executing')
+    .action(async (options) => {
+      const spinner = ora('Running all tasks...').start();
+      try {
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
+        const result = await unifiedOrchestrator.executeSkill(
+          'linear-run',
+          ['all'],
+          {
+            maxConcurrent: parseInt(options.maxConcurrent),
+            dryRun: options.dryRun,
+          }
+        );
+        spinner.stop();
+        if (result.success) {
+          console.log(chalk.green('✓'), result.message);
+          if (result.data) {
+            console.log(JSON.stringify(result.data, null, 2));
+          }
+        } else {
+          console.log(chalk.red('✗'), result.message);
+        }
+        await context.database.disconnect();
+      } catch (error: unknown) {
+        spinner.stop();
+        console.error(chalk.red('Error:'), (error as Error).message);
+        process.exit(1);
+      }
+    });
+
+  linearRunCmd
+    .command('task <taskId>')
+    .description('Execute a specific Linear task by ID')
+    .action(async (taskId) => {
+      const spinner = ora(`Executing task ${taskId}...`).start();
+      try {
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
+        const result = await unifiedOrchestrator.executeSkill(
+          'linear-run',
+          ['task', taskId],
+          {}
+        );
+        spinner.stop();
+        if (result.success) {
+          console.log(chalk.green('✓'), result.message);
+        } else {
+          console.log(chalk.red('✗'), result.message);
+        }
+        await context.database.disconnect();
+      } catch (error: unknown) {
+        spinner.stop();
+        console.error(chalk.red('Error:'), (error as Error).message);
+        process.exit(1);
+      }
+    });
+
+  linearRunCmd
+    .command('preview [taskId]')
+    .description('Show execution plan without running')
+    .action(async (taskId) => {
+      try {
+        const { context, unifiedOrchestrator } = await initializeSkillContext();
+        const result = await unifiedOrchestrator.executeSkill(
+          'linear-run',
+          ['preview', taskId || ''],
+          {}
+        );
+        if (result.success) {
+          console.log(chalk.green('✓'), result.message);
+          if (result.data) {
+            console.log(JSON.stringify(result.data, null, 2));
+          }
+        } else {
+          console.log(chalk.red('✗'), result.message);
+        }
+        await context.database.disconnect();
+      } catch (error: unknown) {
+        console.error(chalk.red('Error:'), (error as Error).message);
+        process.exit(1);
+      }
+    });
+
   // Help command for skills
   skillsCmd
     .command('help [skill]')
@@ -725,7 +958,13 @@ Options:
         console.log('  review     - Multi-stage code review and improvements');
         console.log('  refactor   - Refactor code for better architecture');
         console.log('  publish    - Prepare and execute releases');
-        console.log('  rlm        - Direct recursive agent orchestration\n');
+        console.log('  rlm        - Direct recursive agent orchestration');
+        console.log(
+          '  spec       - Generate iterative spec docs (one-pager, dev-spec, prompt-plan, agents)'
+        );
+        console.log(
+          '  linear-run - Execute Linear tasks via RLM orchestrator\n'
+        );
         console.log(
           chalk.yellow(
             '\nAll skills now use RLM orchestration for intelligent task decomposition'
