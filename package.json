@@ -1,7 +1,7 @@
 {
   "name": "@stackmemoryai/stackmemory",
   "version": "0.5.67",
-  "description": "Project-scoped memory for AI coding tools. Durable context across sessions with MCP integration, frames, and smart retrieval.",
+  "description": "Project-scoped memory for AI coding tools. Durable context across sessions with MCP integration, frames, smart retrieval, Claude Code skills, and automatic hooks.",
   "engines": {
     "node": ">=20.0.0",
     "npm": ">=10.0.0"
@@ -42,12 +42,17 @@
     "llm",
     "mcp",
     "claude",
+    "claude-code",
     "coding",
     "persistence",
-    "code-review",
-    "predictive-edit",
+    "skills",
+    "hooks",
+    "spec-generator",
+    "linear",
+    "task-runner",
     "prompt-optimization",
-    "model-routing"
+    "model-routing",
+    "agent-orchestration"
   ],
   "scripts": {
     "start": "node dist/src/integrations/mcp/server.js",

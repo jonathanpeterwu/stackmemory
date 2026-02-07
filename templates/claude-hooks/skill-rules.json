@@ -1,0 +1,274 @@
+{
+  "$schema": "./skill-rules.schema.json",
+  "version": "2.0",
+  "config": {
+    "minConfidenceScore": 3,
+    "showMatchReasons": true,
+    "maxSkillsToShow": 5
+  },
+  "scoring": {
+    "keyword": 2,
+    "keywordPattern": 3,
+    "pathPattern": 4,
+    "directoryMatch": 5,
+    "intentPattern": 4,
+    "contentPattern": 3,
+    "contextPattern": 2
+  },
+  "directoryMappings": {
+    "src/core": "frame-management",
+    "src/cli": "cli-commands",
+    "src/integrations/linear": "linear-integration",
+    "src/integrations/mcp": "mcp-server",
+    "src/features/tui": "terminal-ui",
+    "src/core/context": "context-bridge",
+    "src/core/storage": "storage-tiers",
+    "src/core/tasks": "task-management",
+    ".claude": "claude-integration",
+    ".github/workflows": "github-actions",
+    "scripts": "build-scripts",
+    "docs": "documentation"
+  },
+  "skills": {
+    "frame-management": {
+      "description": "Frame stack and context management patterns",
+      "priority": 9,
+      "triggers": {
+        "keywords": ["frame", "stack", "context", "framemanager", "push", "pop"],
+        "keywordPatterns": ["\\bframe\\b", "\\bstack\\b", "context(?:Bridge)?"],
+        "pathPatterns": ["**/frame-*.ts", "**/context/*.ts", "**/stack-*.ts"],
+        "intentPatterns": [
+          "(?:manage|handle).*(?:frame|context)",
+          "(?:push|pop).*(?:frame|stack)"
+        ],
+        "contentPatterns": ["FrameManager", "pushFrame", "popFrame", "getContext"]
+      },
+      "relatedSkills": ["context-bridge", "storage-tiers"]
+    },
+    "linear-integration": {
+      "description": "Linear API integration and task sync",
+      "priority": 8,
+      "triggers": {
+        "keywords": ["linear", "issue", "sync", "task sync", "oauth"],
+        "keywordPatterns": ["\\blinear\\b", "\\bissue\\b", "sync.*task"],
+        "pathPatterns": ["**/linear/**", "**/linear-*.ts"],
+        "intentPatterns": [
+          "(?:sync|update).*(?:linear|issue)",
+          "(?:linear).*(?:task|issue|sync)"
+        ],
+        "contentPatterns": ["LinearClient", "syncIssue", "createIssue"]
+      }
+    },
+    "mcp-server": {
+      "description": "Model Context Protocol server implementation",
+      "priority": 8,
+      "triggers": {
+        "keywords": ["mcp", "tool", "server", "protocol", "claude code"],
+        "keywordPatterns": ["\\bmcp\\b", "model.context", "claude.code"],
+        "pathPatterns": ["**/mcp/**", "**/mcp-*.ts", "**/tools/**"],
+        "intentPatterns": [
+          "(?:implement|create).*(?:mcp|tool)",
+          "(?:mcp).*(?:server|tool|protocol)"
+        ],
+        "contentPatterns": ["MCPServer", "registerTool", "@tool", "toolCall"]
+      },
+      "relatedSkills": ["claude-integration"]
+    },
+    "testing-patterns": {
+      "description": "Jest testing and test infrastructure",
+      "priority": 7,
+      "triggers": {
+        "keywords": ["test", "jest", "spec", "mock", "fixture"],
+        "keywordPatterns": ["\\btest\\b", "\\bspec\\b", "\\bjest\\b"],
+        "pathPatterns": ["**/*.test.ts", "**/*.spec.ts", "**/__tests__/**"],
+        "intentPatterns": [
+          "(?:write|add|fix).*(?:test|spec)",
+          "(?:test).*(?:coverage|suite)"
+        ],
+        "contentPatterns": ["describe\\(", "it\\(", "expect\\(", "jest\\.mock"]
+      }
+    },
+    "cli-commands": {
+      "description": "CLI command implementation and structure",
+      "priority": 7,
+      "triggers": {
+        "keywords": ["cli", "command", "yargs", "terminal", "console"],
+        "keywordPatterns": ["\\bcli\\b", "\\bcommand\\b", "\\byargs\\b"],
+        "pathPatterns": ["**/cli/**", "**/commands/**", "**/cli-*.ts"],
+        "intentPatterns": [
+          "(?:add|create).*(?:command|cli)",
+          "(?:cli).*(?:command|option|argument)"
+        ],
+        "contentPatterns": ["yargs", "command\\(", "option\\(", "argv"]
+      }
+    },
+    "storage-tiers": {
+      "description": "3-tier storage system (Redis/Railway/GCS)",
+      "priority": 7,
+      "triggers": {
+        "keywords": ["storage", "redis", "railway", "bucket", "tier", "cache"],
+        "keywordPatterns": ["\\bstorage\\b", "\\btier\\b", "\\bredis\\b"],
+        "pathPatterns": ["**/storage/**", "**/railway-*.ts", "**/redis-*.ts"],
+        "intentPatterns": [
+          "(?:implement|configure).*(?:storage|tier)",
+          "(?:migrate).*(?:data|storage)"
+        ],
+        "contentPatterns": ["RailwayOptimizedStorage", "StorageTier", "Redis"]
+      }
+    },
+    "context-bridge": {
+      "description": "Cross-session context synchronization",
+      "priority": 8,
+      "triggers": {
+        "keywords": ["bridge", "sync", "session", "shared context", "handoff"],
+        "keywordPatterns": ["context.*bridge", "shared.*context", "handoff"],
+        "pathPatterns": ["**/context-bridge*.ts", "**/shared-context/**"],
+        "intentPatterns": [
+          "(?:sync|share).*(?:context|session)",
+          "(?:handoff).*(?:session|context)"
+        ],
+        "contentPatterns": ["ContextBridge", "SharedContext", "syncContext"]
+      },
+      "relatedSkills": ["frame-management"]
+    },
+    "task-management": {
+      "description": "Task creation, tracking, and persistence",
+      "priority": 7,
+      "triggers": {
+        "keywords": ["task", "todo", "progress", "tracking", "pebbles"],
+        "keywordPatterns": ["\\btask\\b", "\\btodo\\b", "pebbles"],
+        "pathPatterns": ["**/tasks/**", "**/task-*.ts", "**/pebbles-*.ts"],
+        "intentPatterns": [
+          "(?:create|manage).*(?:task|todo)",
+          "(?:track).*(?:progress|task)"
+        ],
+        "contentPatterns": ["TaskManager", "createTask", "updateTask", "PebblesTaskStore"]
+      }
+    },
+    "terminal-ui": {
+      "description": "Terminal UI with Ink and React",
+      "priority": 6,
+      "triggers": {
+        "keywords": ["tui", "terminal", "ink", "dashboard", "monitor"],
+        "keywordPatterns": ["\\btui\\b", "\\bink\\b", "terminal.*ui"],
+        "pathPatterns": ["**/tui/**", "**/terminal-*.tsx", "**/dashboard/**"],
+        "intentPatterns": [
+          "(?:create|build).*(?:tui|terminal)",
+          "(?:dashboard|monitor).*(?:ui|interface)"
+        ],
+        "contentPatterns": ["ink", "Text", "Box", "useInput"]
+      }
+    },
+    "claude-integration": {
+      "description": "Claude Code integration and hooks",
+      "priority": 8,
+      "triggers": {
+        "keywords": ["claude", "hook", "skill", "auto-trigger", "clear survival"],
+        "keywordPatterns": ["claude.*(?:code|hook)", "skill.*eval"],
+        "pathPatterns": [".claude/**", "**/claude-*.ts", "**/hooks/**"],
+        "intentPatterns": [
+          "(?:integrate|setup).*(?:claude)",
+          "(?:hook|trigger).*(?:claude|skill)"
+        ],
+        "contentPatterns": ["UserPromptSubmit", "PreToolUse", "PostToolUse", "skill-eval"]
+      },
+      "relatedSkills": ["mcp-server"]
+    },
+    "build-scripts": {
+      "description": "Build, deployment, and utility scripts",
+      "priority": 5,
+      "triggers": {
+        "keywords": ["script", "build", "deploy", "npm", "package"],
+        "keywordPatterns": ["\\bscript\\b", "\\bbuild\\b", "npm.*run"],
+        "pathPatterns": ["scripts/**", "**/*.sh", "**/build/**"],
+        "intentPatterns": [
+          "(?:create|write).*(?:script)",
+          "(?:build|deploy).*(?:project)"
+        ],
+        "contentPatterns": ["#!/bin/bash", "npm run", "NODE_ENV"]
+      }
+    },
+    "documentation": {
+      "description": "Documentation and API reference",
+      "priority": 4,
+      "triggers": {
+        "keywords": ["docs", "documentation", "readme", "api", "reference"],
+        "keywordPatterns": ["\\bdoc(?:s)?\\b", "readme", "api.*reference"],
+        "pathPatterns": ["docs/**", "**/*.md", "**/README*"],
+        "intentPatterns": [
+          "(?:write|update).*(?:doc|documentation)",
+          "(?:document).*(?:api|feature)"
+        ]
+      }
+    },
+    "github-actions": {
+      "description": "CI/CD workflows and GitHub Actions",
+      "priority": 6,
+      "triggers": {
+        "keywords": ["workflow", "action", "ci", "cd", "pipeline"],
+        "keywordPatterns": ["github.*action", "ci.*cd", "\\bworkflow\\b"],
+        "pathPatterns": [".github/workflows/**", ".github/**/*.yml"],
+        "intentPatterns": [
+          "(?:create|setup).*(?:workflow|pipeline)",
+          "(?:ci|cd).*(?:setup|configure)"
+        ],
+        "contentPatterns": ["runs-on:", "uses:", "steps:"]
+      }
+    },
+    "code-quality": {
+      "description": "Code review and quality checks",
+      "priority": 8,
+      "triggers": {
+        "keywords": ["review", "lint", "quality", "eslint", "prettier"],
+        "keywordPatterns": ["code.*review", "\\blint\\b", "quality.*check"],
+        "intentPatterns": [
+          "(?:review|check).*(?:code|quality)",
+          "(?:fix).*(?:lint|formatting)"
+        ]
+      }
+    },
+    "performance-optimization": {
+      "description": "Performance analysis and optimization",
+      "priority": 7,
+      "triggers": {
+        "keywords": ["performance", "optimize", "slow", "bottleneck", "profile"],
+        "keywordPatterns": ["\\bperf\\b", "optimiz", "bottleneck"],
+        "intentPatterns": [
+          "(?:optimize|improve).*(?:performance|speed)",
+          "(?:debug|fix).*(?:slow|performance)"
+        ],
+        "contentPatterns": ["performance\\.now", "console\\.time", "profiler"]
+      }
+    },
+    "spec-generator": {
+      "description": "Iterative spec document generation (one-pager, dev-spec, prompt-plan, agents)",
+      "priority": 8,
+      "triggers": {
+        "keywords": ["spec", "one-pager", "dev-spec", "prompt-plan", "agents.md", "scaffold"],
+        "keywordPatterns": ["\\bspec\\b", "one.pager", "dev.spec", "prompt.plan"],
+        "pathPatterns": ["docs/specs/**", "**/AGENTS.md", "**/ONE_PAGER.md", "**/PROMPT_PLAN.md"],
+        "intentPatterns": [
+          "(?:generate|create).*(?:spec|one-pager|dev-spec)",
+          "(?:spec).*(?:generate|validate|update|list)"
+        ],
+        "contentPatterns": ["SpecGeneratorSkill", "ONE_PAGER", "DEV_SPEC", "PROMPT_PLAN"]
+      },
+      "relatedSkills": ["linear-task-runner"]
+    },
+    "linear-task-runner": {
+      "description": "Execute Linear tasks via RLM orchestrator",
+      "priority": 8,
+      "triggers": {
+        "keywords": ["linear-run", "run task", "execute task", "task runner", "ralph linear"],
+        "keywordPatterns": ["linear.run", "run.*task", "task.*runner"],
+        "pathPatterns": ["**/linear-task-runner.ts"],
+        "intentPatterns": [
+          "(?:run|execute).*(?:linear|task)",
+          "(?:linear).*(?:run|execute|next|all)"
+        ],
+        "contentPatterns": ["LinearTaskRunner", "runNext", "runAll", "runTask"]
+      },
+      "relatedSkills": ["spec-generator", "linear-integration"]
+    }
+  }
+}

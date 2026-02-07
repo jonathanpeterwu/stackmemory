@@ -14,7 +14,9 @@ StackMemory is a **production-ready memory runtime** for AI coding tools that pr
 - **Full Linear integration** with bidirectional sync
 - **Context persistence** that survives /clear operations
 - **Hierarchical frame organization** (nested call stack model)
-- **490 tests passing** with comprehensive coverage
+- **Skills system** with `/spec` and `/linear-run` for Claude Code
+- **Automatic hooks** for task tracking, Linear sync, and spec progress
+- **498 tests passing** with comprehensive coverage
 
 Instead of a linear chat log, StackMemory organizes memory as a **call stack** of scoped work (frames), with intelligent LLM-driven retrieval and team collaboration features.
 
@@ -34,13 +36,13 @@ Tools forget decisions and constraints between sessions. StackMemory makes conte
 
 ## Features (at a glance)
 
-- MCP tools for Claude Code: 26+ tools; context on every request
-- Safe branches: worktree isolation with `--worktree` or `-w`
-- Persistent context: frames, anchors, decisions, retrieval
-- Optional boosts: model routing, prompt optimization (GEPA)
-- Integrations: Linear, Greptile, DiffMem, Browser MCP
-
-See the docs directory for deeper feature guides.
+- **MCP tools** for Claude Code: 26+ tools; context on every request
+- **Skills**: `/spec` (iterative spec generation), `/linear-run` (task execution via RLM)
+- **Hooks**: automatic context save, task tracking, Linear sync, PROMPT_PLAN updates
+- **Prompt Forge**: watches AGENTS.md and CLAUDE.md for prompt optimization (GEPA)
+- **Safe branches**: worktree isolation with `--worktree` or `-w`
+- **Persistent context**: frames, anchors, decisions, retrieval
+- **Integrations**: Linear, Greptile, DiffMem, Browser MCP
 
 ---
 
@@ -131,13 +133,127 @@ Env defaults (optional):
 
 ---
 
-## Quick Start
+## Skills System
 
-See above for install and minimal usage. For advanced options, see Setup.
+StackMemory ships Claude Code skills that integrate directly into your workflow. Skills are invoked via `/skill-name` in Claude Code or `stackmemory skills <name>` from the CLI.
+
+### Spec Generator (`/spec`)
+
+Generates iterative spec documents following a 4-doc progressive chain. Each document reads previous ones from disk for context.
+
+```
+ONE_PAGER.md  →  DEV_SPEC.md  →  PROMPT_PLAN.md  →  AGENTS.md
+(standalone)     (reads 1)       (reads 1+2)        (reads 1+2+3)
+```
+
+```bash
+# Generate specs in order
+/spec one-pager "My App"          # Problem, audience, core flow, MVP
+/spec dev-spec                    # Architecture, tech stack, APIs
+/spec prompt-plan                 # TDD stages A-G with checkboxes
+/spec agents                      # Agent guardrails and responsibilities
+
+# Manage progress
+/spec list                        # Show existing specs
+/spec update prompt-plan "auth"   # Check off matching items
+/spec validate prompt-plan        # Check completion status
+
+# CLI equivalent
+stackmemory skills spec one-pager "My App"
+```
+
+Output goes to `docs/specs/`. Use `--force` to regenerate an existing spec.
+
+### Linear Task Runner (`/linear-run`)
+
+Pulls tasks from Linear, executes them via the RLM orchestrator (8 subagent types), and syncs results back.
+
+```bash
+/linear-run next                  # Execute next todo task
+/linear-run next --priority high  # Filter by priority
+/linear-run all                   # Execute all pending tasks
+/linear-run all --dry-run         # Preview without executing
+/linear-run task STA-123          # Run a specific task
+/linear-run preview               # Show execution plan
+
+# CLI equivalent
+stackmemory ralph linear next
+```
+
+On task completion:
+1. Marks the Linear task as `done`
+2. Auto-checks matching PROMPT_PLAN items
+3. Syncs metrics (tokens, cost, tests) back to Linear
+
+Options: `--priority <level>`, `--tag <tag>`, `--dry-run`, `--maxConcurrent <n>`
 
 ---
 
-## 2. Detailed Setup
+## Hooks (Automatic)
+
+StackMemory installs Claude Code hooks that run automatically during your session. Hooks are non-blocking and fail silently to never interrupt your workflow.
+
+### Installed Hooks
+
+| Hook | Trigger | What it does |
+|------|---------|-------------|
+| `on-task-complete` | Task marked done | Saves context, syncs Linear (STA-* tasks), auto-checks PROMPT_PLAN items |
+| `on-startup` | Session start | Loads StackMemory context, initializes frame |
+| `on-clear` | `/clear` command | Persists context before clearing |
+| `skill-eval` | User prompt | Scores prompt against 28 skill patterns, recommends relevant skills |
+| `tool-use-trace` | Tool invocation | Logs tool usage for context tracking |
+
+### Skill Evaluation
+
+When you type a prompt, the `skill-eval` hook scores it against `skill-rules.json` (28 mapped skills with keyword, pattern, intent, and directory matching). Skills scoring above the threshold (default: 3) are recommended.
+
+```json
+// Example: user types "generate a spec for the auth system"
+// skill-eval recommends:
+{
+  "recommendedSkills": [
+    { "skillName": "spec-generator", "score": 8 },
+    { "skillName": "frame-management", "score": 5 }
+  ]
+}
+```
+
+### Hook Installation
+
+Hooks install automatically during `npm install` (with user consent). To install or reinstall manually:
+
+```bash
+# Automatic (prompted during npm install)
+npm install -g @stackmemoryai/stackmemory
+
+# Manual install
+stackmemory hooks install
+
+# Skip hooks (CI/non-interactive)
+STACKMEMORY_AUTO_HOOKS=true npm install -g @stackmemoryai/stackmemory
+```
+
+Hooks are stored in `~/.claude/hooks/` and configured via `~/.claude/hooks.json`.
+
+### PROMPT_PLAN Auto-Progress
+
+When a task completes (via hook or `/linear-run`), StackMemory fuzzy-matches the task title against unchecked `- [ ]` items in `docs/specs/PROMPT_PLAN.md` and checks them off automatically. One item per task completion, best-effort.
+
+---
+
+## Prompt Forge (GEPA)
+
+When launching via `claude-sm`, StackMemory watches `CLAUDE.md`, `AGENT.md`, and `AGENTS.md` for changes. On file modification, the GEPA optimizer analyzes content and suggests improvements for prompt clarity and structure. Runs as a detached background process.
+
+```bash
+# Launch with Prompt Forge active
+claude-sm
+
+# Status shown in terminal:
+# Prompt Forge: watching CLAUDE.md, AGENTS.md for optimization
+```
+
+---
 
 ### Install
 
@@ -180,15 +296,11 @@ stackmemory doctor
 
 Checks project initialization, database integrity, MCP config, and suggests fixes.
 
----
-
-## 3. Advanced Setup
-
-See https://github.com/stackmemoryai/stackmemory/blob/main/docs/setup.md for advanced options (hosted mode, ChromaDB, manual MCP config, and available tools).
+See [docs/setup.md](https://github.com/stackmemoryai/stackmemory/blob/main/docs/setup.md) for advanced options (hosted mode, ChromaDB, manual MCP config).
 
 ---
 
-## 2. Open-Source Local Mode
+## Open-Source Local Mode
 
 ### Step 1: Clone & Build
 
@@ -285,35 +397,17 @@ StackMemory implements an intelligent two-tier storage architecture:
 
 ## Claude Code Integration
 
-StackMemory can automatically save context when using Claude Code, so your AI assistant has access to previous context and decisions.
-
-### Quick Setup
+StackMemory integrates with Claude Code via MCP tools, skills, and hooks. See the [Hooks](#hooks-automatic) and [Skills](#skills-system) sections above.
 
 ```bash
-# Add alias
-echo 'alias claude="~/Dev/stackmemory/scripts/claude-code-wrapper.sh"' >> ~/.zshrc
-source ~/.zshrc
-
-# Use: claude (saves context on exit)
+# Full setup (one-time)
+npm install -g @stackmemoryai/stackmemory   # installs hooks automatically
+cd your-project && stackmemory init          # init project
+stackmemory setup-mcp                        # configure MCP
+stackmemory doctor                           # verify everything works
 ```
 
-### Integration Methods
-
-```bash
-# 1. Shell wrapper (recommended)
-claude [--auto-sync] [--sync-interval=10]
-
-# 2. Linear auto-sync daemon
-./scripts/linear-auto-sync.sh start [interval]
-
-# 3. Background daemon
-./scripts/stackmemory-daemon.sh [interval] &
-
-# 4. Git hooks
-./scripts/setup-git-hooks.sh
-```
-
-**Features:** Auto-save on exit, Linear sync, runs only in StackMemory projects, configurable sync intervals.
+Additional integration methods: shell wrapper (`claude-sm`), Linear auto-sync daemon, background daemon, git hooks. See [docs/setup.md](https://github.com/stackmemoryai/stackmemory/blob/main/docs/setup.md).
 
 ## RLM (Recursive Language Model) Orchestration
 

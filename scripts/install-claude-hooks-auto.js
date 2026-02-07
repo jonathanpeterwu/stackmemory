@@ -58,6 +58,8 @@ async function askForConsent() {
   console.log('  - Track tool usage for better context');
   console.log('  - Enable session persistence across restarts');
   console.log('  - Sync context with Linear (optional)');
+  console.log('  - Auto-update PROMPT_PLAN on task completion');
+  console.log('  - Recommend relevant skills based on your prompts');
   console.log('\nThis will modify files in ~/.claude/\n');
 
   return new Promise((resolve) => {
@@ -89,11 +91,19 @@ async function installClaudeHooks() {
       console.log('Created ~/.claude/hooks directory');
     }
 
-    // Copy hook files
-    const hookFiles = ['tool-use-trace.js', 'on-startup.js', 'on-clear.js'];
+    // Copy hook files (scripts + data files)
+    const hookFiles = [
+      'tool-use-trace.js',
+      'on-startup.js',
+      'on-clear.js',
+      'on-task-complete.js',
+      'skill-eval.sh',
+      'skill-eval.cjs',
+    ];
+    const dataFiles = ['skill-rules.json'];
     let installed = 0;
 
-    for (const hookFile of hookFiles) {
+    for (const hookFile of [...hookFiles, ...dataFiles]) {
       const srcPath = join(templatesDir, hookFile);
       const destPath = join(claudeHooksDir, hookFile);
 
@@ -107,12 +117,14 @@ async function installClaudeHooks() {
 
         copyFileSync(srcPath, destPath);
 
-        // Make executable
-        try {
-          const { execSync } = await import('child_process');
-          execSync(`chmod +x "${destPath}"`, { stdio: 'ignore' });
-        } catch {
-          // Silent fail on chmod
+        // Make executable (scripts only, not data files)
+        if (!dataFiles.includes(hookFile)) {
+          try {
+            const { execSync } = await import('child_process');
+            execSync(`chmod +x "${destPath}"`, { stdio: 'ignore' });
+          } catch {
+            // Silent fail on chmod
+          }
         }
 
         installed++;
@@ -136,6 +148,8 @@ async function installClaudeHooks() {
       'tool-use-approval': join(claudeHooksDir, 'tool-use-trace.js'),
       'on-startup': join(claudeHooksDir, 'on-startup.js'),
       'on-clear': join(claudeHooksDir, 'on-clear.js'),
+      'on-task-complete': join(claudeHooksDir, 'on-task-complete.js'),
+      'user-prompt-submit': join(claudeHooksDir, 'skill-eval.sh'),
     };
 
     writeFileSync(claudeConfigFile, JSON.stringify(newHooksConfig, null, 2));

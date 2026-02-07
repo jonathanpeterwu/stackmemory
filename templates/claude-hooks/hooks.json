@@ -1,5 +1,7 @@
 {
   "tool-use-approval": "~/.claude/hooks/tool-use-trace.js",
   "on-startup": "~/.claude/hooks/on-startup.js",
-  "on-clear": "~/.claude/hooks/on-clear.js"
+  "on-clear": "~/.claude/hooks/on-clear.js",
+  "on-task-complete": "~/.claude/hooks/on-task-complete.js",
+  "user-prompt-submit": "~/.claude/hooks/skill-eval.sh"
 }
