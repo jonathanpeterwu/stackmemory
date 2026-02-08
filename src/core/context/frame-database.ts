@@ -80,11 +80,24 @@ export class FrameDatabase {
    */
   initSchema(): void {
     try {
-      // Enable WAL mode for better concurrency
-      this.db.pragma('journal_mode = WAL');
-      this.db.pragma('synchronous = NORMAL');
-      // Enforce referential integrity
-      this.db.pragma('foreign_keys = ON');
+      // Pragmas may fail if another component already opened this database
+      // and left an implicit transaction (e.g. SQLiteAdapter.connect()).
+      // Wrap each in try/catch so schema creation still proceeds.
+      try {
+        this.db.pragma('journal_mode = WAL');
+      } catch {
+        // WAL mode likely already set by adapter
+      }
+      try {
+        this.db.pragma('synchronous = NORMAL');
+      } catch {
+        // Safety level cannot change inside a transaction — skip
+      }
+      try {
+        this.db.pragma('foreign_keys = ON');
+      } catch {
+        // Foreign keys likely already enabled
+      }
 
       // Create frames table
       this.db.exec(`

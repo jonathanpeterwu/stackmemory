@@ -35,16 +35,16 @@ const distDir = join(__dirname, '..', 'dist');
  * Returns true if user consents, false otherwise
  */
 async function askForConsent() {
-  // Skip prompt if:
-  // 1. Not a TTY (CI/CD, piped input)
-  // 2. STACKMEMORY_AUTO_HOOKS=true is set
-  // 3. Running in CI environment
-  if (
-    !process.stdin.isTTY ||
-    process.env.STACKMEMORY_AUTO_HOOKS === 'true' ||
-    process.env.CI === 'true'
-  ) {
-    // In non-interactive mode, skip hook installation silently
+  // Auto-install if STACKMEMORY_AUTO_HOOKS=true (no prompt needed)
+  if (process.env.STACKMEMORY_AUTO_HOOKS === 'true') {
+    console.log(
+      'STACKMEMORY_AUTO_HOOKS=true — installing hooks automatically.'
+    );
+    return true;
+  }
+
+  // Skip prompt if not interactive (CI/CD, piped input)
+  if (!process.stdin.isTTY || process.env.CI === 'true') {
     console.log(
       'StackMemory installed. Run "stackmemory setup-mcp" to configure Claude Code integration.'
     );

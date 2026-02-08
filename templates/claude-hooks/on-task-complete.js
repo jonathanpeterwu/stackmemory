@@ -10,8 +10,8 @@
  * 3. Logs to ~/.stackmemory/logs/hook-errors.log on failure (non-blocking)
  */
 
-import fs from 'fs';
-import path from 'path';
+const fs = require('fs');
+const path = require('path');
 
 async function onTaskComplete() {
   try {
@@ -20,14 +20,13 @@ async function onTaskComplete() {
     // Sync Linear if STA task
     if (input.task && input.task.includes('STA-')) {
       try {
-        const smBin = path.join(process.env.HOME || '', '.stackmemory', 'bin');
         const syncScript = path.join(
           process.cwd(),
           'scripts',
           'sync-linear-graphql.js'
         );
         if (fs.existsSync(syncScript)) {
-          const { execSync } = await import('child_process');
+          const { execSync } = require('child_process');
           execSync(`node "${syncScript}"`, {
             stdio: 'ignore',
             timeout: 10000,
