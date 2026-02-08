@@ -25,6 +25,7 @@ import {
 } from './daemon-config.js';
 import { DaemonContextService } from './services/context-service.js';
 import { DaemonLinearService } from './services/linear-service.js';
+import { DaemonMaintenanceService } from './services/maintenance-service.js';
 
 interface LogEntry {
   timestamp: string;
@@ -39,6 +40,7 @@ export class UnifiedDaemon {
   private paths: ReturnType<typeof getDaemonPaths>;
   private contextService: DaemonContextService;
   private linearService: DaemonLinearService;
+  private maintenanceService: DaemonMaintenanceService;
   private heartbeatInterval?: NodeJS.Timeout;
   private isShuttingDown = false;
   private startTime: number = 0;
@@ -56,6 +58,11 @@ export class UnifiedDaemon {
     this.linearService = new DaemonLinearService(
       this.config.linear,
       (level, msg, data) => this.log(level, 'linear', msg, data)
+    );
+
+    this.maintenanceService = new DaemonMaintenanceService(
+      this.config.maintenance,
+      (level, msg, data) => this.log(level, 'maintenance', msg, data)
     );
   }
 
@@ -127,6 +134,7 @@ export class UnifiedDaemon {
   }
 
   private updateStatus(): void {
+    const maintenanceState = this.maintenanceService.getState();
     const status: DaemonStatus = {
       running: true,
       pid: process.pid,
@@ -143,6 +151,13 @@ export class UnifiedDaemon {
           lastRun: this.linearService.getState().lastSyncTime || undefined,
           syncCount: this.linearService.getState().syncCount,
         },
+        maintenance: {
+          enabled: this.config.maintenance.enabled,
+          lastRun: maintenanceState.lastRunTime || undefined,
+          staleFramesCleaned: maintenanceState.staleFramesCleaned,
+          ftsRebuilds: maintenanceState.ftsRebuilds,
+          embeddingsGenerated: maintenanceState.embeddingsGenerated,
+        },
         fileWatch: {
           enabled: this.config.fileWatch.enabled,
         },
@@ -150,6 +165,7 @@ export class UnifiedDaemon {
       errors: [
         ...this.contextService.getState().errors.slice(-5),
         ...this.linearService.getState().errors.slice(-5),
+        ...maintenanceState.errors.slice(-5),
       ],
     };
 
@@ -208,6 +224,12 @@ export class UnifiedDaemon {
           enabled: false,
           syncCount: this.linearService.getState().syncCount,
         },
+        maintenance: {
+          enabled: false,
+          staleFramesCleaned:
+            this.maintenanceService.getState().staleFramesCleaned,
+          ftsRebuilds: this.maintenanceService.getState().ftsRebuilds,
+        },
         fileWatch: { enabled: false },
       },
       errors: [],
@@ -224,6 +246,7 @@ export class UnifiedDaemon {
       uptime: Date.now() - this.startTime,
       contextSaves: this.contextService.getState().saveCount,
       linearSyncs: this.linearService.getState().syncCount,
+      maintenanceRuns: this.maintenanceService.getState().ftsRebuilds,
     });
 
     // Stop heartbeat
@@ -235,6 +258,7 @@ export class UnifiedDaemon {
     // Stop services
     this.contextService.stop();
     this.linearService.stop();
+    this.maintenanceService.stop();
 
     // Cleanup
     this.cleanup();
@@ -266,6 +290,7 @@ export class UnifiedDaemon {
       config: {
         context: this.config.context.enabled,
         linear: this.config.linear.enabled,
+        maintenance: this.config.maintenance.enabled,
         fileWatch: this.config.fileWatch.enabled,
       },
     });
@@ -273,6 +298,7 @@ export class UnifiedDaemon {
     // Start services
     this.contextService.start();
     await this.linearService.start();
+    this.maintenanceService.start();
 
     // Start heartbeat
     this.heartbeatInterval = setInterval(() => {
@@ -284,6 +310,7 @@ export class UnifiedDaemon {
   }
 
   getStatus(): DaemonStatus {
+    const maintenanceState = this.maintenanceService.getState();
     return {
       running: !this.isShuttingDown,
       pid: process.pid,
@@ -300,6 +327,13 @@ export class UnifiedDaemon {
           lastRun: this.linearService.getState().lastSyncTime || undefined,
           syncCount: this.linearService.getState().syncCount,
         },
+        maintenance: {
+          enabled: this.config.maintenance.enabled,
+          lastRun: maintenanceState.lastRunTime || undefined,
+          staleFramesCleaned: maintenanceState.staleFramesCleaned,
+          ftsRebuilds: maintenanceState.ftsRebuilds,
+          embeddingsGenerated: maintenanceState.embeddingsGenerated,
+        },
         fileWatch: {
           enabled: this.config.fileWatch.enabled,
         },
@@ -307,6 +341,7 @@ export class UnifiedDaemon {
       errors: [
         ...this.contextService.getState().errors,
         ...this.linearService.getState().errors,
+        ...maintenanceState.errors,
       ],
     };
   }

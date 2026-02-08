@@ -25,6 +25,13 @@ export interface LinearServiceConfig extends DaemonServiceConfig {
   retryDelay: number; // ms
 }
 
+export interface MaintenanceServiceConfig extends DaemonServiceConfig {
+  staleFrameThresholdDays: number;
+  ftsRebuildInterval: number; // hours
+  embeddingBatchSize: number;
+  vacuumInterval: number; // hours
+}
+
 export interface FileWatchConfig extends DaemonServiceConfig {
   paths: string[];
   extensions: string[];
@@ -36,6 +43,7 @@ export interface DaemonConfig {
   version: string;
   context: ContextServiceConfig;
   linear: LinearServiceConfig;
+  maintenance: MaintenanceServiceConfig;
   fileWatch: FileWatchConfig;
   heartbeatInterval: number; // seconds
   inactivityTimeout: number; // minutes, 0 = disabled
@@ -55,6 +63,14 @@ export const DEFAULT_DAEMON_CONFIG: DaemonConfig = {
     quietHours: { start: 22, end: 7 },
     retryAttempts: 3,
     retryDelay: 30000,
+  },
+  maintenance: {
+    enabled: true,
+    interval: 360, // 6 hours
+    staleFrameThresholdDays: 30,
+    ftsRebuildInterval: 24, // hours
+    embeddingBatchSize: 50,
+    vacuumInterval: 168, // weekly
   },
   fileWatch: {
     enabled: false, // Disabled by default
@@ -77,6 +93,13 @@ export interface DaemonStatus {
   services: {
     context: { enabled: boolean; lastRun?: number; saveCount?: number };
     linear: { enabled: boolean; lastRun?: number; syncCount?: number };
+    maintenance: {
+      enabled: boolean;
+      lastRun?: number;
+      staleFramesCleaned?: number;
+      ftsRebuilds?: number;
+      embeddingsGenerated?: number;
+    };
     fileWatch: { enabled: boolean; eventsProcessed?: number };
   };
   errors: string[];
@@ -136,6 +159,10 @@ export function loadDaemonConfig(): DaemonConfig {
       ...config,
       context: { ...DEFAULT_DAEMON_CONFIG.context, ...config.context },
       linear: { ...DEFAULT_DAEMON_CONFIG.linear, ...config.linear },
+      maintenance: {
+        ...DEFAULT_DAEMON_CONFIG.maintenance,
+        ...config.maintenance,
+      },
       fileWatch: { ...DEFAULT_DAEMON_CONFIG.fileWatch, ...config.fileWatch },
     };
   } catch {
@@ -154,6 +181,7 @@ export function saveDaemonConfig(config: Partial<DaemonConfig>): void {
     ...config,
     context: { ...currentConfig.context, ...config.context },
     linear: { ...currentConfig.linear, ...config.linear },
+    maintenance: { ...currentConfig.maintenance, ...config.maintenance },
     fileWatch: { ...currentConfig.fileWatch, ...config.fileWatch },
   };
   writeFileSync(configFile, JSON.stringify(newConfig, null, 2));
@@ -170,6 +198,7 @@ export function readDaemonStatus(): DaemonStatus {
     services: {
       context: { enabled: false },
       linear: { enabled: false },
+      maintenance: { enabled: false },
       fileWatch: { enabled: false },
     },
     errors: [],

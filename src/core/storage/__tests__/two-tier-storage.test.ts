@@ -7,11 +7,10 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
-import { 
-  TwoTierStorageSystem, 
+import {
+  TwoTierStorageSystem,
   StorageTier,
   type TwoTierConfig,
-  type TierConfig
 } from '../two-tier-storage.js';
 import type { Frame, Event, Anchor } from '../../context/index.js';
 
@@ -22,7 +21,7 @@ describe('TwoTierStorageSystem', () => {
 
   beforeEach(() => {
     tempDir = mkdtempSync(join(tmpdir(), 'two-tier-test-'));
-    
+
     config = {
       local: {
         dbPath: join(tempDir, 'test.db'),
@@ -33,40 +32,40 @@ describe('TwoTierStorageSystem', () => {
             maxAgeHours: 24,
             compressionType: 'none',
             retentionPolicy: 'complete',
-            maxSizeMB: 100
+            maxSizeMB: 100,
           },
           {
             name: StorageTier.MATURE,
             maxAgeHours: 168,
-            compressionType: 'gzip', // Use gzip instead of lz4 for testing
+            compressionType: 'gzip',
             retentionPolicy: 'selective',
-            maxSizeMB: 200
+            maxSizeMB: 200,
           },
           {
             name: StorageTier.OLD,
             maxAgeHours: 720,
             compressionType: 'gzip',
             retentionPolicy: 'critical',
-            maxSizeMB: 100
-          }
-        ]
+            maxSizeMB: 100,
+          },
+        ],
       },
       remote: {
         s3: {
           bucket: 'test-bucket',
-          region: 'us-east-1'
-        }
+          region: 'us-east-1',
+        },
       },
       migration: {
         triggers: [
           { type: 'age', threshold: 720, action: 'migrate' },
-          { type: 'size', threshold: 300, action: 'migrate' }
+          { type: 'size', threshold: 300, action: 'migrate' },
         ],
         batchSize: 10,
-        intervalMs: 1000
-      }
+        intervalMs: 1000,
+      },
     };
-    
+
     storage = new TwoTierStorageSystem(config);
   });
 
@@ -77,16 +76,8 @@ describe('TwoTierStorageSystem', () => {
     rmSync(tempDir, { recursive: true, force: true });
   });
 
-  describe('Initialization', () => {
-    it('should initialize storage system successfully', async () => {
-      await expect(storage.initialize()).resolves.not.toThrow();
-    });
-
-    it('should create required database tables', async () => {
-      await storage.initialize();
-      // Database tables are created in constructor
-      expect(true).toBe(true); // If we reach here, initialization worked
-    });
+  it('should initialize successfully', async () => {
+    await expect(storage.initialize()).resolves.not.toThrow();
   });
 
   describe('Tier Selection', () => {
@@ -94,40 +85,28 @@ describe('TwoTierStorageSystem', () => {
       await storage.initialize();
     });
 
-    it('should select YOUNG tier for recent frames', async () => {
-      const recentFrame: Frame = createTestFrame({
-        created_at: Date.now() - (1000 * 60 * 60) // 1 hour ago
+    it('should select correct tier based on frame age', async () => {
+      // Recent → YOUNG
+      const young = createTestFrame({
+        created_at: Date.now() - 1000 * 60 * 60,
       });
-      
-      const storageId = await storage.storeFrame(recentFrame, [], []);
-      expect(storageId).toBeDefined();
-    });
+      expect(await storage.storeFrame(young, [], [])).toBeDefined();
 
-    it('should select MATURE tier for 2-day-old frames', async () => {
-      const matureFrame: Frame = createTestFrame({
-        created_at: Date.now() - (1000 * 60 * 60 * 48) // 2 days ago
+      // 2 days → MATURE
+      const mature = createTestFrame({
+        created_at: Date.now() - 1000 * 60 * 60 * 48,
       });
-      
-      const storageId = await storage.storeFrame(matureFrame, [], []);
-      expect(storageId).toBeDefined();
-    });
+      expect(await storage.storeFrame(mature, [], [])).toBeDefined();
 
-    it('should select OLD tier for 10-day-old frames', async () => {
-      const oldFrame: Frame = createTestFrame({
-        created_at: Date.now() - (1000 * 60 * 60 * 24 * 10) // 10 days ago
+      // 10 days → OLD
+      const old = createTestFrame({
+        created_at: Date.now() - 1000 * 60 * 60 * 24 * 10,
       });
-      
-      const storageId = await storage.storeFrame(oldFrame, [], []);
-      expect(storageId).toBeDefined();
-    });
+      expect(await storage.storeFrame(old, [], [])).toBeDefined();
 
-    it('should handle invalid timestamps gracefully', async () => {
-      const invalidFrame: Frame = createTestFrame({
-        created_at: NaN
-      });
-      
-      const storageId = await storage.storeFrame(invalidFrame, [], []);
-      expect(storageId).toBeDefined(); // Should default to YOUNG tier
+      // Invalid timestamp defaults to YOUNG
+      const invalid = createTestFrame({ created_at: NaN });
+      expect(await storage.storeFrame(invalid, [], [])).toBeDefined();
     });
   });
 
@@ -136,28 +115,24 @@ describe('TwoTierStorageSystem', () => {
       await storage.initialize();
     });
 
-    it('should not compress young tier data', async () => {
-      const youngFrame = createTestFrame({
-        created_at: Date.now() - (1000 * 60 * 30) // 30 minutes ago
+    it('should handle compression for young and mature tiers', async () => {
+      // Young: no compression
+      const young = createTestFrame({
+        created_at: Date.now() - 1000 * 60 * 30,
       });
-      
-      const storageId = await storage.storeFrame(youngFrame, [], []);
-      const retrieved = await storage.retrieveFrame(youngFrame.frame_id);
-      
-      expect(retrieved).toBeDefined();
-      expect(retrieved.frame.frame_id).toBe(youngFrame.frame_id);
-    });
+      await storage.storeFrame(young, [], []);
+      const retrievedYoung = await storage.retrieveFrame(young.frame_id);
+      expect(retrievedYoung).toBeDefined();
+      expect(retrievedYoung.frame.frame_id).toBe(young.frame_id);
 
-    it('should compress mature tier data', async () => {
-      const matureFrame = createTestFrame({
-        created_at: Date.now() - (1000 * 60 * 60 * 48) // 2 days ago
+      // Mature: gzip compression
+      const mature = createTestFrame({
+        created_at: Date.now() - 1000 * 60 * 60 * 48,
       });
-      
-      const storageId = await storage.storeFrame(matureFrame, [], []);
-      const retrieved = await storage.retrieveFrame(matureFrame.frame_id);
-      
-      expect(retrieved).toBeDefined();
-      expect(retrieved.frame.frame_id).toBe(matureFrame.frame_id);
+      await storage.storeFrame(mature, [], []);
+      const retrievedMature = await storage.retrieveFrame(mature.frame_id);
+      expect(retrievedMature).toBeDefined();
+      expect(retrievedMature.frame.frame_id).toBe(mature.frame_id);
     });
   });
 
@@ -166,34 +141,29 @@ describe('TwoTierStorageSystem', () => {
       await storage.initialize();
     });
 
-    it('should calculate higher importance for frames with decisions', async () => {
-      const frame = createTestFrame();
+    it('should score frames based on decisions, events, and errors', async () => {
+      // Decisions
+      const frame1 = createTestFrame();
       const anchors: Anchor[] = [
         createTestAnchor({ type: 'DECISION' }),
-        createTestAnchor({ type: 'DECISION' })
+        createTestAnchor({ type: 'DECISION' }),
       ];
-      
-      const storageId = await storage.storeFrame(frame, [], anchors);
-      expect(storageId).toBeDefined();
-    });
+      expect(await storage.storeFrame(frame1, [], anchors)).toBeDefined();
 
-    it('should calculate higher importance for frames with many events', async () => {
-      const frame = createTestFrame();
-      const events: Event[] = Array.from({ length: 50 }, () => createTestEvent());
-      
-      const storageId = await storage.storeFrame(frame, events, []);
-      expect(storageId).toBeDefined();
-    });
+      // Many events
+      const frame2 = createTestFrame();
+      const events: Event[] = Array.from({ length: 50 }, () =>
+        createTestEvent()
+      );
+      expect(await storage.storeFrame(frame2, events, [])).toBeDefined();
 
-    it('should calculate higher importance for frames with errors', async () => {
-      const frame = createTestFrame();
-      const events: Event[] = [
+      // Error events
+      const frame3 = createTestFrame();
+      const errorEvents: Event[] = [
         createTestEvent({ event_type: 'error' }),
-        createTestEvent({ event_type: 'error' })
+        createTestEvent({ event_type: 'error' }),
       ];
-      
-      const storageId = await storage.storeFrame(frame, events, []);
-      expect(storageId).toBeDefined();
+      expect(await storage.storeFrame(frame3, errorEvents, [])).toBeDefined();
     });
   });
 
@@ -202,43 +172,39 @@ describe('TwoTierStorageSystem', () => {
       await storage.initialize();
     });
 
-    it('should retrieve stored frame successfully', async () => {
+    it('should store and retrieve frames with events and anchors', async () => {
       const frame = createTestFrame();
-      const events = [createTestEvent()];
-      const anchors = [createTestAnchor()];
-      
-      await storage.storeFrame(frame, events, anchors);
+      await storage.storeFrame(
+        frame,
+        [createTestEvent()],
+        [createTestAnchor()]
+      );
       const retrieved = await storage.retrieveFrame(frame.frame_id);
-      
+
       expect(retrieved).toBeDefined();
       expect(retrieved.frame.frame_id).toBe(frame.frame_id);
       expect(retrieved.events).toHaveLength(1);
       expect(retrieved.anchors).toHaveLength(1);
-    });
 
-    it('should return null for non-existent frame', async () => {
-      const retrieved = await storage.retrieveFrame('non-existent-frame-id');
-      expect(retrieved).toBeNull();
+      // Non-existent
+      expect(await storage.retrieveFrame('non-existent-id')).toBeNull();
     });
   });
 
-  describe('Storage Statistics', () => {
+  describe('Statistics', () => {
     beforeEach(async () => {
       await storage.initialize();
     });
 
     it('should provide accurate storage statistics', async () => {
-      // Store some test data
-      const frame1 = createTestFrame();
-      const frame2 = createTestFrame({ 
-        created_at: Date.now() - (1000 * 60 * 60 * 48) 
-      });
-      
-      await storage.storeFrame(frame1, [], []);
-      await storage.storeFrame(frame2, [], []);
-      
+      await storage.storeFrame(createTestFrame(), [], []);
+      await storage.storeFrame(
+        createTestFrame({ created_at: Date.now() - 1000 * 60 * 60 * 48 }),
+        [],
+        []
+      );
+
       const stats = await storage.getStats();
-      
       expect(stats).toBeDefined();
       expect(stats.tierDistribution).toBeDefined();
       expect(stats.localUsageMB).toBeGreaterThan(0);
@@ -251,55 +217,33 @@ describe('TwoTierStorageSystem', () => {
       await storage.initialize();
     });
 
-    it('should reject invalid frame data', async () => {
-      const invalidFrame = {} as Frame; // Missing required fields
-      
-      await expect(
-        storage.storeFrame(invalidFrame, [], [])
-      ).rejects.toThrow();
-    });
+    it('should reject invalid frames and accept empty arrays', async () => {
+      await expect(storage.storeFrame({} as Frame, [], [])).rejects.toThrow();
 
-    it('should handle empty events and anchors arrays', async () => {
       const frame = createTestFrame();
-      
-      const storageId = await storage.storeFrame(frame, [], []);
-      expect(storageId).toBeDefined();
+      expect(await storage.storeFrame(frame, [], [])).toBeDefined();
     });
   });
 
   describe('Configuration', () => {
-    it('should use default tiers when none provided', () => {
-      const emptyConfig: TwoTierConfig = {
+    it('should handle empty tiers and validate config', () => {
+      const emptyStorage = new TwoTierStorageSystem({
         local: {
           dbPath: join(tempDir, 'empty.db'),
           maxSizeGB: 1,
-          tiers: []
+          tiers: [],
         },
-        remote: {
-          s3: { bucket: 'test', region: 'us-east-1' }
-        },
-        migration: {
-          triggers: [],
-          batchSize: 10,
-          intervalMs: 1000
-        }
-      };
-      
-      // Should not throw when creating with empty tiers
-      const emptyStorage = new TwoTierStorageSystem(emptyConfig);
+        remote: { s3: { bucket: 'test', region: 'us-east-1' } },
+        migration: { triggers: [], batchSize: 10, intervalMs: 1000 },
+      });
       expect(emptyStorage).toBeDefined();
-    });
 
-    it('should validate compression types', () => {
+      // Tier config validation
       expect(config.local.tiers[0].compressionType).toBe('none');
       expect(config.local.tiers[1].compressionType).toBe('gzip');
-      expect(config.local.tiers[2].compressionType).toBe('gzip');
-    });
-
-    it('should validate tier order by age', () => {
-      const ages = config.local.tiers.map(tier => tier.maxAgeHours);
-      expect(ages[0]).toBeLessThan(ages[1]); // Young < Mature
-      expect(ages[1]).toBeLessThan(ages[2]); // Mature < Old
+      const ages = config.local.tiers.map((tier) => tier.maxAgeHours);
+      expect(ages[0]).toBeLessThan(ages[1]);
+      expect(ages[1]).toBeLessThan(ages[2]);
     });
   });
 });
@@ -319,7 +263,7 @@ function createTestFrame(overrides: Partial<Frame> = {}): Frame {
     outputs: null,
     digest_json: null,
     parent_frame_id: null,
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -332,7 +276,7 @@ function createTestEvent(overrides: Partial<Event> = {}): Event {
     event_type: 'tool_call',
     payload: { tool: 'test', args: {} },
     created_at: Date.now(),
-    ...overrides
+    ...overrides,
   };
 }
 
@@ -345,6 +289,6 @@ function createTestAnchor(overrides: Partial<Anchor> = {}): Anchor {
     text: 'Test anchor',
     position: 0,
     created_at: Date.now(),
-    ...overrides
+    ...overrides,
   };
 }

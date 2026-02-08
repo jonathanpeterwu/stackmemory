@@ -19,6 +19,7 @@ import {
 import type { Frame, Event, Anchor } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 import { DatabaseError, ErrorCode, ValidationError } from '../errors/index.js';
+import type { EmbeddingProvider } from './embedding-provider.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -28,22 +29,30 @@ export interface SQLiteConfig {
   busyTimeout?: number;
   cacheSize?: number;
   synchronous?: 'OFF' | 'NORMAL' | 'FULL' | 'EXTRA';
+  embeddingProvider?: EmbeddingProvider;
+  embeddingDimension?: number;
 }
 
 export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   private db: Database.Database | null = null;
   private readonly dbPath: string;
   private inTransactionFlag = false;
+  private ftsEnabled = false;
+  private vecEnabled = false;
+  private embeddingProvider?: EmbeddingProvider;
+  private embeddingDimension: number;
 
   constructor(projectId: string, config: SQLiteConfig) {
     super(projectId, config);
     this.dbPath = config.dbPath;
+    this.embeddingProvider = config.embeddingProvider;
+    this.embeddingDimension = config.embeddingDimension || 384;
   }
 
   getFeatures(): DatabaseFeatures {
     return {
-      supportsFullTextSearch: false, // Could enable with FTS5
-      supportsVectorSearch: false,
+      supportsFullTextSearch: this.ftsEnabled,
+      supportsVectorSearch: this.vecEnabled,
       supportsPartitioning: false,
       supportsAnalytics: false,
       supportsCompression: false,
@@ -194,6 +203,12 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     } catch (e) {
       logger.warn('Failed to ensure cascade constraints', e as Error);
     }
+
+    // Initialize FTS5 full-text search
+    this.initializeFts();
+
+    // Initialize sqlite-vec if provider is configured
+    this.initializeVec();
   }
 
   /**
@@ -271,6 +286,144 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
     if (needsCascade('events')) migrateTable('events');
     if (needsCascade('anchors')) migrateTable('anchors');
+  }
+
+  /**
+   * Initialize FTS5 virtual table and sync triggers
+   */
+  private initializeFts(): void {
+    if (!this.db) return;
+
+    try {
+      // Create FTS5 virtual table (external content, references frames)
+      this.db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS frames_fts USING fts5(
+          name, digest_text, inputs, outputs,
+          content='frames', content_rowid='rowid'
+        );
+      `);
+
+      // Create triggers to keep FTS in sync
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS frames_ai AFTER INSERT ON frames BEGIN
+          INSERT INTO frames_fts(rowid, name, digest_text, inputs, outputs)
+          VALUES (new.rowid, new.name, new.digest_text, new.inputs, new.outputs);
+        END;
+      `);
+
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS frames_ad AFTER DELETE ON frames BEGIN
+          INSERT INTO frames_fts(frames_fts, rowid, name, digest_text, inputs, outputs)
+          VALUES ('delete', old.rowid, old.name, old.digest_text, old.inputs, old.outputs);
+        END;
+      `);
+
+      this.db.exec(`
+        CREATE TRIGGER IF NOT EXISTS frames_au AFTER UPDATE ON frames BEGIN
+          INSERT INTO frames_fts(frames_fts, rowid, name, digest_text, inputs, outputs)
+          VALUES ('delete', old.rowid, old.name, old.digest_text, old.inputs, old.outputs);
+          INSERT INTO frames_fts(rowid, name, digest_text, inputs, outputs)
+          VALUES (new.rowid, new.name, new.digest_text, new.inputs, new.outputs);
+        END;
+      `);
+
+      // Populate FTS index for existing data (schema version migration 1→2)
+      this.migrateToFts();
+
+      this.ftsEnabled = true;
+      logger.info('FTS5 full-text search initialized');
+    } catch (e) {
+      logger.warn(
+        'FTS5 initialization failed, falling back to LIKE search',
+        e as Error
+      );
+      this.ftsEnabled = false;
+    }
+  }
+
+  /**
+   * One-time migration: populate FTS index from existing frames data
+   */
+  private migrateToFts(): void {
+    if (!this.db) return;
+
+    const version =
+      (
+        this.db
+          .prepare('SELECT MAX(version) as version FROM schema_version')
+          .get() as { version: number }
+      )?.version || 1;
+
+    if (version < 2) {
+      // Populate FTS from existing data
+      this.db.exec(`
+        INSERT OR IGNORE INTO frames_fts(rowid, name, digest_text, inputs, outputs)
+        SELECT rowid, name, digest_text, inputs, outputs FROM frames;
+      `);
+      this.db
+        .prepare('INSERT OR REPLACE INTO schema_version (version) VALUES (?)')
+        .run(2);
+      logger.info(
+        'FTS5 index populated from existing frames (migration v1→v2)'
+      );
+    }
+  }
+
+  /**
+   * Initialize sqlite-vec for vector search
+   */
+  private initializeVec(): void {
+    if (!this.db || !this.embeddingProvider) return;
+
+    try {
+      // Try to load sqlite-vec extension
+      let sqliteVec;
+      try {
+        sqliteVec = require('sqlite-vec');
+      } catch {
+        logger.info('sqlite-vec not installed, vector search disabled');
+        return;
+      }
+
+      sqliteVec.load(this.db);
+
+      // Create vec0 virtual table for embeddings
+      this.db.exec(`
+        CREATE VIRTUAL TABLE IF NOT EXISTS frame_embeddings USING vec0(
+          frame_id TEXT PRIMARY KEY,
+          embedding float[${this.embeddingDimension}]
+        );
+      `);
+
+      this.vecEnabled = true;
+      logger.info('sqlite-vec vector search initialized', {
+        dimension: this.embeddingDimension,
+      });
+    } catch (e) {
+      logger.warn(
+        'sqlite-vec initialization failed, vector search disabled',
+        e as Error
+      );
+      this.vecEnabled = false;
+    }
+  }
+
+  /**
+   * Rebuild the FTS5 index (for maintenance)
+   */
+  async rebuildFtsIndex(): Promise<void> {
+    if (!this.db) {
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+    }
+    if (!this.ftsEnabled) {
+      logger.warn('FTS not enabled, skipping rebuild');
+      return;
+    }
+    this.db.exec("INSERT INTO frames_fts(frames_fts) VALUES('rebuild')");
+    logger.info('FTS5 index rebuilt');
   }
 
   async migrateSchema(targetVersion: number): Promise<void> {
@@ -601,7 +754,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     this.db.prepare('DELETE FROM anchors WHERE frame_id = ?').run(frameId);
   }
 
-  // Limited search (basic LIKE queries)
+  // Full-text search with FTS5 + BM25 ranking (fallback to LIKE)
   async search(
     options: SearchOptions
   ): Promise<Array<Frame & { score: number }>> {
@@ -611,10 +764,69 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
         ErrorCode.DB_CONNECTION_FAILED
       );
 
-    // SQLite doesn't support HAVING on non-aggregate queries, so we filter in application
+    if (this.ftsEnabled) {
+      try {
+        return this.searchFts(options);
+      } catch (e) {
+        // FTS MATCH can fail on bad syntax — fall back to LIKE
+        logger.debug('FTS search failed, falling back to LIKE', {
+          error: e instanceof Error ? e.message : String(e),
+          query: options.query,
+        });
+      }
+    }
+
+    return this.searchLike(options);
+  }
+
+  /**
+   * FTS5 MATCH search with BM25 ranking
+   */
+  private searchFts(options: SearchOptions): Array<Frame & { score: number }> {
+    // BM25 weights: name=10, digest_text=5, inputs=2, outputs=1
+    const boost = options.boost || {};
+    const w0 = boost['name'] || 10.0;
+    const w1 = boost['digest_text'] || 5.0;
+    const w2 = boost['inputs'] || 2.0;
+    const w3 = boost['outputs'] || 1.0;
+
     const sql = `
-      SELECT *, 
-        CASE 
+      SELECT f.*, -bm25(frames_fts, ${w0}, ${w1}, ${w2}, ${w3}) as score
+      FROM frames_fts fts
+      JOIN frames f ON f.rowid = fts.rowid
+      WHERE frames_fts MATCH ?
+      ORDER BY score DESC
+      LIMIT ? OFFSET ?
+    `;
+
+    const limit = options.limit || 50;
+    const offset = options.offset || 0;
+
+    const rows = this.db!.prepare(sql).all(
+      options.query,
+      limit,
+      offset
+    ) as any[];
+
+    // Note: scoreThreshold is not applied to FTS results because BM25 scores
+    // are on a different scale than LIKE-based scores. FTS results are already
+    // ranked by relevance via ORDER BY score DESC.
+
+    return rows.map((row) => ({
+      ...row,
+      inputs: JSON.parse(row.inputs || '{}'),
+      outputs: JSON.parse(row.outputs || '{}'),
+      digest_json: JSON.parse(row.digest_json || '{}'),
+    }));
+  }
+
+  /**
+   * Fallback LIKE search for when FTS is unavailable
+   */
+  private searchLike(options: SearchOptions): Array<Frame & { score: number }> {
+    const sql = `
+      SELECT *,
+        CASE
           WHEN name LIKE ? THEN 1.0
           WHEN digest_text LIKE ? THEN 0.8
           WHEN inputs LIKE ? THEN 0.6
@@ -627,14 +839,12 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
     const params = Array(6).fill(`%${options.query}%`);
 
-    let rows = this.db.prepare(sql).all(...params) as any[];
+    let rows = this.db!.prepare(sql).all(...params) as any[];
 
-    // Apply score threshold in application layer
     if (options.scoreThreshold) {
       rows = rows.filter((row) => row.score >= options.scoreThreshold);
     }
 
-    // Apply limit and offset in application layer if threshold is used
     if (options.limit || options.offset) {
       const start = options.offset || 0;
       const end = options.limit ? start + options.limit : rows.length;
@@ -650,21 +860,132 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   async searchByVector(
-    _embedding: number[],
-    _options?: QueryOptions
+    embedding: number[],
+    options?: QueryOptions
   ): Promise<Array<Frame & { similarity: number }>> {
-    // Not supported in SQLite
-    logger.warn('Vector search not supported in SQLite adapter');
-    return [];
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    if (!this.vecEnabled) {
+      logger.warn('Vector search not available (sqlite-vec not loaded)');
+      return [];
+    }
+
+    const limit = options?.limit || 20;
+    const sql = `
+      SELECT f.*, ve.distance as similarity
+      FROM frame_embeddings ve
+      JOIN frames f ON f.frame_id = ve.frame_id
+      WHERE ve.embedding MATCH ?
+      ORDER BY ve.distance
+      LIMIT ?
+    `;
+
+    const rows = this.db
+      .prepare(sql)
+      .all(JSON.stringify(embedding), limit) as any[];
+
+    return rows.map((row) => ({
+      ...row,
+      inputs: JSON.parse(row.inputs || '{}'),
+      outputs: JSON.parse(row.outputs || '{}'),
+      digest_json: JSON.parse(row.digest_json || '{}'),
+    }));
   }
 
   async searchHybrid(
     textQuery: string,
-    _embedding: number[],
+    embedding: number[],
     weights?: { text: number; vector: number }
   ): Promise<Array<Frame & { score: number }>> {
-    // Fall back to text search only
-    return this.search({ query: textQuery, ...weights });
+    const textWeight = weights?.text ?? 0.6;
+    const vecWeight = weights?.vector ?? 0.4;
+
+    // Get text results
+    const textResults = await this.search({ query: textQuery, limit: 50 });
+
+    // Get vector results if available
+    const vecResults = this.vecEnabled
+      ? await this.searchByVector(embedding, { limit: 50 })
+      : [];
+
+    if (vecResults.length === 0) {
+      return textResults;
+    }
+
+    // Merge: build score map by frame_id
+    const scoreMap = new Map<string, { frame: Frame; score: number }>();
+
+    // Normalize text scores: max becomes 1.0
+    const maxText = Math.max(...textResults.map((r) => r.score), 1);
+    for (const r of textResults) {
+      const normalizedScore = (r.score / maxText) * textWeight;
+      scoreMap.set(r.frame_id, { frame: r, score: normalizedScore });
+    }
+
+    // Normalize vec scores: smaller distance = higher score
+    const maxDist = Math.max(...vecResults.map((r) => r.similarity), 1);
+    for (const r of vecResults) {
+      const normalizedScore = (1 - r.similarity / maxDist) * vecWeight;
+      const existing = scoreMap.get(r.frame_id);
+      if (existing) {
+        existing.score += normalizedScore;
+      } else {
+        scoreMap.set(r.frame_id, { frame: r, score: normalizedScore });
+      }
+    }
+
+    return Array.from(scoreMap.values())
+      .sort((a, b) => b.score - a.score)
+      .map(({ frame, score }) => ({ ...frame, score }));
+  }
+
+  /**
+   * Store an embedding for a frame
+   */
+  async storeEmbedding(frameId: string, embedding: number[]): Promise<void> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    if (!this.vecEnabled) return;
+
+    this.db
+      .prepare(
+        'INSERT OR REPLACE INTO frame_embeddings (frame_id, embedding) VALUES (?, ?)'
+      )
+      .run(frameId, JSON.stringify(embedding));
+  }
+
+  /**
+   * Get frames that are missing embeddings
+   */
+  async getFramesMissingEmbeddings(limit: number = 50): Promise<Frame[]> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    const sql = `
+      SELECT f.* FROM frames f
+      LEFT JOIN frame_embeddings ve ON f.frame_id = ve.frame_id
+      WHERE ve.frame_id IS NULL
+      LIMIT ?
+    `;
+
+    const rows = this.db.prepare(sql).all(limit) as any[];
+    return rows.map((row) => ({
+      ...row,
+      inputs: JSON.parse(row.inputs || '{}'),
+      outputs: JSON.parse(row.outputs || '{}'),
+      digest_json: JSON.parse(row.digest_json || '{}'),
+    }));
   }
 
   // Basic aggregation

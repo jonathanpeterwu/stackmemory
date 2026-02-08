@@ -138,6 +138,8 @@ The daemon provides:
           const services = [];
           if (newStatus.services.context.enabled) services.push('context');
           if (newStatus.services.linear.enabled) services.push('linear');
+          if (newStatus.services.maintenance?.enabled)
+            services.push('maintenance');
           if (newStatus.services.fileWatch.enabled) services.push('file-watch');
           if (services.length > 0) {
             console.log(chalk.gray(`Services: ${services.join(', ')}`));
@@ -295,6 +297,33 @@ The daemon provides:
         }
         if (lin.syncCount) {
           console.log(chalk.gray(`    Syncs: ${lin.syncCount}`));
+        }
+      }
+
+      // Maintenance service
+      const maint = status.services.maintenance;
+      if (maint) {
+        console.log(
+          `  Maintenance: ${maint.enabled ? chalk.green('Enabled') : chalk.gray('Disabled')}`
+        );
+        if (maint.enabled) {
+          console.log(
+            chalk.gray(`    Interval: ${config.maintenance.interval} min`)
+          );
+          if (maint.staleFramesCleaned) {
+            console.log(
+              chalk.gray(
+                `    Stale frames cleaned: ${maint.staleFramesCleaned}`
+              )
+            );
+          }
+          if (maint.ftsRebuilds) {
+            console.log(chalk.gray(`    FTS rebuilds: ${maint.ftsRebuilds}`));
+          }
+          if (maint.lastRun) {
+            const ago = Math.round((Date.now() - maint.lastRun) / 1000 / 60);
+            console.log(chalk.gray(`    Last run: ${ago} min ago`));
+          }
         }
       }
 
