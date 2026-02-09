@@ -419,7 +419,19 @@ export class ContextRetriever {
             strategy.weights
           );
         } else {
-          // No embedding provider — fall back to text search
+          rawResults = await this.adapter.search(searchOptions);
+        }
+      } else if (strategy.searchType === 'vector') {
+        const embedding = await this.generateEmbedding(query.text);
+        if (embedding.length > 0) {
+          const vecResults = await this.adapter.searchByVector(embedding, {
+            limit: searchOptions.limit,
+          });
+          rawResults = vecResults.map((r) => ({
+            ...r,
+            score: 1 - (r.similarity || 0),
+          }));
+        } else {
           rawResults = await this.adapter.search(searchOptions);
         }
       } else {

@@ -26,7 +26,12 @@ export class TransformersEmbeddingProvider implements EmbeddingProvider {
       const { pipeline } = await import('@xenova/transformers');
       this.pipeline = await pipeline('feature-extraction', this.modelName);
     })();
-    await this.initPromise;
+    try {
+      await this.initPromise;
+    } catch (err) {
+      this.initPromise = null;
+      throw err;
+    }
   }
 
   async embed(text: string): Promise<number[]> {
