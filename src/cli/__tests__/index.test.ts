@@ -255,15 +255,16 @@ describe('CLI Commands', () => {
     error: ReturnType<typeof vi.spyOn>;
   };
   let exitSpy: ReturnType<typeof vi.spyOn>;
+  let programModule: { program: any };
 
-  beforeAll(() => {
+  beforeAll(async () => {
     // Prevent multiple listener warnings
     process.setMaxListeners(50);
+    // Import once — vi.mock() calls are hoisted and apply globally
+    programModule = await import('../index.js');
   });
 
   beforeEach(() => {
-    vi.resetModules();
-
     tempDir = mkdtempSync(join(tmpdir(), 'stackmemory-cli-test-'));
     originalArgv = [...process.argv];
 
@@ -296,14 +297,14 @@ describe('CLI Commands', () => {
 
   describe('init command', () => {
     it('should initialize StackMemory in current directory', async () => {
-      const { program } = await import('../index.js');
+      const { program } = programModule;
 
       process.argv = ['node', 'stackmemory', 'init'];
       await program.parseAsync(process.argv);
 
       const stackmemoryDir = join(tempDir, '.stackmemory');
       expect(existsSync(stackmemoryDir)).toBe(true);
-    }, 15000); // Increased timeout for module loading
+    });
   });
 
   describe('status command', () => {
@@ -312,17 +313,17 @@ describe('CLI Commands', () => {
       mkdirSync(dbDir, { recursive: true });
       writeFileSync(join(dbDir, 'context.db'), '');
 
-      const { program } = await import('../index.js');
+      const { program } = programModule;
 
       process.argv = ['node', 'stackmemory', 'status'];
       await program.parseAsync(process.argv);
 
       // Verify the command executed (it outputs session/status info)
       expect(consoleSpy.log).toHaveBeenCalled();
-    }, 10000);
+    });
 
     it('should show error when StackMemory is not initialized', async () => {
-      const { program } = await import('../index.js');
+      const { program } = programModule;
 
       process.argv = ['node', 'stackmemory', 'status'];
       await program.parseAsync(process.argv);
@@ -335,7 +336,7 @@ describe('CLI Commands', () => {
 
   describe('update-check command', () => {
     it('should check for updates', async () => {
-      const { program } = await import('../index.js');
+      const { program } = programModule;
 
       process.argv = ['node', 'stackmemory', 'update-check'];
       await program.parseAsync(process.argv);
@@ -346,7 +347,7 @@ describe('CLI Commands', () => {
 
   describe('ping command', () => {
     it('should respond with pong and timestamp', async () => {
-      const { program } = await import('../index.js');
+      const { program } = programModule;
 
       process.argv = ['node', 'stackmemory', 'ping'];
       await program.parseAsync(process.argv);
@@ -361,7 +362,7 @@ describe('CLI Commands', () => {
 
   describe('mcp-server command', () => {
     it('should start MCP server with default options', async () => {
-      const { program } = await import('../index.js');
+      const { program } = programModule;
 
       process.argv = ['node', 'stackmemory', 'mcp-server'];
       await program.parseAsync(process.argv);
@@ -374,7 +375,7 @@ describe('CLI Commands', () => {
     it('should start MCP server with custom project path', async () => {
       const customPath = '/custom/project/path';
 
-      const { program } = await import('../index.js');
+      const { program } = programModule;
 
       process.argv = [
         'node',
@@ -391,7 +392,7 @@ describe('CLI Commands', () => {
 
   describe('Command registration', () => {
     it('should export program with registered commands', async () => {
-      const { program } = await import('../index.js');
+      const { program } = programModule;
 
       // Verify program is exported and has commands
       expect(program).toBeDefined();
@@ -407,7 +408,7 @@ describe('CLI Commands', () => {
 
   describe('Error handling', () => {
     it('should handle unknown commands gracefully', async () => {
-      const { program } = await import('../index.js');
+      const { program } = programModule;
       program.exitOverride();
 
       process.argv = ['node', 'stackmemory', 'unknown-command'];
