@@ -1,13 +1,13 @@
 /**
  * Search Benchmark Tests
  *
- * Skip in CI, run manually with:
- *   npx vitest run --reporter=verbose src/core/database/__tests__/search-benchmark.test.ts
- *
- * To run, temporarily remove the `.skip` from describe.skip
+ * Run full suite:   BENCH=1 npx vitest run src/core/database/__tests__/search-benchmark.test.ts
+ * Pre-publish runs the 100-frame smoke tests automatically.
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+
+const FULL_BENCH = process.env['BENCH'] === '1';
 import { SQLiteAdapter } from '../sqlite-adapter.js';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -150,8 +150,7 @@ function measureLatency(
   };
 }
 
-// Skip by default - remove .skip to run manually
-describe.skip('Search Benchmark', () => {
+describe('Search Benchmark', () => {
   let adapter: SQLiteAdapter;
   let dbPath: string;
 
@@ -217,7 +216,7 @@ describe.skip('Search Benchmark', () => {
     });
   });
 
-  describe('1000 frames', () => {
+  (FULL_BENCH ? describe : describe.skip)('1000 frames', () => {
     beforeEach(() => {
       insertBenchmarkFrames(adapter, 1000);
     });
@@ -311,7 +310,7 @@ describe.skip('Search Benchmark', () => {
     });
   });
 
-  describe('10000 frames', () => {
+  (FULL_BENCH ? describe : describe.skip)('10000 frames', () => {
     beforeEach(() => {
       insertBenchmarkFrames(adapter, 10000);
     });

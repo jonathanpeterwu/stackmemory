@@ -17,15 +17,6 @@ import { v4 as uuidv4 } from 'uuid';
 import chalk from 'chalk';
 import { initializeTracing, trace } from '../core/trace/index.js';
 import {
-  generateSessionSummary,
-  formatSummaryMessage,
-  SessionContext,
-} from '../hooks/session-summary.js';
-import { sendNotification, loadSMSConfig } from '../hooks/sms-notify.js';
-import { enableAutoSync } from '../hooks/whatsapp-sync.js';
-import { enableCommands } from '../hooks/whatsapp-commands.js';
-import { startScheduler, listSchedules } from '../hooks/whatsapp-scheduler.js';
-import {
   getModelRouter,
   loadModelRouterConfig,
   type ModelProvider,
@@ -60,7 +51,6 @@ interface ClaudeSMConfig {
   defaultTracing: boolean;
   defaultRemote: boolean;
   defaultNotifyOnDone: boolean;
-  defaultWhatsApp: boolean;
   defaultModelRouting: boolean;
   defaultSweep: boolean;
   defaultGreptile: boolean;
@@ -75,7 +65,6 @@ interface ClaudeConfig {
   useWorktree: boolean;
   useRemote: boolean;
   notifyOnDone: boolean;
-  useWhatsApp: boolean;
   contextEnabled: boolean;
   branch?: string;
   task?: string;
@@ -99,7 +88,6 @@ const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
   defaultTracing: true,
   defaultRemote: false,
   defaultNotifyOnDone: true,
-  defaultWhatsApp: false,
   defaultModelRouting: false,
   defaultSweep: true,
   defaultGreptile: true,
@@ -150,7 +138,6 @@ class ClaudeSM {
       useWorktree: this.smConfig.defaultWorktree,
       useRemote: this.smConfig.defaultRemote,
       notifyOnDone: this.smConfig.defaultNotifyOnDone,
-      useWhatsApp: this.smConfig.defaultWhatsApp,
       contextEnabled: true,
       tracingEnabled: this.smConfig.defaultTracing,
       verboseTracing: false,
@@ -529,208 +516,10 @@ class ClaudeSM {
     }
   }
 
-  private async startWhatsAppServices(): Promise<void> {
-    const WEBHOOK_PORT = 3456;
-
-    console.log(chalk.cyan('\n📱 WhatsApp Mode - Full Integration'));
-    console.log(chalk.gray('─'.repeat(42)));
-
-    // 1. Check SMS config
-    const smsConfig = loadSMSConfig();
-    if (!smsConfig.enabled) {
-      console.log(
-        chalk.yellow('  Notifications disabled. Run: stackmemory notify enable')
-      );
-    }
-
-    // 2. Enable auto-sync on frame close
-    try {
-      enableAutoSync();
-      console.log(
-        chalk.green('  ✓ Auto-sync enabled (digests on frame close)')
-      );
-    } catch {
-      console.log(chalk.gray('  Auto-sync: skipped'));
-    }
-
-    // 3. Enable inbound command processing
-    try {
-      enableCommands();
-      console.log(chalk.green('  ✓ Command processing enabled'));
-      console.log(
-        chalk.gray('    Reply: status, tasks, context, help, build, test, lint')
-      );
-    } catch {
-      console.log(chalk.gray('  Command processing: skipped'));
-    }
-
-    // 4. Start scheduler if schedules exist
-    try {
-      const schedules = listSchedules();
-      if (schedules.length > 0) {
-        startScheduler();
-        console.log(
-          chalk.green(`  ✓ Scheduler started (${schedules.length} schedules)`)
-        );
-      }
-    } catch {
-      // Scheduler optional
-    }
-
-    // 5. Check if webhook is already running
-    const webhookRunning = await fetch(
-      `http://localhost:${WEBHOOK_PORT}/health`
-    )
-      .then((r) => r.ok)
-      .catch(() => false);
-
-    if (!webhookRunning) {
-      // Start webhook in background
-      const webhookPath = path.join(__dirname, '../hooks/sms-webhook.js');
-      const webhookProcess = spawn('node', [webhookPath], {
-        detached: true,
-        stdio: 'ignore',
-        env: { ...process.env, SMS_WEBHOOK_PORT: String(WEBHOOK_PORT) },
-      });
-      webhookProcess.unref();
-      console.log(
-        chalk.green(`  ✓ Webhook server started (port ${WEBHOOK_PORT})`)
-      );
-    } else {
-      console.log(
-        chalk.green(`  ✓ Webhook already running (port ${WEBHOOK_PORT})`)
-      );
-    }
-
-    // 6. Check if ngrok is running
-    const ngrokRunning = await fetch('http://localhost:4040/api/tunnels')
-      .then((r) => r.ok)
-      .catch(() => false);
-
-    if (!ngrokRunning) {
-      // Start ngrok in background
-      const ngrokProcess = spawn('ngrok', ['http', String(WEBHOOK_PORT)], {
-        detached: true,
-        stdio: 'ignore',
-      });
-      ngrokProcess.unref();
-      console.log(chalk.gray('  Starting ngrok tunnel...'));
-
-      // Wait for ngrok to start and get URL
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-    }
-
-    // 7. Get and display ngrok URL
-    try {
-      const tunnels = await fetch('http://localhost:4040/api/tunnels').then(
-        (r) => r.json() as Promise<{ tunnels: Array<{ public_url: string }> }>
-      );
-      const publicUrl = tunnels?.tunnels?.[0]?.public_url;
-      if (publicUrl) {
-        // Save URL for other processes
-        const configDir = path.join(os.homedir(), '.stackmemory');
-        const configPath = path.join(configDir, 'ngrok-url.txt');
-        if (!fs.existsSync(configDir)) {
-          fs.mkdirSync(configDir, { recursive: true });
-        }
-        fs.writeFileSync(configPath, publicUrl);
-        console.log(chalk.green(`  ✓ ngrok tunnel: ${publicUrl}/sms/incoming`));
-      }
-    } catch {
-      console.log(chalk.yellow('  ngrok: waiting for tunnel...'));
-    }
-
-    // 8. Show pending prompts (sessions waiting for response)
-    if (smsConfig.pendingPrompts.length > 0) {
-      console.log();
-      console.log(
-        chalk.yellow(
-          `  ⏳ ${smsConfig.pendingPrompts.length} pending prompt(s) awaiting response:`
-        )
-      );
-      smsConfig.pendingPrompts.slice(0, 3).forEach((p, i) => {
-        const msg =
-          p.message.length > 40 ? p.message.slice(0, 40) + '...' : p.message;
-        console.log(chalk.gray(`     ${i + 1}. [${p.id}] ${msg}`));
-      });
-      if (smsConfig.pendingPrompts.length > 3) {
-        console.log(
-          chalk.gray(`     ... and ${smsConfig.pendingPrompts.length - 3} more`)
-        );
-      }
-    }
-
-    // 9. Show quick reference
-    console.log();
-    console.log(chalk.gray('  Quick actions from WhatsApp:'));
-    console.log(chalk.gray('    "status"  - session status'));
-    console.log(chalk.gray('    "context" - current frame digest'));
-    console.log(chalk.gray('    "1", "2"  - respond to prompts'));
-
-    console.log(chalk.gray('─'.repeat(42)));
-  }
-
-  private async sendDoneNotification(exitCode: number | null): Promise<void> {
-    try {
-      const context: SessionContext = {
-        instanceId: this.config.instanceId,
-        exitCode,
-        sessionStartTime: this.config.sessionStartTime,
-        worktreePath: this.config.worktreePath,
-        branch: this.config.branch,
-        task: this.config.task,
-      };
-
-      const summary = await generateSessionSummary(context);
-      const message = formatSummaryMessage(summary, this.config.instanceId);
-
-      console.log(chalk.cyan('\nSending session summary via WhatsApp...'));
-
-      // Build options from suggestions for interactive response (always min 2)
-      let options = summary.suggestions.slice(0, 4).map((s) => ({
-        key: s.key,
-        label: s.label,
-        action: s.action,
-      }));
-
-      // Ensure minimum 2 options
-      if (options.length < 2) {
-        const defaults = [
-          { key: '1', label: 'Start new session', action: 'claude-sm' },
-          {
-            key: '2',
-            label: 'View logs',
-            action: 'tail -30 ~/.claude/logs/*.log',
-          },
-        ];
-        options = defaults.slice(0, 2 - options.length).concat(options);
-        options.forEach((o, i) => (o.key = String(i + 1)));
-      }
-
-      const result = await sendNotification({
-        type: 'task_complete',
-        title: `Claude Session ${this.config.instanceId}`,
-        message,
-        prompt: {
-          type: 'options',
-          options,
-        },
-      });
-
-      if (result.success) {
-        console.log(chalk.green('Notification sent successfully'));
-      } else {
-        console.log(
-          chalk.yellow(`Notification not sent: ${result.error || 'unknown'}`)
-        );
-      }
-    } catch (error) {
-      console.log(
-        chalk.yellow(
-          `Could not send notification: ${error instanceof Error ? error.message : 'unknown'}`
-        )
-      );
-    }
+  private notifyDone(exitCode: number | null): void {
+    // Terminal bell to signal session completion
+    process.stdout.write('\x07');
+    console.log(chalk.gray(`\nSession ended (exit ${exitCode ?? 0})`));
   }
 
   public async run(args: string[]): Promise<void> {
@@ -763,13 +552,6 @@ class ClaudeSM {
           break;
         case '--no-notify-done':
           this.config.notifyOnDone = false;
-          break;
-        case '--whatsapp':
-          this.config.useWhatsApp = true;
-          this.config.notifyOnDone = true; // Auto-enable notifications
-          break;
-        case '--no-whatsapp':
-          this.config.useWhatsApp = false;
           break;
         case '--sandbox':
         case '-s':
@@ -973,11 +755,6 @@ class ClaudeSM {
     if (this.config.useSandbox) {
       console.log(chalk.yellow('🔒 Sandbox mode enabled'));
     }
-    if (this.config.useRemote) {
-      console.log(
-        chalk.cyan('📱 Remote mode: WhatsApp notifications for all questions')
-      );
-    }
     if (this.config.useChrome) {
       console.log(chalk.yellow('🌐 Chrome automation enabled'));
     }
@@ -1052,14 +829,6 @@ class ClaudeSM {
       this.startGEPAWatcher();
     }
 
-    // Start WhatsApp services if enabled
-    if (this.config.useWhatsApp) {
-      console.log(
-        chalk.cyan('📱 WhatsApp mode: notifications + webhook enabled')
-      );
-      await this.startWhatsAppServices();
-    }
-
     console.log();
 
     // Launch via Sweep PTY wrapper if enabled
@@ -1124,15 +893,6 @@ class ClaudeSM {
         console.log(chalk.yellow(`\n[auto-fallback] Switching to ${provider}`));
         console.log(chalk.gray(`   Reason: ${reason}`));
         console.log(chalk.gray(`   Session will continue on ${provider}...`));
-
-        // Send WhatsApp notification about fallback
-        if (this.config.notifyOnDone || this.config.useWhatsApp) {
-          sendNotification({
-            type: 'custom',
-            title: 'Model Fallback',
-            message: `Claude unavailable (${reason}). Switched to ${provider}.`,
-          }).catch(() => {});
-        }
       },
     });
 
@@ -1199,9 +959,9 @@ class ClaudeSM {
         console.log(chalk.gray(summary));
       }
 
-      // Send notification when done (if enabled)
-      if (this.config.notifyOnDone || this.config.useRemote) {
-        await this.sendDoneNotification(code);
+      // Bell notification when done
+      if (this.config.notifyOnDone) {
+        this.notifyDone(code);
       }
 
       // Offer to clean up worktree
@@ -1261,7 +1021,6 @@ configCmd
     console.log(`  Prompt Forge      ${config.defaultGEPA ? on : off}`);
     console.log(`  Model Switcher    ${config.defaultModelRouting ? on : off}`);
     console.log(`  Safe Branch       ${config.defaultWorktree ? on : off}`);
-    console.log(`  Mobile Sync       ${config.defaultWhatsApp ? on : off}`);
     console.log(`  Session Insights  ${config.defaultTracing ? on : off}`);
     console.log(`  Task Alert        ${config.defaultNotifyOnDone ? on : off}`);
     console.log(chalk.gray('  ──────────────────────────'));
@@ -1286,7 +1045,6 @@ configCmd
       remote: 'defaultRemote',
       'notify-done': 'defaultNotifyOnDone',
       notifyondone: 'defaultNotifyOnDone',
-      whatsapp: 'defaultWhatsApp',
       'model-routing': 'defaultModelRouting',
       modelrouting: 'defaultModelRouting',
       sweep: 'defaultSweep',
@@ -1299,7 +1057,7 @@ configCmd
       console.log(chalk.red(`Unknown key: ${key}`));
       console.log(
         chalk.gray(
-          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done, whatsapp, sweep, greptile, gepa'
+          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done, sweep, greptile, gepa'
         )
       );
       process.exit(1);
@@ -1332,7 +1090,7 @@ configCmd
 
 configCmd
   .command('remote-on')
-  .description('Enable remote mode by default (WhatsApp for all questions)')
+  .description('Enable remote mode by default')
   .action(() => {
     const config = loadSMConfig();
     config.defaultRemote = true;
@@ -1352,7 +1110,7 @@ configCmd
 
 configCmd
   .command('notify-done-on')
-  .description('Enable WhatsApp notification when session ends (default)')
+  .description('Enable bell notification when session ends (default)')
   .action(() => {
     const config = loadSMConfig();
     config.defaultNotifyOnDone = true;
@@ -1368,28 +1126,6 @@ configCmd
     config.defaultNotifyOnDone = false;
     saveSMConfig(config);
     console.log(chalk.green('Notify-on-done disabled by default'));
-  });
-
-configCmd
-  .command('whatsapp-on')
-  .description('Enable WhatsApp mode by default (auto-starts webhook + ngrok)')
-  .action(() => {
-    const config = loadSMConfig();
-    config.defaultWhatsApp = true;
-    config.defaultNotifyOnDone = true; // Also enable notifications
-    saveSMConfig(config);
-    console.log(chalk.green('WhatsApp mode enabled by default'));
-    console.log(chalk.gray('Sessions will auto-start webhook and ngrok'));
-  });
-
-configCmd
-  .command('whatsapp-off')
-  .description('Disable WhatsApp mode by default')
-  .action(() => {
-    const config = loadSMConfig();
-    config.defaultWhatsApp = false;
-    saveSMConfig(config);
-    console.log(chalk.green('WhatsApp mode disabled by default'));
   });
 
 configCmd
@@ -1504,11 +1240,6 @@ configCmd
         key: 'defaultWorktree',
         name: 'Safe Branch',
         desc: 'Isolated git worktrees for conflict-free parallel work',
-      },
-      {
-        key: 'defaultWhatsApp',
-        name: 'Mobile Sync',
-        desc: 'Remote control and notifications via WhatsApp',
       },
       {
         key: 'defaultTracing',
@@ -1776,15 +1507,10 @@ workersCmd
 program
   .option('-w, --worktree', 'Create isolated worktree for this instance')
   .option('-W, --no-worktree', 'Disable worktree (override default)')
-  .option('-r, --remote', 'Enable remote mode (WhatsApp for all questions)')
+  .option('-r, --remote', 'Enable remote mode')
   .option('--no-remote', 'Disable remote mode (override default)')
-  .option('-n, --notify-done', 'Send WhatsApp notification when session ends')
+  .option('-n, --notify-done', 'Bell notification when session ends')
   .option('--no-notify-done', 'Disable notification when session ends')
-  .option(
-    '--whatsapp',
-    'Enable WhatsApp mode (auto-start webhook + ngrok + notifications)'
-  )
-  .option('--no-whatsapp', 'Disable WhatsApp mode (override default)')
   .option('-s, --sandbox', 'Enable sandbox mode (file/network restrictions)')
   .option('-c, --chrome', 'Enable Chrome automation')
   .option('-a, --auto', 'Automatically detect and apply best settings')

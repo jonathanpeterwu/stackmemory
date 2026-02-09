@@ -16,7 +16,8 @@ StackMemory is a **production-ready memory runtime** for AI coding tools that pr
 - **Hierarchical frame organization** (nested call stack model)
 - **Skills system** with `/spec` and `/linear-run` for Claude Code
 - **Automatic hooks** for task tracking, Linear sync, and spec progress
-- **498 tests passing** with comprehensive coverage
+- **Memory monitor daemon** with automatic capture/clear on RAM pressure
+- **650+ tests passing** with comprehensive coverage
 
 Instead of a linear chat log, StackMemory organizes memory as a **call stack** of scoped work (frames), with intelligent LLM-driven retrieval and team collaboration features.
 
@@ -238,6 +239,43 @@ Hooks are stored in `~/.claude/hooks/` and configured via `~/.claude/hooks.json`
 ### PROMPT_PLAN Auto-Progress
 
 When a task completes (via hook or `/linear-run`), StackMemory fuzzy-matches the task title against unchecked `- [ ]` items in `docs/specs/PROMPT_PLAN.md` and checks them off automatically. One item per task completion, best-effort.
+
+---
+
+## Memory Monitor Daemon (v0.8.0)
+
+Automatically monitors system RAM and Node.js heap usage, triggering capture/clear cycles when memory pressure exceeds thresholds. Prevents long-running sessions from degrading performance.
+
+### How it works
+
+1. Daemon checks RAM and heap usage every 30 seconds
+2. If either exceeds 90%, it captures context (`stackmemory capture --no-commit --basic`)
+3. Clears context (`stackmemory clear --save`)
+4. Writes a signal file (`.stackmemory/.memory-clear-signal`)
+5. On next prompt, a Claude Code hook reads the signal and alerts you to run `/clear`
+
+### Configuration
+
+Configured via `stackmemory daemon` with these defaults:
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `ramThreshold` | 0.9 (90%) | System RAM usage trigger |
+| `heapThreshold` | 0.9 (90%) | Node.js heap usage trigger |
+| `cooldownMinutes` | 10 | Minimum time between triggers |
+| `interval` | 0.5 (30s) | Check frequency in minutes |
+
+### CLI
+
+```bash
+stackmemory daemon start      # Start daemon (includes memory monitor)
+stackmemory daemon status      # Show memory stats, trigger count, thresholds
+stackmemory daemon stop        # Stop daemon
+```
+
+### Hook
+
+The memory guard hook (`.claude/hooks/memory-guard.sh`) is registered as a `user-prompt-submit` hook. When the daemon writes a signal file, the hook alerts you on the next prompt to run `/clear` and restore.
 
 ---
 

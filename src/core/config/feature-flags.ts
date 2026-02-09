@@ -11,7 +11,6 @@ export interface FeatureFlags {
 
   // External integrations (can be disabled)
   linear: boolean;
-  whatsapp: boolean;
   chromadb: boolean;
   aiSummaries: boolean;
   skills: boolean;
@@ -46,11 +45,6 @@ export function isFeatureEnabled(feature: keyof FeatureFlags): boolean {
       return (
         process.env['STACKMEMORY_LINEAR'] !== 'false' &&
         (!!process.env['LINEAR_API_KEY'] || !!process.env['LINEAR_OAUTH_TOKEN'])
-      );
-    case 'whatsapp':
-      return (
-        process.env['STACKMEMORY_WHATSAPP'] !== 'false' &&
-        !!process.env['TWILIO_ACCOUNT_SID']
       );
     case 'chromadb':
       return process.env['STACKMEMORY_CHROMADB'] === 'true';
@@ -87,7 +81,6 @@ export function getFeatureFlags(): FeatureFlags {
   return {
     core: true,
     linear: isFeatureEnabled('linear'),
-    whatsapp: isFeatureEnabled('whatsapp'),
     chromadb: isFeatureEnabled('chromadb'),
     aiSummaries: isFeatureEnabled('aiSummaries'),
     skills: isFeatureEnabled('skills'),
@@ -109,9 +102,6 @@ export function logFeatureStatus(): void {
   if (!local) {
     console.log(
       `  Linear: ${flags.linear ? 'enabled' : 'disabled (no API key)'}`
-    );
-    console.log(
-      `  WhatsApp: ${flags.whatsapp ? 'enabled' : 'disabled (no Twilio)'}`
     );
     console.log(`  ChromaDB: ${flags.chromadb ? 'enabled' : 'disabled'}`);
     console.log(

@@ -295,7 +295,6 @@ export function createDoctorCommand(): Command {
       // 5. Check environment variables
       const envChecks = [
         { key: 'LINEAR_API_KEY', name: 'Linear API Key', optional: true },
-        { key: 'TWILIO_ACCOUNT_SID', name: 'Twilio Account', optional: true },
       ];
 
       for (const check of envChecks) {

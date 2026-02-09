@@ -59,6 +59,14 @@ else
     log_error "Shell integration binary failed"
 fi
 
+# Core tests + search benchmark (100-frame smoke)
+log_info "Running core tests + search benchmark..."
+npx vitest run --reporter=dot --bail=3 2>&1 | tail -5
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    log_error "Tests failed"
+fi
+log_success "Tests pass (including search benchmark)"
+
 # Lint check
 log_info "Testing lint..."
 npm run lint > /dev/null 2>&1 || log_error "Lint failed"

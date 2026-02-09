@@ -272,7 +272,7 @@ export async function generateSessionSummary(
 }
 
 /**
- * Format session summary as WhatsApp message
+ * Format session summary as a compact message
  */
 export function formatSummaryMessage(
   summary: SessionSummary,
