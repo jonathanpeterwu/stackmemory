@@ -986,7 +986,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
         ErrorCode.DB_CONNECTION_FAILED
       );
 
-    if (this.ftsEnabled) {
+    if (this.ftsEnabled && options.query.trim()) {
       try {
         return this.searchFts(options);
       } catch (e) {

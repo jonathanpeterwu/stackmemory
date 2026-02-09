@@ -138,10 +138,11 @@ describe('FTS5 Query Sanitization', () => {
       expect(results[0].name).toBe('authentication login flow');
     });
 
-    it('should return empty array for empty query', async () => {
+    it('should return all frames for empty query (LIKE fallback)', async () => {
       const results = await adapter.search({ query: '' });
       expect(Array.isArray(results)).toBe(true);
-      expect(results.length).toBe(0);
+      // Empty query skips FTS and falls through to LIKE '%%' which matches all
+      expect(results.length).toBe(2);
     });
 
     it('should handle query with only operators', async () => {
