@@ -16,7 +16,11 @@ export interface MaintenanceServiceState {
   lastVacuum: number;
   staleFramesCleaned: number;
   embeddingsGenerated: number;
+  embeddingsTotal: number;
+  embeddingsRemaining: number;
   ftsRebuilds: number;
+  framesGarbageCollected: number;
+  lastGcRun: number;
   errors: string[];
 }
 
@@ -40,7 +44,11 @@ export class DaemonMaintenanceService {
       lastVacuum: 0,
       staleFramesCleaned: 0,
       embeddingsGenerated: 0,
+      embeddingsTotal: 0,
+      embeddingsRemaining: 0,
       ftsRebuilds: 0,
+      framesGarbageCollected: 0,
+      lastGcRun: 0,
       errors: [],
     };
   }
@@ -132,6 +140,9 @@ export class DaemonMaintenanceService {
       // Task 5: Digest generation for frames missing digest_text
       await this.generateMissingDigests(db);
 
+      // Task 6: Incremental garbage collection
+      await this.runGC(db);
+
       await db.disconnect();
 
       this.state.lastRunTime = Date.now();
@@ -202,15 +213,70 @@ export class DaemonMaintenanceService {
       if (!db.getFeatures?.().supportsVectorSearch) return;
       if (!this.embeddingProvider) return;
 
+      // Read checkpoint: last processed rowid
+      let sinceRowid: number | undefined;
+      if (typeof db.getMaintenanceState === 'function') {
+        const lastId = await db.getMaintenanceState(
+          'embedding_backfill_last_id'
+        );
+        if (lastId != null) {
+          sinceRowid = parseInt(lastId, 10);
+          if (isNaN(sinceRowid)) sinceRowid = undefined;
+        }
+      }
+
       const frames = await db.getFramesMissingEmbeddings(
-        this.config.embeddingBatchSize
+        this.config.embeddingBatchSize,
+        sinceRowid
       );
 
+      // Update total/remaining counts for progress reporting
+      if (typeof db.getMaintenanceState === 'function') {
+        const totalStr = await db.getMaintenanceState(
+          'embedding_backfill_total'
+        );
+        const completedStr = await db.getMaintenanceState(
+          'embedding_backfill_completed'
+        );
+        if (totalStr != null)
+          this.state.embeddingsTotal = parseInt(totalStr, 10) || 0;
+        if (completedStr != null) {
+          const completed = parseInt(completedStr, 10) || 0;
+          this.state.embeddingsRemaining = Math.max(
+            0,
+            this.state.embeddingsTotal - completed
+          );
+        }
+      }
+
       if (frames.length === 0) return;
+
+      // If we have no total yet, count all frames missing embeddings
+      if (
+        this.state.embeddingsTotal === 0 &&
+        typeof db.setMaintenanceState === 'function'
+      ) {
+        const rawDb = db.getRawDatabase?.();
+        if (rawDb) {
+          const countResult = rawDb
+            .prepare(
+              `SELECT COUNT(*) as count FROM frames f
+             LEFT JOIN frame_embeddings ve ON f.frame_id = ve.frame_id
+             WHERE ve.frame_id IS NULL`
+            )
+            .get() as { count: number };
+          this.state.embeddingsTotal = countResult.count;
+          await db.setMaintenanceState(
+            'embedding_backfill_total',
+            String(this.state.embeddingsTotal)
+          );
+        }
+      }
 
       this.onLog('INFO', `Generating embeddings for ${frames.length} frames`);
 
       let generated = 0;
+      let lastRowid: number | undefined;
       for (const frame of frames) {
         try {
           const text = [
@@ -225,11 +291,44 @@ export class DaemonMaintenanceService {
           const embedding = await this.embeddingProvider.embed(text);
           await db.storeEmbedding(frame.frame_id, embedding);
           generated++;
+
+          // Track the rowid of the last processed frame for checkpoint
+          const rawDb = db.getRawDatabase?.();
+          if (rawDb) {
+            const rowidRow = rawDb
+              .prepare('SELECT rowid FROM frames WHERE frame_id = ?')
+              .get(frame.frame_id) as { rowid: number } | undefined;
+            if (rowidRow) lastRowid = rowidRow.rowid;
+          }
         } catch (err) {
           this.addError(
             `Embedding frame ${frame.frame_id}: ${err instanceof Error ? err.message : String(err)}`
           );
         }
+      }
+
+      // Save checkpoint after batch
+      if (typeof db.setMaintenanceState === 'function') {
+        if (lastRowid != null) {
+          await db.setMaintenanceState(
+            'embedding_backfill_last_id',
+            String(lastRowid)
+          );
+        }
+        const prevCompleted = await db.getMaintenanceState(
+          'embedding_backfill_completed'
+        );
+        const totalCompleted =
+          (parseInt(prevCompleted ?? '0', 10) || 0) + generated;
+        await db.setMaintenanceState(
+          'embedding_backfill_completed',
+          String(totalCompleted)
+        );
+
+        this.state.embeddingsRemaining = Math.max(
+          0,
+          this.state.embeddingsTotal - totalCompleted
+        );
       }
 
       this.state.embeddingsGenerated += generated;
@@ -286,12 +385,42 @@ export class DaemonMaintenanceService {
     }
   }
 
+  private async runGC(db: any): Promise<void> {
+    try {
+      if (this.config.gcEnabled === false) return;
+      if (typeof db.runGC !== 'function') return;
+
+      const result = await db.runGC({
+        retentionDays: this.config.gcRetentionDays ?? 90,
+        batchSize: this.config.gcBatchSize ?? 100,
+        dryRun: false,
+      });
+
+      this.state.framesGarbageCollected += result.framesDeleted;
+      this.state.lastGcRun = Date.now();
+
+      if (result.framesDeleted > 0) {
+        this.onLog(
+          'INFO',
+          `GC deleted ${result.framesDeleted} expired frames`,
+          {
+            eventsDeleted: result.eventsDeleted,
+            anchorsDeleted: result.anchorsDeleted,
+            embeddingsDeleted: result.embeddingsDeleted,
+          }
+        );
+      }
+    } catch (err) {
+      this.addError(`GC: ${err instanceof Error ? err.message : String(err)}`);
+    }
+  }
+
   private async getDatabase(): Promise<any> {
     try {
       const { SQLiteAdapter } =
         await import('../../core/database/sqlite-adapter.js');
-      const { createTransformersProvider } =
-        await import('../../core/database/transformers-embedding-provider.js');
+      const { EmbeddingProviderFactory } =
+        await import('../../core/database/embedding-provider-factory.js');
 
       const dbPath = this.findDatabasePath();
       if (!dbPath) {
@@ -300,9 +429,14 @@ export class DaemonMaintenanceService {
       }
 
       if (!this.embeddingProvider) {
-        this.embeddingProvider =
-          (await createTransformersProvider(this.config.embeddingModel)) ??
-          null;
+        this.embeddingProvider = await EmbeddingProviderFactory.create({
+          provider: this.config.embeddingProvider ?? 'transformers',
+          model: this.config.embeddingModel,
+          dimension: this.config.embeddingDimension,
+          apiKey: this.config.embeddingApiKey,
+          baseUrl: this.config.embeddingBaseUrl,
+          fallbackProviders: this.config.embeddingFallbackProviders,
+        });
       }
 
       const adapter = new SQLiteAdapter('maintenance', {

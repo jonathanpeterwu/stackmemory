@@ -21,6 +21,7 @@ export interface SearchOptions extends QueryOptions {
   scoreThreshold?: number;
   fields?: string[];
   boost?: Record<string, number>;
+  projectId?: string; // filter results to specific project
 }
 
 export interface AggregationOptions {
@@ -95,6 +96,16 @@ export interface AnchorRow {
   metadata: string;
 }
 
+export interface ProjectRegistryRow {
+  project_id: string;
+  repo_path: string;
+  display_name: string | null;
+  db_path: string;
+  is_active: number;
+  created_at: number;
+  last_accessed: number;
+}
+
 export abstract class DatabaseAdapter {
   protected readonly projectId: string;
   protected readonly config: any;
@@ -147,7 +158,8 @@ export abstract class DatabaseAdapter {
   abstract searchHybrid(
     textQuery: string,
     embedding: number[],
-    weights?: { text: number; vector: number }
+    weights?: { text: number; vector: number },
+    mergeStrategy?: 'weighted' | 'rrf'
   ): Promise<Array<Frame & { score: number }>>;
 
   // Aggregation operations
@@ -204,6 +216,107 @@ export abstract class DatabaseAdapter {
   /** Returns the configured embedding provider, if any */
   getEmbeddingProvider(): EmbeddingProvider | undefined {
     return undefined;
+  }
+
+  // Maintenance state (no-op defaults, overridden in SQLiteAdapter)
+  async getMaintenanceState(_key: string): Promise<string | null> {
+    return null;
+  }
+
+  async setMaintenanceState(_key: string, _value: string): Promise<void> {
+    // No-op default — subclasses may override
+  }
+
+  // Garbage collection (no-op default, overridden in SQLiteAdapter)
+  async runGC(_options?: {
+    retentionDays?: number;
+    batchSize?: number;
+    dryRun?: boolean;
+  }): Promise<{
+    framesDeleted: number;
+    eventsDeleted: number;
+    anchorsDeleted: number;
+    embeddingsDeleted: number;
+    ftsEntriesDeleted: number;
+  }> {
+    return {
+      framesDeleted: 0,
+      eventsDeleted: 0,
+      anchorsDeleted: 0,
+      embeddingsDeleted: 0,
+      ftsEntriesDeleted: 0,
+    };
+  }
+
+  // Retrieval logging (no-op defaults, overridden in SQLiteAdapter)
+  async logRetrieval(_entry: {
+    queryText: string;
+    strategy: string;
+    resultsCount: number;
+    topScore: number | null;
+    latencyMs: number;
+    resultFrameIds: string[];
+  }): Promise<void> {
+    // No-op default — subclasses may override
+  }
+
+  async getRetrievalStats(_sinceDays?: number): Promise<{
+    totalQueries: number;
+    avgLatencyMs: number;
+    p95LatencyMs: number;
+    strategyDistribution: Record<string, number>;
+    avgResultsCount: number;
+    queriesWithNoResults: number;
+  }> {
+    // No-op default
+    return {
+      totalQueries: 0,
+      avgLatencyMs: 0,
+      p95LatencyMs: 0,
+      strategyDistribution: {},
+      avgResultsCount: 0,
+      queriesWithNoResults: 0,
+    };
+  }
+
+  // Project registry (no-op defaults, overridden in SQLiteAdapter)
+  async registerProject(_project: {
+    projectId: string;
+    repoPath: string;
+    displayName?: string;
+    dbPath: string;
+  }): Promise<void> {
+    // No-op default
+  }
+
+  async getRegisteredProjects(): Promise<
+    Array<{
+      projectId: string;
+      repoPath: string;
+      displayName: string | null;
+      dbPath: string;
+      isActive: boolean;
+      createdAt: number;
+      lastAccessed: number;
+    }>
+  > {
+    return [];
+  }
+
+  async setActiveProject(_projectId: string): Promise<void> {
+    // No-op default
+  }
+
+  async getActiveProject(): Promise<string | null> {
+    return null;
+  }
+
+  async removeProject(_projectId: string): Promise<boolean> {
+    return false;
+  }
+
+  async touchProject(_projectId: string): Promise<void> {
+    // No-op default
   }
 
   // Utility methods

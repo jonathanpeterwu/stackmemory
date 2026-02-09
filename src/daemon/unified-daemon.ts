@@ -157,6 +157,8 @@ export class UnifiedDaemon {
           staleFramesCleaned: maintenanceState.staleFramesCleaned,
           ftsRebuilds: maintenanceState.ftsRebuilds,
           embeddingsGenerated: maintenanceState.embeddingsGenerated,
+          embeddingsTotal: maintenanceState.embeddingsTotal,
+          embeddingsRemaining: maintenanceState.embeddingsRemaining,
         },
         fileWatch: {
           enabled: this.config.fileWatch.enabled,
@@ -333,6 +335,8 @@ export class UnifiedDaemon {
           staleFramesCleaned: maintenanceState.staleFramesCleaned,
           ftsRebuilds: maintenanceState.ftsRebuilds,
           embeddingsGenerated: maintenanceState.embeddingsGenerated,
+          embeddingsTotal: maintenanceState.embeddingsTotal,
+          embeddingsRemaining: maintenanceState.embeddingsRemaining,
         },
         fileWatch: {
           enabled: this.config.fileWatch.enabled,

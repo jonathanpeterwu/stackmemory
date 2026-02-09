@@ -56,7 +56,10 @@ export class ContextRetriever {
   private readonly adapter: DatabaseAdapter;
   private readonly embeddingProvider?: EmbeddingProvider;
   private readonly strategies: Map<string, RetrievalStrategy> = new Map();
-  private queryCache = new Map<string, ContextRetrievalResult>();
+  private queryCache = new Map<
+    string,
+    { result: ContextRetrievalResult; cachedAt: number }
+  >();
   private cacheMaxSize = 100;
   private cacheExpiryMs = 300000; // 5 minutes
 
@@ -191,6 +194,20 @@ export class ContextRetriever {
 
       // Cache result
       this.cacheResult(cacheKey, result);
+
+      // Log retrieval for quality signals (fire-and-forget)
+      try {
+        this.adapter.logRetrieval({
+          queryText: query.text,
+          strategy: strategy.name,
+          resultsCount: rankedContexts.length,
+          topScore: rankedContexts[0]?.score ?? null,
+          latencyMs: result.retrievalTimeMs,
+          resultFrameIds: rankedContexts.map((c) => c.frame.frame_id),
+        });
+      } catch {
+        // Don't let logging failures break retrieval
+      }
 
       logger.info('Context retrieval completed', {
         resultsCount: rankedContexts.length,
@@ -625,18 +642,24 @@ export class ContextRetriever {
     const entry = this.queryCache.get(cacheKey);
     if (!entry) return null;
 
-    // Check expiry (simplified - would include timestamp in real implementation)
-    return entry;
+    if (Date.now() - entry.cachedAt > this.cacheExpiryMs) {
+      this.queryCache.delete(cacheKey);
+      return null;
+    }
+
+    // Move to end for LRU (delete + re-set maintains Map insertion order)
+    this.queryCache.delete(cacheKey);
+    this.queryCache.set(cacheKey, entry);
+    return entry.result;
   }
 
   private cacheResult(cacheKey: string, result: ContextRetrievalResult): void {
-    // Implement LRU eviction if cache is full
     if (this.queryCache.size >= this.cacheMaxSize) {
       const firstKey = this.queryCache.keys().next().value;
-      this.queryCache.delete(firstKey);
+      if (firstKey !== undefined) this.queryCache.delete(firstKey);
     }
 
-    this.queryCache.set(cacheKey, result);
+    this.queryCache.set(cacheKey, { result, cachedAt: Date.now() });
   }
 
   // Utility methods for integration

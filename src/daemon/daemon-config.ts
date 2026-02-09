@@ -30,7 +30,20 @@ export interface MaintenanceServiceConfig extends DaemonServiceConfig {
   ftsRebuildInterval: number; // hours
   embeddingBatchSize: number;
   vacuumInterval: number; // hours
+  embeddingProvider?: 'transformers' | 'ollama' | 'openai' | 'none';
   embeddingModel?: string; // default: 'Xenova/all-MiniLM-L6-v2'
+  embeddingDimension?: number;
+  embeddingApiKey?: string;
+  embeddingBaseUrl?: string;
+  embeddingFallbackProviders?: Array<'transformers' | 'ollama' | 'openai'>;
+  gcEnabled?: boolean; // default: true
+  gcRetentionDays?: number; // default: 90
+  gcBatchSize?: number; // default: 100
+  coldTierProvider?: 'none' | 's3' | 'gcs'; // default: 'none'
+  coldTierBucket?: string;
+  coldTierPrefix?: string; // default: 'stackmemory/frames/'
+  coldTierMigrationAgeDays?: number; // default: 60
+  coldTierRehydrateCacheMinutes?: number; // default: 30
 }
 
 export interface FileWatchConfig extends DaemonServiceConfig {
@@ -100,6 +113,10 @@ export interface DaemonStatus {
       staleFramesCleaned?: number;
       ftsRebuilds?: number;
       embeddingsGenerated?: number;
+      embeddingsTotal?: number;
+      embeddingsRemaining?: number;
+      framesGarbageCollected?: number;
+      lastGcRun?: number;
     };
     fileWatch: { enabled: boolean; eventsProcessed?: number };
   };

@@ -15,6 +15,7 @@ import {
   CountResult,
   VersionResult,
   FrameRow,
+  ProjectRegistryRow,
 } from './database-adapter.js';
 import type { Frame, Event, Anchor } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
@@ -84,12 +85,18 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
       this.db.pragma('journal_mode = WAL');
     }
 
+    // Memory-mapped I/O for faster reads on large databases
+    this.db.pragma('mmap_size = 268435456'); // 256MB mmap
+
     if (config.busyTimeout) {
       this.db.pragma(`busy_timeout = ${config.busyTimeout}`);
     }
 
     if (config.cacheSize) {
       this.db.pragma(`cache_size = ${config.cacheSize}`);
+    } else {
+      // Increase page cache to 64MB (negative value = KB)
+      this.db.pragma('cache_size = -64000');
     }
 
     if (config.synchronous) {
@@ -197,9 +204,60 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
       CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);
       CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);
 
+      -- Composite index for project-scoped time queries (most common access pattern)
+      CREATE INDEX IF NOT EXISTS idx_frames_project_created ON frames(project_id, created_at DESC);
+
+      -- Note: frame_embeddings is a vec0 virtual table with frame_id as PRIMARY KEY;
+      -- vec0 handles its own indexing so no CREATE INDEX needed.
+
+      CREATE TABLE IF NOT EXISTS retrieval_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        query_text TEXT NOT NULL,
+        strategy TEXT NOT NULL,
+        results_count INTEGER NOT NULL,
+        top_score REAL,
+        latency_ms INTEGER NOT NULL,
+        result_frame_ids TEXT,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+
+      CREATE INDEX IF NOT EXISTS idx_retrieval_log_created ON retrieval_log(created_at);
+
+      CREATE TABLE IF NOT EXISTS maintenance_state (
+        key TEXT PRIMARY KEY,
+        value TEXT NOT NULL,
+        updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+
+      CREATE TABLE IF NOT EXISTS project_registry (
+        project_id TEXT PRIMARY KEY,
+        repo_path TEXT NOT NULL,
+        display_name TEXT,
+        db_path TEXT NOT NULL,
+        is_active INTEGER DEFAULT 0,
+        created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+        last_accessed INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+      );
+      CREATE INDEX IF NOT EXISTS idx_project_registry_active ON project_registry(is_active);
+
       -- Set initial schema version if not exists
       INSERT OR IGNORE INTO schema_version (version) VALUES (1);
     `);
+
+    // Migration: add retention_policy column if not exists
+    try {
+      this.db.exec(
+        "ALTER TABLE frames ADD COLUMN retention_policy TEXT DEFAULT 'default'"
+      );
+      logger.info('Added retention_policy column to frames');
+    } catch {
+      // Column already exists — safe to ignore
+    }
+
+    // Index for GC queries on retention_policy + age (must be after ALTER TABLE migration)
+    this.db.exec(
+      'CREATE INDEX IF NOT EXISTS idx_frames_retention_created ON frames(retention_policy, created_at)'
+    );
 
     // Ensure cascade constraints exist on dependent tables for existing DBs
     try {
@@ -428,6 +486,166 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     }
     this.db.exec("INSERT INTO frames_fts(frames_fts) VALUES('rebuild')");
     logger.info('FTS5 index rebuilt');
+  }
+
+  /**
+   * Incremental garbage collection: delete expired frames and cascade to related tables.
+   * Respects retention_policy per frame:
+   *   - 'keep_forever': never deleted
+   *   - 'default': deleted after retentionDays (default 90)
+   *   - 'archive': same as default
+   *   - 'ttl_30d': deleted after 30 days
+   *   - 'ttl_7d': deleted after 7 days
+   */
+  async runGC(
+    options: {
+      retentionDays?: number;
+      batchSize?: number;
+      dryRun?: boolean;
+    } = {}
+  ): Promise<{
+    framesDeleted: number;
+    eventsDeleted: number;
+    anchorsDeleted: number;
+    embeddingsDeleted: number;
+    ftsEntriesDeleted: number;
+  }> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    const retentionDays = options.retentionDays ?? 90;
+    const batchSize = options.batchSize ?? 100;
+    const dryRun = options.dryRun ?? false;
+
+    const nowSec = Math.floor(Date.now() / 1000);
+    const defaultCutoff = nowSec - retentionDays * 86400;
+    const ttl30dCutoff = nowSec - 30 * 86400;
+    const ttl7dCutoff = nowSec - 7 * 86400;
+
+    // Find candidate frames (excluding keep_forever)
+    const candidates = this.db
+      .prepare(
+        `SELECT frame_id FROM frames
+         WHERE (
+           (retention_policy IN ('default', 'archive') AND created_at < ?)
+           OR (retention_policy = 'ttl_30d' AND created_at < ?)
+           OR (retention_policy = 'ttl_7d' AND created_at < ?)
+         )
+         AND retention_policy != 'keep_forever'
+         LIMIT ?`
+      )
+      .all(defaultCutoff, ttl30dCutoff, ttl7dCutoff, batchSize) as Array<{
+      frame_id: string;
+    }>;
+
+    const frameIds = candidates.map((r) => r.frame_id);
+
+    if (frameIds.length === 0) {
+      return {
+        framesDeleted: 0,
+        eventsDeleted: 0,
+        anchorsDeleted: 0,
+        embeddingsDeleted: 0,
+        ftsEntriesDeleted: 0,
+      };
+    }
+
+    if (dryRun) {
+      // Count related rows without deleting
+      const placeholders = frameIds.map(() => '?').join(',');
+      const eventsCount = (
+        this.db
+          .prepare(
+            `SELECT COUNT(*) as count FROM events WHERE frame_id IN (${placeholders})`
+          )
+          .get(...frameIds) as CountResult
+      ).count;
+      const anchorsCount = (
+        this.db
+          .prepare(
+            `SELECT COUNT(*) as count FROM anchors WHERE frame_id IN (${placeholders})`
+          )
+          .get(...frameIds) as CountResult
+      ).count;
+
+      let embeddingsCount = 0;
+      if (this.vecEnabled) {
+        embeddingsCount = (
+          this.db
+            .prepare(
+              `SELECT COUNT(*) as count FROM frame_embeddings WHERE frame_id IN (${placeholders})`
+            )
+            .get(...frameIds) as CountResult
+        ).count;
+      }
+
+      return {
+        framesDeleted: frameIds.length,
+        eventsDeleted: eventsCount,
+        anchorsDeleted: anchorsCount,
+        embeddingsDeleted: embeddingsCount,
+        ftsEntriesDeleted: frameIds.length, // FTS has one entry per frame
+      };
+    }
+
+    // Delete in a transaction
+    const placeholders = frameIds.map(() => '?').join(',');
+    let eventsDeleted = 0;
+    let anchorsDeleted = 0;
+    let embeddingsDeleted = 0;
+
+    this.db.prepare('BEGIN').run();
+    try {
+      // Delete embeddings first (if vec enabled)
+      if (this.vecEnabled) {
+        const embResult = this.db
+          .prepare(
+            `DELETE FROM frame_embeddings WHERE frame_id IN (${placeholders})`
+          )
+          .run(...frameIds);
+        embeddingsDeleted = embResult.changes;
+      }
+
+      // Delete events
+      const evtResult = this.db
+        .prepare(`DELETE FROM events WHERE frame_id IN (${placeholders})`)
+        .run(...frameIds);
+      eventsDeleted = evtResult.changes;
+
+      // Delete anchors
+      const ancResult = this.db
+        .prepare(`DELETE FROM anchors WHERE frame_id IN (${placeholders})`)
+        .run(...frameIds);
+      anchorsDeleted = ancResult.changes;
+
+      // Delete frames (FTS5 entries auto-deleted via DELETE trigger)
+      this.db
+        .prepare(`DELETE FROM frames WHERE frame_id IN (${placeholders})`)
+        .run(...frameIds);
+
+      this.db.prepare('COMMIT').run();
+    } catch (error) {
+      this.db.prepare('ROLLBACK').run();
+      throw error;
+    }
+
+    logger.info('GC completed', {
+      framesDeleted: frameIds.length,
+      eventsDeleted,
+      anchorsDeleted,
+      embeddingsDeleted,
+    });
+
+    return {
+      framesDeleted: frameIds.length,
+      eventsDeleted,
+      anchorsDeleted,
+      embeddingsDeleted,
+      ftsEntriesDeleted: frameIds.length,
+    };
   }
 
   async migrateSchema(targetVersion: number): Promise<void> {
@@ -784,9 +1002,42 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   /**
+   * Sanitize user input for FTS5 MATCH queries.
+   * - Strips FTS5 operators and special syntax
+   * - Wraps individual terms in double quotes for exact matching
+   * - Joins with implicit AND
+   * - Supports prefix matching when original query ends with *
+   */
+  private sanitizeFtsQuery(query: string): string {
+    const wantsPrefix = query.trimEnd().endsWith('*');
+
+    // Remove FTS5 special characters and operators
+    const cleaned = query
+      .replace(/['"(){}[\]^~*\\,]/g, ' ')
+      .replace(/\b(AND|OR|NOT|NEAR)\b/gi, '')
+      .trim();
+
+    // Split into words, filter empties
+    const terms = cleaned.split(/\s+/).filter((t) => t.length > 0);
+    if (terms.length === 0) return '""';
+
+    // Each term quoted for exact match, joined with space (implicit AND in FTS5)
+    const quoted = terms.map((t) => `"${t}"`);
+
+    // Add prefix wildcard to last term if requested
+    if (wantsPrefix) {
+      quoted[quoted.length - 1] = quoted[quoted.length - 1] + '*';
+    }
+
+    return quoted.join(' ');
+  }
+
+  /**
    * FTS5 MATCH search with BM25 ranking
    */
   private searchFts(options: SearchOptions): Array<Frame & { score: number }> {
+    const sanitizedQuery = this.sanitizeFtsQuery(options.query);
+
     // BM25 weights: name=10, digest_text=5, inputs=2, outputs=1
     const boost = options.boost || {};
     const w0 = boost['name'] || 10.0;
@@ -794,11 +1045,13 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     const w2 = boost['inputs'] || 2.0;
     const w3 = boost['outputs'] || 1.0;
 
+    const projectFilter = options.projectId ? 'AND f.project_id = ?' : '';
     const sql = `
       SELECT f.*, -bm25(frames_fts, ${w0}, ${w1}, ${w2}, ${w3}) as score
       FROM frames_fts fts
       JOIN frames f ON f.rowid = fts.rowid
       WHERE frames_fts MATCH ?
+      ${projectFilter}
       ORDER BY score DESC
       LIMIT ? OFFSET ?
     `;
@@ -806,11 +1059,11 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     const limit = options.limit || 50;
     const offset = options.offset || 0;
 
-    const rows = this.db!.prepare(sql).all(
-      options.query,
-      limit,
-      offset
-    ) as any[];
+    const params: any[] = [sanitizedQuery];
+    if (options.projectId) params.push(options.projectId);
+    params.push(limit, offset);
+
+    const rows = this.db!.prepare(sql).all(...params) as any[];
 
     // Note: scoreThreshold is not applied to FTS results because BM25 scores
     // are on a different scale than LIKE-based scores. FTS results are already
@@ -828,6 +1081,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
    * Fallback LIKE search for when FTS is unavailable
    */
   private searchLike(options: SearchOptions): Array<Frame & { score: number }> {
+    const projectFilter = options.projectId ? 'AND project_id = ?' : '';
     const sql = `
       SELECT *,
         CASE
@@ -837,11 +1091,14 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
           ELSE 0.5
         END as score
       FROM frames
-      WHERE name LIKE ? OR digest_text LIKE ? OR inputs LIKE ?
+      WHERE (name LIKE ? OR digest_text LIKE ? OR inputs LIKE ?)
+      ${projectFilter}
       ORDER BY score DESC
     `;
 
-    const params = Array(6).fill(`%${options.query}%`);
+    const likeParam = `%${options.query}%`;
+    const params: any[] = Array(6).fill(likeParam);
+    if (options.projectId) params.push(options.projectId);
 
     let rows = this.db!.prepare(sql).all(...params) as any[];
 
@@ -903,11 +1160,9 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   async searchHybrid(
     textQuery: string,
     embedding: number[],
-    weights?: { text: number; vector: number }
+    weights?: { text: number; vector: number },
+    mergeStrategy?: 'weighted' | 'rrf'
   ): Promise<Array<Frame & { score: number }>> {
-    const textWeight = weights?.text ?? 0.6;
-    const vecWeight = weights?.vector ?? 0.4;
-
     // Get text results
     const textResults = await this.search({ query: textQuery, limit: 50 });
 
@@ -920,31 +1175,121 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
       return textResults;
     }
 
-    // Merge: build score map by frame_id
-    const scoreMap = new Map<string, { frame: Frame; score: number }>();
-
-    // Normalize text scores: max becomes 1.0
-    const maxText = Math.max(...textResults.map((r) => r.score), 1);
-    for (const r of textResults) {
-      const normalizedScore = (r.score / maxText) * textWeight;
-      scoreMap.set(r.frame_id, { frame: r, score: normalizedScore });
+    if (textResults.length === 0) {
+      // Pure vector fallback: convert distances to [0, 1] scores
+      return this.normalizeVectorOnly(vecResults);
     }
 
-    // Normalize vec scores: smaller distance = higher score
-    const maxDist = Math.max(...vecResults.map((r) => r.similarity), 1);
+    if (mergeStrategy === 'rrf') {
+      return this.mergeByRRF(textResults, vecResults);
+    }
+
+    return this.mergeByWeightedScore(textResults, vecResults, weights);
+  }
+
+  /**
+   * Merge text and vector results using min-max normalized weighted scoring.
+   * Both score types are scaled to [0, 1] before combining.
+   */
+  private mergeByWeightedScore(
+    textResults: Array<Frame & { score: number }>,
+    vecResults: Array<Frame & { similarity: number }>,
+    weights?: { text: number; vector: number }
+  ): Array<Frame & { score: number }> {
+    const textWeight = weights?.text ?? 0.6;
+    const vecWeight = weights?.vector ?? 0.4;
+
+    const scoreMap = new Map<string, { frame: Frame; score: number }>();
+
+    // Min-max normalize text scores to [0, 1]
+    // When all scores are equal (including single item), normalize to 1.0
+    const textScores = textResults.map((r) => r.score);
+    const minText = Math.min(...textScores);
+    const maxText = Math.max(...textScores);
+    const rangeText = maxText - minText;
+
+    for (const r of textResults) {
+      const normalized =
+        rangeText === 0 ? 1.0 : (r.score - minText) / rangeText;
+      scoreMap.set(r.frame_id, { frame: r, score: normalized * textWeight });
+    }
+
+    // Min-max normalize vector distances to [0, 1] (inverted: lower distance = higher score)
+    // When all distances are equal (including single item), normalize to 1.0
+    const distances = vecResults.map((r) => r.similarity);
+    const minDist = Math.min(...distances);
+    const maxDist = Math.max(...distances);
+    const rangeDist = maxDist - minDist;
+
     for (const r of vecResults) {
-      const normalizedScore = (1 - r.similarity / maxDist) * vecWeight;
+      // Invert: closest distance gets score 1.0, farthest gets 0.0
+      const normalized =
+        rangeDist === 0 ? 1.0 : 1 - (r.similarity - minDist) / rangeDist;
       const existing = scoreMap.get(r.frame_id);
       if (existing) {
-        existing.score += normalizedScore;
+        existing.score += normalized * vecWeight;
       } else {
-        scoreMap.set(r.frame_id, { frame: r, score: normalizedScore });
+        scoreMap.set(r.frame_id, { frame: r, score: normalized * vecWeight });
       }
     }
 
     return Array.from(scoreMap.values())
       .sort((a, b) => b.score - a.score)
       .map(({ frame, score }) => ({ ...frame, score }));
+  }
+
+  /**
+   * Merge text and vector results using Reciprocal Rank Fusion.
+   * Rank-based merging that is immune to score scale differences.
+   */
+  private mergeByRRF(
+    textResults: Array<Frame & { score: number }>,
+    vecResults: Array<Frame & { similarity: number }>,
+    k = 60
+  ): Array<Frame & { score: number }> {
+    const scoreMap = new Map<string, { frame: Frame; score: number }>();
+
+    // Text results are already sorted by score DESC
+    for (let rank = 0; rank < textResults.length; rank++) {
+      const r = textResults[rank];
+      const rrfScore = 1 / (k + rank + 1);
+      scoreMap.set(r.frame_id, { frame: r, score: rrfScore });
+    }
+
+    // Vector results are already sorted by distance ASC (closest first)
+    for (let rank = 0; rank < vecResults.length; rank++) {
+      const r = vecResults[rank];
+      const rrfScore = 1 / (k + rank + 1);
+      const existing = scoreMap.get(r.frame_id);
+      if (existing) {
+        existing.score += rrfScore;
+      } else {
+        scoreMap.set(r.frame_id, { frame: r, score: rrfScore });
+      }
+    }
+
+    return Array.from(scoreMap.values())
+      .sort((a, b) => b.score - a.score)
+      .map(({ frame, score }) => ({ ...frame, score }));
+  }
+
+  /**
+   * Convert vector-only results (distances) to [0, 1] scores.
+   */
+  private normalizeVectorOnly(
+    vecResults: Array<Frame & { similarity: number }>
+  ): Array<Frame & { score: number }> {
+    if (vecResults.length === 0) return [];
+
+    const distances = vecResults.map((r) => r.similarity);
+    const minDist = Math.min(...distances);
+    const maxDist = Math.max(...distances);
+    const range = maxDist - minDist;
+
+    return vecResults.map((r) => ({
+      ...r,
+      score: range === 0 ? 1.0 : 1 - (r.similarity - minDist) / range,
+    }));
   }
 
   /**
@@ -967,29 +1312,193 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
   }
 
   /**
-   * Get frames that are missing embeddings
+   * Get a maintenance state value by key
    */
-  async getFramesMissingEmbeddings(limit: number = 50): Promise<Frame[]> {
+  async getMaintenanceState(key: string): Promise<string | null> {
     if (!this.db)
       throw new DatabaseError(
         'Database not connected',
         ErrorCode.DB_CONNECTION_FAILED
       );
 
+    const row = this.db
+      .prepare('SELECT value FROM maintenance_state WHERE key = ?')
+      .get(key) as { value: string } | undefined;
+
+    return row?.value ?? null;
+  }
+
+  /**
+   * Set a maintenance state value by key
+   */
+  async setMaintenanceState(key: string, value: string): Promise<void> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    this.db
+      .prepare(
+        'INSERT OR REPLACE INTO maintenance_state (key, value, updated_at) VALUES (?, ?, ?)'
+      )
+      .run(key, value, Date.now());
+  }
+
+  /**
+   * Get frames that are missing embeddings
+   */
+  async getFramesMissingEmbeddings(
+    limit: number = 50,
+    sinceRowid?: number
+  ): Promise<Frame[]> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    const rowidFilter = sinceRowid != null ? 'AND f.rowid > ?' : '';
     const sql = `
       SELECT f.* FROM frames f
       LEFT JOIN frame_embeddings ve ON f.frame_id = ve.frame_id
-      WHERE ve.frame_id IS NULL
+      WHERE ve.frame_id IS NULL ${rowidFilter}
+      ORDER BY f.rowid ASC
       LIMIT ?
     `;
 
-    const rows = this.db.prepare(sql).all(limit) as any[];
+    const params: any[] = [];
+    if (sinceRowid != null) params.push(sinceRowid);
+    params.push(limit);
+
+    const rows = this.db.prepare(sql).all(...params) as any[];
     return rows.map((row) => ({
       ...row,
       inputs: JSON.parse(row.inputs || '{}'),
       outputs: JSON.parse(row.outputs || '{}'),
       digest_json: JSON.parse(row.digest_json || '{}'),
     }));
+  }
+
+  // Project registry operations
+  async registerProject(project: {
+    projectId: string;
+    repoPath: string;
+    displayName?: string;
+    dbPath: string;
+  }): Promise<void> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    this.db
+      .prepare(
+        `INSERT OR REPLACE INTO project_registry
+         (project_id, repo_path, display_name, db_path, is_active, created_at, last_accessed)
+         VALUES (?, ?, ?, ?, 0, ?, ?)`
+      )
+      .run(
+        project.projectId,
+        project.repoPath,
+        project.displayName || null,
+        project.dbPath,
+        Date.now(),
+        Date.now()
+      );
+  }
+
+  async getRegisteredProjects(): Promise<
+    Array<{
+      projectId: string;
+      repoPath: string;
+      displayName: string | null;
+      dbPath: string;
+      isActive: boolean;
+      createdAt: number;
+      lastAccessed: number;
+    }>
+  > {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    const rows = this.db
+      .prepare('SELECT * FROM project_registry ORDER BY last_accessed DESC')
+      .all() as ProjectRegistryRow[];
+
+    return rows.map((row) => ({
+      projectId: row.project_id,
+      repoPath: row.repo_path,
+      displayName: row.display_name,
+      dbPath: row.db_path,
+      isActive: row.is_active === 1,
+      createdAt: row.created_at,
+      lastAccessed: row.last_accessed,
+    }));
+  }
+
+  async setActiveProject(projectId: string): Promise<void> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    // Deactivate all, then activate the target
+    this.db.prepare('UPDATE project_registry SET is_active = 0').run();
+    this.db
+      .prepare(
+        'UPDATE project_registry SET is_active = 1, last_accessed = ? WHERE project_id = ?'
+      )
+      .run(Date.now(), projectId);
+  }
+
+  async getActiveProject(): Promise<string | null> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    const row = this.db
+      .prepare(
+        'SELECT project_id FROM project_registry WHERE is_active = 1 LIMIT 1'
+      )
+      .get() as { project_id: string } | undefined;
+
+    return row?.project_id ?? null;
+  }
+
+  async removeProject(projectId: string): Promise<boolean> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    const result = this.db
+      .prepare('DELETE FROM project_registry WHERE project_id = ?')
+      .run(projectId);
+
+    return result.changes > 0;
+  }
+
+  async touchProject(projectId: string): Promise<void> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    this.db
+      .prepare(
+        'UPDATE project_registry SET last_accessed = ? WHERE project_id = ?'
+      )
+      .run(Date.now(), projectId);
   }
 
   // Basic aggregation
@@ -1065,6 +1574,111 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
       frequency: row.frequency,
       lastSeen: new Date(row.last_seen * 1000),
     }));
+  }
+
+  // Retrieval logging
+  async logRetrieval(entry: {
+    queryText: string;
+    strategy: string;
+    resultsCount: number;
+    topScore: number | null;
+    latencyMs: number;
+    resultFrameIds: string[];
+  }): Promise<void> {
+    if (!this.db) return;
+
+    try {
+      this.db
+        .prepare(
+          `INSERT INTO retrieval_log (query_text, strategy, results_count, top_score, latency_ms, result_frame_ids, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?)`
+        )
+        .run(
+          entry.queryText,
+          entry.strategy,
+          entry.resultsCount,
+          entry.topScore,
+          entry.latencyMs,
+          JSON.stringify(entry.resultFrameIds),
+          Date.now()
+        );
+    } catch (e) {
+      logger.warn('Failed to log retrieval', e as Error);
+    }
+  }
+
+  async getRetrievalStats(sinceDays?: number): Promise<{
+    totalQueries: number;
+    avgLatencyMs: number;
+    p95LatencyMs: number;
+    strategyDistribution: Record<string, number>;
+    avgResultsCount: number;
+    queriesWithNoResults: number;
+  }> {
+    if (!this.db)
+      throw new DatabaseError(
+        'Database not connected',
+        ErrorCode.DB_CONNECTION_FAILED
+      );
+
+    const sinceMs = sinceDays
+      ? Date.now() - sinceDays * 24 * 60 * 60 * 1000
+      : 0;
+
+    const whereClause = sinceMs ? 'WHERE created_at >= ?' : '';
+    const params = sinceMs ? [sinceMs] : [];
+
+    // Aggregate stats
+    const agg = this.db
+      .prepare(
+        `SELECT
+           COUNT(*) as total_queries,
+           COALESCE(AVG(latency_ms), 0) as avg_latency_ms,
+           COALESCE(AVG(results_count), 0) as avg_results_count,
+           COUNT(CASE WHEN results_count = 0 THEN 1 END) as queries_with_no_results
+         FROM retrieval_log ${whereClause}`
+      )
+      .get(...params) as {
+      total_queries: number;
+      avg_latency_ms: number;
+      avg_results_count: number;
+      queries_with_no_results: number;
+    };
+
+    // P95 latency: compute offset from total count, then fetch
+    const p95Offset = Math.max(0, Math.round(agg.total_queries * 0.95) - 1);
+    const p95Row =
+      agg.total_queries > 0
+        ? (this.db
+            .prepare(
+              `SELECT latency_ms FROM retrieval_log ${whereClause}
+               ORDER BY latency_ms ASC
+               LIMIT 1 OFFSET ?`
+            )
+            .get(...params, p95Offset) as { latency_ms: number } | undefined)
+        : undefined;
+
+    // Strategy distribution
+    const stratRows = this.db
+      .prepare(
+        `SELECT strategy, COUNT(*) as count FROM retrieval_log ${whereClause}
+         GROUP BY strategy`
+      )
+      .all(...params) as Array<{ strategy: string; count: number }>;
+
+    const strategyDistribution: Record<string, number> = {};
+    for (const row of stratRows) {
+      strategyDistribution[row.strategy] = row.count;
+    }
+
+    return {
+      totalQueries: agg.total_queries,
+      avgLatencyMs: Math.round(agg.avg_latency_ms * 100) / 100,
+      p95LatencyMs: p95Row?.latency_ms ?? 0,
+      strategyDistribution,
+      avgResultsCount: Math.round(agg.avg_results_count * 100) / 100,
+      queriesWithNoResults: agg.queries_with_no_results,
+    };
   }
 
   // Bulk operations
