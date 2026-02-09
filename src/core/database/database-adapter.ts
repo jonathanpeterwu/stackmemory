@@ -5,6 +5,7 @@
  */
 
 import type { Frame, Event, Anchor } from '../context/index.js';
+import type { EmbeddingProvider } from './embedding-provider.js';
 
 export interface QueryOptions {
   limit?: number;
@@ -199,6 +200,11 @@ export abstract class DatabaseAdapter {
     format: 'json' | 'parquet' | 'csv',
     options?: { truncate?: boolean; upsert?: boolean }
   ): Promise<void>;
+
+  /** Returns the configured embedding provider, if any */
+  getEmbeddingProvider(): EmbeddingProvider | undefined {
+    return undefined;
+  }
 
   // Utility methods
   protected generateId(): string {

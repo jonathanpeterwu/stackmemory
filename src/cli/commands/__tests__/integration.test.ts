@@ -27,7 +27,7 @@ describe('CLI Integration Tests', () => {
     process.chdir(testDir);
 
     // Initialize StackMemory in test directory
-    execSync(cli('init'), { cwd: testDir });
+    execSync(cli('init'), { cwd: testDir, timeout: 10000 });
 
     // Create context.db since init skips DB creation in test mode
     const dbDir = path.join(testDir, '.stackmemory');
@@ -108,10 +108,11 @@ describe('CLI Integration Tests', () => {
   });
 
   describe('Capture/Restore Commands', () => {
-    it('should generate handoff document', () => {
+    it('should generate handoff document', { timeout: 30000 }, () => {
       const result = execSync(cli('capture'), {
         cwd: testDir,
         encoding: 'utf8',
+        timeout: 15000,
       });
 
       // Check for any successful output

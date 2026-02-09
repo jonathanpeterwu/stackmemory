@@ -49,6 +49,10 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     this.embeddingDimension = config.embeddingDimension || 384;
   }
 
+  getEmbeddingProvider(): EmbeddingProvider | undefined {
+    return this.embeddingProvider;
+  }
+
   getFeatures(): DatabaseFeatures {
     return {
       supportsFullTextSearch: this.ftsEnabled,

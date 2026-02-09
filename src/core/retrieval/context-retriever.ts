@@ -7,6 +7,7 @@ import {
   DatabaseAdapter,
   SearchOptions,
 } from '../database/database-adapter.js';
+import type { EmbeddingProvider } from '../database/embedding-provider.js';
 import { Frame } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 
@@ -53,13 +54,16 @@ export interface RetrievalStrategy {
 
 export class ContextRetriever {
   private readonly adapter: DatabaseAdapter;
+  private readonly embeddingProvider?: EmbeddingProvider;
   private readonly strategies: Map<string, RetrievalStrategy> = new Map();
   private queryCache = new Map<string, ContextRetrievalResult>();
   private cacheMaxSize = 100;
   private cacheExpiryMs = 300000; // 5 minutes
 
-  constructor(adapter: DatabaseAdapter) {
+  constructor(adapter: DatabaseAdapter, embeddingProvider?: EmbeddingProvider) {
     this.adapter = adapter;
+    this.embeddingProvider =
+      embeddingProvider ?? adapter.getEmbeddingProvider();
     this.initializeStrategies();
   }
 
@@ -407,15 +411,18 @@ export class ContextRetriever {
 
     try {
       if (strategy.searchType === 'hybrid' && strategy.weights) {
-        // Use hybrid search with embeddings (placeholder - would need actual embeddings)
         const embedding = await this.generateEmbedding(query.text);
-        rawResults = await this.adapter.searchHybrid(
-          query.text,
-          embedding,
-          strategy.weights
-        );
+        if (embedding.length > 0) {
+          rawResults = await this.adapter.searchHybrid(
+            query.text,
+            embedding,
+            strategy.weights
+          );
+        } else {
+          // No embedding provider — fall back to text search
+          rawResults = await this.adapter.search(searchOptions);
+        }
       } else {
-        // Use text or vector search
         rawResults = await this.adapter.search(searchOptions);
       }
     } catch (error: unknown) {
@@ -443,23 +450,10 @@ export class ContextRetriever {
   }
 
   private async generateEmbedding(text: string): Promise<number[]> {
-    // Placeholder - in production would use actual embedding service
-    // For now, return a mock embedding
-    const hash = this.simpleHash(text);
-    return Array.from(
-      { length: 384 },
-      (_, i) => ((hash + i) % 100) / 100 - 0.5
-    );
-  }
-
-  private simpleHash(str: string): number {
-    let hash = 0;
-    for (let i = 0; i < str.length; i++) {
-      const char = str.charCodeAt(i);
-      hash = (hash << 5) - hash + char;
-      hash = hash & hash; // Convert to 32-bit integer
+    if (!this.embeddingProvider) {
+      return [];
     }
-    return Math.abs(hash);
+    return this.embeddingProvider.embed(text);
   }
 
   private generateRelevanceReason(

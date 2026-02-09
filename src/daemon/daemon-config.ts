@@ -30,6 +30,7 @@ export interface MaintenanceServiceConfig extends DaemonServiceConfig {
   ftsRebuildInterval: number; // hours
   embeddingBatchSize: number;
   vacuumInterval: number; // hours
+  embeddingModel?: string; // default: 'Xenova/all-MiniLM-L6-v2'
 }
 
 export interface FileWatchConfig extends DaemonServiceConfig {

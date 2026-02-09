@@ -137,13 +137,14 @@ describe('CLI Integration', () => {
   describe('Clear Command', () => {
     it('should show clear status', { timeout: 15000 }, () => {
       // Initialize first
-      execSync(`node ${cliPath} init`, { cwd: testDir });
+      execSync(`node ${cliPath} init`, { cwd: testDir, timeout: 10000 });
       // Create DB since init skips it in test mode
       createTestDb(testDir);
 
       const result = execSync(`node ${cliPath} clear --status`, {
         cwd: testDir,
         encoding: 'utf8',
+        timeout: 10000,
       });
 
       expect(result).toContain('Context Usage');

@@ -8,6 +8,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import type { MaintenanceServiceConfig } from '../daemon-config.js';
+import type { EmbeddingProvider } from '../../core/database/embedding-provider.js';
 
 export interface MaintenanceServiceState {
   lastRunTime: number;
@@ -22,6 +23,7 @@ export interface MaintenanceServiceState {
 export class DaemonMaintenanceService {
   private config: MaintenanceServiceConfig;
   private state: MaintenanceServiceState;
+  private embeddingProvider: EmbeddingProvider | null = null;
   private intervalId?: NodeJS.Timeout;
   private isRunning = false;
   private onLog: (level: string, message: string, data?: unknown) => void;
@@ -198,6 +200,7 @@ export class DaemonMaintenanceService {
     try {
       if (typeof db.getFramesMissingEmbeddings !== 'function') return;
       if (!db.getFeatures?.().supportsVectorSearch) return;
+      if (!this.embeddingProvider) return;
 
       const frames = await db.getFramesMissingEmbeddings(
         this.config.embeddingBatchSize
@@ -205,10 +208,32 @@ export class DaemonMaintenanceService {
 
       if (frames.length === 0) return;
 
-      // Embedding generation requires the provider, which lives on the adapter
-      // The adapter handles this internally via storeEmbedding
-      this.state.embeddingsGenerated += frames.length;
-      this.onLog('INFO', `Found ${frames.length} frames needing embeddings`);
+      this.onLog('INFO', `Generating embeddings for ${frames.length} frames`);
+
+      let generated = 0;
+      for (const frame of frames) {
+        try {
+          const text = [
+            frame.name,
+            frame.digest_text,
+            JSON.stringify(frame.inputs),
+          ]
+            .filter(Boolean)
+            .join(' ');
+          if (!text.trim()) continue;
+
+          const embedding = await this.embeddingProvider.embed(text);
+          await db.storeEmbedding(frame.frame_id, embedding);
+          generated++;
+        } catch (err) {
+          this.addError(
+            `Embedding frame ${frame.frame_id}: ${err instanceof Error ? err.message : String(err)}`
+          );
+        }
+      }
+
+      this.state.embeddingsGenerated += generated;
+      this.onLog('INFO', `Generated ${generated} embeddings`);
     } catch (err) {
       this.addError(
         `Embedding backfill: ${err instanceof Error ? err.message : String(err)}`
@@ -265,6 +290,8 @@ export class DaemonMaintenanceService {
     try {
       const { SQLiteAdapter } =
         await import('../../core/database/sqlite-adapter.js');
+      const { createTransformersProvider } =
+        await import('../../core/database/transformers-embedding-provider.js');
 
       const dbPath = this.findDatabasePath();
       if (!dbPath) {
@@ -272,7 +299,16 @@ export class DaemonMaintenanceService {
         return null;
       }
 
-      const adapter = new SQLiteAdapter('maintenance', { dbPath });
+      if (!this.embeddingProvider) {
+        this.embeddingProvider =
+          (await createTransformersProvider(this.config.embeddingModel)) ??
+          null;
+      }
+
+      const adapter = new SQLiteAdapter('maintenance', {
+        dbPath,
+        embeddingProvider: this.embeddingProvider ?? undefined,
+      });
       await adapter.connect();
       await adapter.initializeSchema();
       return adapter;

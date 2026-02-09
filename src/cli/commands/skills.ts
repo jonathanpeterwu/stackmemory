@@ -20,6 +20,7 @@ import { FrameHandoffManager } from '../../core/context/frame-handoff-manager.js
 import { FrameManager } from '../../core/context/index.js';
 import { ContextRetriever } from '../../core/retrieval/context-retriever.js';
 import { SQLiteAdapter } from '../../core/database/sqlite-adapter.js';
+import { createTransformersProvider } from '../../core/database/transformers-embedding-provider.js';
 import { LinearTaskManager } from '../../features/tasks/linear-task-manager.js';
 import { ConfigManager } from '../../core/config/config-manager.js';
 import * as path from 'path';
@@ -89,7 +90,8 @@ async function initializeSkillContext(): Promise<{
     'stackmemory.db'
   );
 
-  const database = new SQLiteAdapter(projectId, { dbPath });
+  const embeddingProvider = (await createTransformersProvider()) ?? undefined;
+  const database = new SQLiteAdapter(projectId, { dbPath, embeddingProvider });
   await database.connect();
 
   // Get raw database for FrameManager

@@ -174,7 +174,7 @@ describe('ClaudeCodeTaskCoordinator', () => {
 
       expect(metrics.totalTasks).toBe(0);
       expect(metrics.completedTasks).toBe(0);
-    }, 50000);
+    }, 15000);
 
     it('should clear active tasks', async () => {
       await coordinator.cleanup();
@@ -182,6 +182,6 @@ describe('ClaudeCodeTaskCoordinator', () => {
       const active = coordinator.getActiveTaskStatus();
 
       expect(active.length).toBe(0);
-    }, 50000);
+    }, 15000);
   });
 });

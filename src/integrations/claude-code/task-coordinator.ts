@@ -298,13 +298,18 @@ export class ClaudeCodeTaskCoordinator {
     fn: () => Promise<T>,
     timeoutMs: number
   ): Promise<T> {
+    let timer: ReturnType<typeof setTimeout>;
     const timeoutPromise = new Promise<T>((_, reject) => {
-      setTimeout(() => {
+      timer = setTimeout(() => {
         reject(new Error(`Task execution timeout after ${timeoutMs}ms`));
       }, timeoutMs);
     });
 
-    return Promise.race([fn(), timeoutPromise]);
+    try {
+      return await Promise.race([fn(), timeoutPromise]);
+    } finally {
+      clearTimeout(timer!);
+    }
   }
 
   /**
