@@ -140,6 +140,7 @@ The daemon provides:
           if (newStatus.services.linear.enabled) services.push('linear');
           if (newStatus.services.maintenance?.enabled)
             services.push('maintenance');
+          if (newStatus.services.memory?.enabled) services.push('memory');
           if (newStatus.services.fileWatch.enabled) services.push('file-watch');
           if (services.length > 0) {
             console.log(chalk.gray(`Services: ${services.join(', ')}`));
@@ -323,6 +324,38 @@ The daemon provides:
           if (maint.lastRun) {
             const ago = Math.round((Date.now() - maint.lastRun) / 1000 / 60);
             console.log(chalk.gray(`    Last run: ${ago} min ago`));
+          }
+        }
+      }
+
+      // Memory service
+      const mem = status.services.memory;
+      if (mem) {
+        console.log(
+          `  Memory: ${mem.enabled ? chalk.green('Enabled') : chalk.gray('Disabled')}`
+        );
+        if (mem.enabled) {
+          console.log(
+            chalk.gray(`    Interval: ${config.memory.interval} min`)
+          );
+          console.log(
+            chalk.gray(
+              `    Thresholds: RAM ${config.memory.ramThreshold * 100}% / Heap ${config.memory.heapThreshold * 100}%`
+            )
+          );
+          if (mem.currentRamPercent !== undefined) {
+            console.log(
+              chalk.gray(
+                `    Current RAM: ${Math.round(mem.currentRamPercent * 100)}%`
+              )
+            );
+          }
+          if (mem.triggerCount) {
+            console.log(chalk.gray(`    Triggers: ${mem.triggerCount}`));
+          }
+          if (mem.lastTrigger) {
+            const ago = Math.round((Date.now() - mem.lastTrigger) / 1000 / 60);
+            console.log(chalk.gray(`    Last trigger: ${ago} min ago`));
           }
         }
       }

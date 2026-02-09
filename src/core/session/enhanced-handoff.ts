@@ -499,7 +499,7 @@ export class EnhancedHandoffGenerator {
 
     // Check for failing tests
     try {
-      const testResult = execSync('npm test 2>&1 || true', {
+      const testResult = execSync('npm run test:run 2>&1 || true', {
         encoding: 'utf-8',
         cwd: this.projectRoot,
         timeout: 30000,

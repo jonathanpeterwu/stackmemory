@@ -26,6 +26,7 @@ import {
 import { DaemonContextService } from './services/context-service.js';
 import { DaemonLinearService } from './services/linear-service.js';
 import { DaemonMaintenanceService } from './services/maintenance-service.js';
+import { DaemonMemoryService } from './services/memory-service.js';
 
 interface LogEntry {
   timestamp: string;
@@ -41,6 +42,7 @@ export class UnifiedDaemon {
   private contextService: DaemonContextService;
   private linearService: DaemonLinearService;
   private maintenanceService: DaemonMaintenanceService;
+  private memoryService: DaemonMemoryService;
   private heartbeatInterval?: NodeJS.Timeout;
   private isShuttingDown = false;
   private startTime: number = 0;
@@ -63,6 +65,11 @@ export class UnifiedDaemon {
     this.maintenanceService = new DaemonMaintenanceService(
       this.config.maintenance,
       (level, msg, data) => this.log(level, 'maintenance', msg, data)
+    );
+
+    this.memoryService = new DaemonMemoryService(
+      this.config.memory,
+      (level, msg, data) => this.log(level, 'memory', msg, data)
     );
   }
 
@@ -135,6 +142,7 @@ export class UnifiedDaemon {
 
   private updateStatus(): void {
     const maintenanceState = this.maintenanceService.getState();
+    const memoryState = this.memoryService.getState();
     const status: DaemonStatus = {
       running: true,
       pid: process.pid,
@@ -160,6 +168,12 @@ export class UnifiedDaemon {
           embeddingsTotal: maintenanceState.embeddingsTotal,
           embeddingsRemaining: maintenanceState.embeddingsRemaining,
         },
+        memory: {
+          enabled: this.config.memory.enabled,
+          lastTrigger: memoryState.lastTriggerTime || undefined,
+          triggerCount: memoryState.triggerCount,
+          currentRamPercent: memoryState.currentRamPercent,
+        },
         fileWatch: {
           enabled: this.config.fileWatch.enabled,
         },
@@ -168,6 +182,7 @@ export class UnifiedDaemon {
         ...this.contextService.getState().errors.slice(-5),
         ...this.linearService.getState().errors.slice(-5),
         ...maintenanceState.errors.slice(-5),
+        ...memoryState.errors.slice(-5),
       ],
     };
 
@@ -232,6 +247,10 @@ export class UnifiedDaemon {
             this.maintenanceService.getState().staleFramesCleaned,
           ftsRebuilds: this.maintenanceService.getState().ftsRebuilds,
         },
+        memory: {
+          enabled: false,
+          triggerCount: this.memoryService.getState().triggerCount,
+        },
         fileWatch: { enabled: false },
       },
       errors: [],
@@ -249,6 +268,7 @@ export class UnifiedDaemon {
       contextSaves: this.contextService.getState().saveCount,
       linearSyncs: this.linearService.getState().syncCount,
       maintenanceRuns: this.maintenanceService.getState().ftsRebuilds,
+      memoryTriggers: this.memoryService.getState().triggerCount,
     });
 
     // Stop heartbeat
@@ -261,6 +281,7 @@ export class UnifiedDaemon {
     this.contextService.stop();
     this.linearService.stop();
     this.maintenanceService.stop();
+    this.memoryService.stop();
 
     // Cleanup
     this.cleanup();
@@ -293,6 +314,7 @@ export class UnifiedDaemon {
         context: this.config.context.enabled,
         linear: this.config.linear.enabled,
         maintenance: this.config.maintenance.enabled,
+        memory: this.config.memory.enabled,
         fileWatch: this.config.fileWatch.enabled,
       },
     });
@@ -301,6 +323,7 @@ export class UnifiedDaemon {
     this.contextService.start();
     await this.linearService.start();
     this.maintenanceService.start();
+    this.memoryService.start();
 
     // Start heartbeat
     this.heartbeatInterval = setInterval(() => {
@@ -313,6 +336,7 @@ export class UnifiedDaemon {
 
   getStatus(): DaemonStatus {
     const maintenanceState = this.maintenanceService.getState();
+    const memoryState = this.memoryService.getState();
     return {
       running: !this.isShuttingDown,
       pid: process.pid,
@@ -338,6 +362,12 @@ export class UnifiedDaemon {
           embeddingsTotal: maintenanceState.embeddingsTotal,
           embeddingsRemaining: maintenanceState.embeddingsRemaining,
         },
+        memory: {
+          enabled: this.config.memory.enabled,
+          lastTrigger: memoryState.lastTriggerTime || undefined,
+          triggerCount: memoryState.triggerCount,
+          currentRamPercent: memoryState.currentRamPercent,
+        },
         fileWatch: {
           enabled: this.config.fileWatch.enabled,
         },
@@ -346,6 +376,7 @@ export class UnifiedDaemon {
         ...this.contextService.getState().errors,
         ...this.linearService.getState().errors,
         ...maintenanceState.errors,
+        ...memoryState.errors,
       ],
     };
   }

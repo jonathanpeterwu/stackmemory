@@ -485,6 +485,14 @@ export class RefactoredFrameManager {
   }
 
   /**
+   * Get stack as { frames } — compat shim for ClearSurvival
+   */
+  getStack(): { frames: Frame[] } {
+    const frames = this.frameDb.getFramesByProject(this.projectId);
+    return { frames };
+  }
+
+  /**
    * Get stack depth
    */
   getStackDepth(): number {

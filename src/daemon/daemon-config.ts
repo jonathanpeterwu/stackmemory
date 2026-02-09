@@ -46,6 +46,12 @@ export interface MaintenanceServiceConfig extends DaemonServiceConfig {
   coldTierRehydrateCacheMinutes?: number; // default: 30
 }
 
+export interface MemoryServiceConfig extends DaemonServiceConfig {
+  ramThreshold: number; // 0.9 = 90% system RAM
+  heapThreshold: number; // 0.9 = 90% Node.js heap
+  cooldownMinutes: number; // avoid repeated triggers
+}
+
 export interface FileWatchConfig extends DaemonServiceConfig {
   paths: string[];
   extensions: string[];
@@ -58,6 +64,7 @@ export interface DaemonConfig {
   context: ContextServiceConfig;
   linear: LinearServiceConfig;
   maintenance: MaintenanceServiceConfig;
+  memory: MemoryServiceConfig;
   fileWatch: FileWatchConfig;
   heartbeatInterval: number; // seconds
   inactivityTimeout: number; // minutes, 0 = disabled
@@ -85,6 +92,13 @@ export const DEFAULT_DAEMON_CONFIG: DaemonConfig = {
     ftsRebuildInterval: 24, // hours
     embeddingBatchSize: 50,
     vacuumInterval: 168, // weekly
+  },
+  memory: {
+    enabled: true,
+    interval: 0.5, // 30 seconds
+    ramThreshold: 0.9,
+    heapThreshold: 0.9,
+    cooldownMinutes: 10,
   },
   fileWatch: {
     enabled: false, // Disabled by default
@@ -117,6 +131,12 @@ export interface DaemonStatus {
       embeddingsRemaining?: number;
       framesGarbageCollected?: number;
       lastGcRun?: number;
+    };
+    memory: {
+      enabled: boolean;
+      lastTrigger?: number;
+      triggerCount?: number;
+      currentRamPercent?: number;
     };
     fileWatch: { enabled: boolean; eventsProcessed?: number };
   };
@@ -181,6 +201,7 @@ export function loadDaemonConfig(): DaemonConfig {
         ...DEFAULT_DAEMON_CONFIG.maintenance,
         ...config.maintenance,
       },
+      memory: { ...DEFAULT_DAEMON_CONFIG.memory, ...config.memory },
       fileWatch: { ...DEFAULT_DAEMON_CONFIG.fileWatch, ...config.fileWatch },
     };
   } catch {
@@ -200,6 +221,7 @@ export function saveDaemonConfig(config: Partial<DaemonConfig>): void {
     context: { ...currentConfig.context, ...config.context },
     linear: { ...currentConfig.linear, ...config.linear },
     maintenance: { ...currentConfig.maintenance, ...config.maintenance },
+    memory: { ...currentConfig.memory, ...config.memory },
     fileWatch: { ...currentConfig.fileWatch, ...config.fileWatch },
   };
   writeFileSync(configFile, JSON.stringify(newConfig, null, 2));
@@ -217,6 +239,7 @@ export function readDaemonStatus(): DaemonStatus {
       context: { enabled: false },
       linear: { enabled: false },
       maintenance: { enabled: false },
+      memory: { enabled: false },
       fileWatch: { enabled: false },
     },
     errors: [],

@@ -56,10 +56,13 @@ const clearCommand = new Command('clear')
         generateHandoff: () => Promise.resolve('Mock handoff'),
         getHandoffPath: () => 'mock.md',
       };
-      // Create a mock DatabaseManager for ClearSurvival
+      // Create a stub DatabaseManager for ClearSurvival
       const dbManager = {
         getCurrentSessionId: () => Promise.resolve(session.id),
         getSession: () => Promise.resolve(session),
+        getRecentTraces: () => Promise.resolve([]),
+        getRecentFrames: () => Promise.resolve([]),
+        addAnchor: () => Promise.resolve(),
       } as any;
       const clearSurvival = new ClearSurvival(
         frameManager,
@@ -147,19 +150,15 @@ async function saveLedger(
 ): Promise<void> {
   spinner.start('Saving continuity ledger...');
 
-  const ledgerPath = await clearSurvival.saveContinuityLedger();
+  const ledger = await clearSurvival.saveContinuityLedger();
 
   spinner.succeed(chalk.green('Continuity ledger saved'));
-  console.log(chalk.cyan(`Location: ${ledgerPath}`));
 
   // Show what was saved
-  const ledger = JSON.parse(await fs.readFile(ledgerPath, 'utf-8'));
   console.log('\nSaved:');
-  console.log(`  • ${ledger.activeFrames.length} active frames`);
-  console.log(`  • ${ledger.decisions.length} key decisions`);
-  console.log(
-    `  • ${ledger.context.importantTasks?.length || 0} important tasks`
-  );
+  console.log(`  • ${ledger.active_frame_stack?.length || 0} active frames`);
+  console.log(`  • ${ledger.key_decisions?.length || 0} key decisions`);
+  console.log(`  • ${ledger.active_tasks?.length || 0} active tasks`);
 }
 
 async function restoreFromLedger(
@@ -168,16 +167,12 @@ async function restoreFromLedger(
 ): Promise<void> {
   spinner.start('Restoring from continuity ledger...');
 
-  const result = await clearSurvival.restoreFromLedger();
+  const success = await clearSurvival.restoreFromLedger();
 
-  if (result.success) {
+  if (success) {
     spinner.succeed(chalk.green('Context restored from ledger'));
-    console.log('\nRestored:');
-    console.log(`  • ${result.restoredFrames} frames`);
-    console.log(`  • ${result.restoredDecisions} decisions`);
   } else {
     spinner.fail(chalk.red('Failed to restore from ledger'));
-    console.log(chalk.yellow(result.message));
   }
 }
 
