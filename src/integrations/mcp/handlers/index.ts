@@ -52,7 +52,6 @@ export class MCPHandlerFactory {
   constructor(deps: MCPHandlerDependencies) {
     this.contextHandlers = new ContextHandlers({
       frameManager: deps.frameManager,
-      contextRetrieval: deps.contextRetrieval,
     });
 
     this.taskHandlers = new TaskHandlers({

@@ -4,12 +4,10 @@
  */
 
 import { FrameManager, FrameType } from '../../../core/context/index.js';
-import { LLMContextRetrieval } from '../../../core/retrieval/index.js';
 import { logger } from '../../../core/monitoring/logger.js';
 
 export interface ContextHandlerDependencies {
   frameManager: FrameManager;
-  contextRetrieval: LLMContextRetrieval;
 }
 
 export class ContextHandlers {
@@ -39,28 +37,6 @@ export class ContextHandlers {
         };
       }
 
-      // Use LLM context retrieval if available
-      if (this.deps.contextRetrieval && query) {
-        try {
-          // TODO: Implement getRelevantContext method
-          const llmContext = { summary: 'Context retrieval not yet implemented', frameIds: [] };
-          return {
-            content: [
-              {
-                type: 'text',
-                text: llmContext.summary || 'No specific context found.',
-              },
-            ],
-            metadata: {
-              relevantFrames: llmContext.frameIds,
-              query,
-            },
-          };
-        } catch (error: unknown) {
-          logger.warn('LLM context retrieval failed, falling back to hot stack', error instanceof Error ? error : new Error(String(error)));
-        }
-      }
-
       // Format hot stack context
       const contextText = hotStack
         .map((frame, i) => {
@@ -85,7 +61,10 @@ export class ContextHandlers {
         ],
       };
     } catch (error: unknown) {
-      logger.error('Error getting context', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error getting context',
+        error instanceof Error ? error : new Error(String(error))
+      );
       throw error;
     }
   }
@@ -96,7 +75,7 @@ export class ContextHandlers {
   async handleAddDecision(args: any): Promise<any> {
     try {
       const { content, type } = args;
-      
+
       if (!content) {
         throw new Error('Content is required');
       }
@@ -131,7 +110,10 @@ export class ContextHandlers {
         ],
       };
     } catch (error: unknown) {
-      logger.error('Error adding decision', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error adding decision',
+        error instanceof Error ? error : new Error(String(error))
+      );
       throw error;
     }
   }
@@ -142,7 +124,7 @@ export class ContextHandlers {
   async handleStartFrame(args: any): Promise<any> {
     try {
       const { name, type = 'task', constraints = [], definitions = {} } = args;
-      
+
       if (!name) {
         throw new Error('Frame name is required');
       }
@@ -150,7 +132,7 @@ export class ContextHandlers {
       const frameId = this.deps.frameManager.createFrame({
         type: type as FrameType,
         name,
-        inputs: { constraints, definitions }
+        inputs: { constraints, definitions },
       });
 
       logger.info('Started frame', { frameId, name, type });
@@ -169,7 +151,10 @@ export class ContextHandlers {
         },
       };
     } catch (error: unknown) {
-      logger.error('Error starting frame', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error starting frame',
+        error instanceof Error ? error : new Error(String(error))
+      );
       throw error;
     }
   }
@@ -180,7 +165,8 @@ export class ContextHandlers {
   async handleCloseFrame(args: any): Promise<any> {
     try {
       const { summary, frameId } = args;
-      const targetFrameId = frameId || this.deps.frameManager.getCurrentFrameId();
+      const targetFrameId =
+        frameId || this.deps.frameManager.getCurrentFrameId();
 
       if (!targetFrameId) {
         throw new Error('No active frame to close');
@@ -200,9 +186,15 @@ export class ContextHandlers {
         });
       }
 
-      this.deps.frameManager.closeFrame(targetFrameId, summary ? { summary } : {});
+      this.deps.frameManager.closeFrame(
+        targetFrameId,
+        summary ? { summary } : {}
+      );
 
-      logger.info('Closed frame', { frameId: targetFrameId, frameName: frame.name });
+      logger.info('Closed frame', {
+        frameId: targetFrameId,
+        frameName: frame.name,
+      });
 
       return {
         content: [
@@ -213,7 +205,10 @@ export class ContextHandlers {
         ],
       };
     } catch (error: unknown) {
-      logger.error('Error closing frame', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error closing frame',
+        error instanceof Error ? error : new Error(String(error))
+      );
       throw error;
     }
   }
@@ -224,7 +219,7 @@ export class ContextHandlers {
   async handleAddAnchor(args: any): Promise<any> {
     try {
       const { type, text, priority = 5 } = args;
-      
+
       if (!text) {
         throw new Error('Anchor text is required');
       }
@@ -234,9 +229,18 @@ export class ContextHandlers {
         throw new Error('No active frame. Use start_frame first.');
       }
 
-      const validTypes = ['FACT', 'DECISION', 'CONSTRAINT', 'INTERFACE_CONTRACT', 'TODO', 'RISK'];
+      const validTypes = [
+        'FACT',
+        'DECISION',
+        'CONSTRAINT',
+        'INTERFACE_CONTRACT',
+        'TODO',
+        'RISK',
+      ];
       if (!validTypes.includes(type)) {
-        throw new Error(`Invalid anchor type. Must be one of: ${validTypes.join(', ')}`);
+        throw new Error(
+          `Invalid anchor type. Must be one of: ${validTypes.join(', ')}`
+        );
       }
 
       this.deps.frameManager.addAnchor(type, text, priority);
@@ -252,7 +256,10 @@ export class ContextHandlers {
         ],
       };
     } catch (error: unknown) {
-      logger.error('Error adding anchor', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error adding anchor',
+        error instanceof Error ? error : new Error(String(error))
+      );
       throw error;
     }
   }
@@ -290,10 +297,14 @@ export class ContextHandlers {
         content: [
           {
             type: 'text',
-            text: `Hot Stack (${hotStack.length} frames):\n` +
-                  stackSummary.map((f: any) => 
+            text:
+              `Hot Stack (${hotStack.length} frames):\n` +
+              stackSummary
+                .map(
+                  (f: any) =>
                     `  ${f.depth}: ${f.goal} (${f.anchors} anchors, ${f.recentEvents} events)`
-                  ).join('\n'),
+                )
+                .join('\n'),
           },
         ],
         metadata: {
@@ -301,7 +312,10 @@ export class ContextHandlers {
         },
       };
     } catch (error: unknown) {
-      logger.error('Error getting hot stack', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error getting hot stack',
+        error instanceof Error ? error : new Error(String(error))
+      );
       throw error;
     }
   }

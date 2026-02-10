@@ -848,9 +848,6 @@ WantedBy=default.target`;
       console.log(chalk.white(`  Health: http://localhost:${port}/health`));
       console.log(chalk.gray(`\nLogs: ${logDir}/remote-mcp.log`));
       console.log(chalk.gray(`Service: ${serviceFile}`));
-      console.log(chalk.cyan('\nFor external access (ngrok):'));
-      console.log(chalk.white(`  ngrok http ${port}`));
-      console.log(chalk.gray('  Then use the ngrok URL + /sse in Claude.ai'));
     });
 
   return cmd;

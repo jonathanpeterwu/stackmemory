@@ -576,10 +576,6 @@ program
       console.log('');
       console.log('For Claude.ai web connector:');
       console.log(`  URL: http://localhost:${port}/sse`);
-      console.log('');
-      console.log('For external access (ngrok):');
-      console.log(`  ngrok http ${port}`);
-      console.log('  Then use the ngrok URL + /sse in Claude.ai');
     } catch (error: unknown) {
       logger.error('Failed to start remote MCP server', error as Error);
       console.error('Remote MCP server failed:', (error as Error).message);

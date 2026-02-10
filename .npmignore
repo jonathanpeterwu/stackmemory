@@ -24,10 +24,7 @@ tests/
 *.spec.*
 coverage/
 
-# Scripts (keep essential ones)
-scripts/fix-*.js
-scripts/update-*.js
-scripts/reorganize-*.sh
+# dist/scripts excluded via package.json files field (only dist/src ships)
 attention-scoring/
 p2p-sync/
 mcp-server/

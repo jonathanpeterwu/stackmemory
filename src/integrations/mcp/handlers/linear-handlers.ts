@@ -61,10 +61,17 @@ export class LinearHandlers {
         metadata: result,
       };
     } catch (error: unknown) {
-      logger.error('Linear sync failed', error instanceof Error ? error : new Error(String(error)));
-      
-      const errorMessage = error instanceof Error ? error.message : String(error);
-      if (errorMessage?.includes('unauthorized') || errorMessage?.includes('auth')) {
+      logger.error(
+        'Linear sync failed',
+        error instanceof Error ? error : new Error(String(error))
+      );
+
+      const errorMessage =
+        error instanceof Error ? error.message : String(error);
+      if (
+        errorMessage?.includes('unauthorized') ||
+        errorMessage?.includes('auth')
+      ) {
         return {
           content: [
             {
@@ -77,7 +84,7 @@ export class LinearHandlers {
           },
         };
       }
-      
+
       throw error;
     }
   }
@@ -88,7 +95,7 @@ export class LinearHandlers {
   async handleLinearUpdateTask(args: any): Promise<any> {
     try {
       const { linear_id, status, assignee_id, priority, labels } = args;
-      
+
       if (!linear_id) {
         throw new Error('Linear ID is required');
       }
@@ -100,43 +107,31 @@ export class LinearHandlers {
       }
 
       const updateData: any = {};
-      
+
       if (status) {
         updateData.status = status;
       }
-      
+
       if (assignee_id) {
         updateData.assigneeId = assignee_id;
       }
-      
+
       if (priority) {
         updateData.priority = priority;
       }
-      
+
       if (labels) {
         updateData.labels = Array.isArray(labels) ? labels : [labels];
       }
 
-      // TODO: Implement updateLinearIssue public method
-      const result = { success: true };
-
-      logger.info('Updated Linear task', { linearId: linear_id, updates: updateData });
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Updated Linear issue ${linear_id}: ${Object.keys(updateData).join(', ')}`,
-          },
-        ],
-        metadata: {
-          linearId: linear_id,
-          updates: updateData,
-          result,
-        },
-      };
+      throw new Error(
+        'Linear issue updates via MCP are not yet implemented. Use `stackmemory linear sync` instead.'
+      );
     } catch (error: unknown) {
-      logger.error('Error updating Linear task', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error updating Linear task',
+        error instanceof Error ? error : new Error(String(error))
+      );
       throw error;
     }
   }
@@ -146,12 +141,12 @@ export class LinearHandlers {
    */
   async handleLinearGetTasks(args: any): Promise<any> {
     try {
-      const { 
-        team_id, 
-        assignee_id, 
+      const {
+        team_id,
+        assignee_id,
         state = 'active',
         limit = 20,
-        search 
+        search,
       } = args;
 
       try {
@@ -163,58 +158,31 @@ export class LinearHandlers {
       const filters: any = {
         limit,
       };
-      
+
       if (team_id) {
         filters.teamId = team_id;
       }
-      
+
       if (assignee_id) {
         filters.assigneeId = assignee_id;
       }
-      
+
       if (state) {
         filters.state = state;
       }
-      
+
       if (search) {
         filters.search = search;
       }
 
-      // TODO: Implement getLinearIssues public method
-      const issues: any[] = [];
-
-      const issuesSummary = issues.map((issue: any) => ({
-        id: issue.id,
-        identifier: issue.identifier,
-        title: issue.title,
-        state: issue.state?.name || 'Unknown',
-        priority: issue.priority || 0,
-        assignee: issue.assignee?.name || 'Unassigned',
-        team: issue.team?.name || 'Unknown',
-        url: issue.url,
-      }));
-
-      const summaryText = issuesSummary.length > 0
-        ? issuesSummary.map((i: any) => 
-            `${i.identifier}: ${i.title} [${i.state}] (${i.assignee})`
-          ).join('\n')
-        : 'No Linear issues found';
-
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Linear Issues (${issues.length}):\n${summaryText}`,
-          },
-        ],
-        metadata: {
-          issues: issuesSummary,
-          totalCount: issues.length,
-          filters,
-        },
-      };
+      throw new Error(
+        'Linear issue listing via MCP is not yet implemented. Use `stackmemory linear sync` instead.'
+      );
     } catch (error: unknown) {
-      logger.error('Error getting Linear tasks', error instanceof Error ? error : new Error(String(error)));
+      logger.error(
+        'Error getting Linear tasks',
+        error instanceof Error ? error : new Error(String(error))
+      );
       throw error;
     }
   }
@@ -231,7 +199,7 @@ export class LinearHandlers {
       } catch {
         authStatus = false;
       }
-      
+
       if (!authStatus) {
         return {
           content: [
@@ -248,18 +216,8 @@ export class LinearHandlers {
       }
 
       // Get basic Linear info
-      const userInfo = null; // TODO: Implement getUserInfo
-      const teams: any[] = []; // TODO: Implement getTeams
-      
-      // Get sync stats
-      const syncStats = { lastSync: 'Never', totalSynced: 0, errors: 0 }; // TODO: Implement getSyncStatistics
-
-      const statusText = `Linear Integration Status:
-✓ Connected as: ${userInfo?.name || 'Unknown'}
-✓ Teams: ${teams.length || 0}
-✓ Last sync: ${syncStats.lastSync || 'Never'}
-✓ Synced tasks: ${syncStats.totalSynced || 0}
-✓ Sync errors: ${syncStats.errors || 0}`;
+      const statusText =
+        'Linear Integration Status:\n✓ Connected (authenticated)\n\nUse `stackmemory linear sync` for full sync details.';
 
       return {
         content: [
@@ -270,14 +228,14 @@ export class LinearHandlers {
         ],
         metadata: {
           connected: true,
-          user: userInfo,
-          teams,
-          syncStats,
         },
       };
     } catch (error: unknown) {
-      logger.error('Error getting Linear status', error instanceof Error ? error : new Error(String(error)));
-      
+      logger.error(
+        'Error getting Linear status',
+        error instanceof Error ? error : new Error(String(error))
+      );
+
       return {
         content: [
           {

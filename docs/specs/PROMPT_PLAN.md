@@ -121,4 +121,3 @@
 - [ ] PostgreSQL production adapter (pgvector, LISTEN/NOTIFY)
 - [ ] Specish API — OpenAPI-based tool bridge
 - [ ] Linear Chrome extension (ticket → subagent pipeline)
-- [ ] SMS/WhatsApp notification system
