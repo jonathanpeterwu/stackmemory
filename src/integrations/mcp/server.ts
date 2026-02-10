@@ -99,7 +99,28 @@ class LocalStackMemoryMCP {
     // Initialize database
     const dbPath = join(dbDir, 'context.db');
     this.db = new Database(dbPath);
-    this.initDB();
+
+    // MCP-specific tables for context tracking and attention logging
+    this.db.exec(`
+      CREATE TABLE IF NOT EXISTS contexts (
+        id TEXT PRIMARY KEY,
+        type TEXT NOT NULL,
+        content TEXT NOT NULL,
+        importance REAL DEFAULT 0.5,
+        created_at INTEGER DEFAULT (unixepoch()),
+        last_accessed INTEGER DEFAULT (unixepoch()),
+        access_count INTEGER DEFAULT 1
+      );
+
+      CREATE TABLE IF NOT EXISTS attention_log (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        context_id TEXT,
+        query TEXT,
+        response TEXT,
+        influence_score REAL,
+        timestamp INTEGER DEFAULT (unixepoch())
+      );
+    `);
 
     // Initialize frame manager
     this.frameManager = new FrameManager(this.db, this.projectId);
@@ -203,31 +224,6 @@ class LocalStackMemoryMCP {
     } catch (error) {
       logger.warn('Failed to initialize Linear integration', { error });
     }
-  }
-
-  private initDB() {
-    // Note: Don't create frames table here - FrameManager handles the schema
-    // with the full run_id, project_id, parent_frame_id columns
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS contexts (
-        id TEXT PRIMARY KEY,
-        type TEXT NOT NULL,
-        content TEXT NOT NULL,
-        importance REAL DEFAULT 0.5,
-        created_at INTEGER DEFAULT (unixepoch()),
-        last_accessed INTEGER DEFAULT (unixepoch()),
-        access_count INTEGER DEFAULT 1
-      );
-
-      CREATE TABLE IF NOT EXISTS attention_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        context_id TEXT,
-        query TEXT,
-        response TEXT,
-        influence_score REAL,
-        timestamp INTEGER DEFAULT (unixepoch())
-      );
-    `);
   }
 
   private loadInitialContext() {

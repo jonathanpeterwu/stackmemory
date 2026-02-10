@@ -46,6 +46,7 @@ export interface FrameContext {
 export interface Anchor {
   anchor_id: string;
   frame_id: string;
+  project_id?: string;
   type:
     | 'FACT'
     | 'DECISION'

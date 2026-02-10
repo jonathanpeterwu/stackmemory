@@ -23,6 +23,7 @@ import type { Frame, Event, Anchor } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 import { DatabaseError, ErrorCode, ValidationError } from '../errors/index.js';
 import type { EmbeddingProvider } from './embedding-provider.js';
+import { FrameDatabase } from '../context/frame-database.js';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 
@@ -150,101 +151,9 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
         ErrorCode.DB_CONNECTION_FAILED
       );
 
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS frames (
-        frame_id TEXT PRIMARY KEY,
-        run_id TEXT NOT NULL,
-        project_id TEXT NOT NULL,
-        parent_frame_id TEXT REFERENCES frames(frame_id),
-        depth INTEGER NOT NULL DEFAULT 0,
-        type TEXT NOT NULL,
-        name TEXT NOT NULL,
-        state TEXT DEFAULT 'active',
-        inputs TEXT DEFAULT '{}',
-        outputs TEXT DEFAULT '{}',
-        digest_text TEXT,
-        digest_json TEXT DEFAULT '{}',
-        created_at INTEGER DEFAULT (unixepoch()),
-        closed_at INTEGER
-      );
-
-      CREATE TABLE IF NOT EXISTS events (
-        event_id TEXT PRIMARY KEY,
-        run_id TEXT NOT NULL,
-        frame_id TEXT NOT NULL,
-        seq INTEGER NOT NULL,
-        event_type TEXT NOT NULL,
-        payload TEXT NOT NULL,
-        ts INTEGER DEFAULT (unixepoch()),
-        FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS anchors (
-        anchor_id TEXT PRIMARY KEY,
-        frame_id TEXT NOT NULL,
-        project_id TEXT NOT NULL,
-        type TEXT NOT NULL,
-        text TEXT NOT NULL,
-        priority INTEGER DEFAULT 0,
-        created_at INTEGER DEFAULT (unixepoch()),
-        metadata TEXT DEFAULT '{}',
-        FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
-      );
-
-      CREATE TABLE IF NOT EXISTS schema_version (
-        version INTEGER PRIMARY KEY,
-        applied_at INTEGER DEFAULT (unixepoch())
-      );
-
-      -- Indexes for performance
-      CREATE INDEX IF NOT EXISTS idx_frames_run ON frames(run_id);
-      CREATE INDEX IF NOT EXISTS idx_frames_project ON frames(project_id);
-      CREATE INDEX IF NOT EXISTS idx_frames_parent ON frames(parent_frame_id);
-      CREATE INDEX IF NOT EXISTS idx_frames_state ON frames(state);
-      CREATE INDEX IF NOT EXISTS idx_frames_created ON frames(created_at DESC);
-      CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);
-      CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);
-      CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);
-
-      -- Composite index for project-scoped time queries (most common access pattern)
-      CREATE INDEX IF NOT EXISTS idx_frames_project_created ON frames(project_id, created_at DESC);
-
-      -- Note: frame_embeddings is a vec0 virtual table with frame_id as PRIMARY KEY;
-      -- vec0 handles its own indexing so no CREATE INDEX needed.
-
-      CREATE TABLE IF NOT EXISTS retrieval_log (
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        query_text TEXT NOT NULL,
-        strategy TEXT NOT NULL,
-        results_count INTEGER NOT NULL,
-        top_score REAL,
-        latency_ms INTEGER NOT NULL,
-        result_frame_ids TEXT,
-        created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
-      );
-
-      CREATE INDEX IF NOT EXISTS idx_retrieval_log_created ON retrieval_log(created_at);
-
-      CREATE TABLE IF NOT EXISTS maintenance_state (
-        key TEXT PRIMARY KEY,
-        value TEXT NOT NULL,
-        updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
-      );
-
-      CREATE TABLE IF NOT EXISTS project_registry (
-        project_id TEXT PRIMARY KEY,
-        repo_path TEXT NOT NULL,
-        display_name TEXT,
-        db_path TEXT NOT NULL,
-        is_active INTEGER DEFAULT 0,
-        created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
-        last_accessed INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
-      );
-      CREATE INDEX IF NOT EXISTS idx_project_registry_active ON project_registry(is_active);
-
-      -- Set initial schema version if not exists
-      INSERT OR IGNORE INTO schema_version (version) VALUES (1);
-    `);
+    // Delegate base table creation to FrameDatabase (single canonical schema source)
+    const frameDb = new FrameDatabase(this.db);
+    frameDb.initSchema();
 
     // Migration: add retention_policy column if not exists
     try {
@@ -294,6 +203,13 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
       );
     };
 
+    const hasColumn = (table: string, column: string): boolean => {
+      const cols = this.db!.prepare(
+        `PRAGMA table_info(${table})`
+      ).all() as Array<{ name: string }>;
+      return cols.some((c) => c.name === column);
+    };
+
     const migrateTable = (table: 'events' | 'anchors') => {
       const createSql =
         table === 'events'
@@ -310,7 +226,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
           : `CREATE TABLE anchors_new (
               anchor_id TEXT PRIMARY KEY,
               frame_id TEXT NOT NULL,
-              project_id TEXT NOT NULL,
+              project_id TEXT NOT NULL DEFAULT '',
               type TEXT NOT NULL,
               text TEXT NOT NULL,
               priority INTEGER DEFAULT 0,
@@ -318,6 +234,17 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
               metadata TEXT DEFAULT '{}',
               FOREIGN KEY(frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
             );`;
+
+      // For anchors, handle missing project_id column in old schemas
+      let selectCols: string;
+      if (table === 'anchors') {
+        const hasProjectId = hasColumn('anchors', 'project_id');
+        selectCols = hasProjectId
+          ? 'anchor_id, frame_id, project_id, type, text, priority, created_at, metadata'
+          : `anchor_id, frame_id, '${this.projectId}' as project_id, type, text, priority, created_at, metadata`;
+      } else {
+        selectCols = 'event_id, run_id, frame_id, seq, event_type, payload, ts';
+      }
 
       const cols =
         table === 'events'
@@ -338,7 +265,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
       this.db!.exec('BEGIN;');
       this.db!.exec(createSql);
       this.db!.prepare(
-        `INSERT INTO ${table === 'events' ? 'events_new' : 'anchors_new'} (${cols}) SELECT ${cols} FROM ${table}`
+        `INSERT INTO ${table === 'events' ? 'events_new' : 'anchors_new'} (${cols}) SELECT ${selectCols} FROM ${table}`
       ).run();
       this.db!.exec(`DROP TABLE ${table};`);
       this.db!.exec(`ALTER TABLE ${table}_new RENAME TO ${table};`);

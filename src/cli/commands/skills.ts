@@ -93,6 +93,7 @@ async function initializeSkillContext(): Promise<{
   const embeddingProvider = (await createTransformersProvider()) ?? undefined;
   const database = new SQLiteAdapter(projectId, { dbPath, embeddingProvider });
   await database.connect();
+  await database.initializeSchema();
 
   // Get raw database for FrameManager
   const rawDatabase = database.getRawDatabase();

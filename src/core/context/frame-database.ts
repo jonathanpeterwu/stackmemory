@@ -39,11 +39,12 @@ interface EventRow {
 interface AnchorRow {
   anchor_id: string;
   frame_id: string;
+  project_id: string;
   type: string;
   text: string;
   priority: number;
-  metadata: string;
   created_at: number;
+  metadata: string;
 }
 
 interface CountRow {
@@ -116,6 +117,7 @@ export class FrameDatabase {
           digest_json TEXT DEFAULT '{}',
           created_at INTEGER NOT NULL DEFAULT (unixepoch()),
           closed_at INTEGER,
+          retention_policy TEXT DEFAULT 'default',
           FOREIGN KEY (parent_frame_id) REFERENCES frames(frame_id)
         );
       `);
@@ -139,21 +141,70 @@ export class FrameDatabase {
         CREATE TABLE IF NOT EXISTS anchors (
           anchor_id TEXT PRIMARY KEY,
           frame_id TEXT NOT NULL,
+          project_id TEXT NOT NULL DEFAULT '',
           type TEXT NOT NULL,
           text TEXT NOT NULL,
           priority INTEGER NOT NULL DEFAULT 5,
-          metadata TEXT DEFAULT '{}',
           created_at INTEGER NOT NULL DEFAULT (unixepoch()),
+          metadata TEXT DEFAULT '{}',
           FOREIGN KEY (frame_id) REFERENCES frames(frame_id) ON DELETE CASCADE
         );
       `);
 
       // Create indexes for performance
       this.db.exec(`
-        CREATE INDEX IF NOT EXISTS idx_frames_project_state ON frames(project_id, state);
+        CREATE INDEX IF NOT EXISTS idx_frames_run ON frames(run_id);
+        CREATE INDEX IF NOT EXISTS idx_frames_project ON frames(project_id);
         CREATE INDEX IF NOT EXISTS idx_frames_parent ON frames(parent_frame_id);
-        CREATE INDEX IF NOT EXISTS idx_events_frame_seq ON events(frame_id, seq);
+        CREATE INDEX IF NOT EXISTS idx_frames_state ON frames(state);
+        CREATE INDEX IF NOT EXISTS idx_frames_created ON frames(created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_frames_project_state ON frames(project_id, state);
+        CREATE INDEX IF NOT EXISTS idx_frames_project_created ON frames(project_id, created_at DESC);
+        CREATE INDEX IF NOT EXISTS idx_frames_retention_created ON frames(retention_policy, created_at);
+        CREATE INDEX IF NOT EXISTS idx_events_frame ON events(frame_id);
+        CREATE INDEX IF NOT EXISTS idx_events_seq ON events(frame_id, seq);
+        CREATE INDEX IF NOT EXISTS idx_anchors_frame ON anchors(frame_id);
         CREATE INDEX IF NOT EXISTS idx_anchors_frame_priority ON anchors(frame_id, priority DESC);
+      `);
+
+      // System tables
+      this.db.exec(`
+        CREATE TABLE IF NOT EXISTS schema_version (
+          version INTEGER PRIMARY KEY,
+          applied_at INTEGER DEFAULT (unixepoch())
+        );
+
+        CREATE TABLE IF NOT EXISTS retrieval_log (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          query_text TEXT NOT NULL,
+          strategy TEXT NOT NULL,
+          results_count INTEGER NOT NULL,
+          top_score REAL,
+          latency_ms INTEGER NOT NULL,
+          result_frame_ids TEXT,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+        );
+        CREATE INDEX IF NOT EXISTS idx_retrieval_log_created ON retrieval_log(created_at);
+
+        CREATE TABLE IF NOT EXISTS maintenance_state (
+          key TEXT PRIMARY KEY,
+          value TEXT NOT NULL,
+          updated_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+        );
+
+        CREATE TABLE IF NOT EXISTS project_registry (
+          project_id TEXT PRIMARY KEY,
+          repo_path TEXT NOT NULL,
+          display_name TEXT,
+          db_path TEXT NOT NULL,
+          is_active INTEGER DEFAULT 0,
+          created_at INTEGER NOT NULL DEFAULT (unixepoch() * 1000),
+          last_accessed INTEGER NOT NULL DEFAULT (unixepoch() * 1000)
+        );
+        CREATE INDEX IF NOT EXISTS idx_project_registry_active ON project_registry(is_active);
+
+        -- Set initial schema version if not exists
+        INSERT OR IGNORE INTO schema_version (version) VALUES (1);
       `);
 
       logger.info('Frame database schema initialized');
@@ -469,13 +520,14 @@ export class FrameDatabase {
   insertAnchor(anchor: Omit<Anchor, 'created_at'>): Anchor {
     try {
       const stmt = this.db.prepare(`
-        INSERT INTO anchors (anchor_id, frame_id, type, text, priority, metadata)
-        VALUES (?, ?, ?, ?, ?, ?)
+        INSERT INTO anchors (anchor_id, frame_id, project_id, type, text, priority, metadata)
+        VALUES (?, ?, ?, ?, ?, ?, ?)
       `);
 
       const result = stmt.run(
         anchor.anchor_id,
         anchor.frame_id,
+        anchor.project_id || '',
         anchor.type,
         anchor.text,
         anchor.priority,
