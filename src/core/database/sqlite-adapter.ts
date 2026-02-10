@@ -151,24 +151,9 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
         ErrorCode.DB_CONNECTION_FAILED
       );
 
-    // Delegate base table creation to FrameDatabase (single canonical schema source)
+    // Delegate base table creation + migrations to FrameDatabase (single canonical schema source)
     const frameDb = new FrameDatabase(this.db);
     frameDb.initSchema();
-
-    // Migration: add retention_policy column if not exists
-    try {
-      this.db.exec(
-        "ALTER TABLE frames ADD COLUMN retention_policy TEXT DEFAULT 'default'"
-      );
-      logger.info('Added retention_policy column to frames');
-    } catch {
-      // Column already exists — safe to ignore
-    }
-
-    // Index for GC queries on retention_policy + age (must be after ALTER TABLE migration)
-    this.db.exec(
-      'CREATE INDEX IF NOT EXISTS idx_frames_retention_created ON frames(retention_policy, created_at)'
-    );
 
     // Ensure cascade constraints exist on dependent tables for existing DBs
     try {

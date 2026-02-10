@@ -151,6 +151,15 @@ export class FrameDatabase {
         );
       `);
 
+      // Migration: add retention_policy column if missing (pre-v0.8 databases)
+      try {
+        this.db.exec(
+          "ALTER TABLE frames ADD COLUMN retention_policy TEXT DEFAULT 'default'"
+        );
+      } catch {
+        // Column already exists — safe to ignore
+      }
+
       // Create indexes for performance
       this.db.exec(`
         CREATE INDEX IF NOT EXISTS idx_frames_run ON frames(run_id);
