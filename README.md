@@ -43,7 +43,7 @@ Tools forget decisions and constraints between sessions. StackMemory makes conte
 - **Prompt Forge**: watches AGENTS.md and CLAUDE.md for prompt optimization (GEPA)
 - **Safe branches**: worktree isolation with `--worktree` or `-w`
 - **Persistent context**: frames, anchors, decisions, retrieval
-- **Integrations**: Linear, Greptile, DiffMem, Browser MCP
+- **Integrations**: Linear, DiffMem, Browser MCP
 
 ---
 

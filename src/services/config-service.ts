@@ -18,7 +18,6 @@ export interface StackMemoryConfig {
   webhook?: {
     port?: number;
     host?: string;
-    ngrokSubdomain?: string;
   };
   features?: {
     autoSync?: boolean;
