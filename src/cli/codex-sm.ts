@@ -42,6 +42,36 @@ class CodexSM {
     this.stackmemoryPath = this.findStackMemory();
   }
 
+  private getRepoRoot(): string | null {
+    try {
+      const root = execSync('git rev-parse --show-toplevel', {
+        encoding: 'utf8',
+      }).trim();
+      return root || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private ensureInitialized(): void {
+    try {
+      const root = this.getRepoRoot();
+      const dir = root || process.cwd();
+      const dbPath = path.join(dir, '.stackmemory', 'context.db');
+      if (!fs.existsSync(dbPath)) {
+        console.log(
+          chalk.blue('📦 Initializing StackMemory for this project...')
+        );
+        execSync(`${this.stackmemoryPath} init`, {
+          cwd: dir,
+          stdio: ['ignore', 'ignore', 'ignore'],
+        });
+      }
+    } catch {
+      // Non-fatal: allow Codex to run without context
+    }
+  }
+
   private generateInstanceId(): string {
     return uuidv4().substring(0, 8);
   }
@@ -293,6 +323,9 @@ class CodexSM {
     console.log(chalk.blue('╔════════════════════════════════════════╗'));
     console.log(chalk.blue('║     Codex + StackMemory + Worktree    ║'));
     console.log(chalk.blue('╚════════════════════════════════════════╝'));
+
+    // Ensure project has StackMemory initialized (if possible)
+    this.ensureInitialized();
     console.log();
 
     if (this.isGitRepo()) {

@@ -136,7 +136,11 @@ async function runOnboarding(): Promise<OnboardingConfig> {
         const mod = await import('open');
         await mod.default(signupUrl);
       } catch (e) {
-        console.log(chalk.yellow('Could not open browser automatically. Please sign up and obtain your DATABASE_URL.'));
+        console.log(
+          chalk.yellow(
+            'Could not open browser automatically. Please sign up and obtain your DATABASE_URL.'
+          )
+        );
       }
     }
 
@@ -437,9 +441,20 @@ async function applyConfiguration(config: OnboardingConfig): Promise<void> {
   if (config.storageMode === 'hosted' && config.databaseUrl) {
     try {
       const envFile = join(configPath, 'railway.env');
-      writeFileSync(envFile, `# StackMemory hosted DB\nDATABASE_URL=${config.databaseUrl}\n`);
-      console.log(chalk.green('  ✓ Saved hosted DB settings to ~/.stackmemory/railway.env'));
-      console.log(chalk.gray('    Tip: export DATABASE_URL from this file in your shell profile.'));
+      writeFileSync(
+        envFile,
+        `# StackMemory hosted DB\nDATABASE_URL=${config.databaseUrl}\n`
+      );
+      console.log(
+        chalk.green(
+          '  ✓ Saved hosted DB settings to ~/.stackmemory/railway.env'
+        )
+      );
+      console.log(
+        chalk.gray(
+          '    Tip: export DATABASE_URL from this file in your shell profile.'
+        )
+      );
     } catch (e) {
       console.log(chalk.yellow('  ⚠ Could not write hosted DB env file'));
     }
@@ -513,7 +528,8 @@ done
 # Auto-initialize StackMemory if in git repo without it
 if [ -d ".git" ] && [ ! -d ".stackmemory" ]; then
     echo "📦 Initializing StackMemory for this project..."
-    stackmemory init --silent 2>/dev/null || true
+    # Quiet init (no unsupported flags)
+    stackmemory init >/dev/null 2>&1 || true
 fi
 
 # Load existing context if available

@@ -49,11 +49,9 @@ interface ClaudeSMConfig {
   defaultSandbox: boolean;
   defaultChrome: boolean;
   defaultTracing: boolean;
-  defaultRemote: boolean;
   defaultNotifyOnDone: boolean;
   defaultModelRouting: boolean;
   defaultSweep: boolean;
-  defaultGreptile: boolean;
   defaultGEPA: boolean;
 }
 
@@ -63,7 +61,6 @@ interface ClaudeConfig {
   useSandbox: boolean;
   useChrome: boolean;
   useWorktree: boolean;
-  useRemote: boolean;
   notifyOnDone: boolean;
   contextEnabled: boolean;
   branch?: string;
@@ -77,7 +74,6 @@ interface ClaudeConfig {
   forceProvider?: ModelProvider;
   useThinkingMode: boolean;
   useSweep: boolean;
-  useGreptile: boolean;
   useGEPA: boolean;
 }
 
@@ -86,11 +82,9 @@ const DEFAULT_SM_CONFIG: ClaudeSMConfig = {
   defaultSandbox: false,
   defaultChrome: false,
   defaultTracing: true,
-  defaultRemote: false,
   defaultNotifyOnDone: true,
   defaultModelRouting: false,
   defaultSweep: true,
-  defaultGreptile: true,
   defaultGEPA: false,
 };
 
@@ -136,7 +130,6 @@ class ClaudeSM {
       useSandbox: this.smConfig.defaultSandbox,
       useChrome: this.smConfig.defaultChrome,
       useWorktree: this.smConfig.defaultWorktree,
-      useRemote: this.smConfig.defaultRemote,
       notifyOnDone: this.smConfig.defaultNotifyOnDone,
       contextEnabled: true,
       tracingEnabled: this.smConfig.defaultTracing,
@@ -145,7 +138,6 @@ class ClaudeSM {
       useModelRouting: this.smConfig.defaultModelRouting,
       useThinkingMode: false,
       useSweep: this.smConfig.defaultSweep,
-      useGreptile: this.smConfig.defaultGreptile,
       useGEPA: this.smConfig.defaultGEPA,
     };
 
@@ -159,6 +151,36 @@ class ClaudeSM {
     // Ensure config directory exists
     if (!fs.existsSync(this.claudeConfigDir)) {
       fs.mkdirSync(this.claudeConfigDir, { recursive: true });
+    }
+  }
+
+  private getRepoRoot(): string | null {
+    try {
+      const root = execSync('git rev-parse --show-toplevel', {
+        encoding: 'utf8',
+      }).trim();
+      return root || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private ensureInitialized(): void {
+    try {
+      const root = this.getRepoRoot();
+      const dir = root || process.cwd();
+      const dbPath = path.join(dir, '.stackmemory', 'context.db');
+      if (!fs.existsSync(dbPath)) {
+        console.log(
+          chalk.blue('📦 Initializing StackMemory for this project...')
+        );
+        execSync(`${this.stackmemoryPath} init`, {
+          cwd: dir,
+          stdio: ['ignore', 'ignore', 'ignore'],
+        });
+      }
+    } catch {
+      // Non-fatal: Claude should continue even if context init fails
     }
   }
 
@@ -314,60 +336,6 @@ class ClaudeSM {
     this.gepaProcesses = [];
   }
 
-  private ensureGreptileMcp(): void {
-    const apiKey = process.env['GREPTILE_API_KEY'];
-    const ghToken = process.env['GITHUB_TOKEN'];
-
-    if (!apiKey) {
-      console.log(
-        chalk.gray('   Greptile: disabled (set GREPTILE_API_KEY in .env)')
-      );
-      return;
-    }
-
-    // Check if already registered
-    try {
-      const result = execSync('claude mcp list 2>/dev/null', {
-        encoding: 'utf-8',
-      });
-      if (result.includes('greptile')) {
-        console.log(chalk.gray('   Greptile: MCP server registered'));
-        return;
-      }
-    } catch {
-      // claude mcp list not available, try to add anyway
-    }
-
-    // Register Greptile MCP server via HTTP transport
-    try {
-      const cmd = [
-        'claude mcp add',
-        '--transport http',
-        'greptile',
-        'https://api.greptile.com/mcp',
-        `--header "Authorization: Bearer ${apiKey}"`,
-      ];
-      if (ghToken) {
-        cmd.push(`--header "X-GitHub-Token: ${ghToken}"`);
-      }
-      execSync(cmd.join(' '), { stdio: 'ignore' });
-      console.log(chalk.cyan('   Greptile: MCP server registered'));
-    } catch {
-      // Fallback: register via stdio transport with npx
-      try {
-        const envArgs = [`GREPTILE_API_KEY=${apiKey}`];
-        if (ghToken) envArgs.push(`GITHUB_TOKEN=${ghToken}`);
-        execSync(
-          `claude mcp add greptile -- env ${envArgs.join(' ')} npx greptile-mcp-server`,
-          { stdio: 'ignore' }
-        );
-        console.log(chalk.cyan('   Greptile: MCP server registered (stdio)'));
-      } catch {
-        console.log(chalk.gray('   Greptile: failed to register MCP server'));
-      }
-    }
-  }
-
   private setupWorktree(): string | null {
     if (!this.config.useWorktree || !this.isGitRepo()) {
       return null;
@@ -454,27 +422,47 @@ class ClaudeSM {
     }
   }
 
+  private getHandoffContent(): string | null {
+    if (!this.config.contextEnabled) return null;
+
+    try {
+      const handoffPath = path.join(
+        process.cwd(),
+        '.stackmemory',
+        'last-handoff.md'
+      );
+      if (fs.existsSync(handoffPath)) {
+        const content = fs.readFileSync(handoffPath, 'utf8').trim();
+        if (content.length > 0) {
+          // Cap at 8000 chars to avoid excessively long system prompts
+          return content.length > 8000
+            ? content.substring(0, 8000) + '\n\n[...truncated]'
+            : content;
+        }
+      }
+    } catch {
+      // Silently continue - handoff loading is optional
+    }
+    return null;
+  }
+
   private loadContext(): void {
     if (!this.config.contextEnabled) return;
 
     try {
-      console.log(chalk.blue('📚 Loading previous context...'));
-
-      // Use 'context show' command which outputs the current context stack
+      // Use 'context show' command to display the current context stack
       const cmd = `${this.stackmemoryPath} context show`;
       const output = execSync(cmd, {
         encoding: 'utf8',
-        stdio: ['pipe', 'pipe', 'pipe'], // Capture stderr to suppress errors
+        stdio: ['pipe', 'pipe', 'pipe'],
       });
 
-      // Check if we got meaningful output (not empty or just headers)
       const lines = output
         .trim()
         .split('\n')
         .filter((l) => l.trim());
       if (lines.length > 3) {
-        // Has content beyond headers
-        console.log(chalk.gray('Context stack loaded'));
+        console.log(chalk.gray('   Context stack loaded'));
       }
     } catch {
       // Silently continue - context loading is optional
@@ -538,13 +526,6 @@ class ClaudeSM {
         case '--no-worktree':
         case '-W':
           this.config.useWorktree = false;
-          break;
-        case '--remote':
-        case '-r':
-          this.config.useRemote = true;
-          break;
-        case '--no-remote':
-          this.config.useRemote = false;
           break;
         case '--notify-done':
         case '-n':
@@ -630,12 +611,6 @@ class ClaudeSM {
         case '--no-sweep':
           this.config.useSweep = false;
           break;
-        case '--greptile':
-          this.config.useGreptile = true;
-          break;
-        case '--no-greptile':
-          this.config.useGreptile = false;
-          break;
         case '--gepa':
           this.config.useGEPA = true;
           break;
@@ -668,7 +643,7 @@ class ClaudeSM {
       }
     }
 
-    // Initialize tracing system if enabled
+    // ── Core Setup ──────────────────────────────────────────────
     if (this.config.tracingEnabled) {
       // Set up environment for tracing
       process.env['DEBUG_TRACE'] = 'true';
@@ -711,6 +686,9 @@ class ClaudeSM {
     console.log(chalk.blue('╚════════════════════════════════════════╝'));
     console.log();
 
+    // Ensure project is initialized for context operations (best-effort)
+    this.ensureInitialized();
+
     // Check Git repo status
     if (this.isGitRepo()) {
       const branch = this.getCurrentBranch();
@@ -745,10 +723,6 @@ class ClaudeSM {
     if (this.config.worktreePath) {
       process.env['CLAUDE_WORKTREE_PATH'] = this.config.worktreePath;
     }
-    if (this.config.useRemote) {
-      process.env['CLAUDE_REMOTE'] = '1';
-    }
-
     console.log(chalk.gray(`🤖 Instance ID: ${this.config.instanceId}`));
     console.log(chalk.gray(`📁 Working in: ${process.cwd()}`));
 
@@ -769,7 +743,8 @@ class ClaudeSM {
       }
     }
 
-    // Apply model routing if enabled
+    // ── Optional Services ────────────────────────────────────────
+    // Model routing: route to Qwen/OpenAI/Ollama based on task type
     if (this.config.useModelRouting) {
       const routerConfig = loadModelRouterConfig();
       if (routerConfig.enabled || this.config.forceProvider) {
@@ -819,19 +794,30 @@ class ClaudeSM {
       }
     }
 
-    // Ensure Greptile MCP server is registered if enabled
-    if (this.config.useGreptile) {
-      this.ensureGreptileMcp();
-    }
-
-    // Start GEPA auto-optimizer if enabled
+    // GEPA: auto-optimize CLAUDE.md on file changes
     if (this.config.useGEPA) {
       this.startGEPAWatcher();
     }
 
+    // ── Session Injection ─────────────────────────────────────────
+    let initialInput = '';
+    const handoffContent = this.getHandoffContent();
+    if (handoffContent) {
+      // Only inject if not resuming an existing conversation
+      const hasResume =
+        claudeArgs.includes('--continue') ||
+        claudeArgs.some((a) => a === '--resume');
+      if (!hasResume) {
+        // Load into input text area via PTY bracketed paste (not auto-sent)
+        initialInput = handoffContent;
+        console.log(chalk.gray('   Handoff context ready'));
+      }
+    }
+
     console.log();
 
-    // Launch via Sweep PTY wrapper if enabled
+    // ── Launch ────────────────────────────────────────────────────
+    // Sweep PTY wrapper: next-edit predictions (falls back to direct launch)
     if (this.config.useSweep) {
       const claudeBin = this.resolveClaudeBin();
       if (!claudeBin) {
@@ -847,6 +833,7 @@ class ClaudeSM {
         await launchWrapper({
           claudeBin,
           claudeArgs,
+          initialInput: initialInput || undefined,
         });
         // PTY wrapper is now running — it calls process.exit() on child exit.
         // Return to prevent falling through to the fallback-monitor path,
@@ -864,6 +851,11 @@ class ClaudeSM {
         // Disable Sweep for this session and continue below
         this.config.useSweep = false;
       }
+    }
+
+    // Non-Sweep fallback: inject handoff as system prompt context
+    if (initialInput) {
+      claudeArgs.push('--append-system-prompt', initialInput);
     }
 
     console.log(chalk.gray('Starting Claude...'));
@@ -1017,7 +1009,6 @@ configCmd
     console.log(chalk.cyan('\n  Feature           Status'));
     console.log(chalk.gray('  ──────────────────────────'));
     console.log(`  Predictive Edit   ${config.defaultSweep ? on : off}`);
-    console.log(`  Code Review       ${config.defaultGreptile ? on : off}`);
     console.log(`  Prompt Forge      ${config.defaultGEPA ? on : off}`);
     console.log(`  Model Switcher    ${config.defaultModelRouting ? on : off}`);
     console.log(`  Safe Branch       ${config.defaultWorktree ? on : off}`);
@@ -1042,13 +1033,11 @@ configCmd
       sandbox: 'defaultSandbox',
       chrome: 'defaultChrome',
       tracing: 'defaultTracing',
-      remote: 'defaultRemote',
       'notify-done': 'defaultNotifyOnDone',
       notifyondone: 'defaultNotifyOnDone',
       'model-routing': 'defaultModelRouting',
       modelrouting: 'defaultModelRouting',
       sweep: 'defaultSweep',
-      greptile: 'defaultGreptile',
       gepa: 'defaultGEPA',
     };
 
@@ -1057,7 +1046,7 @@ configCmd
       console.log(chalk.red(`Unknown key: ${key}`));
       console.log(
         chalk.gray(
-          'Valid keys: worktree, sandbox, chrome, tracing, remote, notify-done, sweep, greptile, gepa'
+          'Valid keys: worktree, sandbox, chrome, tracing, notify-done, model-routing, sweep, gepa'
         )
       );
       process.exit(1);
@@ -1086,26 +1075,6 @@ configCmd
     config.defaultWorktree = false;
     saveSMConfig(config);
     console.log(chalk.green('Worktree mode disabled by default'));
-  });
-
-configCmd
-  .command('remote-on')
-  .description('Enable remote mode by default')
-  .action(() => {
-    const config = loadSMConfig();
-    config.defaultRemote = true;
-    saveSMConfig(config);
-    console.log(chalk.green('Remote mode enabled by default'));
-  });
-
-configCmd
-  .command('remote-off')
-  .description('Disable remote mode by default')
-  .action(() => {
-    const config = loadSMConfig();
-    config.defaultRemote = false;
-    saveSMConfig(config);
-    console.log(chalk.green('Remote mode disabled by default'));
   });
 
 configCmd
@@ -1152,31 +1121,6 @@ configCmd
   });
 
 configCmd
-  .command('greptile-on')
-  .description(
-    'Enable Greptile AI code review by default (requires GREPTILE_API_KEY)'
-  )
-  .action(() => {
-    const config = loadSMConfig();
-    config.defaultGreptile = true;
-    saveSMConfig(config);
-    console.log(chalk.green('Greptile enabled by default'));
-    if (!process.env['GREPTILE_API_KEY']) {
-      console.log(chalk.gray('Set GREPTILE_API_KEY in .env to activate'));
-    }
-  });
-
-configCmd
-  .command('greptile-off')
-  .description('Disable Greptile AI code review by default')
-  .action(() => {
-    const config = loadSMConfig();
-    config.defaultGreptile = false;
-    saveSMConfig(config);
-    console.log(chalk.green('Greptile disabled by default'));
-  });
-
-configCmd
   .command('gepa-on')
   .description('Enable GEPA auto-optimization of CLAUDE.md on changes')
   .action(() => {
@@ -1220,11 +1164,6 @@ configCmd
         key: 'defaultSweep',
         name: 'Predictive Edit',
         desc: 'AI-powered next-edit suggestions in real-time',
-      },
-      {
-        key: 'defaultGreptile',
-        name: 'Code Review',
-        desc: 'Automated code review with deep codebase intelligence',
       },
       {
         key: 'defaultGEPA',
@@ -1296,48 +1235,6 @@ configCmd
         } catch {
           spinner.fail('Failed to install node-pty');
           console.log(chalk.gray('  Install manually: npm install node-pty'));
-        }
-      }
-    }
-
-    // Post-install: Greptile -> prompt for API key, register MCP
-    if (config.defaultGreptile) {
-      const apiKey = process.env['GREPTILE_API_KEY'];
-      if (!apiKey) {
-        const { key } = await inquirer.default.prompt([
-          {
-            type: 'password',
-            name: 'key',
-            message: 'Enter your Greptile API key (from app.greptile.com):',
-            mask: '*',
-          },
-        ]);
-        if (key && key.trim()) {
-          // Append to .env
-          const envPath = path.join(process.cwd(), '.env');
-          const line = `\nGREPTILE_API_KEY=${key.trim()}\n`;
-          fs.appendFileSync(envPath, line);
-          process.env['GREPTILE_API_KEY'] = key.trim();
-          console.log(chalk.green('  API key saved to .env'));
-        }
-      }
-
-      // Register MCP server
-      const currentKey = process.env['GREPTILE_API_KEY'];
-      if (currentKey) {
-        try {
-          const result = execSync('claude mcp list 2>/dev/null', {
-            encoding: 'utf-8',
-          });
-          if (!result.includes('greptile')) {
-            execSync(
-              `claude mcp add --transport http greptile https://api.greptile.com/mcp --header "Authorization: Bearer ${currentKey}"`,
-              { stdio: 'ignore' }
-            );
-            console.log(chalk.green('  Greptile MCP server registered'));
-          }
-        } catch {
-          // ignore registration failures
         }
       }
     }
@@ -1507,8 +1404,6 @@ workersCmd
 program
   .option('-w, --worktree', 'Create isolated worktree for this instance')
   .option('-W, --no-worktree', 'Disable worktree (override default)')
-  .option('-r, --remote', 'Enable remote mode')
-  .option('--no-remote', 'Disable remote mode (override default)')
   .option('-n, --notify-done', 'Bell notification when session ends')
   .option('--no-notify-done', 'Disable notification when session ends')
   .option('-s, --sandbox', 'Enable sandbox mode (file/network restrictions)')
@@ -1530,8 +1425,6 @@ program
   .option('--no-model-routing', 'Disable model routing')
   .option('--sweep', 'Enable Sweep next-edit predictions (PTY wrapper)')
   .option('--no-sweep', 'Disable Sweep predictions')
-  .option('--greptile', 'Enable Greptile AI code review (MCP server)')
-  .option('--no-greptile', 'Disable Greptile integration')
   .option('--gepa', 'Enable GEPA auto-optimization of CLAUDE.md')
   .option('--no-gepa', 'Disable GEPA auto-optimization')
   .helpOption('-h, --help', 'Display help')

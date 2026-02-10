@@ -32,6 +32,7 @@ export interface PtyWrapperConfig {
   claudeBin?: string;
   claudeArgs?: string[];
   stateFile?: string;
+  initialInput?: string;
 }
 
 // Minimal interface for node-pty process to avoid compile-time dep
@@ -57,6 +58,7 @@ export class PtyWrapper {
       claudeBin: config.claudeBin || this.findClaude(),
       claudeArgs: config.claudeArgs || [],
       stateFile: config.stateFile || getSweepPath('sweep-state.json'),
+      initialInput: config.initialInput || '',
     };
 
     this.stateWatcher = new SweepStateWatcher(this.config.stateFile);
@@ -111,11 +113,24 @@ export class PtyWrapper {
     process.stdin.resume();
 
     // PTY stdout -> parent stdout (transparent passthrough)
+    let inputInjected = false;
+    const initialInput = this.config.initialInput;
+    const ptyRef = this.ptyProcess;
+
     this.ptyProcess.onData((data: string) => {
       // Detect alt screen buffer transitions
       if (data.includes(ALT_SCREEN_ENTER)) {
         this.inAltScreen = true;
         this.statusBar.hide();
+
+        // Inject initial input as bracketed paste after Claude UI enters alt screen
+        if (!inputInjected && initialInput && ptyRef) {
+          inputInjected = true;
+          setTimeout(() => {
+            // Bracketed paste mode: text appears in input area without auto-sending
+            ptyRef.write('\x1b[200~' + initialInput + '\x1b[201~');
+          }, 800);
+        }
       }
       if (data.includes(ALT_SCREEN_EXIT)) {
         this.inAltScreen = false;

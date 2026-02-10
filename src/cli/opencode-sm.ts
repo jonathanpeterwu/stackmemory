@@ -86,6 +86,36 @@ class OpencodeSM {
     this.stackmemoryPath = this.findStackMemory();
   }
 
+  private getRepoRoot(): string | null {
+    try {
+      const root = execSync('git rev-parse --show-toplevel', {
+        encoding: 'utf8',
+      }).trim();
+      return root || null;
+    } catch {
+      return null;
+    }
+  }
+
+  private ensureInitialized(): void {
+    try {
+      const root = this.getRepoRoot();
+      const dir = root || process.cwd();
+      const dbPath = path.join(dir, '.stackmemory', 'context.db');
+      if (!fs.existsSync(dbPath)) {
+        console.log(
+          chalk.blue('📦 Initializing StackMemory for this project...')
+        );
+        execSync(`${this.stackmemoryPath} init`, {
+          cwd: dir,
+          stdio: ['ignore', 'ignore', 'ignore'],
+        });
+      }
+    } catch {
+      // Non-fatal: allow OpenCode to run without context
+    }
+  }
+
   private generateInstanceId(): string {
     return uuidv4().substring(0, 8);
   }
@@ -390,6 +420,9 @@ class OpencodeSM {
     // Show header
     console.log(chalk.magenta('OpenCode + StackMemory'));
     console.log();
+
+    // Ensure project has StackMemory initialized so context commands succeed
+    this.ensureInitialized();
 
     if (this.isGitRepo()) {
       const branch = this.getCurrentBranch();
