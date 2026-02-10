@@ -46,7 +46,7 @@ export function createContextCommands(): Command {
             SELECT value FROM metadata WHERE key = 'project_id'
           `
             )
-            .get() as any;
+            .get() as Record<string, unknown> | undefined;
           if (projectRow?.value) projectId = projectRow.value;
         } catch {
           // metadata table doesn't exist, use default
@@ -130,7 +130,7 @@ export function createContextCommands(): Command {
         try {
           const projectRow = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as Record<string, unknown> | undefined;
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
@@ -196,7 +196,7 @@ export function createContextCommands(): Command {
         try {
           const projectRow = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as Record<string, unknown> | undefined;
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
@@ -257,7 +257,7 @@ export function createContextCommands(): Command {
         try {
           const projectRow = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as Record<string, unknown> | undefined;
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
@@ -331,7 +331,7 @@ export function createContextCommands(): Command {
         try {
           const projectRow = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as Record<string, unknown> | undefined;
           if (projectRow?.value) projectId = projectRow.value;
         } catch {}
 
@@ -352,7 +352,7 @@ export function createContextCommands(): Command {
               LIMIT 10
             `
             )
-            .all(projectId) as any[];
+            .all(projectId) as Record<string, unknown>[];
 
           console.log('\n🌳 Worktree Contexts\n');
           if (worktreeFrames.length === 0) {
@@ -418,7 +418,9 @@ export function createContextCommands(): Command {
               LIMIT 1
             `
             )
-            .get(projectId, `%"instanceId":"${instanceId}"%`) as any;
+            .get(projectId, `%"instanceId":"${instanceId}"%`) as
+            | Record<string, unknown>
+            | undefined;
 
           if (worktreeFrame) {
             const inputs = JSON.parse(worktreeFrame.inputs || '{}');

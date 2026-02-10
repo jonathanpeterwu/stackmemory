@@ -571,7 +571,7 @@ export class ProjectManager {
         GROUP BY organization, account_type
       `);
 
-      const orgs = stmt.all() as any[];
+      const orgs = stmt.all() as Record<string, unknown>[];
 
       for (const org of orgs) {
         if (!this.organizations.has(org.organization)) {
@@ -641,7 +641,7 @@ export class ProjectManager {
         ORDER BY last_accessed DESC
       `);
 
-      const projects = stmt.all() as any[];
+      const projects = stmt.all() as Record<string, unknown>[];
       return projects.map((p) => ({
         ...p,
         isPrivate: p.is_private === 1,
@@ -671,7 +671,7 @@ export class ProjectManager {
         ORDER BY last_accessed DESC
       `);
 
-      const projects = stmt.all(organization) as any[];
+      const projects = stmt.all(organization) as Record<string, unknown>[];
       return projects.map((p) => ({
         ...p,
         isPrivate: p.is_private === 1,
@@ -702,7 +702,7 @@ export class ProjectManager {
         ORDER BY last_accessed DESC
       `);
 
-      const projects = stmt.all(accountType) as any[];
+      const projects = stmt.all(accountType) as Record<string, unknown>[];
       return projects.map((p) => ({
         ...p,
         isPrivate: p.is_private === 1,

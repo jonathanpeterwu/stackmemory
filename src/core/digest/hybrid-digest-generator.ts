@@ -508,7 +508,7 @@ export class HybridDigestGenerator {
           LIMIT ?
         `
         )
-        .all(this.config.batchSize) as any[];
+        .all(this.config.batchSize) as Record<string, unknown>[];
 
       for (const item of pending) {
         await this.processQueueItem(item);
@@ -535,7 +535,7 @@ export class HybridDigestGenerator {
       // Get frame data
       const frame = this.db
         .prepare(`SELECT * FROM frames WHERE frame_id = ?`)
-        .get(item.frame_id) as any;
+        .get(item.frame_id) as Record<string, unknown> | undefined;
 
       if (!frame) {
         throw new Error(`Frame not found: ${item.frame_id}`);
@@ -729,17 +729,17 @@ export class HybridDigestGenerator {
   public getDigest(frameId: string): HybridDigest | null {
     const frame = this.db
       .prepare(`SELECT * FROM frames WHERE frame_id = ?`)
-      .get(frameId) as any;
+      .get(frameId) as Record<string, unknown> | undefined;
 
     if (!frame) return null;
 
     const digestJson = JSON.parse(frame.digest_json || '{}');
     const anchors = this.db
       .prepare(`SELECT * FROM anchors WHERE frame_id = ?`)
-      .all(frameId) as any[];
+      .all(frameId) as Record<string, unknown>[];
     const events = this.db
       .prepare(`SELECT * FROM events WHERE frame_id = ?`)
-      .all(frameId) as any[];
+      .all(frameId) as Record<string, unknown>[];
 
     const parsedFrame: Frame = {
       ...frame,
@@ -765,7 +765,7 @@ export class HybridDigestGenerator {
     // Check queue status
     const queueItem = this.db
       .prepare(`SELECT status FROM digest_queue WHERE frame_id = ?`)
-      .get(frameId) as any;
+      .get(frameId) as Record<string, unknown> | undefined;
 
     let status: DigestStatus = 'deterministic_only';
     if (digestJson.aiGenerated) {

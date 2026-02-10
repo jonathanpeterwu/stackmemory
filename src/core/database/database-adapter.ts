@@ -79,16 +79,18 @@ export interface FrameRow {
 
 export interface EventRow {
   event_id: string;
+  run_id: string;
   frame_id: string;
   seq: number;
-  type: string;
-  text: string;
-  metadata: string;
+  event_type: string;
+  payload: string;
+  ts: number;
 }
 
 export interface AnchorRow {
   anchor_id: string;
   frame_id: string;
+  project_id: string;
   type: string;
   text: string;
   priority: number;

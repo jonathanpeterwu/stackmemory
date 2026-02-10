@@ -173,10 +173,13 @@ export class DualStackManager {
       // Execute schema creation using raw SQL
       if (this.adapter.isConnected()) {
         // Note: This is a temporary workaround - proper schema creation would use adapter methods
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (await (this.adapter as any).execute?.(createStackContextsTable)) ||
           this.executeSchemaQuery(createStackContextsTable);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (await (this.adapter as any).execute?.(createHandoffRequestsTable)) ||
           this.executeSchemaQuery(createHandoffRequestsTable);
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         (await (this.adapter as any).execute?.(createStackSyncLogTable)) ||
           this.executeSchemaQuery(createStackSyncLogTable);
       }
@@ -747,7 +750,7 @@ export class DualStackManager {
   ): Promise<void> {
     // Create frame in target stack
     await targetStack.createFrame({
-      type: frame.type as any,
+      type: frame.type,
       name: frame.name,
       inputs: frame.inputs,
     });
@@ -755,22 +758,24 @@ export class DualStackManager {
     // Copy events
     const events = await this.individualStack.getFrameEvents(frame.frame_id);
     for (const event of events) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await targetStack.addEvent(frame.frame_id, {
-        type: event.type as any,
+        type: event.type,
         text: event.text,
         metadata: event.metadata,
-      });
+      } as any);
     }
 
     // Copy anchors
     const anchors = await this.individualStack.getFrameAnchors(frame.frame_id);
     for (const anchor of anchors) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await targetStack.addAnchor(frame.frame_id, {
-        type: anchor.type as any,
+        type: anchor.type,
         text: anchor.text,
         priority: anchor.priority,
         metadata: anchor.metadata,
-      });
+      } as any);
     }
   }
 
@@ -784,23 +789,25 @@ export class DualStackManager {
       sourceFrame.frame_id
     );
     for (const event of sourceEvents) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await targetStack.addEvent(existingFrame.frame_id, {
-        type: event.type as any,
+        type: event.type,
         text: event.text,
         metadata: { ...event.metadata, merged: true },
-      });
+      } as any);
     }
 
     const sourceAnchors = await this.individualStack.getFrameAnchors(
       sourceFrame.frame_id
     );
     for (const anchor of sourceAnchors) {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       await targetStack.addAnchor(existingFrame.frame_id, {
-        type: anchor.type as any,
+        type: anchor.type,
         text: anchor.text,
         priority: anchor.priority,
         metadata: { ...anchor.metadata, merged: true },
-      });
+      } as any);
     }
   }
 
@@ -823,14 +830,26 @@ export class DualStackManager {
         WHERE stack_id = ?
       `);
 
-      const row = query.get(stackId) as any;
+      const row = query.get(stackId) as
+        | {
+            stack_id: string;
+            type: string;
+            project_id: string;
+            owner_id: string;
+            team_id: string;
+            permissions: string;
+            metadata: string;
+            created_at: string;
+            last_active: string;
+          }
+        | undefined;
       if (!row) {
         return null;
       }
 
       return {
         stackId: row.stack_id,
-        type: row.type,
+        type: row.type as 'individual' | 'shared',
         projectId: row.project_id,
         ownerId: row.owner_id,
         teamId: row.team_id,
@@ -934,7 +953,19 @@ export class DualStackManager {
           SELECT * FROM handoff_requests WHERE request_id = ?
         `);
 
-        const row = query.get(requestId) as any;
+        const row = query.get(requestId) as
+          | {
+              request_id: string;
+              source_stack_id: string;
+              target_stack_id: string;
+              frame_ids: string;
+              status: string;
+              created_at: string;
+              expires_at: string;
+              target_user_id: string;
+              message: string;
+            }
+          | undefined;
         if (row) {
           const request: HandoffRequest = {
             requestId: row.request_id,
@@ -1028,12 +1059,22 @@ export class DualStackManager {
           WHERE type = 'shared' AND project_id = ?
         `);
 
-        const rows = query.all(this.activeContext.projectId) as any[];
+        const rows = query.all(this.activeContext.projectId) as Array<{
+          stack_id: string;
+          type: string;
+          project_id: string;
+          owner_id: string;
+          team_id: string;
+          permissions: string;
+          metadata: string;
+          created_at: string;
+          last_active: string;
+        }>;
 
         for (const row of rows) {
           const context: StackContext = {
             stackId: row.stack_id,
-            type: row.type,
+            type: row.type as 'individual' | 'shared',
             projectId: row.project_id,
             ownerId: row.owner_id,
             teamId: row.team_id,

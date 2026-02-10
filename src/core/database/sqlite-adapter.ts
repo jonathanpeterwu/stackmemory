@@ -15,6 +15,8 @@ import {
   CountResult,
   VersionResult,
   FrameRow,
+  EventRow,
+  AnchorRow,
   ProjectRegistryRow,
 } from './database-adapter.js';
 import type { Frame, Event, Anchor } from '../context/index.js';
@@ -283,7 +285,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     const needsCascade = (table: string): boolean => {
       const rows = this.db!.prepare(
         `PRAGMA foreign_key_list(${table})`
-      ).all() as any[];
+      ).all() as Array<{ table: string; on_delete: string }>;
       // If any FK points to frames without cascade, we need migration
       return rows.some(
         (r) =>
@@ -831,7 +833,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
     query += ' ORDER BY depth ASC, created_at ASC';
 
-    const rows = this.db.prepare(query).all(...params) as any[];
+    const rows = this.db.prepare(query).all(...params) as FrameRow[];
 
     return rows.map((row) => ({
       ...row,
@@ -896,7 +898,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     );
     query += this.buildLimitClause(options?.limit, options?.offset);
 
-    const rows = this.db.prepare(query).all(frameId) as any[];
+    const rows = this.db.prepare(query).all(frameId) as EventRow[];
 
     return rows.map((row) => ({
       ...row,
@@ -958,7 +960,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
       ORDER BY priority DESC, created_at ASC
     `
       )
-      .all(frameId) as any[];
+      .all(frameId) as AnchorRow[];
 
     return rows.map((row) => ({
       ...row,
@@ -1063,7 +1065,9 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     if (options.projectId) params.push(options.projectId);
     params.push(limit, offset);
 
-    const rows = this.db!.prepare(sql).all(...params) as any[];
+    const rows = this.db!.prepare(sql).all(...params) as (FrameRow & {
+      score: number;
+    })[];
 
     // Note: scoreThreshold is not applied to FTS results because BM25 scores
     // are on a different scale than LIKE-based scores. FTS results are already
@@ -1100,7 +1104,9 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     const params: any[] = Array(6).fill(likeParam);
     if (options.projectId) params.push(options.projectId);
 
-    let rows = this.db!.prepare(sql).all(...params) as any[];
+    let rows = this.db!.prepare(sql).all(...params) as (FrameRow & {
+      score: number;
+    })[];
 
     if (options.scoreThreshold) {
       rows = rows.filter((row) => row.score >= options.scoreThreshold);
@@ -1147,7 +1153,9 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
     const rows = this.db
       .prepare(sql)
-      .all(JSON.stringify(embedding), limit) as any[];
+      .all(JSON.stringify(embedding), limit) as (FrameRow & {
+      similarity: number;
+    })[];
 
     return rows.map((row) => ({
       ...row,
@@ -1371,7 +1379,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
     if (sinceRowid != null) params.push(sinceRowid);
     params.push(limit);
 
-    const rows = this.db.prepare(sql).all(...params) as any[];
+    const rows = this.db.prepare(sql).all(...params) as FrameRow[];
     return rows.map((row) => ({
       ...row,
       inputs: JSON.parse(row.inputs || '{}'),
@@ -1532,7 +1540,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
     return this.db
       .prepare(sql)
-      .all(...Object.values(options.having || {})) as any[];
+      .all(...Object.values(options.having || {})) as Record<string, unknown>[];
   }
 
   // Pattern detection (basic)
@@ -1566,7 +1574,12 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
 
     sql += ' GROUP BY type HAVING COUNT(*) > 1 ORDER BY frequency DESC';
 
-    const rows = this.db.prepare(sql).all(...params) as any[];
+    const rows = this.db.prepare(sql).all(...params) as Array<{
+      pattern: string;
+      type: string;
+      frequency: number;
+      last_seen: number;
+    }>;
 
     return rows.map((row) => ({
       pattern: row.pattern,
@@ -1909,7 +1922,7 @@ export class SQLiteAdapter extends FeatureAwareDatabaseAdapter {
           this.db!.prepare(`DELETE FROM ${table}`).run();
         }
 
-        for (const row of rows as any[]) {
+        for (const row of rows as Record<string, unknown>[]) {
           const cols = Object.keys(row);
           const placeholders = cols.map(() => '?').join(',');
 

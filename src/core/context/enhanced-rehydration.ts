@@ -168,7 +168,7 @@ export class CompactionHandler {
 
       // Store in frame manager as high-priority anchor
       this.frameManager.addAnchor(
-        'CONSTRAINT' as any, // Using CONSTRAINT type for now
+        'CONSTRAINT',
         JSON.stringify(anchor),
         10,
         {

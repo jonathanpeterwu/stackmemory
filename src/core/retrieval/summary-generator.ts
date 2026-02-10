@@ -4,12 +4,7 @@
  */
 
 import Database from 'better-sqlite3';
-import {
-  FrameManager,
-  Frame,
-  Anchor,
-  Event,
-} from '../context/index.js';
+import { FrameManager, Frame, Anchor, Event } from '../context/index.js';
 import { TraceDetector } from '../trace/trace-detector.js';
 import {
   CompressedSummary,
@@ -200,7 +195,7 @@ export class CompressedSummaryGenerator {
         WHERE project_id = ?
       `
           )
-          .get(this.projectId) as any) || {};
+          .get(this.projectId) as Record<string, unknown> | undefined) || {};
 
       const eventCount = (this.db
         .prepare(
@@ -210,7 +205,9 @@ export class CompressedSummaryGenerator {
         WHERE f.project_id = ?
       `
         )
-        .get(this.projectId) as any) || { count: 0 };
+        .get(this.projectId) as Record<string, unknown> | undefined) || {
+        count: 0,
+      };
 
       const anchorCount = (this.db
         .prepare(
@@ -220,7 +217,9 @@ export class CompressedSummaryGenerator {
         WHERE f.project_id = ?
       `
         )
-        .get(this.projectId) as any) || { count: 0 };
+        .get(this.projectId) as Record<string, unknown> | undefined) || {
+        count: 0,
+      };
 
       const decisionCount = (this.db
         .prepare(
@@ -230,7 +229,9 @@ export class CompressedSummaryGenerator {
         WHERE f.project_id = ? AND a.type = 'DECISION'
       `
         )
-        .get(this.projectId) as any) || { count: 0 };
+        .get(this.projectId) as Record<string, unknown> | undefined) || {
+        count: 0,
+      };
 
       const totalFrames = frameStats.totalFrames || 0;
 
@@ -273,7 +274,7 @@ export class CompressedSummaryGenerator {
         LIMIT ?
       `
         )
-        .all(this.projectId, cutoffTime, limit) as any[];
+        .all(this.projectId, cutoffTime, limit) as Record<string, unknown>[];
 
       return rows.map((row) => ({
         ...row,
@@ -294,7 +295,9 @@ export class CompressedSummaryGenerator {
       SELECT COUNT(*) as count FROM events WHERE frame_id = ?
     `
       )
-      .get(frame.frame_id) as any) || { count: 0 };
+      .get(frame.frame_id) as Record<string, unknown> | undefined) || {
+      count: 0,
+    };
 
     // Get anchor count
     const anchorCount = (this.db
@@ -303,7 +306,9 @@ export class CompressedSummaryGenerator {
       SELECT COUNT(*) as count FROM anchors WHERE frame_id = ?
     `
       )
-      .get(frame.frame_id) as any) || { count: 0 };
+      .get(frame.frame_id) as Record<string, unknown> | undefined) || {
+      count: 0,
+    };
 
     // Calculate score based on activity
     const score = this.calculateFrameScore(
@@ -366,7 +371,7 @@ export class CompressedSummaryGenerator {
         LIMIT 10
       `
         )
-        .all(this.projectId, cutoffTime) as any[];
+        .all(this.projectId, cutoffTime) as Record<string, unknown>[];
 
       return rows.map((row) => ({
         operation: row.operation,
@@ -397,7 +402,7 @@ export class CompressedSummaryGenerator {
         GROUP BY json_extract(e.payload, '$.file_path'), e.event_type
       `
         )
-        .all(this.projectId, cutoffTime) as any[];
+        .all(this.projectId, cutoffTime) as Record<string, unknown>[];
 
       // Aggregate by file
       const fileMap = new Map<string, FileSummary>();
@@ -451,7 +456,7 @@ export class CompressedSummaryGenerator {
         LIMIT 15
       `
         )
-        .all(this.projectId, cutoffTime) as any[];
+        .all(this.projectId, cutoffTime) as Record<string, unknown>[];
 
       return rows.map((row) => ({
         errorType: row.errorType || 'unknown',
@@ -478,7 +483,7 @@ export class CompressedSummaryGenerator {
         GROUP BY type
       `
         )
-        .all(this.projectId) as any[];
+        .all(this.projectId) as Record<string, unknown>[];
 
       const counts: Record<string, number> = {};
       for (const row of rows) {
@@ -508,7 +513,7 @@ export class CompressedSummaryGenerator {
         LIMIT 20
       `
         )
-        .all(this.projectId) as any[];
+        .all(this.projectId) as Record<string, unknown>[];
 
       return rows.map((row) => ({
         id: row.id,
@@ -542,7 +547,7 @@ export class CompressedSummaryGenerator {
         LIMIT 10
       `
         )
-        .all(this.projectId) as any[];
+        .all(this.projectId) as Record<string, unknown>[];
 
       return rows.map((row) => ({
         issueType: row.issueType,
@@ -592,7 +597,7 @@ export class CompressedSummaryGenerator {
         ORDER BY count DESC
       `
         )
-        .all(this.projectId) as any[];
+        .all(this.projectId) as Record<string, unknown>[];
 
       const peakHours = hourlyRows.slice(0, 3).map((r) => `${r.hour}:00`);
       const totalEvents = hourlyRows.reduce((sum, r) => sum + r.count, 0);
@@ -625,7 +630,7 @@ export class CompressedSummaryGenerator {
           AND json_extract(e.payload, '$.error_type') IS NOT NULL
       `
         )
-        .all(this.projectId) as any[];
+        .all(this.projectId) as Record<string, unknown>[];
 
       const index: Record<string, string[]> = {};
       for (const row of rows) {
@@ -661,7 +666,7 @@ export class CompressedSummaryGenerator {
           WHERE project_id = ? AND created_at >= ?
         `
           )
-          .all(this.projectId, cutoff) as any[];
+          .all(this.projectId, cutoff) as Record<string, unknown>[];
 
         index[label] = rows.map((r) => r.frame_id);
       }
@@ -686,7 +691,7 @@ export class CompressedSummaryGenerator {
         WHERE project_id = ?
       `
         )
-        .all(this.projectId) as any[];
+        .all(this.projectId) as Record<string, unknown>[];
 
       const index: Record<string, string[]> = {};
 
@@ -725,7 +730,7 @@ export class CompressedSummaryGenerator {
           AND json_extract(e.payload, '$.file_path') IS NOT NULL
       `
         )
-        .all(this.projectId) as any[];
+        .all(this.projectId) as Record<string, unknown>[];
 
       const index: Record<string, string[]> = {};
       for (const row of rows) {

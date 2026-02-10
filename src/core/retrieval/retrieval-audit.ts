@@ -143,7 +143,7 @@ export class RetrievalAuditStore {
         LIMIT ?
       `);
 
-      const rows = stmt.all(this.projectId, limit) as any[];
+      const rows = stmt.all(this.projectId, limit) as Record<string, unknown>[];
       return rows.map(this.rowToEntry);
     } catch (error) {
       logger.warn('Failed to get recent audit entries', {
@@ -162,7 +162,7 @@ export class RetrievalAuditStore {
         SELECT * FROM retrieval_audit WHERE id = ?
       `);
 
-      const row = stmt.get(id) as any;
+      const row = stmt.get(id) as Record<string, unknown> | undefined;
       return row ? this.rowToEntry(row) : null;
     } catch (error) {
       logger.warn('Failed to get audit entry', {
@@ -185,7 +185,10 @@ export class RetrievalAuditStore {
         LIMIT ?
       `);
 
-      const rows = stmt.all(this.projectId, `%${searchTerm}%`, limit) as any[];
+      const rows = stmt.all(this.projectId, `%${searchTerm}%`, limit) as Record<
+        string,
+        unknown
+      >[];
       return rows.map(this.rowToEntry);
     } catch (error) {
       logger.warn('Failed to search audit entries', {
@@ -223,8 +226,13 @@ export class RetrievalAuditStore {
         GROUP BY provider
       `);
 
-      const stats = statsStmt.get(this.projectId) as any;
-      const providers = providerStmt.all(this.projectId) as any[];
+      const stats = statsStmt.get(this.projectId) as
+        | Record<string, unknown>
+        | undefined;
+      const providers = providerStmt.all(this.projectId) as Record<
+        string,
+        unknown
+      >[];
 
       const providerBreakdown: Record<string, number> = {};
       for (const p of providers) {

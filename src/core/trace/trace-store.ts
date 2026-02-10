@@ -13,6 +13,38 @@ import {
 } from './types.js';
 import { logger } from '../monitoring/logger.js';
 
+/** Database row shape for the traces table */
+interface TraceRow {
+  id: string;
+  type: string;
+  score: number;
+  summary: string;
+  start_time: number;
+  end_time: number;
+  frame_id: string | null;
+  user_id: string | null;
+  files_modified: string;
+  errors_encountered: string;
+  decisions_recorded: string;
+  causal_chain: number;
+  compressed_data: string | null;
+  created_at: number;
+}
+
+/** Database row shape for the tool_calls table */
+interface ToolCallRow {
+  id: string;
+  trace_id: string;
+  tool: string;
+  arguments: string | null;
+  timestamp: number;
+  result: string | null;
+  error: string | null;
+  files_affected: string | null;
+  duration: number | null;
+  sequence_number: number;
+}
+
 export class TraceStore {
   private db: Database.Database;
 
@@ -180,7 +212,7 @@ export class TraceStore {
       SELECT * FROM traces WHERE id = ?
     `
       )
-      .get(id) as any;
+      .get(id) as TraceRow | undefined;
 
     if (!traceRow) {
       return null;
@@ -192,7 +224,7 @@ export class TraceStore {
       SELECT * FROM tool_calls WHERE trace_id = ? ORDER BY sequence_number
     `
       )
-      .all(id) as any[];
+      .all(id) as ToolCallRow[];
 
     return this.rowsToTrace(traceRow, toolRows);
   }
@@ -207,7 +239,7 @@ export class TraceStore {
       SELECT * FROM traces ORDER BY start_time DESC
     `
       )
-      .all() as any[];
+      .all() as TraceRow[];
 
     return traceRows.map((traceRow) => {
       const toolRows = this.db
@@ -216,7 +248,7 @@ export class TraceStore {
         SELECT * FROM tool_calls WHERE trace_id = ? ORDER BY sequence_number
       `
         )
-        .all(traceRow.id) as any[];
+        .all(traceRow.id) as ToolCallRow[];
 
       return this.rowsToTrace(traceRow, toolRows);
     });
@@ -232,7 +264,7 @@ export class TraceStore {
       SELECT * FROM traces WHERE type = ? ORDER BY start_time DESC
     `
       )
-      .all(type) as any[];
+      .all(type) as TraceRow[];
 
     return traceRows.map((traceRow) => {
       const toolRows = this.db
@@ -241,7 +273,7 @@ export class TraceStore {
         SELECT * FROM tool_calls WHERE trace_id = ? ORDER BY sequence_number
       `
         )
-        .all(traceRow.id) as any[];
+        .all(traceRow.id) as ToolCallRow[];
 
       return this.rowsToTrace(traceRow, toolRows);
     });
@@ -257,7 +289,7 @@ export class TraceStore {
       SELECT * FROM traces WHERE frame_id = ? ORDER BY start_time DESC
     `
       )
-      .all(frameId) as any[];
+      .all(frameId) as TraceRow[];
 
     return traceRows.map((traceRow) => {
       const toolRows = this.db
@@ -266,7 +298,7 @@ export class TraceStore {
         SELECT * FROM tool_calls WHERE trace_id = ? ORDER BY sequence_number
       `
         )
-        .all(traceRow.id) as any[];
+        .all(traceRow.id) as ToolCallRow[];
 
       return this.rowsToTrace(traceRow, toolRows);
     });
@@ -282,7 +314,7 @@ export class TraceStore {
       SELECT * FROM traces WHERE score >= ? ORDER BY score DESC, start_time DESC
     `
       )
-      .all(minScore) as any[];
+      .all(minScore) as TraceRow[];
 
     return traceRows.map((traceRow) => {
       const toolRows = this.db
@@ -291,7 +323,7 @@ export class TraceStore {
         SELECT * FROM tool_calls WHERE trace_id = ? ORDER BY sequence_number
       `
         )
-        .all(traceRow.id) as any[];
+        .all(traceRow.id) as ToolCallRow[];
 
       return this.rowsToTrace(traceRow, toolRows);
     });
@@ -309,7 +341,7 @@ export class TraceStore {
       ORDER BY start_time DESC
     `
       )
-      .all(TraceType.ERROR_RECOVERY) as any[];
+      .all(TraceType.ERROR_RECOVERY) as TraceRow[];
 
     return traceRows.map((traceRow) => {
       const toolRows = this.db
@@ -318,7 +350,7 @@ export class TraceStore {
         SELECT * FROM tool_calls WHERE trace_id = ? ORDER BY sequence_number
       `
         )
-        .all(traceRow.id) as any[];
+        .all(traceRow.id) as ToolCallRow[];
 
       return this.rowsToTrace(traceRow, toolRows);
     });
@@ -347,7 +379,14 @@ export class TraceStore {
       FROM traces
     `
       )
-      .get(TraceType.ERROR_RECOVERY) as any;
+      .get(TraceType.ERROR_RECOVERY) as
+      | {
+          total: number;
+          avg_score: number;
+          avg_length: number;
+          error_rate: number;
+        }
+      | undefined;
 
     const typeStats = this.db
       .prepare(
@@ -357,7 +396,7 @@ export class TraceStore {
       GROUP BY type
     `
       )
-      .all() as any[];
+      .all() as { type: string; count: number }[];
 
     const tracesByType: Record<string, number> = {};
     typeStats.forEach((row) => {
@@ -365,11 +404,11 @@ export class TraceStore {
     });
 
     return {
-      totalTraces: stats.total || 0,
+      totalTraces: stats?.total || 0,
       tracesByType,
-      averageScore: stats.avg_score || 0,
-      averageLength: stats.avg_length || 0,
-      errorRate: stats.error_rate || 0,
+      averageScore: stats?.avg_score || 0,
+      averageLength: stats?.avg_length || 0,
+      errorRate: stats?.error_rate || 0,
     };
   }
 
@@ -392,7 +431,7 @@ export class TraceStore {
   /**
    * Convert database rows to Trace object
    */
-  private rowsToTrace(traceRow: any, toolRows: any[]): Trace {
+  private rowsToTrace(traceRow: TraceRow, toolRows: ToolCallRow[]): Trace {
     const tools: ToolCall[] = toolRows.map((row) => ({
       id: row.id,
       tool: row.tool,
