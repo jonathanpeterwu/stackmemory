@@ -11,6 +11,28 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
 
+/** Frame statistics row */
+interface FrameStatsRow {
+  total: number;
+  active: number;
+  sessions: number;
+}
+
+/** Recent activity row */
+interface RecentActivityRow {
+  name: string;
+  type: string;
+  state: string;
+  created: string;
+}
+
+/** Context usage estimation row */
+interface ContextUsageRow {
+  frame_count: number;
+  input_size: number;
+  output_size: number;
+}
+
 export const dashboardCommand = {
   command: 'dashboard',
   describe: 'Display monitoring dashboard in terminal',
@@ -122,7 +144,7 @@ export const dashboardCommand = {
         FROM frames
       `
         )
-        .get() as any;
+        .get() as FrameStatsRow | undefined;
 
       const statsTable = new Table({
         head: [chalk.white('Metric'), chalk.white('Value')],
@@ -130,9 +152,9 @@ export const dashboardCommand = {
       });
 
       statsTable.push(
-        ['Total Frames', frameStats.total || 0],
-        ['Active Frames', chalk.green(frameStats.active || 0)],
-        ['Total Sessions', frameStats.sessions || 0]
+        ['Total Frames', frameStats?.total || 0],
+        ['Active Frames', chalk.green(frameStats?.active || 0)],
+        ['Total Sessions', frameStats?.sessions || 0]
       );
 
       console.log(chalk.yellow.bold('📈 Frame Statistics'));
@@ -153,7 +175,7 @@ export const dashboardCommand = {
         LIMIT 5
       `
         )
-        .all() as any[];
+        .all() as RecentActivityRow[];
 
       if (recentActivity.length > 0) {
         const activityTable = new Table({
@@ -253,10 +275,10 @@ async function estimateContextUsage(db: Database): Promise<number> {
     WHERE state = 'active'
   `
     )
-    .get() as any;
+    .get() as ContextUsageRow | undefined;
 
   // Rough estimate: assume average token is 4 bytes
-  const totalBytes = (result.input_size || 0) + (result.output_size || 0);
+  const totalBytes = (result?.input_size || 0) + (result?.output_size || 0);
   const estimatedTokens = totalBytes / 4;
   const maxTokens = 128000; // Claude's context window
 

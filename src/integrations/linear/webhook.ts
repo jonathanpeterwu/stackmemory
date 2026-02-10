@@ -111,7 +111,11 @@ export class LinearWebhookHandler {
   ): LinearWebhookPayload | null {
     if (!payload || typeof payload !== 'object') return null;
 
-    const p = payload as any;
+    const p = payload as Record<string, unknown> & {
+      action?: string;
+      type?: string;
+      data?: Record<string, unknown>;
+    };
 
     // Validate required fields
     if (!p.action || typeof p.action !== 'string') return null;

@@ -6,12 +6,39 @@
 import Database from 'better-sqlite3';
 import { getQueryCache, createCacheKey } from '../database/query-cache.js';
 import { logger } from '../monitoring/logger.js';
-import {
-  Frame,
-  FrameContext,
-  Anchor,
-  Event,
-} from '../context/index.js';
+import { Frame, FrameContext, Anchor, Event } from '../context/index.js';
+
+/** Raw frame row from SQLite */
+interface RawFrameRow {
+  frame_id: string;
+  name: string;
+  type: string;
+  state: string;
+  inputs: string;
+  outputs: string;
+  digest_json: string;
+  [key: string]: unknown;
+}
+
+/** Raw event row from SQLite */
+interface RawEventRow {
+  frame_id: string;
+  payload: string;
+  [key: string]: unknown;
+}
+
+/** Raw anchor row from SQLite */
+interface RawAnchorRow {
+  frame_id: string;
+  metadata: string;
+  [key: string]: unknown;
+}
+
+/** Raw artifact row from SQLite */
+interface RawArtifactRow {
+  frame_id: string;
+  payload: string;
+}
 
 export interface ContextAssemblyOptions {
   maxEvents?: number;
@@ -82,7 +109,7 @@ export class OptimizedContextAssembler {
       const assemblyTimeMs = performance.now() - startTime;
 
       // Add performance stats to each context
-      return contexts.map((context: any) => ({
+      return contexts.map((context) => ({
         ...context,
         performance: {
           assemblyTimeMs: assemblyTimeMs / contexts.length,
@@ -239,7 +266,7 @@ export class OptimizedContextAssembler {
     const query = `SELECT * FROM frames WHERE frame_id IN (${placeholders})`;
 
     stats.dbQueries++;
-    const rows = this.db.prepare(query).all(...frameIds) as any[];
+    const rows = this.db.prepare(query).all(...frameIds) as RawFrameRow[];
     stats.totalRows += rows.length;
 
     const frameMap = new Map<string, Frame>();
@@ -249,7 +276,7 @@ export class OptimizedContextAssembler {
         inputs: JSON.parse(row.inputs || '{}'),
         outputs: JSON.parse(row.outputs || '{}'),
         digest_json: JSON.parse(row.digest_json || '{}'),
-      });
+      } as unknown as Frame);
     }
 
     return frameMap;
@@ -275,7 +302,7 @@ export class OptimizedContextAssembler {
     `;
 
     stats.dbQueries++;
-    const rows = this.db.prepare(query).all(...frameIds) as any[];
+    const rows = this.db.prepare(query).all(...frameIds) as RawEventRow[];
     stats.totalRows += rows.length;
 
     const eventMap = new Map<string, Event[]>();
@@ -286,7 +313,7 @@ export class OptimizedContextAssembler {
       eventMap.get(row.frame_id)!.push({
         ...row,
         payload: JSON.parse(row.payload),
-      });
+      } as unknown as Event);
     }
 
     return eventMap;
@@ -309,7 +336,7 @@ export class OptimizedContextAssembler {
     `;
 
     stats.dbQueries++;
-    const rows = this.db.prepare(query).all(...frameIds) as any[];
+    const rows = this.db.prepare(query).all(...frameIds) as RawAnchorRow[];
     stats.totalRows += rows.length;
 
     const anchorMap = new Map<string, Anchor[]>();
@@ -320,7 +347,7 @@ export class OptimizedContextAssembler {
       anchorMap.get(row.frame_id)!.push({
         ...row,
         metadata: JSON.parse(row.metadata || '{}'),
-      });
+      } as unknown as Anchor);
     }
 
     return anchorMap;
@@ -345,12 +372,12 @@ export class OptimizedContextAssembler {
     `;
 
     stats.dbQueries++;
-    const rows = this.db.prepare(query).all(...frameIds) as any[];
+    const rows = this.db.prepare(query).all(...frameIds) as RawArtifactRow[];
     stats.totalRows += rows.length;
 
     const artifactMap = new Map<string, string[]>();
     for (const row of rows) {
-      const payload = JSON.parse(row.payload);
+      const payload = JSON.parse(row.payload) as { path?: string };
       if (!artifactMap.has(row.frame_id)) {
         artifactMap.set(row.frame_id, []);
       }

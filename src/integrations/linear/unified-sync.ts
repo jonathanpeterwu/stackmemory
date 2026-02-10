@@ -131,8 +131,8 @@ export class UnifiedLinearSync extends EventEmitter {
     this.config = { ...DEFAULT_UNIFIED_CONFIG, ...config };
 
     // Initialize Linear client - will be set up in initialize()
-    this.linearClient = null as any;
-    this.duplicateDetector = null as any;
+    this.linearClient = null!;
+    this.duplicateDetector = null!;
 
     // Load existing mappings
     this.loadMappings();

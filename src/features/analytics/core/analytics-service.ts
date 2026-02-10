@@ -113,7 +113,9 @@ export class AnalyticsService {
             priority: this.mapLinearPriority(issue.priority),
             labels: Array.isArray(issue.labels)
               ? issue.labels.map((l: any) => l.name)
-              : (issue.labels as any)?.nodes?.map((l: any) => l.name) || [],
+              : (
+                  issue.labels as { nodes?: Array<{ name: string }> }
+                )?.nodes?.map((l) => l.name) || [],
             blockingIssues: [],
           };
           this.metricsQueries.upsertTask(task);
@@ -161,7 +163,19 @@ export class AnalyticsService {
     }
   }
 
-  private getAllTasksFromStore(): any[] {
+  private getAllTasksFromStore(): Array<{
+    id: string;
+    title: string;
+    status: string;
+    created_at: number;
+    completed_at?: number;
+    estimated_effort?: number;
+    actual_effort?: number;
+    assignee?: string;
+    priority: string;
+    tags: string[];
+    depends_on: string[];
+  }> {
     if (!this.taskStore) return [];
 
     try {
@@ -176,11 +190,23 @@ export class AnalyticsService {
       const rows = db
         .prepare(
           `
-        SELECT * FROM task_cache 
+        SELECT * FROM task_cache
         ORDER BY created_at DESC
       `
         )
-        .all() as any[];
+        .all() as Array<{
+        id: string;
+        title: string;
+        status: string;
+        created_at: number;
+        completed_at?: number;
+        estimated_effort?: number;
+        actual_effort?: number;
+        assignee?: string;
+        priority: string;
+        tags: string;
+        depends_on: string;
+      }>;
 
       db.close();
 

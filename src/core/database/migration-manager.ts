@@ -441,7 +441,7 @@ export class MigrationManager extends EventEmitter {
   ): Promise<any[]> {
     // Validate table name against whitelist
     const allowedTables = ['frames', 'events', 'anchors'] as const;
-    if (!allowedTables.includes(table as any)) {
+    if (!(allowedTables as readonly string[]).includes(table)) {
       throw new DatabaseError(
         `Invalid table name: ${table}`,
         ErrorCode.DB_QUERY_FAILED,
@@ -477,7 +477,7 @@ export class MigrationManager extends EventEmitter {
   private async migrateBatch(table: string, batch: any[]): Promise<void> {
     // Validate table name
     const allowedTables = ['frames', 'events', 'anchors'] as const;
-    if (!allowedTables.includes(table as any)) {
+    if (!(allowedTables as readonly string[]).includes(table)) {
       throw new DatabaseError(
         `Invalid table name: ${table}`,
         ErrorCode.DB_INSERT_FAILED,

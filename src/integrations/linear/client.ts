@@ -872,8 +872,9 @@ export class LinearClient {
       }
 
       // Find the "In Progress" or "started" state for this issue's team
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const teamId = (issue as any).team?.id;
+      const teamId = (
+        issue as Record<string, unknown> & { team?: { id: string } }
+      ).team?.id;
       if (teamId) {
         const states = await this.getWorkflowStates(teamId);
         const inProgressState = states.find(

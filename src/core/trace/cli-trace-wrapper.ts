@@ -50,7 +50,7 @@ export function wrapCommand(command: Command): Command {
     await trace.command(commandPath, context, async () => {
       try {
         // Call the original action with wrapped handler
-        const result = await originalAction.apply(null, args as any);
+        const result = await originalAction.apply(null, args as unknown[]);
 
         // Log successful completion
         logger.info(`CLI Command Completed: ${commandPath}`, {

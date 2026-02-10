@@ -460,7 +460,7 @@ export class SharedContextLayer {
     if (frame.type === 'error') score += 0.15; // Error frames are important for pattern extraction
 
     // Check for data property (used in tests)
-    const frameWithData = frame as any;
+    const frameWithData = frame as Frame & { data?: Record<string, unknown> };
     if (frameWithData.data) score += 0.2;
 
     // Boost for having outputs (indicates completion/results)
@@ -496,7 +496,10 @@ export class SharedContextLayer {
   private generateFrameSummary(frame: Frame): string {
     // Generate a brief summary of the frame
     const parts = [];
-    const frameWithData = frame as any;
+    const frameWithData = frame as Frame & {
+      data?: Record<string, string>;
+      title?: string;
+    };
 
     if (frame.type) parts.push(`[${frame.type}]`);
     if (frame.name) parts.push(frame.name);
@@ -518,7 +521,7 @@ export class SharedContextLayer {
     for (const frame of frames) {
       // Extract patterns from frame data
       // Handle frames with a data property (used in tests)
-      const frameWithData = frame as any;
+      const frameWithData = frame as Frame & { data?: Record<string, string> };
       if (frameWithData.data?.error) {
         this.addPattern(
           context,

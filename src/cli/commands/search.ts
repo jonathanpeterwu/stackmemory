@@ -9,6 +9,33 @@ import { join } from 'path';
 import { existsSync } from 'fs';
 import { z } from 'zod';
 
+/** Raw task row from task_cache table */
+interface TaskRow {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  created_at: number;
+}
+
+/** Raw context frame row */
+interface ContextRow {
+  id: string;
+  type: string;
+  name: string;
+  metadata: string;
+  created_at: number;
+}
+
+/** Raw event row */
+interface SearchEventRow {
+  id: string;
+  type: string;
+  data: string;
+  timestamp: number;
+}
+
 // Input validation schemas
 const SearchQuerySchema = z
   .string()
@@ -81,7 +108,7 @@ export function createSearchCommand(): Command {
             LIMIT ?
           `
             )
-            .all(`%${query}%`, `%${query}%`, limit) as any[];
+            .all(`%${query}%`, `%${query}%`, limit) as TaskRow[];
 
           if (tasks.length > 0) {
             console.log(`📋 Tasks (${tasks.length})\n`);
@@ -145,7 +172,7 @@ export function createSearchCommand(): Command {
             LIMIT ?
           `
             )
-            .all(`%${query}%`, `%${query}%`, limit) as any[];
+            .all(`%${query}%`, `%${query}%`, limit) as ContextRow[];
 
           if (contexts.length > 0) {
             console.log(`📁 Context Frames (${contexts.length})\n`);
@@ -187,14 +214,14 @@ export function createSearchCommand(): Command {
             LIMIT ?
           `
             )
-            .all(`%${query}%`, limit) as any[];
+            .all(`%${query}%`, limit) as SearchEventRow[];
 
           if (events.length > 0) {
             console.log(`📝 Events (${events.length})\n`);
 
             events.forEach((evt) => {
               const date = new Date(evt.timestamp * 1000).toLocaleDateString();
-              let data: any = {};
+              let data: Record<string, unknown> = {};
               try {
                 data = JSON.parse(evt.data);
               } catch {}

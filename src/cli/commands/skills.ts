@@ -500,17 +500,24 @@ export function createSkillsCommand(): Command {
           { plannerModel: options.plannerModel }
         );
         spinner.stop();
+        const planRecord = plan as Record<string, unknown> | undefined;
         const compacted = options.compact
           ? {
               summary: plan?.summary,
-              steps: Array.isArray((plan as any)?.steps)
-                ? (plan as any).steps.map((s: any) => ({
+              steps: Array.isArray(planRecord?.steps)
+                ? (
+                    planRecord.steps as Array<{
+                      id: string;
+                      title: string;
+                      acceptanceCriteria: string;
+                    }>
+                  ).map((s) => ({
                     id: s.id,
                     title: s.title,
                     acceptanceCriteria: s.acceptanceCriteria,
                   }))
                 : [],
-              risks: (plan as any)?.risks,
+              risks: planRecord?.risks,
             }
           : plan;
         const payload = JSON.stringify(compacted, null, options.pretty ? 2 : 0);

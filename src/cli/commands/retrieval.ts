@@ -10,6 +10,11 @@ import { existsSync } from 'fs';
 import chalk from 'chalk';
 import { RetrievalAuditStore } from '../../core/retrieval/retrieval-audit.js';
 
+/** Metadata key-value row */
+interface MetadataRow {
+  value: string;
+}
+
 export function createRetrievalCommands(): Command {
   const retrieval = new Command('retrieval')
     .alias('ret')
@@ -42,7 +47,7 @@ export function createRetrievalCommands(): Command {
         try {
           const row = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as MetadataRow | undefined;
           if (row?.value) projectId = row.value;
         } catch {
           // Use default
@@ -141,7 +146,7 @@ export function createRetrievalCommands(): Command {
         try {
           const row = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as MetadataRow | undefined;
           if (row?.value) projectId = row.value;
         } catch {
           // Use default
@@ -208,7 +213,7 @@ export function createRetrievalCommands(): Command {
         try {
           const row = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as MetadataRow | undefined;
           if (row?.value) projectId = row.value;
         } catch {
           // Use default
@@ -285,7 +290,7 @@ export function createRetrievalCommands(): Command {
         try {
           const row = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as MetadataRow | undefined;
           if (row?.value) projectId = row.value;
         } catch {
           // Use default

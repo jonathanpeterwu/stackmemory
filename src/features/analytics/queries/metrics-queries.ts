@@ -140,7 +140,17 @@ export class MetricsQueries {
         WHERE ${whereClause}
       `);
 
-      const result = metricsQuery.get(params) as any;
+      const result = metricsQuery.get(params) as
+        | {
+            total_tasks: number;
+            completed_tasks: number;
+            in_progress_tasks: number;
+            blocked_tasks: number;
+            avg_time_to_complete: number;
+            effort_accuracy: number;
+            blocking_issues_count: number;
+          }
+        | undefined;
 
       const velocityQuery = this.db.prepare(`
         SELECT 
@@ -154,23 +164,27 @@ export class MetricsQueries {
         LIMIT 30
       `);
 
-      const velocityData = velocityQuery.all(params) as any[];
+      const velocityData = velocityQuery.all(params) as Array<{
+        day: string;
+        completed_count: number;
+      }>;
       const velocityTrend = velocityData
         .map((v) => v.completed_count)
         .reverse();
 
       return {
-        totalTasks: result.total_tasks || 0,
-        completedTasks: result.completed_tasks || 0,
-        inProgressTasks: result.in_progress_tasks || 0,
-        blockedTasks: result.blocked_tasks || 0,
+        totalTasks: result?.total_tasks || 0,
+        completedTasks: result?.completed_tasks || 0,
+        inProgressTasks: result?.in_progress_tasks || 0,
+        blockedTasks: result?.blocked_tasks || 0,
         completionRate:
-          result.total_tasks > 0
-            ? (result.completed_tasks / result.total_tasks) * 100
+          (result?.total_tasks || 0) > 0
+            ? ((result?.completed_tasks || 0) / (result?.total_tasks || 1)) *
+              100
             : 0,
-        averageTimeToComplete: result.avg_time_to_complete || 0,
-        effortAccuracy: result.effort_accuracy || 100,
-        blockingIssuesCount: result.blocking_issues_count || 0,
+        averageTimeToComplete: result?.avg_time_to_complete || 0,
+        effortAccuracy: result?.effort_accuracy || 100,
+        blockingIssuesCount: result?.blocking_issues_count || 0,
         velocityTrend,
       };
     } catch (error: unknown) {
@@ -208,7 +222,19 @@ export class MetricsQueries {
         LIMIT ? OFFSET ?
       `);
 
-      const rows = tasksQuery.all(limit, offset) as any[];
+      const rows = tasksQuery.all(limit, offset) as Array<{
+        id: string;
+        title: string;
+        state: string;
+        created_at: number;
+        completed_at: number | null;
+        estimated_effort: number | null;
+        actual_effort: number | null;
+        assignee_id: string | null;
+        priority: number;
+        labels: string;
+        blocking_issues: string;
+      }>;
 
       return rows.map((row) => ({
         id: row.id,

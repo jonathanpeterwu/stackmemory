@@ -95,6 +95,15 @@ function findPackageJson(): { version: string } {
 }
 const VERSION = findPackageJson().version;
 
+// Runtime Node.js version gate — package.json requires >=20.0.0
+const nodeMajor = parseInt(process.version.slice(1), 10);
+if (nodeMajor < 20) {
+  console.error(
+    `[ERROR] Node.js 20+ required. Current: ${process.version}\n  Upgrade: https://nodejs.org/`
+  );
+  process.exit(1);
+}
+
 // Lazy DB opener to avoid loading native module at import time (test-friendly)
 async function openDatabase(dbPath: string) {
   const { default: Database } = await import('better-sqlite3');

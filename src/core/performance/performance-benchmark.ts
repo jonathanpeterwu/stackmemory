@@ -190,11 +190,11 @@ export class PerformanceBenchmark {
     const loader = new LazyContextLoader(db, projectId);
 
     // Check if frames table exists, if not use a mock test
-    let frames: any[] = [];
+    let frames: Array<{ id: string }> = [];
     try {
       frames = db
         .prepare('SELECT id FROM frames ORDER BY updated_at DESC LIMIT ?')
-        .all(frameCount) as any[];
+        .all(frameCount) as Array<{ id: string }>;
     } catch (error: unknown) {
       // Create mock frame IDs if table doesn't exist
       logger.warn('Frames table not found, using mock data for benchmark');
@@ -203,7 +203,7 @@ export class PerformanceBenchmark {
       }));
     }
 
-    const frameIds = frames.map((f: any) => f.id);
+    const frameIds = frames.map((f) => f.id);
 
     // Benchmark eager loading (baseline)
     const eagerStart = performance.now();

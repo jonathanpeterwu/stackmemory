@@ -12,6 +12,11 @@ import { FrameManager } from '../../core/context/index.js';
 import { LLMContextRetrieval } from '../../core/retrieval/index.js';
 import { DiscoveryHandlers } from '../../integrations/mcp/handlers/discovery-handlers.js';
 
+/** Metadata key-value row */
+interface MetadataRow {
+  value: string;
+}
+
 export function createDiscoveryCommands(): Command {
   const discovery = new Command('discovery')
     .alias('discover')
@@ -50,7 +55,7 @@ export function createDiscoveryCommands(): Command {
         try {
           const row = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as MetadataRow | undefined;
           if (row?.value) projectId = row.value;
         } catch {}
 
@@ -147,7 +152,7 @@ export function createDiscoveryCommands(): Command {
         try {
           const row = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as MetadataRow | undefined;
           if (row?.value) projectId = row.value;
         } catch {}
 
@@ -222,7 +227,7 @@ export function createDiscoveryCommands(): Command {
         try {
           const row = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as MetadataRow | undefined;
           if (row?.value) projectId = row.value;
         } catch {}
 
@@ -301,7 +306,7 @@ export function createDiscoveryCommands(): Command {
         try {
           const row = db
             .prepare(`SELECT value FROM metadata WHERE key = 'project_id'`)
-            .get() as any;
+            .get() as MetadataRow | undefined;
           if (row?.value) projectId = row.value;
         } catch {}
 

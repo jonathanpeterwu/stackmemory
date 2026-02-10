@@ -198,7 +198,13 @@ export class RemoteStorageManager {
       ORDER BY t.start_time ASC
     `
       )
-      .all() as any[];
+      .all() as Array<{
+      id: string;
+      score: number;
+      start_time: number;
+      size: number;
+      already_migrated: string | null;
+    }>;
 
     const candidates: MigrationCandidate[] = [];
 
@@ -560,7 +566,7 @@ export class RemoteStorageManager {
       FROM traces
     `
       )
-      .get() as any;
+      .get() as { total_size: number } | undefined;
 
     return result?.total_size || 0;
   }
@@ -586,7 +592,7 @@ export class RemoteStorageManager {
       SELECT * FROM remote_migrations WHERE trace_id = ?
     `
       )
-      .get(traceId) as any;
+      .get(traceId) as { s3_key: string; storage_tier: string } | undefined;
 
     if (!migration) {
       throw new Error(`Trace ${traceId} not found in remote storage`);
@@ -626,7 +632,12 @@ export class RemoteStorageManager {
   /**
    * Get migration statistics
    */
-  getMigrationStats(): any {
+  getMigrationStats(): {
+    byTier: unknown[];
+    total: unknown;
+    compressionRatio: string | number;
+    localSize: number;
+  } {
     const stats = this.localDb
       .prepare(
         `
@@ -654,14 +665,20 @@ export class RemoteStorageManager {
       )
       .get();
 
+    const typedTotal = total as
+      | {
+          total_migrated: number;
+          total_original: number;
+          total_compressed: number;
+        }
+      | undefined;
     return {
       byTier: stats,
       total,
-      compressionRatio: total
-        ? (
-            1 -
-            (total as any).total_compressed / (total as any).total_original
-          ).toFixed(2)
+      compressionRatio: typedTotal
+        ? (1 - typedTotal.total_compressed / typedTotal.total_original).toFixed(
+            2
+          )
         : 0,
       localSize: this.getLocalStorageSize(),
     };

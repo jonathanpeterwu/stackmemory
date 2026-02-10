@@ -55,9 +55,20 @@ export class LinearMigrator {
     source: { success: boolean; info?: any; error?: string };
     target: { success: boolean; info?: any; error?: string };
   }> {
-    const result = {
-      source: { success: false } as any,
-      target: { success: false } as any,
+    const result: {
+      source: {
+        success: boolean;
+        info?: Record<string, unknown>;
+        error?: string;
+      };
+      target: {
+        success: boolean;
+        info?: Record<string, unknown>;
+        error?: string;
+      };
+    } = {
+      source: { success: false },
+      target: { success: false },
     };
 
     // Test source connection
@@ -362,7 +373,14 @@ export class LinearMigrator {
       }
     `;
 
-    const response = await (this.sourceClient as any).makeRequest(deleteQuery, {
+    const response = await (
+      this.sourceClient as unknown as {
+        makeRequest: (
+          query: string,
+          vars: Record<string, string>
+        ) => Promise<{ data?: { issueDelete?: { success: boolean } } }>;
+      }
+    ).makeRequest(deleteQuery, {
       id: taskId,
     });
 

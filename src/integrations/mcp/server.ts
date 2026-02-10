@@ -322,7 +322,13 @@ class LocalStackMemoryMCP {
       LIMIT 50
     `
       )
-      .all() as any[];
+      .all() as Array<{
+      id: string;
+      type: string;
+      content: string;
+      importance: number;
+      last_accessed: number;
+    }>;
 
     stored.forEach((ctx) => {
       this.contexts.set(ctx.id, ctx);
@@ -1383,8 +1389,8 @@ class LocalStackMemoryMCP {
             toolCall.filesAffected = [args.file_path || args.path].filter(
               Boolean
             ) as string[];
-          } else if ((result as any)?.files) {
-            const files = (result as any).files;
+          } else if ((result as Record<string, unknown>)?.files) {
+            const files = (result as Record<string, unknown>).files;
             toolCall.filesAffected = Array.isArray(files) ? files : [files];
           }
 
@@ -1697,7 +1703,10 @@ class LocalStackMemoryMCP {
         isError: false,
       };
     }
-    const a = parsed.success && parsed.data ? parsed.data : ({} as any);
+    const a =
+      parsed.success && parsed.data
+        ? parsed.data
+        : ({} as Record<string, unknown>);
     const now = Date.now();
     let items = Array.from(this.pendingPlans.entries()).map(
       ([approvalId, data]) => ({
@@ -2056,7 +2065,7 @@ class LocalStackMemoryMCP {
   private async handleCreateTask(args: unknown) {
     const validated = validateInput(CreateTaskSchema, args, 'create_task');
     const { title, description, priority, tags } = validated;
-    const { estimatedEffort, dependsOn } = args as any; // Legacy fields
+    const { estimatedEffort, dependsOn } = args as Record<string, unknown>; // Legacy fields
     const currentFrameId = this.frameManager.getCurrentFrameId();
 
     if (!currentFrameId) {
@@ -2884,7 +2893,12 @@ ${typeBreakdown}`,
             `%${query}%`,
             `%${query}%`,
             limit
-          ) as any[];
+          ) as Array<{
+          frame_id: string;
+          name: string;
+          type: string;
+          created_at: number;
+        }>;
 
         frames.forEach((f) => {
           results.push({
@@ -2910,7 +2924,13 @@ ${typeBreakdown}`,
           LIMIT ?
         `
           )
-          .all(this.projectId, `%${query}%`, limit) as any[];
+          .all(this.projectId, `%${query}%`, limit) as Array<{
+          event_id: string;
+          type: string;
+          data: string;
+          timestamp: number;
+          frame_name: string;
+        }>;
 
         events.forEach((e) => {
           results.push({
@@ -2936,7 +2956,14 @@ ${typeBreakdown}`,
           LIMIT ?
         `
           )
-          .all(this.projectId, `%${query}%`, limit) as any[];
+          .all(this.projectId, `%${query}%`, limit) as Array<{
+          anchor_id: string;
+          type: string;
+          text: string;
+          priority: number;
+          created_at: number;
+          frame_name: string;
+        }>;
 
         anchors.forEach((a) => {
           results.push({
@@ -2963,7 +2990,13 @@ ${typeBreakdown}`,
             LIMIT ?
           `
             )
-            .all(`%${query}%`, `%${query}%`, limit) as any[];
+            .all(`%${query}%`, `%${query}%`, limit) as Array<{
+            id: string;
+            title: string;
+            description: string;
+            status: string;
+            priority: string;
+          }>;
 
           tasks.forEach((t) => {
             results.push({

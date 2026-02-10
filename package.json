@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "0.8.1",
+  "version": "1.0.0",
   "description": "Project-scoped memory for AI coding tools. Durable context across sessions with MCP integration, frames, smart retrieval, Claude Code skills, and automatic hooks.",
   "engines": {
     "node": ">=20.0.0",
@@ -16,7 +16,6 @@
     "claude-smd": "bin/claude-smd",
     "opencode-sm": "bin/opencode-sm"
   },
-  "types": "dist/src/index.d.ts",
   "files": [
     "bin",
     "dist/src",
@@ -58,7 +57,10 @@
     "url": "https://github.com/stackmemoryai/stackmemory/issues"
   },
   "author": "StackMemory AI",
-  "license": "MIT",
+  "license": "BUSL-1.1",
+  "publishConfig": {
+    "access": "public"
+  },
   "keywords": [
     "ai",
     "memory",
@@ -84,8 +86,7 @@
     "setup": "npm install && npm run build && npm run init",
     "postinstall": "node scripts/install-claude-hooks-auto.js || true",
     "init": "node dist/scripts/initialize.js",
-    "build": "node esbuild.config.js",
-    "build:types": "tsc --emitDeclarationOnly --project tsconfig.build.json",
+    "build": "rm -rf dist && node esbuild.config.js",
     "lint": "eslint src/**/*.ts scripts/**/*.ts",
     "lint:fix": "eslint src/**/*.ts scripts/**/*.ts --fix --max-warnings=-1",
     "lint:fast": "oxlint src scripts",

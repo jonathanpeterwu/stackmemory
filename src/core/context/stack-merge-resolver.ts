@@ -564,7 +564,9 @@ export class StackMergeResolver {
         return {
           conflictId: conflict.frameId,
           strategy:
-            rule.action === 'require_manual' ? 'manual' : (rule.action as any),
+            rule.action === 'require_manual'
+              ? 'manual'
+              : (rule.action as MergeResolution['strategy']),
           resolvedBy: 'system',
           resolvedAt: new Date(),
           notes: `Auto-resolved by policy: ${policy.name}`,

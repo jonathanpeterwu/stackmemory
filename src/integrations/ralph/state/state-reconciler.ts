@@ -35,24 +35,27 @@ export class StateReconciler {
    */
   async reconcile(sources: StateSource[]): Promise<RalphLoopState> {
     logger.info('Reconciling state from sources', {
-      sources: sources.map(s => ({ type: s.type, confidence: s.confidence })),
+      sources: sources.map((s) => ({ type: s.type, confidence: s.confidence })),
     });
 
     // Sort sources by precedence
     const sortedSources = this.sortByPrecedence(sources);
-    
+
     // Detect conflicts
     const conflicts = this.detectConflicts(sortedSources);
-    
+
     if (conflicts.length > 0) {
       logger.warn('State conflicts detected', {
         count: conflicts.length,
-        fields: conflicts.map(c => c.field),
+        fields: conflicts.map((c) => c.field),
       });
 
       // Resolve conflicts based on configuration
       const resolutions = await this.resolveConflicts(conflicts);
-      return this.applyResolutions(sortedSources[0].state as RalphLoopState, resolutions);
+      return this.applyResolutions(
+        sortedSources[0].state as RalphLoopState,
+        resolutions
+      );
     }
 
     // No conflicts, merge states
@@ -67,25 +70,28 @@ export class StateReconciler {
     const fields = new Set<string>();
 
     // Collect all fields across sources
-    sources.forEach(source => {
-      Object.keys(source.state).forEach(field => fields.add(field));
+    sources.forEach((source) => {
+      Object.keys(source.state).forEach((field) => fields.add(field));
     });
 
     // Check each field for conflicts
     for (const field of fields) {
       const values = sources
-        .filter(s => s.state[field as keyof RalphLoopState] !== undefined)
-        .map(s => ({
+        .filter((s) => s.state[field as keyof RalphLoopState] !== undefined)
+        .map((s) => ({
           source: s,
           value: s.state[field as keyof RalphLoopState],
         }));
 
-      if (values.length > 1 && !this.valuesMatch(values.map(v => v.value))) {
+      if (values.length > 1 && !this.valuesMatch(values.map((v) => v.value))) {
         conflicts.push({
           field,
-          sources: values.map(v => v.source),
+          sources: values.map((v) => v.source),
           severity: this.assessConflictSeverity(field),
-          suggestedResolution: this.suggestResolution(field, values.map(v => v.source)),
+          suggestedResolution: this.suggestResolution(
+            field,
+            values.map((v) => v.source)
+          ),
         });
       }
     }
@@ -98,9 +104,9 @@ export class StateReconciler {
    */
   async resolveConflict(conflict: Conflict): Promise<Resolution> {
     const resolution = await this.resolveConflictByStrategy(conflict);
-    
+
     this.reconciliationLog.push(resolution);
-    
+
     logger.debug('Conflict resolved', {
       field: conflict.field,
       resolution: resolution.source,
@@ -120,10 +126,10 @@ export class StateReconciler {
     try {
       // Validate file system state
       await this.validateFileSystemState(state, errors, warnings);
-      
+
       // Validate git state
       this.validateGitState(state, errors, warnings);
-      
+
       // Validate logical consistency
       this.validateLogicalConsistency(state, errors, warnings);
 
@@ -151,14 +157,25 @@ export class StateReconciler {
    */
   async getGitState(): Promise<StateSource> {
     try {
-      const currentCommit = execSync('git rev-parse HEAD', { encoding: 'utf8' }).trim();
-      const branch = execSync('git branch --show-current', { encoding: 'utf8' }).trim();
-      const uncommittedChanges = execSync('git status --porcelain', { encoding: 'utf8' });
-      
-      // Check for Ralph commits
-      const ralphCommits = execSync('git log --oneline --grep="Ralph iteration"', {
+      const currentCommit = execSync('git rev-parse HEAD', {
         encoding: 'utf8',
-      }).split('\n').filter(Boolean);
+      }).trim();
+      const branch = execSync('git branch --show-current', {
+        encoding: 'utf8',
+      }).trim();
+      const uncommittedChanges = execSync('git status --porcelain', {
+        encoding: 'utf8',
+      });
+
+      // Check for Ralph commits
+      const ralphCommits = execSync(
+        'git log --oneline --grep="Ralph iteration"',
+        {
+          encoding: 'utf8',
+        }
+      )
+        .split('\n')
+        .filter(Boolean);
 
       const lastRalphCommit = ralphCommits[0]?.split(' ')[0];
       const iteration = ralphCommits.length;
@@ -196,13 +213,14 @@ export class StateReconciler {
       const taskPath = path.join(this.ralphDir, 'task.md');
       const criteriaPath = path.join(this.ralphDir, 'completion-criteria.md');
 
-      const [stateData, iteration, feedback, task, criteria] = await Promise.all([
-        fs.readFile(statePath, 'utf8').catch(() => '{}'),
-        fs.readFile(iterationPath, 'utf8').catch(() => '0'),
-        fs.readFile(feedbackPath, 'utf8').catch(() => ''),
-        fs.readFile(taskPath, 'utf8').catch(() => ''),
-        fs.readFile(criteriaPath, 'utf8').catch(() => ''),
-      ]);
+      const [stateData, iteration, feedback, task, criteria] =
+        await Promise.all([
+          fs.readFile(statePath, 'utf8').catch(() => '{}'),
+          fs.readFile(iterationPath, 'utf8').catch(() => '0'),
+          fs.readFile(feedbackPath, 'utf8').catch(() => ''),
+          fs.readFile(taskPath, 'utf8').catch(() => ''),
+          fs.readFile(criteriaPath, 'utf8').catch(() => ''),
+        ]);
 
       const state = JSON.parse(stateData);
 
@@ -263,13 +281,13 @@ export class StateReconciler {
     return sources.sort((a, b) => {
       const aIndex = this.config.precedence.indexOf(a.type);
       const bIndex = this.config.precedence.indexOf(b.type);
-      
+
       if (aIndex === -1 && bIndex === -1) {
         return b.confidence - a.confidence;
       }
       if (aIndex === -1) return 1;
       if (bIndex === -1) return -1;
-      
+
       return aIndex - bIndex;
     });
   }
@@ -280,7 +298,7 @@ export class StateReconciler {
   private valuesMatch(values: any[]): boolean {
     if (values.length === 0) return true;
     const first = JSON.stringify(values[0]);
-    return values.every(v => JSON.stringify(v) === first);
+    return values.every((v) => JSON.stringify(v) === first);
   }
 
   /**
@@ -289,7 +307,7 @@ export class StateReconciler {
   private assessConflictSeverity(field: string): 'low' | 'medium' | 'high' {
     const highSeverityFields = ['loopId', 'task', 'criteria', 'status'];
     const mediumSeverityFields = ['iteration', 'currentCommit', 'feedback'];
-    
+
     if (highSeverityFields.includes(field)) return 'high';
     if (mediumSeverityFields.includes(field)) return 'medium';
     return 'low';
@@ -301,10 +319,10 @@ export class StateReconciler {
   private suggestResolution(field: string, sources: StateSource[]): any {
     // Sort by confidence and precedence
     const sorted = this.sortByPrecedence(sources);
-    const highestConfidence = sorted.reduce((max, s) => 
+    const highestConfidence = sorted.reduce((max, s) =>
       s.confidence > max.confidence ? s : max
     );
-    
+
     return highestConfidence.state[field as keyof RalphLoopState];
   }
 
@@ -325,17 +343,19 @@ export class StateReconciler {
   /**
    * Resolve conflict based on strategy
    */
-  private async resolveConflictByStrategy(conflict: Conflict): Promise<Resolution> {
+  private async resolveConflictByStrategy(
+    conflict: Conflict
+  ): Promise<Resolution> {
     switch (this.config.conflictResolution) {
       case 'automatic':
         return this.automaticResolution(conflict);
-      
+
       case 'manual':
         return this.manualResolution(conflict);
-      
+
       case 'interactive':
         return this.interactiveResolution(conflict);
-      
+
       default:
         return this.automaticResolution(conflict);
     }
@@ -347,7 +367,7 @@ export class StateReconciler {
   private automaticResolution(conflict: Conflict): Resolution {
     const sorted = this.sortByPrecedence(conflict.sources);
     const winner = sorted[0];
-    
+
     return {
       field: conflict.field,
       value: winner.state[conflict.field as keyof RalphLoopState],
@@ -375,7 +395,7 @@ export class StateReconciler {
     // In real implementation, this would prompt the user
     logger.info('Interactive resolution required', {
       field: conflict.field,
-      options: conflict.sources.map(s => ({
+      options: conflict.sources.map((s) => ({
         type: s.type,
         value: s.state[conflict.field as keyof RalphLoopState],
         confidence: s.confidence,
@@ -396,7 +416,8 @@ export class StateReconciler {
     const resolvedState = { ...baseState };
 
     for (const resolution of resolutions) {
-      (resolvedState as any)[resolution.field] = resolution.value;
+      (resolvedState as Record<string, unknown>)[resolution.field] =
+        resolution.value;
     }
 
     return resolvedState;
@@ -425,8 +446,11 @@ export class StateReconciler {
     warnings: string[]
   ): Promise<void> {
     try {
-      const ralphDirExists = await fs.stat(this.ralphDir).then(() => true).catch(() => false);
-      
+      const ralphDirExists = await fs
+        .stat(this.ralphDir)
+        .then(() => true)
+        .catch(() => false);
+
       if (!ralphDirExists) {
         warnings.push('Ralph directory does not exist');
         return;
@@ -435,8 +459,11 @@ export class StateReconciler {
       const requiredFiles = ['task.md', 'state.json', 'iteration.txt'];
       for (const file of requiredFiles) {
         const filePath = path.join(this.ralphDir, file);
-        const exists = await fs.stat(filePath).then(() => true).catch(() => false);
-        
+        const exists = await fs
+          .stat(filePath)
+          .then(() => true)
+          .catch(() => false);
+
         if (!exists) {
           warnings.push(`Missing file: ${file}`);
         }
@@ -455,17 +482,20 @@ export class StateReconciler {
     warnings: string[]
   ): void {
     try {
-      const isGitRepo = execSync('git rev-parse --is-inside-work-tree', {
-        encoding: 'utf8',
-      }).trim() === 'true';
-      
+      const isGitRepo =
+        execSync('git rev-parse --is-inside-work-tree', {
+          encoding: 'utf8',
+        }).trim() === 'true';
+
       if (!isGitRepo) {
         warnings.push('Not in a git repository');
       }
 
       if (state.currentCommit && state.startCommit) {
         try {
-          execSync(`git rev-parse ${state.currentCommit}`, { encoding: 'utf8' });
+          execSync(`git rev-parse ${state.currentCommit}`, {
+            encoding: 'utf8',
+          });
         } catch {
           errors.push(`Invalid current commit: ${state.currentCommit}`);
         }
@@ -500,7 +530,11 @@ export class StateReconciler {
     }
 
     // Check time consistency
-    if (state.lastUpdateTime && state.startTime && state.lastUpdateTime < state.startTime) {
+    if (
+      state.lastUpdateTime &&
+      state.startTime &&
+      state.lastUpdateTime < state.startTime
+    ) {
       errors.push('Last update time is before start time');
     }
 

@@ -8,6 +8,33 @@ import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync, readFileSync } from 'fs';
 
+/** Raw frame row for log display */
+interface LogFrameRow {
+  id: string;
+  type: string;
+  name: string;
+  state: string;
+  created_at: number;
+  updated_at: number;
+}
+
+/** Raw event row for log display */
+interface LogEventRow {
+  id: string;
+  type: string;
+  data: string;
+  timestamp: number;
+}
+
+/** Raw task row for log display */
+interface LogTaskRow {
+  id: string;
+  title: string;
+  status: string;
+  type: string;
+  timestamp: number;
+}
+
 export function createLogCommand(): Command {
   const log = new Command('log')
     .alias('history')
@@ -49,7 +76,7 @@ export function createLogCommand(): Command {
             LIMIT ?
           `
             )
-            .all(limit) as any[];
+            .all(limit) as LogFrameRow[];
 
           frames.forEach((f) => {
             activities.push({
@@ -74,10 +101,10 @@ export function createLogCommand(): Command {
             LIMIT ?
           `
             )
-            .all(limit) as any[];
+            .all(limit) as LogEventRow[];
 
           events.forEach((e) => {
-            let data: any = {};
+            let data: Record<string, string> = {};
             try {
               data = JSON.parse(e.data);
             } catch {}
@@ -104,7 +131,7 @@ export function createLogCommand(): Command {
             LIMIT ?
           `
             )
-            .all(limit) as any[];
+            .all(limit) as LogTaskRow[];
 
           tasks.forEach((t) => {
             activities.push({

@@ -18,24 +18,27 @@ import shellEscape from 'shell-escape';
 import { z } from 'zod';
 
 // Input validation schemas
-const BranchNameSchema = z.string()
+const BranchNameSchema = z
+  .string()
   .min(1, 'Branch name cannot be empty')
   .max(100, 'Branch name too long')
   .regex(/^[a-zA-Z0-9._/-]+$/, 'Branch name contains invalid characters')
-  .refine(name => !name.includes('..'), 'Branch name cannot contain ".."')
-  .refine(name => !name.includes(';'), 'Branch name cannot contain ";"')
-  .refine(name => !name.includes('&'), 'Branch name cannot contain "&"')
-  .refine(name => !name.includes('|'), 'Branch name cannot contain "|"')
-  .refine(name => !name.includes('$'), 'Branch name cannot contain "$"')
-  .refine(name => !name.includes('`'), 'Branch name cannot contain "`"');
+  .refine((name) => !name.includes('..'), 'Branch name cannot contain ".."')
+  .refine((name) => !name.includes(';'), 'Branch name cannot contain ";"')
+  .refine((name) => !name.includes('&'), 'Branch name cannot contain "&"')
+  .refine((name) => !name.includes('|'), 'Branch name cannot contain "|"')
+  .refine((name) => !name.includes('$'), 'Branch name cannot contain "$"')
+  .refine((name) => !name.includes('`'), 'Branch name cannot contain "`"');
 
-const PathSchema = z.string()
+const PathSchema = z
+  .string()
   .min(1, 'Path cannot be empty')
   .max(500, 'Path too long')
   .regex(/^[a-zA-Z0-9._/-]+$/, 'Path contains invalid characters')
-  .refine(path => !path.includes('..'), 'Path cannot contain ".."');
+  .refine((path) => !path.includes('..'), 'Path cannot contain ".."');
 
-const CommitSchema = z.string()
+const CommitSchema = z
+  .string()
   .min(1, 'Commit reference cannot be empty')
   .max(100, 'Commit reference too long')
   .regex(/^[a-zA-Z0-9._/-]+$/, 'Commit reference contains invalid characters');
@@ -130,7 +133,7 @@ export function registerWorktreeCommands(program: Command): void {
             const db = new Database(context.dbPath);
             const lastEvent = db
               .prepare('SELECT MAX(created_at) as last FROM events')
-              .get() as any;
+              .get() as { last: number | null } | undefined;
 
             if (lastEvent?.last) {
               const date = new Date(lastEvent.last);
@@ -224,12 +227,14 @@ export function registerWorktreeCommands(program: Command): void {
                 (SELECT COUNT(*) FROM contexts) as contexts
             `
               )
-              .get() as any;
+              .get() as
+              | { frames: number; events: number; contexts: number }
+              | undefined;
 
             console.log(chalk.cyan('\nContext Statistics:'));
-            console.log(chalk.gray('  Frames:'), stats.frames);
-            console.log(chalk.gray('  Events:'), stats.events);
-            console.log(chalk.gray('  Contexts:'), stats.contexts);
+            console.log(chalk.gray('  Frames:'), stats?.frames ?? 0);
+            console.log(chalk.gray('  Events:'), stats?.events ?? 0);
+            console.log(chalk.gray('  Contexts:'), stats?.contexts ?? 0);
 
             db.close();
           } else {
@@ -261,23 +266,30 @@ export function registerWorktreeCommands(program: Command): void {
       try {
         // Validate and sanitize inputs
         const validatedBranch = BranchNameSchema.parse(branch);
-        
+
         // Get current project info
         const project = await projectManager.detectProject();
-        const worktreePath = options.path || `../${project.name}-${validatedBranch}`;
-        
+        const worktreePath =
+          options.path || `../${project.name}-${validatedBranch}`;
+
         // Validate path if provided
         if (options.path) {
           PathSchema.parse(options.path);
         }
-        
+
         // Validate commit reference if provided
         if (options.from) {
           CommitSchema.parse(options.from);
         }
 
         // Create git worktree using execFileSync for safety
-        const gitArgs = ['worktree', 'add', '-b', validatedBranch, worktreePath];
+        const gitArgs = [
+          'worktree',
+          'add',
+          '-b',
+          validatedBranch,
+          worktreePath,
+        ];
         if (options.from) {
           gitArgs.push(options.from);
         }
@@ -313,7 +325,7 @@ export function registerWorktreeCommands(program: Command): void {
       } catch (error: unknown) {
         if (error instanceof z.ZodError) {
           console.error(chalk.red('Invalid input:'));
-          error.errors.forEach(err => {
+          error.errors.forEach((err) => {
             console.error(chalk.red(`  ${err.path.join('.')}: ${err.message}`));
           });
         } else {

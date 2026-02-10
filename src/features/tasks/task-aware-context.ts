@@ -12,6 +12,29 @@ import {
 } from '../../core/context/index.js';
 import { logger } from '../../core/monitoring/logger.js';
 
+/** Raw task row from SQLite before hydration */
+interface TaskRow {
+  task_id: string;
+  frame_id: string;
+  anchor_id?: string;
+  name: string;
+  description?: string;
+  status: string;
+  priority: string;
+  parent_task_id?: string;
+  depends_on: string;
+  assigned_to?: string;
+  estimated_effort?: number;
+  actual_effort?: number;
+  created_at: number;
+  started_at?: number;
+  completed_at?: number;
+  blocked_reason?: string;
+  context_tags: string;
+  metadata: string;
+  [key: string]: unknown;
+}
+
 export type TaskStatus =
   | 'pending'
   | 'in_progress'
@@ -344,7 +367,7 @@ export class TaskAwareContextManager {
 
     query += ` ORDER BY priority DESC, created_at ASC`;
 
-    const rows = this.db.prepare(query).all(...params) as any[];
+    const rows = this.db.prepare(query).all(...params) as TaskRow[];
     return this.hydrateTasks(rows);
   }
 
@@ -355,7 +378,7 @@ export class TaskAwareContextManager {
       SELECT * FROM tasks WHERE status = 'blocked' ORDER BY priority DESC
     `
       )
-      .all() as any[];
+      .all() as TaskRow[];
     return this.hydrateTasks(rows);
   }
 
@@ -549,7 +572,7 @@ export class TaskAwareContextManager {
   private getTask(taskId: string): Task | undefined {
     const row = this.db
       .prepare(`SELECT * FROM tasks WHERE task_id = ?`)
-      .get(taskId) as any;
+      .get(taskId) as TaskRow | undefined;
     return row ? this.hydrateTask(row) : undefined;
   }
 
@@ -569,19 +592,19 @@ export class TaskAwareContextManager {
       LIMIT 20
     `
       )
-      .all(...frameIds) as any[];
+      .all(...frameIds) as Array<{ metadata: string; [key: string]: unknown }>;
 
     return rows.map((row) => ({
       ...row,
       metadata: JSON.parse(row.metadata || '{}'),
-    }));
+    })) as unknown as Anchor[];
   }
 
-  private hydrateTasks(rows: any[]): Task[] {
+  private hydrateTasks(rows: TaskRow[]): Task[] {
     return rows.map(this.hydrateTask);
   }
 
-  private hydrateTask = (row: any): Task => ({
+  private hydrateTask = (row: TaskRow): Task => ({
     ...row,
     depends_on: JSON.parse(row.depends_on || '[]'),
     context_tags: JSON.parse(row.context_tags || '[]'),

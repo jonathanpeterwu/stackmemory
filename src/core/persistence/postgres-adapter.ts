@@ -328,7 +328,7 @@ export class PostgresAdapter implements PersistenceAdapter {
       // Migrate projects
       const projects = sqliteDb
         .prepare('SELECT * FROM projects')
-        .all() as any[];
+        .all() as Array<Record<string, unknown>>;
       for (const project of projects) {
         await this.execute(
           'INSERT INTO projects (id, name, path, created_at, updated_at, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -346,7 +346,7 @@ export class PostgresAdapter implements PersistenceAdapter {
       // Migrate sessions
       const sessions = sqliteDb
         .prepare('SELECT * FROM sessions')
-        .all() as any[];
+        .all() as Array<Record<string, unknown>>;
       for (const session of sessions) {
         await this.execute(
           'INSERT INTO sessions (id, project_id, branch, started_at, ended_at, metadata) VALUES ($1, $2, $3, $4, $5, $6)',
@@ -370,7 +370,7 @@ export class PostgresAdapter implements PersistenceAdapter {
       for (let offset = 0; offset < traceCount.count; offset += batchSize) {
         const traces = sqliteDb
           .prepare('SELECT * FROM traces LIMIT ? OFFSET ?')
-          .all(batchSize, offset) as any[];
+          .all(batchSize, offset) as Array<Record<string, unknown>>;
 
         for (const trace of traces) {
           await this.execute(
@@ -394,7 +394,7 @@ export class PostgresAdapter implements PersistenceAdapter {
       // Migrate context frames
       const contexts = sqliteDb
         .prepare('SELECT * FROM context_frames')
-        .all() as any[];
+        .all() as Array<Record<string, unknown>>;
       for (const context of contexts) {
         await this.execute(
           'INSERT INTO context_frames (id, project_id, branch, content, summary, timestamp, type, metadata) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)',

@@ -7,6 +7,48 @@ import Database from 'better-sqlite3';
 import { Frame, Anchor, Event } from '../context/index.js';
 import { logger } from '../monitoring/logger.js';
 
+/** Raw row returned by SQLite for frames */
+interface FrameRow {
+  id: string;
+  type: string;
+  name: string;
+  state: string;
+  score: number;
+  metadata: string;
+  created_at: number;
+  updated_at: number;
+  [key: string]: unknown;
+}
+
+/** Raw row returned by SQLite for anchors */
+interface AnchorRow {
+  metadata: string;
+  [key: string]: unknown;
+}
+
+/** Raw row returned by SQLite for events */
+interface EventRow {
+  data: string;
+  metadata: string;
+  [key: string]: unknown;
+}
+
+/** Row with just an id field */
+interface IdRow {
+  id: string;
+}
+
+/** Frame header row */
+interface FrameHeaderRow {
+  id: string;
+  type: string;
+  name: string;
+  state: string;
+  score: number;
+  created_at: number;
+  updated_at: number;
+}
+
 export interface LazyLoadOptions {
   preloadDepth?: number; // How many levels to preload
   chunkSize?: number; // Items per chunk
@@ -195,7 +237,7 @@ export class LazyContextLoader {
     const startTime = Date.now();
 
     if (parallel) {
-      const promises: Promise<any>[] = [];
+      const promises: Promise<unknown>[] = [];
 
       for (const frameId of frameIds) {
         promises.push(this.lazyFrame(frameId).get());
@@ -234,24 +276,27 @@ export class LazyContextLoader {
   /**
    * Load only frame headers (lightweight)
    */
-  async loadFrameHeaders(frameIds: string[]): Promise<Map<string, any>> {
+  async loadFrameHeaders(
+    frameIds: string[]
+  ): Promise<
+    Map<string, FrameHeaderRow & { createdAt: number; updatedAt: number }>
+  > {
     const placeholders = frameIds.map(() => '?').join(',');
     const query = `
       SELECT id, type, name, state, score, created_at, updated_at
-      FROM frames 
+      FROM frames
       WHERE id IN (${placeholders})
     `;
 
-    const rows = this.db.prepare(query).all(...frameIds) as any[];
-    const headers = new Map<string, any>();
+    const rows = this.db.prepare(query).all(...frameIds) as FrameHeaderRow[];
+    const headers = new Map<
+      string,
+      FrameHeaderRow & { createdAt: number; updatedAt: number }
+    >();
 
     for (const row of rows) {
       headers.set(row.id, {
-        id: row.id,
-        type: row.type,
-        name: row.name,
-        state: row.state,
-        score: row.score,
+        ...row,
         createdAt: row.created_at,
         updatedAt: row.updated_at,
       });
@@ -265,13 +310,13 @@ export class LazyContextLoader {
    */
   async *streamContext(
     query: string,
-    params: any[] = []
+    params: unknown[] = []
   ): AsyncGenerator<Frame | Anchor | Event, void, unknown> {
     const stmt = this.db.prepare(query);
     const iterator = stmt.iterate(...params);
 
     for (const row of iterator) {
-      yield row as any;
+      yield row as Frame | Anchor | Event;
     }
   }
 
@@ -321,14 +366,14 @@ export class LazyContextLoader {
     try {
       const row = this.db
         .prepare('SELECT * FROM frames WHERE id = ?')
-        .get(frameId) as any;
+        .get(frameId) as FrameRow | undefined;
 
       if (!row) return null;
 
       return {
         ...row,
         metadata: JSON.parse(row.metadata || '{}'),
-      };
+      } as unknown as Frame;
     } catch (error: unknown) {
       // Return mock frame if table doesn't exist (for benchmarking)
       if (frameId.startsWith('frame-')) {
@@ -341,7 +386,7 @@ export class LazyContextLoader {
           created_at: Date.now(),
           updated_at: Date.now(),
           metadata: {},
-        } as any;
+        } as unknown as Frame;
       }
       return null;
     }
@@ -353,12 +398,12 @@ export class LazyContextLoader {
         .prepare(
           'SELECT * FROM anchors WHERE frame_id = ? ORDER BY priority DESC, created_at DESC'
         )
-        .all(frameId) as any[];
+        .all(frameId) as AnchorRow[];
 
-      return rows.map((row: any) => ({
+      return rows.map((row) => ({
         ...row,
         metadata: JSON.parse(row.metadata || '{}'),
-      }));
+      })) as unknown as Anchor[];
     } catch {
       return []; // Return empty array if table doesn't exist
     }
@@ -370,13 +415,13 @@ export class LazyContextLoader {
         .prepare(
           'SELECT * FROM events WHERE frame_id = ? ORDER BY timestamp DESC LIMIT ?'
         )
-        .all(frameId, limit) as any[];
+        .all(frameId, limit) as EventRow[];
 
-      return rows.map((row: any) => ({
+      return rows.map((row) => ({
         ...row,
         data: JSON.parse(row.data || '{}'),
         metadata: JSON.parse(row.metadata || '{}'),
-      }));
+      })) as unknown as Event[];
     } catch {
       return []; // Return empty array if table doesn't exist
     }
@@ -395,19 +440,19 @@ export class LazyContextLoader {
             WHERE id IN (${frameIds.map(() => '?').join(',')})
             ORDER BY updated_at DESC
           `;
-          const rows = this.db.prepare(query).all(...frameIds) as any[];
-          return rows.map((r: any) => r.id);
+          const rows = this.db.prepare(query).all(...frameIds) as IdRow[];
+          return rows.map((r) => r.id);
         }
 
         case 'relevance': {
           // Get scores and sort
           const query = `
-            SELECT id, score FROM frames 
+            SELECT id, score FROM frames
             WHERE id IN (${frameIds.map(() => '?').join(',')})
             ORDER BY score DESC
           `;
-          const rows = this.db.prepare(query).all(...frameIds) as any[];
-          return rows.map((r: any) => r.id);
+          const rows = this.db.prepare(query).all(...frameIds) as IdRow[];
+          return rows.map((r) => r.id);
         }
 
         case 'frequency': {
@@ -420,8 +465,8 @@ export class LazyContextLoader {
             GROUP BY f.id
             ORDER BY event_count DESC
           `;
-          const rows = this.db.prepare(query).all(...frameIds) as any[];
-          return rows.map((r: any) => r.id);
+          const rows = this.db.prepare(query).all(...frameIds) as IdRow[];
+          return rows.map((r) => r.id);
         }
 
         default:

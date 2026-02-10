@@ -47,7 +47,7 @@ export class BatchOperationsManager {
       this.initializePreparedStatements();
     } else {
       // Will be initialized when used with getConnectionPool().withConnection()
-      this.db = undefined as any;
+      this.db = undefined!;
     }
   }
 

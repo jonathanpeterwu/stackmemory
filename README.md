@@ -25,6 +25,19 @@ Instead of a linear chat log, StackMemory organizes memory as a **call stack** o
 
 ---
 
+## Who is this for?
+
+| You are... | StackMemory helps you... |
+|------------|--------------------------|
+| **Solo dev using Claude Code** | Keep decisions, constraints, and progress across sessions — no more re-explaining context after `/clear` |
+| **Team using AI coding tools** | Share project context across agents and teammates with a single source of truth |
+| **AI-first startup** | Ship faster with persistent memory, automatic Linear sync, and recursive task orchestration |
+| **Open-source maintainer** | Onboard contributors and AI agents with durable project knowledge |
+
+If you use an LLM coding assistant and lose context between sessions, StackMemory fixes that.
+
+---
+
 ## Why StackMemory exists
 
 Tools forget decisions and constraints between sessions. StackMemory makes context durable and actionable.
@@ -533,8 +546,7 @@ See https://github.com/stackmemoryai/stackmemory/blob/main/docs/roadmap.md for o
 
 ## License
 
-- Hosted service: Proprietary
-- Open-source mirror: Apache 2.0 / MIT (TBD)
+Licensed under the [Business Source License 1.1](./LICENSE). You can use, modify, and self-host StackMemory freely. The one restriction: you may not offer it as a competing hosted service. The license converts to MIT after 4 years per release.
 
 ---
 

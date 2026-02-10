@@ -241,12 +241,12 @@ export function createCaptureCommand(): Command {
             LIMIT 5
           `
             )
-            .all() as any[];
+            .all() as Array<{ type: string; data: string; time: string }>;
 
           if (recentEvents.length > 0) {
             recentWork += '\nRecent Activity:\n';
             recentEvents.forEach((event) => {
-              const data = JSON.parse(event.data);
+              const data = JSON.parse(event.data) as Record<string, string>;
               recentWork += `  - ${event.type}: ${data.message || data.name || 'activity'}\n`;
             });
           }

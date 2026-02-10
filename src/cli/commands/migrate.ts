@@ -108,7 +108,7 @@ async function getCurrentVersion(m: Migrator): Promise<number> {
     .sqlite!.prepare(
       'SELECT COALESCE(MAX(version), 0) AS v FROM railway_schema_version'
     )
-    .get() as any;
+    .get() as { v: number } | undefined;
   return Number(row?.v || 0);
 }
 
@@ -128,7 +128,11 @@ async function listApplied(
     .sqlite!.prepare(
       'SELECT version, description, applied_at FROM railway_schema_version ORDER BY version ASC'
     )
-    .all() as any[];
+    .all() as Array<{
+    version: number;
+    description: string;
+    applied_at: string;
+  }>;
   return rows.map((row) => ({
     version: Number(row.version),
     description: row.description,

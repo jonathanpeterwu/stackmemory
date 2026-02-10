@@ -12,6 +12,17 @@ import {
   TaskPriority,
 } from '../../features/tasks/linear-task-manager.js';
 
+/** Raw task row from task_cache table */
+interface TaskCacheRow {
+  id: string;
+  title: string;
+  description: string;
+  status: string;
+  priority: string;
+  created_at: number;
+  [key: string]: unknown;
+}
+
 function getTaskStore(projectRoot: string): LinearTaskManager | null {
   const dbPath = join(projectRoot, '.stackmemory', 'context.db');
   if (!existsSync(dbPath)) {
@@ -20,10 +31,11 @@ function getTaskStore(projectRoot: string): LinearTaskManager | null {
     );
     return null;
   }
-  
+
   // Use project isolation for proper task management
   const config = {
-    linearApiKey: process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY,
+    linearApiKey:
+      process.env.STACKMEMORY_LINEAR_API_KEY || process.env.LINEAR_API_KEY,
     autoSync: true,
     syncInterval: 15,
   };
@@ -86,7 +98,7 @@ export function createTaskCommands(): Command {
         query += ' ORDER BY priority ASC, created_at DESC LIMIT ?';
         params.push(parseInt(options.limit));
 
-        const rows = db.prepare(query).all(...params) as any[];
+        const rows = db.prepare(query).all(...params) as TaskCacheRow[];
         db.close();
 
         if (rows.length === 0) {

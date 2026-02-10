@@ -517,23 +517,23 @@ function wrapStatement(
   const originalGet = stmt.get;
   const originalAll = stmt.all;
 
-  stmt.run = function (this: Database.Statement, ...args: any[]) {
+  stmt.run = function (this: Database.Statement, ...args: unknown[]) {
     return getProfiler().timeFunction(`${operationName}.run`, () =>
       originalRun.apply(this, args)
     );
-  } as any;
+  } as typeof stmt.run;
 
-  stmt.get = function (this: Database.Statement, ...args: any[]) {
+  stmt.get = function (this: Database.Statement, ...args: unknown[]) {
     return getProfiler().timeFunction(`${operationName}.get`, () =>
       originalGet.apply(this, args)
     );
-  } as any;
+  } as typeof stmt.get;
 
-  stmt.all = function (this: Database.Statement, ...args: any[]) {
+  stmt.all = function (this: Database.Statement, ...args: unknown[]) {
     return getProfiler().timeFunction(`${operationName}.all`, () =>
       originalAll.apply(this, args)
     );
-  } as any;
+  } as typeof stmt.all;
 
   return stmt;
 }

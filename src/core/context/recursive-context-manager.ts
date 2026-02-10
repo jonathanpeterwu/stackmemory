@@ -535,7 +535,11 @@ export class RecursiveContextManager {
 
         return { ...chunk, priority };
       })
-      .sort((a, b) => (b as any).priority - (a as any).priority);
+      .sort(
+        (a, b) =>
+          (b as { priority: number }).priority -
+          (a as { priority: number }).priority
+      );
   }
 
   /**

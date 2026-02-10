@@ -371,7 +371,8 @@ async function applyConfiguration(config: OnboardingConfig): Promise<void> {
     console.log(chalk.gray('Scanning for projects...'));
     const projectManager = ProjectManager.getInstance();
 
-    const scanPaths = (config as any).scanPaths || [
+    const scanPaths = ((config as Record<string, unknown>)
+      .scanPaths as string[]) || [
       join(homedir(), 'Dev'),
       join(homedir(), 'dev'),
       join(homedir(), 'Projects'),
@@ -380,7 +381,7 @@ async function applyConfiguration(config: OnboardingConfig): Promise<void> {
     ];
 
     await projectManager.scanAndCategorizeAllProjects(
-      scanPaths.filter((p: string) => existsSync(p))
+      scanPaths.filter((p) => existsSync(p))
     );
 
     const projects = projectManager.getAllProjects();

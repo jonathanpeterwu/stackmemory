@@ -250,7 +250,7 @@ export class DiscoveryHandlers {
         LIMIT 20
       `
         )
-        .all() as any[];
+        .all() as Array<{ data: string }>;
 
       for (const evt of fileEvents) {
         try {
@@ -373,7 +373,7 @@ export class DiscoveryHandlers {
         LIMIT 50
       `
         )
-        .all(Math.floor(Date.now() / 1000) - 3600) as any[]; // Last hour
+        .all(Math.floor(Date.now() / 1000) - 3600) as Array<{ data: string }>; // Last hour
 
       for (const evt of fileEvents) {
         try {

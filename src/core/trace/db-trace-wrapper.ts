@@ -12,6 +12,17 @@ export interface TracedDatabaseOptions extends Database.Options {
   slowQueryThreshold?: number;
 }
 
+interface QueryStats {
+  totalQueries: number;
+  slowQueries: number;
+  totalDuration: number;
+  queryTypes: Record<string, number>;
+}
+
+interface TracedDatabase extends Database.Database {
+  __queryStats?: QueryStats;
+}
+
 /**
  * Create a traced database instance
  */
@@ -85,11 +96,11 @@ export function wrapDatabase(
   } as typeof db.transaction;
 
   // Add query statistics tracking
-  (db as any).__queryStats = {
+  (db as TracedDatabase).__queryStats = {
     totalQueries: 0,
     slowQueries: 0,
     totalDuration: 0,
-    queryTypes: {} as Record<string, number>,
+    queryTypes: {},
   };
 
   return db;
@@ -250,7 +261,7 @@ function updateQueryStats(
   duration: number,
   slowQueryThreshold: number
 ): void {
-  const db = statement.database as any;
+  const db = statement.database as TracedDatabase;
   if (db.__queryStats) {
     db.__queryStats.totalQueries++;
     db.__queryStats.totalDuration += duration;
@@ -276,7 +287,7 @@ export function getQueryStatistics(db: Database.Database): {
   totalDuration: number;
   queryTypes: Record<string, number>;
 } | null {
-  const stats = (db as any).__queryStats;
+  const stats = (db as TracedDatabase).__queryStats;
   if (!stats) return null;
 
   return {
@@ -314,7 +325,7 @@ export async function traceQuery<T>(
       logger.error(`Database query failed: ${queryName}`, error as Error, {
         query,
         params,
-        errorCode: (error as any).code,
+        errorCode: (error as Error & { code?: string }).code,
       });
       throw error;
     }
@@ -334,7 +345,7 @@ export function createTracedTransaction<T>(
 
     try {
       const tx = db.transaction(fn);
-      const result = (tx as any).deferred();
+      const result = (tx as unknown as { deferred: () => T }).deferred();
 
       const duration = performance.now() - startTime;
       logger.info(`Transaction completed: ${name}`, {

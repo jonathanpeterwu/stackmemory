@@ -229,7 +229,13 @@ class RemoteStackMemoryMCP {
       LIMIT 50
     `
       )
-      .all() as any[];
+      .all() as Array<{
+      id: string;
+      type: string;
+      content: string;
+      importance: number;
+      last_accessed: number;
+    }>;
 
     stored.forEach((ctx) => {
       this.contexts.set(ctx.id, ctx);
@@ -610,7 +616,7 @@ class RemoteStackMemoryMCP {
           `%${query}%`,
           `%${query}%`,
           limit
-        ) as any[];
+        ) as Array<{ frame_id: string; name: string; type: string }>;
 
       frames.forEach((f) => {
         results.push({
@@ -634,7 +640,12 @@ class RemoteStackMemoryMCP {
         LIMIT ?
       `
         )
-        .all(this.projectId, `%${query}%`, limit) as any[];
+        .all(this.projectId, `%${query}%`, limit) as Array<{
+        anchor_id: string;
+        type: string;
+        text: string;
+        frame_name: string;
+      }>;
 
       anchors.forEach((a) => {
         results.push({

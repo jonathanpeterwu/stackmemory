@@ -532,9 +532,18 @@ export class WorktreeManager {
       ORDER BY is_main DESC, branch ASC
     `);
 
-    const rows = stmt.all() as any[];
+    const rows = stmt.all() as Array<{
+      path: string;
+      branch: string;
+      commit: string;
+      is_main: number;
+      is_bare: number;
+      is_detached: number;
+      linked_path: string;
+      context_id: string;
+    }>;
 
-    return rows.map((row: any) => ({
+    return rows.map((row) => ({
       path: row.path,
       branch: row.branch,
       commit: row.commit,
@@ -553,11 +562,11 @@ export class WorktreeManager {
     if (!this.db) return;
 
     const activeWorktrees = this.detectWorktrees();
-    const activePaths = new Set(activeWorktrees.map((w: any) => w.path));
+    const activePaths = new Set(activeWorktrees.map((w) => w.path));
 
     // Get all stored worktrees
     const stmt = this.db.prepare('SELECT * FROM worktrees');
-    const stored = stmt.all() as any[];
+    const stored = stmt.all() as Array<{ path: string; id: string }>;
 
     // Remove stale entries
     const deleteStmt = this.db.prepare('DELETE FROM worktrees WHERE id = ?');

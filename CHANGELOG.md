@@ -5,6 +5,46 @@ All notable changes to StackMemory will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.0.0] - 2026-02-10
+
+### Highlights
+- First stable release of StackMemory
+- Licensed under BSL 1.1 (converts to MIT after 4 years)
+- 652 tests passing, TypeScript strict mode, Node 20+ required
+
+### Added
+- FTS5 full-text search with BM25 ranking and hybrid scoring
+- sqlite-vec embedding support with multi-provider architecture (Xenova, OpenAI)
+- Memory monitor daemon with auto-capture/clear cycle
+- Prompt Forge (GEPA) with AGENT.md watcher and extensions system
+- Skills system: spec generator, Linear task runner, agent prompt consolidation
+- DiffMem integration for long-term user memory
+- Retrieval signals, garbage collection, cold storage, multi-repo support
+- Node.js 20+ runtime version check at CLI startup
+- Claude Code hooks: auto-init on wrapper launch
+
+### Changed
+- Removed SMS/WhatsApp/Twilio integration (replaced with terminal bell notification)
+- Removed ngrok dependency
+- Reduced `as any` casts by 71% (153 to 44) with proper TypeScript interfaces
+- Consolidated test suite from 719 to 652 focused tests
+- CI/CD: Node 20+22 matrix, fixed deprecated actions, added concurrency groups
+- Build: clean dist before build, removed source maps from tarball (2.1MB to 735KB)
+- License changed from MIT to BSL 1.1
+
+### Fixed
+- Schema unification between FrameDatabase and SQLiteAdapter
+- FTS5 empty query fallback to LIKE search
+- Pre-publish script git dirty check race condition
+- Embedding provider initPromise reset on failure
+- SQLite pragma conflict in skills CLI
+- CLI test timeout flakes via module import caching
+
+### Security
+- Feature flags cleanup (removed stale whatsapp flag)
+- Removed dead feature stubs and scripts
+- Input validation improvements across CLI commands
+
 ## [0.3.15] - 2025-01-14
 
 ### Added

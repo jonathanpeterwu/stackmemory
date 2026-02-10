@@ -98,8 +98,10 @@ export class TraceContext {
       enabled:
         process.env['DEBUG_TRACE'] === 'true' ||
         process.env['STACKMEMORY_DEBUG'] === 'true',
-      verbosity: (process.env['TRACE_VERBOSITY'] as any) || 'full',
-      output: (process.env['TRACE_OUTPUT'] as any) || 'console',
+      verbosity:
+        (process.env['TRACE_VERBOSITY'] as TraceConfig['verbosity']) || 'full',
+      output:
+        (process.env['TRACE_OUTPUT'] as TraceConfig['output']) || 'console',
       includeParams: process.env['TRACE_PARAMS'] !== 'false',
       includeResults: process.env['TRACE_RESULTS'] !== 'false',
       maskSensitive: process.env['TRACE_MASK_SENSITIVE'] !== 'false',

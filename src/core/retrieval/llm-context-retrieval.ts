@@ -4,12 +4,7 @@
  */
 
 import Database from 'better-sqlite3';
-import {
-  FrameManager,
-  Frame,
-  Anchor,
-  Event,
-} from '../context/index.js';
+import { FrameManager, Frame, Anchor, Event } from '../context/index.js';
 import { QueryParser, StackMemoryQuery } from '../query/query-parser.js';
 import { CompressedSummaryGenerator } from './summary-generator.js';
 import {
@@ -711,12 +706,12 @@ Respond with only the JSON object, no other text.`;
         ORDER BY priority DESC, created_at DESC
       `
         )
-        .all(frameId) as any[];
+        .all(frameId) as Array<{ metadata: string; [key: string]: unknown }>;
 
       return rows.map((row) => ({
         ...row,
         metadata: JSON.parse(row.metadata || '{}'),
-      }));
+      })) as unknown as Anchor[];
     } catch {
       return [];
     }

@@ -38,9 +38,11 @@ export async function callClaude(
       system,
       messages: [{ role: 'user', content: prompt }],
     });
-    const block = (msg as any)?.content?.[0];
+    const block = msg?.content?.[0];
     const text =
-      block && 'text' in block ? (block as any).text : JSON.stringify(msg);
+      block && 'text' in block
+        ? (block as { text: string }).text
+        : JSON.stringify(msg);
     return text;
   } catch {
     // Network/auth errors: behave like offline/no-key mode

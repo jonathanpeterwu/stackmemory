@@ -19,7 +19,10 @@ import {
 export interface LifecycleHooks {
   preIteration?: (context: IterationContext) => Promise<IterationContext>;
   postIteration?: (iteration: RalphIteration) => Promise<void>;
-  onStateChange?: (oldState: RalphLoopState, newState: RalphLoopState) => Promise<void>;
+  onStateChange?: (
+    oldState: RalphLoopState,
+    newState: RalphLoopState
+  ) => Promise<void>;
   onError?: (error: Error, context: any) => Promise<void>;
   onComplete?: (state: RalphLoopState) => Promise<void>;
   onCheckpoint?: (checkpoint: Checkpoint) => Promise<void>;
@@ -31,14 +34,15 @@ export class IterationLifecycle extends EventEmitter {
   private checkpoints: Checkpoint[] = [];
   private currentIteration?: RalphIteration;
   private iterationHistory: IterationEvent[] = [];
-  private activeTimers: Map<string, NodeJS.Timeout> = new Map();
+  private activeTimers: Map<string, NodeJS.Timeout & { startTime?: number }> =
+    new Map();
 
   constructor(
     config?: Partial<RalphStackMemoryConfig['lifecycle']>,
     hooks?: LifecycleHooks
   ) {
     super();
-    
+
     this.config = {
       hooks: {
         preIteration: config?.hooks?.preIteration ?? true,
@@ -66,7 +70,7 @@ export class IterationLifecycle extends EventEmitter {
    */
   registerHooks(hooks: LifecycleHooks): void {
     this.hooks = { ...this.hooks, ...hooks };
-    
+
     logger.debug('Lifecycle hooks registered', {
       registered: Object.keys(hooks),
     });
@@ -320,8 +324,8 @@ export class IterationLifecycle extends EventEmitter {
    * Restore from checkpoint
    */
   async restoreFromCheckpoint(checkpointId: string): Promise<void> {
-    const checkpoint = this.checkpoints.find(c => c.id === checkpointId);
-    
+    const checkpoint = this.checkpoints.find((c) => c.id === checkpointId);
+
     if (!checkpoint) {
       throw new Error(`Checkpoint not found: ${checkpointId}`);
     }
@@ -353,15 +357,15 @@ export class IterationLifecycle extends EventEmitter {
     let events = [...this.iterationHistory];
 
     if (filter?.type) {
-      events = events.filter(e => e.type === filter.type);
+      events = events.filter((e) => e.type === filter.type);
     }
 
     if (filter?.iteration !== undefined) {
-      events = events.filter(e => e.iteration === filter.iteration);
+      events = events.filter((e) => e.iteration === filter.iteration);
     }
 
     if (filter?.since) {
-      events = events.filter(e => e.timestamp >= filter.since);
+      events = events.filter((e) => e.timestamp >= filter.since);
     }
 
     return events;
@@ -472,10 +476,11 @@ export class IterationLifecycle extends EventEmitter {
    * Clean old checkpoints based on retention
    */
   private async cleanOldCheckpoints(): Promise<void> {
-    const cutoff = Date.now() - this.config.checkpoints.retentionDays * 24 * 60 * 60 * 1000;
-    
+    const cutoff =
+      Date.now() - this.config.checkpoints.retentionDays * 24 * 60 * 60 * 1000;
+
     const before = this.checkpoints.length;
-    this.checkpoints = this.checkpoints.filter(c => c.timestamp >= cutoff);
+    this.checkpoints = this.checkpoints.filter((c) => c.timestamp >= cutoff);
     const removed = before - this.checkpoints.length;
 
     if (removed > 0) {
@@ -497,7 +502,7 @@ export class IterationLifecycle extends EventEmitter {
     };
 
     this.checkpoints.push(checkpoint);
-    
+
     logger.info('Final checkpoint created', {
       id: checkpoint.id,
       iterations: state.iteration,
@@ -510,7 +515,7 @@ export class IterationLifecycle extends EventEmitter {
   private async restoreGitState(commit: string): Promise<void> {
     // Stash any uncommitted changes
     execSync('git stash', { encoding: 'utf8' });
-    
+
     // Checkout the commit
     execSync(`git checkout ${commit}`, { encoding: 'utf8' });
   }
@@ -565,10 +570,11 @@ export class IterationLifecycle extends EventEmitter {
    */
   private startTimer(name: string): void {
     const start = Date.now();
-    this.activeTimers.set(name, setTimeout(() => {
+    const timeout = setTimeout(() => {
       this.activeTimers.delete(name);
-    }, 0) as any);
-    (this.activeTimers.get(name) as any).startTime = start;
+    }, 0) as NodeJS.Timeout & { startTime?: number };
+    timeout.startTime = start;
+    this.activeTimers.set(name, timeout);
   }
 
   /**
@@ -578,7 +584,7 @@ export class IterationLifecycle extends EventEmitter {
     const timer = this.activeTimers.get(name);
     if (!timer) return 0;
 
-    const duration = Date.now() - (timer as any).startTime;
+    const duration = Date.now() - (timer.startTime || Date.now());
     clearTimeout(timer);
     this.activeTimers.delete(name);
 

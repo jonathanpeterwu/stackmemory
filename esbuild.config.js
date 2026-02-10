@@ -27,7 +27,7 @@ const buildConfig = {
   platform: 'node',
   target: 'node20',
   format: 'esm',
-  sourcemap: true,
+  sourcemap: false,
   allowOverwrite: true,
   logLevel: 'info',
   preserveSymlinks: false,
