@@ -10,6 +10,7 @@ import type {
   HarnessOptions,
   HarnessResult,
 } from './types.js';
+import type { HarnessRunMetrics } from './baselines.js';
 
 function heuristicPlan(input: PlanningInput): ImplementationPlan {
   // Generic fallback plan when Claude API is unavailable
@@ -58,6 +59,8 @@ export async function runSpike(
   const contextSummary = getLocalContextSummary(input.repoPath);
   const plannerPrompt = `Task: ${input.task}\nRepo: ${input.repoPath}\nNotes: ${input.contextNotes || '(none)'}\n${contextSummary}\nConstraints: Keep the plan minimal and implementable in a single PR.`;
 
+  const t0 = Date.now();
+
   let plan: ImplementationPlan;
   try {
     const raw = await callClaude(plannerPrompt, {
@@ -78,6 +81,8 @@ export async function runSpike(
   } catch {
     plan = heuristicPlan(input);
   }
+
+  const planLatencyMs = Date.now() - t0;
 
   // Implementer (Codex by default) with retry loop driven by critique suggestions
   const implementer = (options.implementer || 'codex') as 'codex' | 'claude';
@@ -160,7 +165,26 @@ export async function runSpike(
     }
   }
 
-  // Persist audit
+  const totalLatencyMs = Date.now() - t0;
+
+  // Build run metrics for benchmark tracking
+  const runMetrics: HarnessRunMetrics = {
+    timestamp: Date.now(),
+    task: input.task,
+    plannerModel: options.plannerModel || 'default',
+    reviewerModel: options.reviewerModel || 'default',
+    implementer,
+    planLatencyMs,
+    totalLatencyMs,
+    iterations: iterations.length,
+    approved,
+    editAttempts: 0,
+    editSuccesses: 0,
+    editFuzzyFallbacks: 0,
+    contextTokens: 0,
+  };
+
+  // Persist audit + metrics
   try {
     const dir =
       options.auditDir || path.join(input.repoPath, '.stackmemory', 'build');
@@ -175,11 +199,16 @@ export async function runSpike(
           options: { ...options, auditDir: undefined },
           plan,
           iterations,
+          metrics: runMetrics,
         },
         null,
         2
       )
     );
+
+    // Append to metrics JSONL for time-series analysis
+    const metricsFile = path.join(dir, 'harness-metrics.jsonl');
+    fs.appendFileSync(metricsFile, JSON.stringify(runMetrics) + '\n');
   } catch {
     // best-effort only
   }
