@@ -17,7 +17,7 @@ const cli = (cmd: string) => `node ${cliPath} ${cmd}`;
 // NOTE: These tests have implementation dependencies
 // Simpler tests are in src/__tests__/integration/cli-integration.test.ts
 
-describe('CLI Integration Tests', () => {
+describe('CLI Integration Tests', { timeout: 60_000 }, () => {
   let testDir: string;
 
   beforeEach(() => {
@@ -27,7 +27,7 @@ describe('CLI Integration Tests', () => {
     process.chdir(testDir);
 
     // Initialize StackMemory in test directory
-    execSync(cli('init'), { cwd: testDir, timeout: 10000 });
+    execSync(cli('init'), { cwd: testDir, timeout: 30000 });
 
     // Create context.db since init skips DB creation in test mode
     const dbDir = path.join(testDir, '.stackmemory');
@@ -98,7 +98,7 @@ describe('CLI Integration Tests', () => {
       const result = execSync(cli('clear --status'), {
         cwd: testDir,
         encoding: 'utf8',
-        timeout: 25000,
+        timeout: 30000,
       });
 
       // Updated expectations to match actual output
@@ -112,7 +112,7 @@ describe('CLI Integration Tests', () => {
       const result = execSync(cli('capture'), {
         cwd: testDir,
         encoding: 'utf8',
-        timeout: 15000,
+        timeout: 30000,
       });
 
       // Check for any successful output
@@ -128,13 +128,13 @@ describe('CLI Integration Tests', () => {
 
     it('should load handoff document', { timeout: 30000 }, () => {
       // First generate a handoff
-      execSync(cli('capture'), { cwd: testDir, timeout: 15000 });
+      execSync(cli('capture'), { cwd: testDir, timeout: 30000 });
 
       // Then load it
       const result = execSync(cli('restore'), {
         cwd: testDir,
         encoding: 'utf8',
-        timeout: 15000,
+        timeout: 30000,
       });
 
       // Just check it ran without error
@@ -143,12 +143,12 @@ describe('CLI Integration Tests', () => {
 
     it('should capture handoff document', { timeout: 30000 }, () => {
       // Generate a capture
-      execSync(cli('capture'), { cwd: testDir, timeout: 15000 });
+      execSync(cli('capture'), { cwd: testDir, timeout: 30000 });
 
       const result = execSync(cli('capture'), {
         cwd: testDir,
         encoding: 'utf8',
-        timeout: 15000,
+        timeout: 30000,
       });
 
       // Just check it ran without error

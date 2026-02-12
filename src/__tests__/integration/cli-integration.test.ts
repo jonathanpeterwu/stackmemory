@@ -73,7 +73,7 @@ function createTestDb(testDir: string): void {
   db.close();
 }
 
-describe('CLI Integration', () => {
+describe('CLI Integration', { timeout: 60_000 }, () => {
   let testDir: string;
 
   beforeEach(() => {
@@ -135,16 +135,16 @@ describe('CLI Integration', () => {
   });
 
   describe('Clear Command', () => {
-    it('should show clear status', { timeout: 15000 }, () => {
+    it('should show clear status', { timeout: 45000 }, () => {
       // Initialize first
-      execSync(`node ${cliPath} init`, { cwd: testDir, timeout: 10000 });
+      execSync(`node ${cliPath} init`, { cwd: testDir, timeout: 30000 });
       // Create DB since init skips it in test mode
       createTestDb(testDir);
 
       const result = execSync(`node ${cliPath} clear --status`, {
         cwd: testDir,
         encoding: 'utf8',
-        timeout: 10000,
+        timeout: 30000,
       });
 
       expect(result).toContain('Context Usage');

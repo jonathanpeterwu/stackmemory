@@ -7,6 +7,16 @@ export default defineConfig({
     testTimeout: 30000,
     hookTimeout: 30000,
     include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
+    sequence: {
+      // Run CLI integration tests sequentially to avoid execSync resource contention
+      sequenceFiles: true,
+    },
+    poolOptions: {
+      forks: {
+        // Limit parallelism to prevent CLI integration test timeouts
+        maxForks: 6,
+      },
+    },
     exclude: [
       'node_modules',
       'dist',
