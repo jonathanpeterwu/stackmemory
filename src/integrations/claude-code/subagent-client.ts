@@ -1,11 +1,12 @@
 /**
  * Claude Code Subagent Client
- * 
+ *
  * Uses Claude Code's Task tool to spawn subagents instead of direct API calls
  * This leverages the Claude Code Max plan for unlimited subagent execution
  */
 
 import { logger } from '../../core/monitoring/logger.js';
+import { STRUCTURED_RESPONSE_SUFFIX } from '../../orchestrators/multimodal/constants.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
 import * as fs from 'fs';
@@ -15,7 +16,15 @@ import * as os from 'os';
 const execAsync = promisify(exec);
 
 export interface SubagentRequest {
-  type: 'planning' | 'code' | 'testing' | 'linting' | 'review' | 'improve' | 'context' | 'publish';
+  type:
+    | 'planning'
+    | 'code'
+    | 'testing'
+    | 'linting'
+    | 'review'
+    | 'improve'
+    | 'context'
+    | 'publish';
   task: string;
   context: Record<string, any>;
   systemPrompt?: string;
@@ -41,22 +50,23 @@ export class ClaudeCodeSubagentClient {
   private tempDir: string;
   private activeSubagents: Map<string, AbortController> = new Map();
   private mockMode: boolean;
-  
-  constructor(mockMode: boolean = true) { // Default to mock mode for testing
+
+  constructor(mockMode: boolean = true) {
+    // Default to mock mode for testing
     this.mockMode = mockMode;
-    
+
     // Create temp directory for subagent communication
     this.tempDir = path.join(os.tmpdir(), 'stackmemory-rlm');
     if (!fs.existsSync(this.tempDir)) {
       fs.mkdirSync(this.tempDir, { recursive: true });
     }
-    
+
     logger.info('Claude Code Subagent Client initialized', {
       tempDir: this.tempDir,
       mockMode: this.mockMode,
     });
   }
-  
+
   /**
    * Execute a subagent task using Claude Code's Task tool
    * This will spawn a new Claude instance with specific instructions
@@ -64,39 +74,44 @@ export class ClaudeCodeSubagentClient {
   async executeSubagent(request: SubagentRequest): Promise<SubagentResponse> {
     const startTime = Date.now();
     const subagentId = `${request.type}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-    
+
     logger.info(`Spawning ${request.type} subagent`, {
       subagentId,
       task: request.task.slice(0, 100),
       mockMode: this.mockMode,
     });
-    
+
     // Return mock responses for testing
     if (this.mockMode) {
       return this.getMockResponse(request, startTime, subagentId);
     }
-    
+
     try {
       // Create subagent prompt based on type
       const prompt = this.buildSubagentPrompt(request);
-      
+
       // Write context to temp file for large contexts
       const contextFile = path.join(this.tempDir, `${subagentId}-context.json`);
       await fs.promises.writeFile(
         contextFile,
         JSON.stringify(request.context, null, 2)
       );
-      
+
       // Create result file path
       const resultFile = path.join(this.tempDir, `${subagentId}-result.json`);
-      
+
       // Build the Task tool command
       // The Task tool will spawn a new Claude instance with the specified prompt
-      const taskCommand = this.buildTaskCommand(request, prompt, contextFile, resultFile);
-      
+      const taskCommand = this.buildTaskCommand(
+        request,
+        prompt,
+        contextFile,
+        resultFile
+      );
+
       // Execute via Claude Code's Task tool
       const result = await this.executeTaskTool(taskCommand, request.timeout);
-      
+
       // Read result from file
       let subagentResult: any = {};
       if (fs.existsSync(resultFile)) {
@@ -107,10 +122,10 @@ export class ClaudeCodeSubagentClient {
           subagentResult = { rawOutput: resultContent };
         }
       }
-      
+
       // Cleanup temp files
       this.cleanup(subagentId);
-      
+
       return {
         success: true,
         result: subagentResult,
@@ -119,10 +134,12 @@ export class ClaudeCodeSubagentClient {
         subagentType: request.type,
         tokens: this.estimateTokens(prompt + JSON.stringify(subagentResult)),
       };
-      
     } catch (error: any) {
-      logger.error(`Subagent execution failed: ${request.type}`, { error, subagentId });
-      
+      logger.error(`Subagent execution failed: ${request.type}`, {
+        error,
+        subagentId,
+      });
+
       return {
         success: false,
         result: null,
@@ -132,16 +149,18 @@ export class ClaudeCodeSubagentClient {
       };
     }
   }
-  
+
   /**
    * Execute multiple subagents in parallel
    */
-  async executeParallel(requests: SubagentRequest[]): Promise<SubagentResponse[]> {
+  async executeParallel(
+    requests: SubagentRequest[]
+  ): Promise<SubagentResponse[]> {
     logger.info(`Executing ${requests.length} subagents in parallel`);
-    
-    const promises = requests.map(request => this.executeSubagent(request));
+
+    const promises = requests.map((request) => this.executeSubagent(request));
     const results = await Promise.allSettled(promises);
-    
+
     return results.map((result, index) => {
       if (result.status === 'fulfilled') {
         return result.value;
@@ -156,7 +175,7 @@ export class ClaudeCodeSubagentClient {
       }
     });
   }
-  
+
   /**
    * Build subagent prompt based on type
    */
@@ -176,7 +195,7 @@ export class ClaudeCodeSubagentClient {
         Context is available in the provided file.
         
         Output a JSON structure with the task decomposition.`,
-      
+
       code: `You are a Code Generation Subagent. Your role is to implement high-quality, production-ready code.
         
         Task: ${request.task}
@@ -191,7 +210,7 @@ export class ClaudeCodeSubagentClient {
         Context and requirements are in the provided file.
         
         Output the implementation code.`,
-      
+
       testing: `You are a Testing Subagent specializing in comprehensive test generation.
         
         Task: ${request.task}
@@ -207,7 +226,7 @@ export class ClaudeCodeSubagentClient {
         Context and code to test are in the provided file.
         
         Output a complete test suite.`,
-      
+
       linting: `You are a Linting Subagent ensuring code quality and standards.
         
         Task: ${request.task}
@@ -223,7 +242,7 @@ export class ClaudeCodeSubagentClient {
         Code to analyze is in the context file.
         
         Output a JSON report with issues and fixes.`,
-      
+
       review: `You are a Code Review Subagent performing thorough multi-stage reviews.
         
         Task: ${request.task}
@@ -240,7 +259,7 @@ export class ClaudeCodeSubagentClient {
         Code and context are in the provided file.
         
         Output a detailed review with quality score and improvements.`,
-      
+
       improve: `You are an Improvement Subagent enhancing code based on reviews.
         
         Task: ${request.task}
@@ -257,7 +276,7 @@ export class ClaudeCodeSubagentClient {
         Review feedback and code are in the context file.
         
         Output the improved code.`,
-      
+
       context: `You are a Context Retrieval Subagent finding relevant information.
         
         Task: ${request.task}
@@ -272,7 +291,7 @@ export class ClaudeCodeSubagentClient {
         Search parameters are in the context file.
         
         Output relevant context snippets.`,
-      
+
       publish: `You are a Publishing Subagent handling releases and deployments.
         
         Task: ${request.task}
@@ -289,10 +308,13 @@ export class ClaudeCodeSubagentClient {
         
         Output the release plan and commands.`,
     };
-    
-    return request.systemPrompt || prompts[request.type] || prompts.planning;
+
+    return (
+      (request.systemPrompt || prompts[request.type] || prompts.planning) +
+      STRUCTURED_RESPONSE_SUFFIX
+    );
   }
-  
+
   /**
    * Build Task tool command
    * This creates a command that Claude Code's Task tool can execute
@@ -336,16 +358,16 @@ esac
 # Write result
 echo '{"status": "completed", "type": "${request.type}"}' > "${resultFile}"
 `;
-    
+
     const scriptFile = path.join(this.tempDir, `${request.type}-script.sh`);
     fs.writeFileSync(scriptFile, scriptContent);
     fs.chmodSync(scriptFile, '755');
-    
+
     // Return the command that Task tool will execute
     // In practice, this would trigger Claude Code's Task tool
     return scriptFile;
   }
-  
+
   /**
    * Execute via Task tool (simulated for now)
    * In production, this would use Claude Code's actual Task tool API
@@ -361,7 +383,7 @@ echo '{"status": "completed", "type": "${request.type}"}' > "${resultFile}"
         timeout: timeout || 300000, // 5 minutes default
         maxBuffer: 10 * 1024 * 1024, // 10MB buffer
       });
-      
+
       return result;
     } catch (error: any) {
       if (error.killed || error.signal === 'SIGTERM') {
@@ -370,18 +392,20 @@ echo '{"status": "completed", "type": "${request.type}"}' > "${resultFile}"
       throw error;
     }
   }
-  
+
   /**
    * Get mock response for testing
    */
   private async getMockResponse(
-    request: SubagentRequest, 
-    startTime: number, 
+    request: SubagentRequest,
+    startTime: number,
     subagentId: string
   ): Promise<SubagentResponse> {
     // Simulate some processing time
-    await new Promise(resolve => setTimeout(resolve, Math.random() * 20 + 10));
-    
+    await new Promise((resolve) =>
+      setTimeout(resolve, Math.random() * 20 + 10)
+    );
+
     const mockResponses: Record<string, any> = {
       planning: {
         tasks: [
@@ -392,7 +416,7 @@ echo '{"status": "completed", "type": "${request.type}"}' > "${resultFile}"
         dependencies: [],
         estimated_time: 300,
       },
-      
+
       code: {
         implementation: `function greetUser(name: string): string {
   if (!name || typeof name !== 'string') {
@@ -404,7 +428,7 @@ echo '{"status": "completed", "type": "${request.type}"}' > "${resultFile}"
         lines_added: 6,
         lines_removed: 0,
       },
-      
+
       testing: {
         tests: [
           {
@@ -417,13 +441,13 @@ echo '{"status": "completed", "type": "${request.type}"}' > "${resultFile}"
         ],
         coverage: { lines: 100, branches: 100, functions: 100 },
       },
-      
+
       linting: {
         issues: [],
         fixes: [],
         passed: true,
       },
-      
+
       review: {
         quality: 0.85,
         issues: [
@@ -437,7 +461,7 @@ echo '{"status": "completed", "type": "${request.type}"}' > "${resultFile}"
         ],
         improvements: [],
       },
-      
+
       improve: {
         improved_code: `/**
  * Greets a user with their name
@@ -451,18 +475,15 @@ function greetUser(name: string): string {
   }
   return \`Hello, \${name}!\`;
 }`,
-        changes_made: [
-          'Added JSDoc documentation',
-          'Improved error message',
-        ],
+        changes_made: ['Added JSDoc documentation', 'Improved error message'],
       },
-      
+
       context: {
         relevant_files: ['src/greet.ts', 'test/greet.test.ts'],
         patterns: ['greeting functions', 'input validation'],
         dependencies: [],
       },
-      
+
       publish: {
         version: '1.0.0',
         changelog: 'Initial release',
@@ -470,9 +491,9 @@ function greetUser(name: string): string {
         reason: 'Mock mode - no actual publishing',
       },
     };
-    
+
     const result = mockResponses[request.type] || {};
-    
+
     return {
       success: true,
       result,
@@ -482,7 +503,7 @@ function greetUser(name: string): string {
       tokens: this.estimateTokens(JSON.stringify(result)),
     };
   }
-  
+
   /**
    * Estimate token usage
    */
@@ -490,7 +511,7 @@ function greetUser(name: string): string {
     // Rough estimation: 1 token ≈ 4 characters
     return Math.ceil(text.length / 4);
   }
-  
+
   /**
    * Cleanup temporary files
    */
@@ -500,7 +521,7 @@ function greetUser(name: string): string {
       `${subagentId}-result.json`,
       `${subagentId}-script.sh`,
     ];
-    
+
     for (const pattern of patterns) {
       const filePath = path.join(this.tempDir, pattern);
       if (fs.existsSync(filePath)) {
@@ -512,17 +533,21 @@ function greetUser(name: string): string {
       }
     }
   }
-  
+
   /**
    * Create a mock Task tool response for development
    * This simulates what Claude Code's Task tool would return
    */
-  async mockTaskToolExecution(request: SubagentRequest): Promise<SubagentResponse> {
+  async mockTaskToolExecution(
+    request: SubagentRequest
+  ): Promise<SubagentResponse> {
     const startTime = Date.now();
-    
+
     // Simulate processing delay
-    await new Promise(resolve => setTimeout(resolve, 1000 + Math.random() * 2000));
-    
+    await new Promise((resolve) =>
+      setTimeout(resolve, 1000 + Math.random() * 2000)
+    );
+
     // Generate mock responses based on subagent type
     const mockResponses: Record<string, any> = {
       planning: {
@@ -578,7 +603,7 @@ describe('Solution', () => {
         ],
       },
     };
-    
+
     return {
       success: true,
       result: mockResponses[request.type] || { status: 'completed' },
@@ -588,7 +613,7 @@ describe('Solution', () => {
       tokens: Math.floor(Math.random() * 5000) + 1000,
     };
   }
-  
+
   /**
    * Get active subagent statistics
    */
@@ -598,7 +623,7 @@ describe('Solution', () => {
       tempDir: this.tempDir,
     };
   }
-  
+
   /**
    * Cleanup all resources
    */
@@ -608,7 +633,7 @@ describe('Solution', () => {
       controller.abort();
     }
     this.activeSubagents.clear();
-    
+
     // Clean temp directory
     if (fs.existsSync(this.tempDir)) {
       const files = await fs.promises.readdir(this.tempDir);
@@ -616,7 +641,7 @@ describe('Solution', () => {
         await fs.promises.unlink(path.join(this.tempDir, file));
       }
     }
-    
+
     logger.info('Claude Code Subagent Client cleaned up');
   }
 }

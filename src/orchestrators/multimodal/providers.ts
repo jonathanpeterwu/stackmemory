@@ -1,5 +1,7 @@
 import { spawnSync } from 'child_process';
 
+import { STRUCTURED_RESPONSE_SUFFIX } from './constants.js';
+
 // Lightweight provider wrappers with safe fallbacks for a spike.
 
 export async function callClaude(
@@ -29,7 +31,8 @@ export async function callClaude(
   const client = new Anthropic({ apiKey });
   const model = options.model || 'claude-sonnet-4-20250514';
   const system =
-    options.system || 'You are a precise software planning assistant.';
+    (options.system || 'You are a precise software planning assistant.') +
+    STRUCTURED_RESPONSE_SUFFIX;
 
   try {
     const msg = await client.messages.create({

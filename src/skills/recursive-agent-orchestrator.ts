@@ -22,6 +22,7 @@ import { LinearTaskManager } from '../features/tasks/linear-task-manager.js';
 import { ParallelExecutor } from '../core/execution/parallel-executor.js';
 import { RecursiveContextManager } from '../core/context/recursive-context-manager.js';
 import { ClaudeCodeSubagentClient } from '../integrations/claude-code/subagent-client.js';
+import { STRUCTURED_RESPONSE_SUFFIX } from '../orchestrators/multimodal/constants.js';
 
 // Subagent types
 export type SubagentType =
@@ -169,13 +170,15 @@ export class RecursiveAgentOrchestrator {
       model: 'claude-sonnet-4-5-20250929',
       maxTokens: 20000,
       temperature: 0.3,
-      systemPrompt: `You decompose tasks into parallel/sequential subtask trees.
+      systemPrompt:
+        `You decompose tasks into parallel/sequential subtask trees.
 Output JSON: { subtasks: [{ id, description, agent, dependencies[], parallel: bool }] }
 Rules:
 - Maximize parallelism — independent tasks run concurrently
 - Each subtask names its agent type: planning, code, testing, linting, review, improve, context, publish
 - Include failure modes and rollback steps for risky operations
-- Keep subtask descriptions actionable (verb + object + constraint)`,
+- Keep subtask descriptions actionable (verb + object + constraint)` +
+        STRUCTURED_RESPONSE_SUFFIX,
       capabilities: ['decompose', 'analyze', 'strategize', 'prioritize'],
     });
 
@@ -185,14 +188,15 @@ Rules:
       model: 'claude-sonnet-4-5-20250929',
       maxTokens: 30000,
       temperature: 0.2,
-      systemPrompt: `You implement code changes. Read existing code before modifying.
+      systemPrompt:
+        `You implement code changes. Read existing code before modifying.
 Output JSON: { success: bool, filesChanged: string[], changes: string[], notes: string[] }
 Rules:
 - Follow existing project conventions (naming, imports, patterns)
 - Add .js extensions to relative TypeScript imports (ESM)
 - Return undefined over throwing; log+continue over crash
 - No emojis, no unnecessary comments, functions under 20 lines
-- Validate inputs at system boundaries only`,
+- Validate inputs at system boundaries only` + STRUCTURED_RESPONSE_SUFFIX,
       capabilities: ['implement', 'refactor', 'optimize', 'document'],
     });
 
@@ -202,14 +206,15 @@ Rules:
       model: 'claude-sonnet-4-5-20250929',
       maxTokens: 25000,
       temperature: 0.1,
-      systemPrompt: `You generate and run tests using the project's test framework.
+      systemPrompt:
+        `You generate and run tests using the project's test framework.
 Output JSON: { success: bool, tests: [{ name, type, file }], coverage: string, notes: string[] }
 Rules:
 - Use vitest (describe/it/expect) — check existing tests for patterns
 - Prioritize: critical paths > edge cases > happy paths
 - Each test should assert meaningful behavior, not implementation details
 - Use parameterized tests (it.each) to consolidate similar cases
-- Run tests after writing: npm run test:run`,
+- Run tests after writing: npm run test:run` + STRUCTURED_RESPONSE_SUFFIX,
       capabilities: [
         'generate-tests',
         'validate',
@@ -224,13 +229,14 @@ Rules:
       model: 'claude-haiku-4-5-20251001',
       maxTokens: 15000,
       temperature: 0,
-      systemPrompt: `You run lint checks and fix issues.
+      systemPrompt:
+        `You run lint checks and fix issues.
 Output JSON: { success: bool, issuesFound: number, issuesFixed: number, remaining: string[] }
 Rules:
 - Run: npm run lint (ESLint + Prettier)
 - Auto-fix: npm run lint:fix
 - ESM imports require .js extension on relative paths
-- Report unfixable issues with file:line format`,
+- Report unfixable issues with file:line format` + STRUCTURED_RESPONSE_SUFFIX,
       capabilities: ['lint', 'format', 'type-check', 'security-scan'],
     });
 
@@ -240,14 +246,15 @@ Rules:
       model: 'claude-sonnet-4-5-20250929',
       maxTokens: 25000,
       temperature: 0.2,
-      systemPrompt: `You review code changes for quality, security, and correctness.
+      systemPrompt:
+        `You review code changes for quality, security, and correctness.
 Output JSON: { qualityScore: 0-1, issues: [{ severity, file, line, description, suggestion }], approved: bool }
 Rules:
 - Score 0.85+ = approved, below = needs improvement
 - Flag: SQL injection, XSS, secret exposure, command injection
 - Flag: functions > 20 lines, cyclomatic complexity > 5
 - Flag: missing error handling at system boundaries
-- Suggest specific fixes, not vague improvements`,
+- Suggest specific fixes, not vague improvements` + STRUCTURED_RESPONSE_SUFFIX,
       capabilities: [
         'review',
         'critique',
@@ -262,13 +269,14 @@ Rules:
       model: 'claude-sonnet-4-5-20250929',
       maxTokens: 30000,
       temperature: 0.3,
-      systemPrompt: `You implement review feedback and improve code quality.
+      systemPrompt:
+        `You implement review feedback and improve code quality.
 Output JSON: { success: bool, improvements: string[], filesChanged: string[] }
 Rules:
 - Apply only the specific improvements requested — no scope creep
 - Maintain backward compatibility unless explicitly breaking
 - Run lint + tests after changes to verify nothing regressed
-- Keep changes minimal and focused`,
+- Keep changes minimal and focused` + STRUCTURED_RESPONSE_SUFFIX,
       capabilities: ['enhance', 'refactor', 'optimize', 'polish'],
     });
 
@@ -278,13 +286,15 @@ Rules:
       model: 'claude-haiku-4-5-20251001',
       maxTokens: 10000,
       temperature: 0,
-      systemPrompt: `You retrieve relevant context from the codebase and specs.
+      systemPrompt:
+        `You retrieve relevant context from the codebase and specs.
 Output JSON: { context: string, sources: string[], relevanceScore: 0-1 }
 Rules:
 - Check docs/specs/ for ONE_PAGER.md, DEV_SPEC.md, PROMPT_PLAN.md
 - Check CLAUDE.md and AGENTS.md for project conventions
 - Search src/ for relevant implementations
-- Return concise summaries, not full file contents`,
+- Return concise summaries, not full file contents` +
+        STRUCTURED_RESPONSE_SUFFIX,
       capabilities: ['search', 'retrieve', 'summarize', 'contextualize'],
     });
 
@@ -294,13 +304,14 @@ Rules:
       model: 'claude-haiku-4-5-20251001',
       maxTokens: 15000,
       temperature: 0,
-      systemPrompt: `You handle releases and publishing.
+      systemPrompt:
+        `You handle releases and publishing.
 Output JSON: { success: bool, version: string, actions: string[] }
 Rules:
 - Verify lint + tests + build pass before any publish
 - Follow semver: breaking=major, feature=minor, fix=patch
 - Generate changelog from git log since last tag
-- Never force-push or skip pre-publish hooks`,
+- Never force-push or skip pre-publish hooks` + STRUCTURED_RESPONSE_SUFFIX,
       capabilities: ['publish-npm', 'github-release', 'deploy', 'document'],
     });
 
