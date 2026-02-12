@@ -69,6 +69,16 @@
             "timeout": 30
           }
         ]
+      },
+      {
+        "matcher": "Edit|MultiEdit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "# Log edit telemetry to .stackmemory/context.db\ndb_path=\"$CLAUDE_PROJECT_DIR/.stackmemory/context.db\"\nif [ ! -f \"$db_path\" ]; then exit 0; fi\ntool_name=\"${CLAUDE_TOOL_NAME:-unknown}\"\nfile_path=\"${CLAUDE_TOOL_INPUT_FILE_PATH:-}\"\noutput=\"${CLAUDE_TOOL_OUTPUT:-}\"\nsuccess=1\nerror_type=\"\"\nerror_msg=\"\"\nif echo \"$output\" | grep -qi 'not found in file\\|string to replace not found\\|could not find\\|multiple occurrences'; then\n  success=0\n  if echo \"$output\" | grep -qi 'not found in file\\|string to replace not found\\|could not find'; then\n    error_type='string_not_found'\n  elif echo \"$output\" | grep -qi 'multiple occurrences'; then\n    error_type='multiple_matches'\n  fi\n  error_msg=$(echo \"$output\" | head -1 | cut -c1-200)\nfi\nsqlite3 \"$db_path\" \"INSERT INTO edit_telemetry (tool_name, file_path, success, error_type, error_message) VALUES ('$tool_name', '$(echo \"$file_path\" | sed \"s/'/''/g\")', $success, '$(echo \"$error_type\" | sed \"s/'/''/g\")', '$(echo \"$error_msg\" | sed \"s/'/''/g\")')\" 2>/dev/null\nexit 0",
+            "timeout": 5
+          }
+        ]
       }
     ]
   }

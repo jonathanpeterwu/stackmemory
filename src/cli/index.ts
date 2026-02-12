@@ -58,6 +58,8 @@ import { createDiscoveryCommands } from './commands/discovery.js';
 import { createModelCommand } from './commands/model.js';
 import { registerSetupCommands } from './commands/setup.js';
 import { createPingCommand } from './commands/ping.js';
+import { createAuditCommand } from './commands/audit.js';
+import { createStatsCommand } from './commands/stats.js';
 import chalk from 'chalk';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -744,6 +746,8 @@ program.addCommand(createPingCommand());
 program.addCommand(createRetrievalCommands());
 program.addCommand(createDiscoveryCommands());
 program.addCommand(createModelCommand());
+program.addCommand(createAuditCommand());
+program.addCommand(createStatsCommand());
 
 // Register setup and diagnostic commands
 registerSetupCommands(program);

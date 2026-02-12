@@ -44,6 +44,7 @@ import { ToolCall, Trace } from '../../core/trace/types.js';
 import { LLMContextRetrieval } from '../../core/retrieval/index.js';
 import { DiscoveryHandlers } from './handlers/discovery-handlers.js';
 import { DiffMemHandlers } from './handlers/diffmem-handlers.js';
+import { fuzzyEdit } from '../../utils/fuzzy-edit.js';
 import { v4 as uuidv4 } from 'uuid';
 import {
   DEFAULT_PLANNER_MODEL,
@@ -120,6 +121,18 @@ class LocalStackMemoryMCP {
         influence_score REAL,
         timestamp INTEGER DEFAULT (unixepoch())
       );
+
+      CREATE TABLE IF NOT EXISTS edit_telemetry (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        timestamp INTEGER NOT NULL DEFAULT (unixepoch()),
+        session_id TEXT,
+        tool_name TEXT NOT NULL,
+        file_path TEXT,
+        success INTEGER NOT NULL DEFAULT 1,
+        error_type TEXT,
+        error_message TEXT
+      );
+      CREATE INDEX IF NOT EXISTS idx_edit_telemetry_ts ON edit_telemetry(timestamp);
     `);
 
     // Initialize frame manager
@@ -1353,6 +1366,10 @@ class LocalStackMemoryMCP {
 
             case 'diffmem_status':
               result = await this.diffMemHandlers.handleStatus();
+              break;
+
+            case 'sm_edit':
+              result = await this.handleSmEdit(args);
               break;
 
             default:
@@ -3062,6 +3079,43 @@ ${typeBreakdown}`,
         ],
       };
     }
+  }
+
+  private async handleSmEdit(args: any) {
+    const {
+      file_path: filePath,
+      old_string: oldString,
+      new_string: newString,
+      threshold = 0.85,
+    } = args;
+
+    if (!filePath || !oldString || newString === undefined) {
+      throw new Error('file_path, old_string, and new_string are required');
+    }
+
+    const { readFileSync, writeFileSync } = await import('fs');
+    const content = readFileSync(filePath, 'utf-8');
+    const editResult = fuzzyEdit(content, oldString, newString, threshold);
+
+    if (!editResult) {
+      return {
+        success: false,
+        error: 'No match found above threshold',
+        threshold,
+      };
+    }
+
+    writeFileSync(filePath, editResult.content, 'utf-8');
+
+    return {
+      success: true,
+      method: editResult.match.method,
+      confidence: editResult.match.confidence,
+      matchedText:
+        editResult.match.matchedText.length > 200
+          ? editResult.match.matchedText.slice(0, 200) + '...'
+          : editResult.match.matchedText,
+    };
   }
 
   async start() {

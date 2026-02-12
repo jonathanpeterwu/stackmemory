@@ -24,6 +24,7 @@ export class MCPToolDefinitions {
       ...this.getLinearTools(),
       ...this.getTraceTools(),
       ...this.getDiscoveryTools(),
+      ...this.getEditTools(),
     ];
   }
 
@@ -696,6 +697,43 @@ export class MCPToolDefinitions {
   }
 
   /**
+   * Edit tools (fuzzy edit fallback)
+   */
+  private getEditTools(): MCPToolDefinition[] {
+    return [
+      {
+        name: 'sm_edit',
+        description:
+          "Fuzzy file edit — fallback when Claude Code's Edit tool fails on whitespace or indentation mismatches. Uses four-tier matching: exact, whitespace-normalized, indentation-insensitive, and line-level fuzzy (Levenshtein).",
+        inputSchema: {
+          type: 'object',
+          properties: {
+            file_path: {
+              type: 'string',
+              description: 'Absolute path to the file to edit',
+            },
+            old_string: {
+              type: 'string',
+              description: 'The text to find and replace',
+            },
+            new_string: {
+              type: 'string',
+              description: 'The replacement text',
+            },
+            threshold: {
+              type: 'number',
+              default: 0.85,
+              description:
+                'Minimum similarity threshold for fuzzy matching (0-1). Default 0.85.',
+            },
+          },
+          required: ['file_path', 'old_string', 'new_string'],
+        },
+      },
+    ];
+  }
+
+  /**
    * Get tool definition by name
    */
   getToolDefinition(name: string): MCPToolDefinition | undefined {
@@ -706,7 +744,7 @@ export class MCPToolDefinitions {
    * Get tool names by category
    */
   getToolsByCategory(
-    category: 'context' | 'task' | 'linear' | 'trace' | 'discovery'
+    category: 'context' | 'task' | 'linear' | 'trace' | 'discovery' | 'edit'
   ): MCPToolDefinition[] {
     switch (category) {
       case 'context':
@@ -719,6 +757,8 @@ export class MCPToolDefinitions {
         return this.getTraceTools();
       case 'discovery':
         return this.getDiscoveryTools();
+      case 'edit':
+        return this.getEditTools();
       default:
         return [];
     }
