@@ -1,4 +1,11 @@
-import { callClaude, callCodexCLI, implementWithClaude } from './providers.js';
+import {
+  callClaude,
+  callCodexCLI,
+  captureGitDiff,
+  implementWithClaude,
+  parseEditMetrics,
+  runPostImplChecks,
+} from './providers.js';
 import * as fs from 'fs';
 import * as path from 'path';
 import { FrameManager } from '../../core/context/index.js';
@@ -132,9 +139,22 @@ export async function runSpike(
       lastOutput = impl.output;
     }
 
-    // Critic
-    const criticSystem = `You are a strict code reviewer. Return a JSON object: { approved: boolean, issues: string[], suggestions: string[] }`;
-    const criticPrompt = `Plan: ${plan.summary}\nAttempt ${i + 1}/${maxIters}\nCommand: ${lastCommand}\nOutput: ${lastOutput.slice(0, 2000)}`;
+    // Capture actual code changes for the critic
+    const diff =
+      options.dryRun !== false
+        ? '(dry run — no diff)'
+        : captureGitDiff(input.repoPath);
+
+    // Post-implementation verification: lint + tests
+    const checks =
+      options.dryRun !== false ? null : runPostImplChecks(input.repoPath);
+    const checksSection = checks
+      ? `\n\nPost-implementation checks:\n  Lint: ${checks.lintOk ? 'PASS' : 'FAIL'}\n${checks.lintOutput}\n  Tests: ${checks.testsOk ? 'PASS' : 'FAIL'}\n${checks.testOutput}`
+      : '';
+
+    // Critic reviews the diff, not the CLI log
+    const criticSystem = `You are a strict code reviewer. Review the git diff against the plan. Check for: correctness, missing steps, unrelated changes, bugs, security issues. Also review lint and test results if provided. Return raw JSON only (no markdown fences): { "approved": boolean, "issues": ["string"], "suggestions": ["string"] }`;
+    const criticPrompt = `Plan: ${plan.summary}\nAcceptance criteria:\n${plan.steps.map((s) => s.acceptanceCriteria?.join(', ') || s.title).join('\n')}\n\nAttempt ${i + 1}/${maxIters}\nImplementer exit: ${ok ? 'success' : 'failed'}\n\nGit diff:\n${diff}${checksSection}`;
     try {
       const raw = await callClaude(criticPrompt, {
         model: options.reviewerModel,
@@ -157,7 +177,7 @@ export async function runSpike(
     iterations.push({
       command: lastCommand,
       ok,
-      outputPreview: lastOutput.slice(0, 400),
+      outputPreview: diff.slice(0, 2000),
       critique: lastCritique,
     });
 
@@ -168,6 +188,13 @@ export async function runSpike(
   }
 
   const totalLatencyMs = Date.now() - t0;
+
+  // Parse edit metrics from the final git diff
+  const finalDiff =
+    options.dryRun !== false
+      ? '(dry run — no diff)'
+      : captureGitDiff(input.repoPath);
+  const editMetrics = parseEditMetrics(finalDiff);
 
   // Build run metrics for benchmark tracking
   const runMetrics: HarnessRunMetrics = {
@@ -180,10 +207,10 @@ export async function runSpike(
     totalLatencyMs,
     iterations: iterations.length,
     approved,
-    editAttempts: 0,
-    editSuccesses: 0,
-    editFuzzyFallbacks: 0,
-    contextTokens: 0,
+    editAttempts: editMetrics.editAttempts,
+    editSuccesses: editMetrics.editSuccesses,
+    editFuzzyFallbacks: editMetrics.editFuzzyFallbacks,
+    contextTokens: Math.ceil(finalDiff.length / 4),
   };
 
   // Persist audit + metrics

@@ -111,6 +111,9 @@ export function createBenchCommand(): Command {
           `  Total latency P95:       ${HARNESS_TARGETS.totalLatencyP95Ms}ms`
         );
         console.log(
+          `  Single-iter latency P95: ${HARNESS_TARGETS.singleIterLatencyP95Ms}ms`
+        );
+        console.log(
           `  First-pass approval:     ${(HARNESS_TARGETS.firstPassApprovalRate * 100).toFixed(0)}%`
         );
         console.log(

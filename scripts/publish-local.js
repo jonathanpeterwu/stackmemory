@@ -2,7 +2,7 @@
 /**
  * Local NPM Publishing Script with Token
  * Usage: node scripts/publish-local.js
- * 
+ *
  * Requires NPM_TOKEN in environment or .env file
  */
 
@@ -15,7 +15,7 @@ import chalk from 'chalk';
 const envPath = join(process.cwd(), '.env');
 if (existsSync(envPath)) {
   const envContent = readFileSync(envPath, 'utf-8');
-  envContent.split('\n').forEach(line => {
+  envContent.split('\n').forEach((line) => {
     const [key, value] = line.split('=');
     if (key && value && !process.env[key]) {
       process.env[key.trim()] = value.trim();
@@ -32,7 +32,9 @@ if (!npmToken) {
   console.log(chalk.gray('  Or create a .env file with NPM_TOKEN=npm_xxx...'));
   console.log();
   console.log(chalk.yellow('Get your token from:'));
-  console.log(chalk.blue('  https://www.npmjs.com/settings/YOUR_USERNAME/tokens'));
+  console.log(
+    chalk.blue('  https://www.npmjs.com/settings/YOUR_USERNAME/tokens')
+  );
   process.exit(1);
 }
 
@@ -49,21 +51,32 @@ try {
   // Check current version
   console.log(chalk.yellow('📦 Current package info:'));
   execSync('npm view @stackmemoryai/stackmemory version', { stdio: 'inherit' });
-  
+
   // Build
   console.log(chalk.yellow('\n🔨 Building package...'));
   execSync('npm run build', { stdio: 'inherit' });
-  
+
+  // Verify dist artifacts
+  console.log(chalk.yellow('\n🔍 Verifying dist artifacts...'));
+  execSync('npm run verify:dist', { stdio: 'inherit' });
+
+  // Run pre-publish quality gate (tests + benchmarks + lint)
+  console.log(
+    chalk.yellow(
+      '\n🧪 Running pre-publish checks (tests + benchmarks + loops + lint)...'
+    )
+  );
+  execSync('npm run test:pre-publish', { stdio: 'inherit' });
+
   // Publish
   console.log(chalk.yellow('\n🚀 Publishing to NPM...'));
   execSync('npm publish --access public', { stdio: 'inherit' });
-  
+
   console.log(chalk.green('\n✅ Successfully published to NPM!'));
-  
+
   // Show new version
   console.log(chalk.yellow('\n📦 New package info:'));
   execSync('npm view @stackmemoryai/stackmemory version', { stdio: 'inherit' });
-  
 } catch (error) {
   console.error(chalk.red('\n❌ Publishing failed:'), error.message);
   process.exit(1);

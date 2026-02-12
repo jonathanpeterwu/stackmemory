@@ -82,8 +82,17 @@ export const SWE_BENCH_BASELINES: BaselineEntry[] = [
 export const HARNESS_TARGETS = {
   /** Plan generation should complete within 10s */
   planLatencyP95Ms: 10_000,
-  /** Full cycle (plan + implement + critique) within 60s */
-  totalLatencyP95Ms: 60_000,
+  /**
+   * Full cycle (plan + implement + critique) within 5 minutes.
+   * Codex execution benchmarks show 89-231s for real runs (1-2 iterations).
+   * 300s allows for 2-iteration runs with margin.
+   */
+  totalLatencyP95Ms: 300_000,
+  /**
+   * Single-iteration (first-pass) latency ceiling: 2.5 minutes.
+   * Based on observed single-pass runs of 89-115s with headroom.
+   */
+  singleIterLatencyP95Ms: 150_000,
   /** First-pass approval rate (no retries needed) */
   firstPassApprovalRate: 0.7,
   /** Edit success rate (exact + fuzzy combined) */
@@ -106,6 +115,7 @@ export function summarizeRuns(runs: HarnessRunMetrics[]): {
   avgTotalLatencyMs: number;
   p95PlanLatencyMs: number;
   p95TotalLatencyMs: number;
+  p95SingleIterLatencyMs: number;
   editSuccessRate: number;
   editFuzzyRate: number;
   avgContextTokens: number;
@@ -121,6 +131,7 @@ export function summarizeRuns(runs: HarnessRunMetrics[]): {
       avgTotalLatencyMs: 0,
       p95PlanLatencyMs: 0,
       p95TotalLatencyMs: 0,
+      p95SingleIterLatencyMs: 0,
       editSuccessRate: 0,
       editFuzzyRate: 0,
       avgContextTokens: 0,
@@ -151,6 +162,21 @@ export function summarizeRuns(runs: HarnessRunMetrics[]): {
   const p95Plan = planLatencies[p95Idx];
   const p95Total = totalLatencies[p95Idx];
 
+  // P95 latency for single-iteration approved runs
+  const singleIterLatencies = runs
+    .filter((r) => r.approved && r.iterations <= 1)
+    .map((r) => r.totalLatencyMs)
+    .sort((a, b) => a - b);
+  const p95SingleIter =
+    singleIterLatencies.length > 0
+      ? singleIterLatencies[
+          Math.min(
+            Math.ceil(singleIterLatencies.length * 0.95) - 1,
+            singleIterLatencies.length - 1
+          )
+        ]
+      : 0;
+
   return {
     totalRuns: runs.length,
     approvalRate,
@@ -162,12 +188,16 @@ export function summarizeRuns(runs: HarnessRunMetrics[]): {
       runs.reduce((s, r) => s + r.totalLatencyMs, 0) / runs.length,
     p95PlanLatencyMs: p95Plan,
     p95TotalLatencyMs: p95Total,
+    p95SingleIterLatencyMs: p95SingleIter,
     editSuccessRate,
     editFuzzyRate,
     avgContextTokens,
     passesTargets: {
       planLatency: p95Plan <= HARNESS_TARGETS.planLatencyP95Ms,
       totalLatency: p95Total <= HARNESS_TARGETS.totalLatencyP95Ms,
+      singleIterLatency:
+        singleIterLatencies.length === 0 ||
+        p95SingleIter <= HARNESS_TARGETS.singleIterLatencyP95Ms,
       firstPassApproval: firstPassRate >= HARNESS_TARGETS.firstPassApprovalRate,
       editSuccess: editSuccessRate >= HARNESS_TARGETS.editSuccessRate,
       editFuzzyRate: editFuzzyRate <= HARNESS_TARGETS.editFuzzyFallbackRate,

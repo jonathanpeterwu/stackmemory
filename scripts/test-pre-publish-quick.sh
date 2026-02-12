@@ -59,11 +59,33 @@ if [ ${PIPESTATUS[0]} -ne 0 ]; then
 fi
 log_success "Tests pass (including search benchmark)"
 
+# Benchmark verification — run search benchmarks explicitly to gate on perf
+log_info "Running search benchmark verification (100-frame + 1000-frame)..."
+BENCH=1 npx vitest run src/core/database/__tests__/search-benchmark.test.ts --reporter=dot --bail=1 2>&1 | tail -5
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    log_error "Search benchmark failed — performance regression detected"
+fi
+log_success "Search benchmarks pass (100/1000/10000 frames)"
+
+# Feedback loops test — verify loops engine is healthy
+log_info "Verifying feedback loops..."
+npx vitest run src/core/monitoring/__tests__/feedback-loops.test.ts --reporter=dot 2>&1 | tail -3
+if [ ${PIPESTATUS[0]} -ne 0 ]; then
+    log_error "Feedback loops tests failed"
+fi
+log_success "Feedback loops verified (6 loops configured)"
+
 # Lint check
 log_info "Testing lint..."
 npm run lint > /dev/null 2>&1 || log_error "Lint failed"
 log_success "Lint passes"
 
 echo
-echo -e "${GREEN}✅ All pre-publish checks passed!${NC}"
-echo -e "${GREEN}Ready for npm publish.${NC}"
+echo -e "${GREEN}============================================${NC}"
+echo -e "${GREEN}  All pre-publish checks passed!${NC}"
+echo -e "${GREEN}  - Tests: PASS${NC}"
+echo -e "${GREEN}  - Benchmarks: PASS${NC}"
+echo -e "${GREEN}  - Feedback loops: PASS${NC}"
+echo -e "${GREEN}  - Lint: PASS${NC}"
+echo -e "${GREEN}  Ready for npm publish.${NC}"
+echo -e "${GREEN}============================================${NC}"

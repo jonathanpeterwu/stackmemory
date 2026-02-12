@@ -122,6 +122,153 @@ export function callCodexCLI(
   }
 }
 
+/**
+ * Capture git diff in a repo directory. Returns the diff string
+ * (staged + unstaged) truncated to maxLen chars.
+ */
+export function captureGitDiff(cwd: string, maxLen = 12000): string {
+  try {
+    // Unstaged changes
+    const unstaged = spawnSync('git', ['diff'], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 10000,
+    });
+    // Staged changes
+    const staged = spawnSync('git', ['diff', '--cached'], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 10000,
+    });
+    // Untracked new files (show content)
+    const untracked = spawnSync(
+      'git',
+      ['ls-files', '--others', '--exclude-standard'],
+      { cwd, encoding: 'utf8', timeout: 10000 }
+    );
+
+    let diff = '';
+    if (staged.stdout?.trim()) diff += staged.stdout;
+    if (unstaged.stdout?.trim()) diff += (diff ? '\n' : '') + unstaged.stdout;
+    if (untracked.stdout?.trim()) {
+      const newFiles = untracked.stdout.trim().split('\n').slice(0, 10);
+      diff +=
+        (diff ? '\n' : '') + `New untracked files:\n${newFiles.join('\n')}`;
+    }
+
+    if (!diff.trim()) return '(no changes detected)';
+    if (diff.length > maxLen) {
+      return (
+        diff.slice(0, maxLen) + `\n... (truncated, ${diff.length} total chars)`
+      );
+    }
+    return diff;
+  } catch {
+    return '(git diff failed)';
+  }
+}
+
+/**
+ * Run lint and test checks in a repo directory after implementation.
+ * Returns pass/fail status and truncated output for each.
+ */
+export function runPostImplChecks(cwd: string): {
+  lintOk: boolean;
+  lintOutput: string;
+  testsOk: boolean;
+  testOutput: string;
+} {
+  const maxOutput = 2000;
+
+  function truncate(s: string): string {
+    if (s.length <= maxOutput) return s;
+    return s.slice(0, maxOutput) + `\n... (truncated, ${s.length} total chars)`;
+  }
+
+  let lintOk = false;
+  let lintOutput = '';
+  try {
+    const lint = spawnSync('npm', ['run', 'lint'], {
+      cwd,
+      encoding: 'utf8',
+      timeout: 30000,
+    });
+    lintOk = lint.status === 0;
+    lintOutput = truncate((lint.stdout || '') + (lint.stderr || ''));
+  } catch (e: unknown) {
+    lintOutput = truncate(e instanceof Error ? e.message : String(e));
+  }
+
+  let testsOk = false;
+  let testOutput = '';
+  try {
+    const tests = spawnSync(
+      'npx',
+      ['vitest', 'run', '--reporter=dot', '--bail=1'],
+      {
+        cwd,
+        encoding: 'utf8',
+        timeout: 120000,
+      }
+    );
+    testsOk = tests.status === 0;
+    testOutput = truncate((tests.stdout || '') + (tests.stderr || ''));
+  } catch (e: unknown) {
+    testOutput = truncate(e instanceof Error ? e.message : String(e));
+  }
+
+  return { lintOk, lintOutput, testsOk, testOutput };
+}
+
+/**
+ * Parse edit metrics from a git diff string.
+ * Counts hunks as edit attempts; hunks in files without conflict markers
+ * count as successes. Fuzzy fallbacks can't be detected from diff alone.
+ */
+export function parseEditMetrics(diff: string): {
+  editAttempts: number;
+  editSuccesses: number;
+  editFuzzyFallbacks: number;
+} {
+  if (!diff || diff.startsWith('(')) {
+    // Sentinel strings like '(dry run — no diff)' or '(no changes detected)'
+    return { editAttempts: 0, editSuccesses: 0, editFuzzyFallbacks: 0 };
+  }
+
+  const lines = diff.split('\n');
+
+  let currentFileHunks = 0;
+  let currentFileHasConflict = false;
+  let totalAttempts = 0;
+  let totalSuccesses = 0;
+
+  const flushFile = () => {
+    totalAttempts += currentFileHunks;
+    if (!currentFileHasConflict) {
+      totalSuccesses += currentFileHunks;
+    }
+    currentFileHunks = 0;
+    currentFileHasConflict = false;
+  };
+
+  for (const line of lines) {
+    if (/^diff --git /.test(line)) {
+      flushFile();
+    } else if (/^@@ /.test(line)) {
+      currentFileHunks++;
+    } else if (/^[<>=]{7}/.test(line)) {
+      currentFileHasConflict = true;
+    }
+  }
+  flushFile();
+
+  return {
+    editAttempts: totalAttempts,
+    editSuccesses: totalSuccesses,
+    editFuzzyFallbacks: 0,
+  };
+}
+
 export async function implementWithClaude(
   prompt: string,
   options: { model?: string; system?: string }
