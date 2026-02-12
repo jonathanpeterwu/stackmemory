@@ -176,6 +176,17 @@ export class PtyWrapper {
     // Handle PTY exit
     this.ptyProcess.onExit(({ exitCode }) => {
       this.cleanup();
+      // Sync Linear on exit if configured
+      if (process.env['LINEAR_API_KEY']) {
+        try {
+          execSync('stackmemory linear sync', {
+            stdio: 'ignore',
+            timeout: 10000,
+          });
+        } catch {
+          // Non-fatal: don't block exit
+        }
+      }
       process.exit(exitCode);
     });
 

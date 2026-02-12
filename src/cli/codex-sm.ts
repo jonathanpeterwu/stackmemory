@@ -406,6 +406,19 @@ class CodexSM {
         action: 'session_end',
         exitCode: code,
       });
+
+      // Sync Linear on exit if configured
+      if (process.env['LINEAR_API_KEY']) {
+        try {
+          execSync('stackmemory linear sync', {
+            stdio: 'ignore',
+            timeout: 10000,
+          });
+        } catch {
+          // Non-fatal: don't block exit
+        }
+      }
+
       if (this.config.tracingEnabled) {
         const summary = trace.getExecutionSummary();
         console.log();

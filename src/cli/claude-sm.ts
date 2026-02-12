@@ -942,6 +942,18 @@ class ClaudeSM {
         exitCode: code,
       });
 
+      // Sync Linear on exit if configured
+      if (process.env['LINEAR_API_KEY']) {
+        try {
+          execSync('stackmemory linear sync', {
+            stdio: 'ignore',
+            timeout: 10000,
+          });
+        } catch {
+          // Non-fatal: don't block exit
+        }
+      }
+
       // End tracing and show summary if enabled
       if (this.config.tracingEnabled) {
         const summary = trace.getExecutionSummary();

@@ -1,11 +1,11 @@
 # Status
 
-- Hosted: Private beta
-- OSS mirror: Production ready
-- MCP integration: Stable
-- CLI: v0.5.51 — Zero-config setup, diagnostics, full task/context/Linear management
-- Two-tier storage: Complete
-- Test Suite: 480 tests passing
+- **Version**: 1.0.0
+- **OSS**: Production ready
+- **MCP integration**: Stable (25 tools)
+- **CLI**: Full command suite — setup, context, tasks, search, Linear, daemon, sessions, skills, config
+- **Storage**: SQLite with FTS5 full-text search, optional embedding providers
+- **Test Suite**: 652 tests passing across 65 test files
 
 ## Test Mode
 
@@ -13,7 +13,7 @@ To run tests in constrained environments or avoid native module initialization d
 
 - Env flags:
   - `VITEST=true`: Detected automatically by the CLI; disables DB work in commands like `init`, `status`, and `context:test`.
-  - `NODE_ENV=test`: Also triggers DB‑skip behavior.
+  - `NODE_ENV=test`: Also triggers DB-skip behavior.
   - `STACKMEMORY_TEST_SKIP_DB=1`: Explicit override to skip DB, independent of test runner.
 
 - Typical usage:

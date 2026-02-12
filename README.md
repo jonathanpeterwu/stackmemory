@@ -5,19 +5,19 @@
 [![Coverage](https://codecov.io/gh/stackmemoryai/stackmemory/branch/main/graph/badge.svg)](https://codecov.io/gh/stackmemoryai/stackmemory)
 [![npm version](https://img.shields.io/npm/v/@stackmemoryai/stackmemory)](https://www.npmjs.com/package/@stackmemoryai/stackmemory)
 
-Lossless, project-scoped memory for AI tools
+Lossless, project-scoped memory for AI coding tools.
 
 StackMemory is a **production-ready memory runtime** for AI coding tools that preserves full project context across sessions:
 
-- **Zero-config setup** - `stackmemory init` just works, no questions asked
-- **26 MCP tools** for Claude Code integration
+- **Zero-config setup** — `stackmemory init` just works
+- **25 MCP tools** for Claude Code integration
 - **Full Linear integration** with bidirectional sync
-- **Context persistence** that survives /clear operations
+- **Context persistence** that survives `/clear` operations
 - **Hierarchical frame organization** (nested call stack model)
 - **Skills system** with `/spec` and `/linear-run` for Claude Code
 - **Automatic hooks** for task tracking, Linear sync, and spec progress
 - **Memory monitor daemon** with automatic capture/clear on RAM pressure
-- **650+ tests passing** with comprehensive coverage
+- **652 tests passing** with comprehensive coverage
 
 Instead of a linear chat log, StackMemory organizes memory as a **call stack** of scoped work (frames), with intelligent LLM-driven retrieval and team collaboration features.
 
@@ -48,12 +48,12 @@ Tools forget decisions and constraints between sessions. StackMemory makes conte
 
 ---
 
-## Features (at a glance)
+## Features
 
-- **MCP tools** for Claude Code: 26+ tools; context on every request
+- **MCP tools** for Claude Code: 25 tools across context, tasks, Linear, traces, and discovery
 - **Skills**: `/spec` (iterative spec generation), `/linear-run` (task execution via RLM)
 - **Hooks**: automatic context save, task tracking, Linear sync, PROMPT_PLAN updates
-- **Prompt Forge**: watches AGENTS.md and CLAUDE.md for prompt optimization (GEPA)
+- **Prompt Forge**: watches CLAUDE.md and AGENTS.md for prompt optimization (GEPA)
 - **Safe branches**: worktree isolation with `--worktree` or `-w`
 - **Persistent context**: frames, anchors, decisions, retrieval
 - **Integrations**: Linear, DiffMem, Browser MCP
@@ -68,22 +68,34 @@ Requirements: Node >= 20
 # Install globally
 npm install -g @stackmemoryai/stackmemory
 
-# Initialize in your project (zero-config, just works)
+# Initialize in your project (zero-config)
 cd your-project
 stackmemory init
 
 # Configure Claude Code integration
 stackmemory setup-mcp
 
-# Minimal usage
-stackmemory init && stackmemory setup-mcp && stackmemory doctor
+# Verify everything works
+stackmemory doctor
 ```
 
 Restart Claude Code and StackMemory MCP tools will be available.
 
+### Wrapper Scripts
+
+StackMemory ships wrapper scripts that launch your coding tool with StackMemory context pre-loaded:
+
+```bash
+claude-sm          # Claude Code with StackMemory context + Prompt Forge
+claude-smd         # Claude Code with --dangerously-skip-permissions
+codex-sm           # Codex with StackMemory context
+codex-smd          # Codex with --dangerously-skip-permissions
+opencode-sm        # OpenCode with StackMemory context
+```
+
 ---
 
-## Core concepts (quick mental model)
+## Core Concepts
 
 | Concept        | Meaning                                           |
 | -------------- | ------------------------------------------------- |
@@ -94,56 +106,13 @@ Restart Claude Code and StackMemory MCP tools will be available.
 | **Digest**     | Structured return value when a frame closes       |
 | **Anchor**     | Pinned fact (DECISION, CONSTRAINT, INTERFACE)     |
 
-Frames can span:
-
-- multiple chat turns
-- multiple tool calls
-- multiple sessions
-
----
-
-## Hosted vs Open Source
-
-- Hosted: cloud-backed, fast retrieval, durable, team features — works out of the box.
-- OSS local: SQLite, offline, inspectable — intentionally behind; no sync/org features.
+Frames can span multiple chat turns, tool calls, and sessions.
 
 ---
 
 ## How it integrates
 
-Runs as an MCP server. Editors (e.g., Claude Code) call StackMemory on each interaction to fetch a compiled context bundle; editors don’t store memory themselves.
-
-### MCP Quick Usage
-
-Use these JSON snippets with Claude Code’s MCP “tools/call”. Responses are returned as a single text item containing JSON.
-
-- Plan only (no code):
-  ```json
-  {"method":"tools/call","params":{"name":"plan_only","arguments":{"task":"Refactor config loader","plannerModel":"claude-sonnet-4-20250514"}}}
-  ```
-
-- Approval‑gated plan (phase 1):
-  ```json
-  {"method":"tools/call","params":{"name":"plan_gate","arguments":{"task":"Refactor config loader","compact":true}}}
-  ```
-
-- Approve + execute (phase 2):
-  ```json
-  {"method":"tools/call","params":{"name":"approve_plan","arguments":{"approvalId":"<copy from plan_gate>","implementer":"codex","execute":true,"recordFrame":true,"compact":true}}}
-  ```
-
-- Manage approvals:
-  ```json
-  {"method":"tools/call","params":{"name":"pending_list","arguments":{}}}
-  {"method":"tools/call","params":{"name":"pending_show","arguments":{"approvalId":"<id>","compact":true}}}
-  {"method":"tools/call","params":{"name":"pending_clear","arguments":{"approvalId":"<id>"}}}
-  ```
-
-Env defaults (optional):
-- `STACKMEMORY_MM_PLANNER_MODEL` (e.g., `claude-sonnet-4-20250514`)
-- `STACKMEMORY_MM_REVIEWER_MODEL` (defaults to planner if unset)
-- `STACKMEMORY_MM_IMPLEMENTER` (`codex` or `claude`)
-- `STACKMEMORY_MM_MAX_ITERS` (e.g., `2`)
+Runs as an MCP server. Editors (e.g., Claude Code) call StackMemory on each interaction to fetch a compiled context bundle; editors don't store memory themselves.
 
 ---
 
@@ -156,7 +125,7 @@ StackMemory ships Claude Code skills that integrate directly into your workflow.
 Generates iterative spec documents following a 4-doc progressive chain. Each document reads previous ones from disk for context.
 
 ```
-ONE_PAGER.md  →  DEV_SPEC.md  →  PROMPT_PLAN.md  →  AGENTS.md
+ONE_PAGER.md  ->  DEV_SPEC.md  ->  PROMPT_PLAN.md  ->  AGENTS.md
 (standalone)     (reads 1)       (reads 1+2)        (reads 1+2+3)
 ```
 
@@ -217,21 +186,6 @@ StackMemory installs Claude Code hooks that run automatically during your sessio
 | `skill-eval` | User prompt | Scores prompt against 28 skill patterns, recommends relevant skills |
 | `tool-use-trace` | Tool invocation | Logs tool usage for context tracking |
 
-### Skill Evaluation
-
-When you type a prompt, the `skill-eval` hook scores it against `skill-rules.json` (28 mapped skills with keyword, pattern, intent, and directory matching). Skills scoring above the threshold (default: 3) are recommended.
-
-```json
-// Example: user types "generate a spec for the auth system"
-// skill-eval recommends:
-{
-  "recommendedSkills": [
-    { "skillName": "spec-generator", "score": 8 },
-    { "skillName": "frame-management", "score": 5 }
-  ]
-}
-```
-
 ### Hook Installation
 
 Hooks install automatically during `npm install` (with user consent). To install or reinstall manually:
@@ -255,7 +209,7 @@ When a task completes (via hook or `/linear-run`), StackMemory fuzzy-matches the
 
 ---
 
-## Memory Monitor Daemon (v0.8.0)
+## Memory Monitor Daemon
 
 Automatically monitors system RAM and Node.js heap usage, triggering capture/clear cycles when memory pressure exceeds thresholds. Prevents long-running sessions from degrading performance.
 
@@ -286,10 +240,6 @@ stackmemory daemon status      # Show memory stats, trigger count, thresholds
 stackmemory daemon stop        # Stop daemon
 ```
 
-### Hook
-
-The memory guard hook (`.claude/hooks/memory-guard.sh`) is registered as a `user-prompt-submit` hook. When the daemon writes a signal file, the hook alerts you on the next prompt to run `/clear` and restore.
-
 ---
 
 ## Prompt Forge (GEPA)
@@ -306,48 +256,44 @@ claude-sm
 
 ---
 
-### Install
+## RLM (Recursive Language Model) Orchestration
+
+StackMemory includes an RLM system that handles complex tasks through recursive decomposition and parallel execution using Claude Code's Task tool.
+
+### Key Features
+
+- **Recursive Task Decomposition**: Breaks complex tasks into manageable subtasks
+- **Parallel Subagent Execution**: Run multiple specialized agents concurrently
+- **8 Specialized Agent Types**: Planning, Code, Testing, Linting, Review, Improve, Context, Publish
+- **Multi-Stage Review**: Iterative improvement cycles with quality scoring (0-1 scale)
+- **Automatic Test Generation**: Unit, integration, and E2E test creation
+
+### Usage
 
 ```bash
-npm install -g @stackmemoryai/stackmemory@latest
+# Basic usage
+stackmemory skills rlm "Your complex task description"
+
+# With options
+stackmemory skills rlm "Refactor authentication system" \
+  --max-parallel 8 \
+  --review-stages 5 \
+  --quality-threshold 0.9 \
+  --test-mode all
 ```
 
-During install, you'll be asked if you want to install Claude Code hooks (optional but recommended).
+### Configuration Options
 
-### Initialize Project
+| Option | Description | Default |
+|--------|-------------|---------|
+| `--max-parallel` | Maximum concurrent subagents | 5 |
+| `--max-recursion` | Maximum recursion depth | 4 |
+| `--review-stages` | Number of review iterations | 3 |
+| `--quality-threshold` | Target quality score (0-1) | 0.85 |
+| `--test-mode` | Test generation mode (unit/integration/e2e/all) | all |
+| `--verbose` | Show all recursive operations | false |
 
-```bash
-cd your-project
-stackmemory init
-```
-
-This creates `.stackmemory/` with SQLite storage. No questions asked.
-
-For interactive setup with more options:
-```bash
-stackmemory init --interactive
-```
-
-### Configure Claude Code
-
-```bash
-stackmemory setup-mcp
-```
-
-This automatically:
-- Creates `~/.claude/stackmemory-mcp.json` MCP configuration
-- Updates `~/.claude/config.json` with StackMemory integration
-- Validates the configuration
-
-### Diagnose Issues
-
-```bash
-stackmemory doctor
-```
-
-Checks project initialization, database integrity, MCP config, and suggests fixes.
-
-See [docs/setup.md](https://github.com/stackmemoryai/stackmemory/blob/main/docs/setup.md) for advanced options (hosted mode, ChromaDB, manual MCP config).
+**Note**: RLM requires Claude Code Max plan for unlimited subagent execution.
 
 ---
 
@@ -370,8 +316,6 @@ npm run mcp:start
 npm run mcp:dev
 ```
 
-This creates `.stackmemory/` with SQLite storage.
-
 ### Step 3: Point your editor to local MCP
 
 ```json
@@ -385,133 +329,7 @@ This creates `.stackmemory/` with SQLite storage.
 }
 ```
 
-## How it works
-
-Each interaction: ingests events → updates indices → retrieves relevant context → returns sized bundle.
-
 ---
-
-## Example MCP response (simplified)
-
-```json
-{
-  "hot_stack": [
-    { "frame": "Debug auth redirect", "constraints": [...] }
-  ],
-  "anchors": [
-    { "type": "DECISION", "text": "Use SameSite=Lax cookies" }
-  ],
-  "relevant_digests": [
-    { "frame": "Initial auth refactor", "summary": "..." }
-  ],
-  "pointers": [
-    "s3://logs/auth-test-0421"
-  ]
-}
-```
-
----
-
-## Storage & limits
-
-### Two-Tier Storage System (v0.3.15+)
-
-StackMemory implements an intelligent two-tier storage architecture:
-
-#### Local Storage Tiers
-- **Young (<24h)**: Uncompressed, complete retention in memory/Redis
-- **Mature (1-7d)**: LZ4 compression (~2.5x), selective retention
-- **Old (7-30d)**: ZSTD compression (~3.5x), critical data only
-
-#### Remote Storage
-- **Archive (>30d)**: Infinite retention in S3 + TimeSeries DB
-- **Migration**: Automatic background migration based on age, size, and importance
-- **Offline Queue**: Persistent retry logic for failed uploads
-
-### Free tier (hosted)
-
-- 1 project
-- Up to **2GB local storage**
-- Up to **100GB retrieval egress / month**
-
-### Paid tiers
-
-- Per-project pricing
-- Unlimited storage + retrieval
-- Team sharing
-- Org controls
-- Custom retention policies
-
-**No seat-based pricing.**
-
----
-
-## Claude Code Integration
-
-StackMemory integrates with Claude Code via MCP tools, skills, and hooks. See the [Hooks](#hooks-automatic) and [Skills](#skills-system) sections above.
-
-```bash
-# Full setup (one-time)
-npm install -g @stackmemoryai/stackmemory   # installs hooks automatically
-cd your-project && stackmemory init          # init project
-stackmemory setup-mcp                        # configure MCP
-stackmemory doctor                           # verify everything works
-```
-
-Additional integration methods: shell wrapper (`claude-sm`), Linear auto-sync daemon, background daemon, git hooks. See [docs/setup.md](https://github.com/stackmemoryai/stackmemory/blob/main/docs/setup.md).
-
-## RLM (Recursive Language Model) Orchestration
-
-StackMemory includes an advanced RLM system that enables handling arbitrarily complex tasks through recursive decomposition and parallel execution using Claude Code's Task tool.
-
-### Key Features
-
-- **Recursive Task Decomposition**: Breaks complex tasks into manageable subtasks
-- **Parallel Subagent Execution**: Run multiple specialized agents concurrently
-- **8 Specialized Agent Types**: Planning, Code, Testing, Linting, Review, Improve, Context, Publish
-- **Multi-Stage Review**: Iterative improvement cycles with quality scoring (0-1 scale)
-- **Automatic Test Generation**: Unit, integration, and E2E test creation
-- **Full Transparency**: Complete execution tree visualization
-
-### Usage
-
-```bash
-# Basic usage
-stackmemory skills rlm "Your complex task description"
-
-# With options
-stackmemory skills rlm "Refactor authentication system" \
-  --max-parallel 8 \
-  --review-stages 5 \
-  --quality-threshold 0.9 \
-  --test-mode all
-
-# Examples
-stackmemory skills rlm "Generate comprehensive tests for API endpoints"
-stackmemory skills rlm "Refactor the entire authentication system to use JWT"
-stackmemory skills rlm "Build, test, and publish version 2.0.0"
-```
-
-### Configuration Options
-
-| Option | Description | Default |
-|--------|-------------|---------|
-| `--max-parallel` | Maximum concurrent subagents | 5 |
-| `--max-recursion` | Maximum recursion depth | 4 |
-| `--review-stages` | Number of review iterations | 3 |
-| `--quality-threshold` | Target quality score (0-1) | 0.85 |
-| `--test-mode` | Test generation mode (unit/integration/e2e/all) | all |
-| `--verbose` | Show all recursive operations | false |
-
-### How It Works
-
-1. **Task Decomposition**: Planning agent analyzes the task and creates a dependency graph
-2. **Parallel Execution**: Independent subtasks run concurrently up to the parallel limit
-3. **Review Cycle**: Review agents assess quality, improve agents implement fixes
-4. **Test Generation**: Testing agents create comprehensive test suites
-5. **Result Aggregation**: All outputs are combined into a final deliverable
-
-**Note**: RLM requires Claude Code Max plan for unlimited subagent execution. In development mode, it uses mock responses for testing.
 
 ## Guarantees & Non-goals
 
@@ -519,49 +337,27 @@ stackmemory skills rlm "Build, test, and publish version 2.0.0"
 
 **Non-goals:** Chat UI, vector DB replacement, tool runtime, prompt framework.
 
+---
 
 ## CLI Commands
 
-See https://github.com/stackmemoryai/stackmemory/blob/main/docs/cli.md for the full command reference and examples.
+See [docs/cli.md](https://github.com/stackmemoryai/stackmemory/blob/main/docs/cli.md) for the full command reference.
 
 ---
 
-## Status
+## Documentation
 
-See https://github.com/stackmemoryai/stackmemory/blob/main/docs/status.md for current status.
-
----
-
-## Changelog
-
-See https://github.com/stackmemoryai/stackmemory/blob/main/docs/changelog.md for detailed release notes.
-
----
-
-## Roadmap
-
-See https://github.com/stackmemoryai/stackmemory/blob/main/docs/roadmap.md for our current roadmap.
+- [CLI Reference](./docs/cli.md) — Full command reference
+- [Setup Guide](./docs/SETUP.md) — Advanced setup options
+- [Development Guide](./docs/DEVELOPMENT.md) — Contributing and development
+- [Architecture](./docs/architecture.md) — System design
+- [API Reference](./docs/API_REFERENCE.md) — API documentation
+- [Vision](./vision.md) — Product vision and principles
+- [Status](./docs/status.md) — Current project status
+- [Roadmap](./docs/roadmap.md) — Future plans
 
 ---
 
 ## License
 
 Licensed under the [Business Source License 1.1](./LICENSE). You can use, modify, and self-host StackMemory freely. The one restriction: you may not offer it as a competing hosted service. The license converts to MIT after 4 years per release.
-
----
-
-## Additional Resources
-
-### ML System Design
-
-- [ML System Insights](./ML_SYSTEM_INSIGHTS.md) - Analysis of 300+ production ML systems
-- [Agent Instructions](./AGENTS.md) - Specific guidance for AI agents working with ML systems
-
-### Documentation
-- [Vision](./vision.md) - Product vision, principles, roadmap, metrics
-- [Product Requirements](./PRD.md) - Detailed product specifications
-- [Technical Architecture](./TECHNICAL_ARCHITECTURE.md) - System design and database schemas
-- [Beads Integration](./BEADS_INTEGRATION.md) - Git-native memory patterns from Beads ecosystem
- - [MCP: plan_and_code](https://github.com/stackmemoryai/stackmemory/blob/main/docs/mcp.md) - Trigger planning + coding via MCP with JSON results
-
----
