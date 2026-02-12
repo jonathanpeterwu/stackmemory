@@ -11,6 +11,8 @@ import type {
   HarnessResult,
 } from './types.js';
 import type { HarnessRunMetrics } from './baselines.js';
+import { HARNESS_TARGETS, summarizeRuns } from './baselines.js';
+import { feedbackLoops } from '../../core/monitoring/feedback-loops.js';
 
 function heuristicPlan(input: PlanningInput): ImplementationPlan {
   // Generic fallback plan when Claude API is unavailable
@@ -209,6 +211,48 @@ export async function runSpike(
     // Append to metrics JSONL for time-series analysis
     const metricsFile = path.join(dir, 'harness-metrics.jsonl');
     fs.appendFileSync(metricsFile, JSON.stringify(runMetrics) + '\n');
+
+    // LOOP 5: Harness Regression — check rolling window against targets
+    try {
+      const lines = fs
+        .readFileSync(metricsFile, 'utf-8')
+        .split('\n')
+        .filter((l) => l.trim());
+      const recent = lines
+        .slice(-10)
+        .map((l) => JSON.parse(l) as HarnessRunMetrics);
+      if (recent.length >= 3) {
+        const summary = summarizeRuns(recent);
+        if (summary.approvalRate < HARNESS_TARGETS.firstPassApprovalRate) {
+          feedbackLoops.fire(
+            'harnessRegression',
+            'metrics_append',
+            {
+              metric: 'approvalRate',
+              current: summary.approvalRate,
+              target: HARNESS_TARGETS.firstPassApprovalRate,
+              window: recent.length,
+            },
+            'regression_alert'
+          );
+        }
+        if (summary.p95TotalLatencyMs > HARNESS_TARGETS.totalLatencyP95Ms) {
+          feedbackLoops.fire(
+            'harnessRegression',
+            'metrics_append',
+            {
+              metric: 'totalLatencyP95',
+              current: summary.p95TotalLatencyMs,
+              target: HARNESS_TARGETS.totalLatencyP95Ms,
+              window: recent.length,
+            },
+            'regression_alert'
+          );
+        }
+      }
+    } catch {
+      // best-effort
+    }
   } catch {
     // best-effort only
   }

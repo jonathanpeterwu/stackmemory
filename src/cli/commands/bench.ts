@@ -14,6 +14,10 @@ import {
   summarizeRuns,
 } from '../../orchestrators/multimodal/baselines.js';
 import type { HarnessRunMetrics } from '../../orchestrators/multimodal/baselines.js';
+import {
+  feedbackLoops,
+  DEFAULT_CONFIG,
+} from '../../core/monitoring/feedback-loops.js';
 
 function loadRunMetrics(projectRoot: string): HarnessRunMetrics[] {
   const metricsFile = join(
@@ -231,6 +235,69 @@ export function createBenchCommand(): Command {
           const icon = approved ? 'OK' : '--';
           console.log(`  [${icon}] ${task.slice(0, 50)}`);
         }
+      }
+
+      console.log('');
+    });
+
+  // Sub-command: bench loops
+  bench
+    .command('loops')
+    .description('Show feedback loop configuration, status, and recent events')
+    .option('--json', 'Output as JSON', false)
+    .action((options) => {
+      const config = feedbackLoops.getConfig();
+      const stats = feedbackLoops.getStats();
+      const history = feedbackLoops.getHistory(undefined, 20);
+
+      if (options.json) {
+        console.log(JSON.stringify({ config, stats, history }, null, 2));
+        return;
+      }
+
+      console.log('\nFeedback Loops');
+      console.log('═'.repeat(60));
+
+      const loopDescriptions: Record<string, string> = {
+        contextPressure: 'Context 70%+ → auto-digest old frames',
+        editRecovery: 'Edit failure → sm_edit fuzzy fallback → telemetry',
+        retrievalQuality: 'Empty results > 20% → switch search strategy',
+        traceErrorChain: 'Same error 3x → surface anchor + memory',
+        harnessRegression: 'Approval rate drops → regression alert',
+        sessionDrift: 'Depth > 5 or stale frames → auto-checkpoint',
+      };
+
+      console.log('\nLoop Configuration:');
+      for (const [name, cfg] of Object.entries(config)) {
+        const icon = cfg.enabled ? ' ON' : 'OFF';
+        const desc = loopDescriptions[name] || name;
+        const cooldown =
+          cfg.cooldownSec > 0 ? ` (cooldown ${cfg.cooldownSec}s)` : '';
+        console.log(`  [${icon}] ${name.padEnd(22)} ${desc}${cooldown}`);
+      }
+
+      if (Object.keys(stats).length > 0) {
+        console.log('\nLoop Stats (this session):');
+        for (const [name, s] of Object.entries(stats)) {
+          const ago = s.lastFired
+            ? `${Math.round((Date.now() - s.lastFired) / 1000)}s ago`
+            : 'never';
+          console.log(
+            `  ${name.padEnd(22)} ${s.fires} fires, ${s.successes} ok, ${s.errors} err (last: ${ago})`
+          );
+        }
+      }
+
+      if (history.length > 0) {
+        console.log(`\nRecent Events (${history.length}):`);
+        for (const e of history.slice(-10)) {
+          const time = new Date(e.timestamp).toISOString().slice(11, 19);
+          console.log(
+            `  ${time} [${e.loop}] ${e.trigger} → ${e.action} (${e.outcome})`
+          );
+        }
+      } else {
+        console.log('\nNo loop events fired yet this session.');
       }
 
       console.log('');
