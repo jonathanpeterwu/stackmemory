@@ -1,6 +1,6 @@
 {
   "name": "@stackmemoryai/stackmemory",
-  "version": "1.1.2",
+  "version": "1.2.0",
   "description": "Project-scoped memory for AI coding tools. Durable context across sessions with MCP integration, frames, smart retrieval, Claude Code skills, and automatic hooks.",
   "engines": {
     "node": ">=20.0.0",
@@ -93,6 +93,10 @@
     "format": "prettier --write src/**/*.ts scripts/**/*.ts",
     "test": "vitest",
     "test:ui": "vitest --ui",
+    "test:unit": "vitest run --project unit",
+    "test:integration": "vitest run --project integration",
+    "test:live": "vitest run --project live",
+    "test:all": "vitest run",
     "test:run": "vitest run",
     "test:pre-publish": "./scripts/test-pre-publish-quick.sh",
     "test:pre-commit": "vitest related --run --reporter=dot --silent --bail=1",

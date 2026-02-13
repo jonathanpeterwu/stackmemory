@@ -263,49 +263,11 @@ export interface GPTExtensions {
 }
 
 /**
- * Google Gemini-specific extensions
- */
-export interface GeminiExtensions {
-  /**
-   * Grounding with Google Search
-   */
-  grounding?: {
-    enabled: boolean;
-    dynamicThreshold?: number;
-  };
-
-  /**
-   * Native multimodal - video/audio support
-   */
-  multimodal?: {
-    videoEnabled: boolean;
-    audioEnabled: boolean;
-    maxVideoDurationSec?: number;
-  };
-
-  /**
-   * Code execution
-   */
-  codeExecution?: {
-    enabled: boolean;
-  };
-
-  /**
-   * Safety settings
-   */
-  safetySettings?: Array<{
-    category: string;
-    threshold: 'BLOCK_NONE' | 'BLOCK_LOW' | 'BLOCK_MEDIUM' | 'BLOCK_HIGH';
-  }>;
-}
-
-/**
  * All provider extensions - union type
  */
 export interface ProviderExtensions {
   claude?: ClaudeExtensions;
   gpt?: GPTExtensions;
-  gemini?: GeminiExtensions;
 }
 
 // =============================================================================
@@ -441,12 +403,7 @@ export class ClaudeAdapter implements ProviderAdapter {
 
     const response = await fetch(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': this.getBetaFlags(options.extensions),
-      },
+      headers: this.getHeaders(options.extensions),
       body: JSON.stringify({ ...body, stream: true }),
     });
 
@@ -509,12 +466,7 @@ export class ClaudeAdapter implements ProviderAdapter {
 
     const response = await fetch(`${this.baseUrl}/v1/messages`, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': this.apiKey,
-        'anthropic-version': '2023-06-01',
-        'anthropic-beta': this.getBetaFlags(options.extensions),
-      },
+      headers: this.getHeaders(options.extensions),
       body: JSON.stringify(body),
     });
 
@@ -613,9 +565,14 @@ export class ClaudeAdapter implements ProviderAdapter {
     return body;
   }
 
-  private getBetaFlags(extensions?: ClaudeExtensions): string {
-    const flags: string[] = [];
+  private getHeaders(extensions?: ClaudeExtensions): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Content-Type': 'application/json',
+      'x-api-key': this.apiKey,
+      'anthropic-version': '2023-06-01',
+    };
 
+    const flags: string[] = [];
     if (extensions?.extendedThinking?.enabled) {
       flags.push('interleaved-thinking-2025-05-14');
     }
@@ -626,7 +583,11 @@ export class ClaudeAdapter implements ProviderAdapter {
       flags.push('pdfs-2024-09-25');
     }
 
-    return flags.join(',');
+    if (flags.length > 0) {
+      headers['anthropic-beta'] = flags.join(',');
+    }
+
+    return headers;
   }
 
   private normalizeEvent(event: StreamEvent): StreamEvent {
@@ -668,8 +629,8 @@ export class GPTAdapter implements ProviderAdapter {
     },
   };
 
-  private apiKey: string;
-  private baseUrl: string;
+  protected apiKey: string;
+  protected baseUrl: string;
 
   constructor(config: { apiKey: string; baseUrl?: string }) {
     this.apiKey = config.apiKey;
@@ -898,284 +859,21 @@ export class GPTAdapter implements ProviderAdapter {
 }
 
 // =============================================================================
-// Gemini Adapter Stub
+// Provider Factory
 // =============================================================================
 
 /**
- * Extended stream options for Gemini
+ * Provider IDs accepted by createProvider().
+ * Aligned with ModelProvider from model-router — no translation needed.
  */
-export interface GeminiStreamOptions extends StreamOptions {
-  extensions?: GeminiExtensions;
-}
-
-/**
- * Gemini adapter - stub implementation
- */
-export class GeminiAdapter implements ProviderAdapter {
-  readonly id = 'gemini';
-  readonly name = 'Google Gemini';
-  readonly version = '1.0.0';
-
-  readonly extensions: ProviderExtensions = {
-    gemini: {
-      grounding: { enabled: true, dynamicThreshold: 0.3 },
-      multimodal: {
-        videoEnabled: true,
-        audioEnabled: true,
-        maxVideoDurationSec: 60,
-      },
-      codeExecution: { enabled: true },
-    },
-  };
-
-  private apiKey: string;
-  private baseUrl: string;
-
-  constructor(config: { apiKey: string; baseUrl?: string }) {
-    this.apiKey = config.apiKey;
-    this.baseUrl =
-      config.baseUrl || 'https://generativelanguage.googleapis.com/v1beta';
-  }
-
-  supportsExtension(extension: keyof ProviderExtensions): boolean {
-    return extension === 'gemini';
-  }
-
-  async *stream(
-    messages: Message[],
-    options: GeminiStreamOptions
-  ): AsyncIterable<StreamEvent> {
-    // Convert messages to Gemini format
-    const contents = messages
-      .filter((m) => m.role !== 'system')
-      .map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [
-          {
-            text:
-              typeof m.content === 'string'
-                ? m.content
-                : m.content
-                    .filter((c): c is TextBlock => c.type === 'text')
-                    .map((c) => c.text)
-                    .join(''),
-          },
-        ],
-      }));
-
-    const body: Record<string, unknown> = {
-      contents,
-      generationConfig: {
-        maxOutputTokens: options.maxTokens,
-        temperature: options.temperature,
-        topP: options.topP,
-      },
-    };
-
-    // System instruction
-    const systemMsg = messages.find((m) => m.role === 'system');
-    if (systemMsg || options.system) {
-      body.systemInstruction = {
-        parts: [
-          {
-            text:
-              options.system ||
-              (typeof systemMsg?.content === 'string' ? systemMsg.content : ''),
-          },
-        ],
-      };
-    }
-
-    // Gemini extensions
-    if (options.extensions?.grounding?.enabled) {
-      body.tools = [
-        {
-          googleSearchRetrieval: {
-            dynamicRetrievalConfig: {
-              mode: 'MODE_DYNAMIC',
-              dynamicThreshold: options.extensions.grounding.dynamicThreshold,
-            },
-          },
-        },
-      ];
-    }
-
-    if (options.extensions?.codeExecution?.enabled) {
-      body.tools = [
-        ...((body.tools as unknown[]) || []),
-        { codeExecution: {} },
-      ];
-    }
-
-    if (options.extensions?.safetySettings) {
-      body.safetySettings = options.extensions.safetySettings;
-    }
-
-    const url = `${this.baseUrl}/models/${options.model}:streamGenerateContent?key=${this.apiKey}&alt=sse`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      yield {
-        type: 'error',
-        error: {
-          type: 'api_error',
-          message: `Gemini API error: ${response.status} ${response.statusText}`,
-        },
-      };
-      return;
-    }
-
-    yield {
-      type: 'message_start',
-      message: {
-        id: `msg_${Date.now()}`,
-        model: options.model,
-        role: 'assistant',
-      },
-    };
-
-    const reader = response.body?.getReader();
-    if (!reader) return;
-
-    const decoder = new TextDecoder();
-    let buffer = '';
-    const blockIndex = 0;
-    let blockStarted = false;
-
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() || '';
-
-      for (const line of lines) {
-        if (line.startsWith('data: ')) {
-          try {
-            const parsed = JSON.parse(line.slice(6));
-            const text = parsed.candidates?.[0]?.content?.parts?.[0]?.text;
-
-            if (text && !blockStarted) {
-              blockStarted = true;
-              yield {
-                type: 'content_block_start',
-                index: blockIndex,
-                contentBlock: { type: 'text', text: '' },
-              };
-            }
-
-            if (text) {
-              yield {
-                type: 'content_block_delta',
-                index: blockIndex,
-                delta: { type: 'text_delta', text },
-              };
-            }
-          } catch {
-            // Skip malformed events
-          }
-        }
-      }
-    }
-
-    if (blockStarted) {
-      yield { type: 'content_block_stop', index: blockIndex };
-    }
-    yield { type: 'message_stop' };
-  }
-
-  async complete(
-    messages: Message[],
-    options: GeminiStreamOptions
-  ): Promise<{
-    content: AnyContentBlock[];
-    usage: { inputTokens: number; outputTokens: number };
-    stopReason: string;
-  }> {
-    const contents = messages
-      .filter((m) => m.role !== 'system')
-      .map((m) => ({
-        role: m.role === 'assistant' ? 'model' : 'user',
-        parts: [
-          {
-            text:
-              typeof m.content === 'string'
-                ? m.content
-                : m.content
-                    .filter((c): c is TextBlock => c.type === 'text')
-                    .map((c) => c.text)
-                    .join(''),
-          },
-        ],
-      }));
-
-    const body: Record<string, unknown> = {
-      contents,
-      generationConfig: {
-        maxOutputTokens: options.maxTokens,
-        temperature: options.temperature,
-      },
-    };
-
-    const url = `${this.baseUrl}/models/${options.model}:generateContent?key=${this.apiKey}`;
-
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(body),
-    });
-
-    if (!response.ok) {
-      throw new Error(
-        `Gemini API error: ${response.status} ${response.statusText}`
-      );
-    }
-
-    const data = await response.json();
-    const candidate = data.candidates?.[0];
-    const text = candidate?.content?.parts?.[0]?.text ?? '';
-
-    return {
-      content: [{ type: 'text', text }],
-      usage: {
-        inputTokens: data.usageMetadata?.promptTokenCount ?? 0,
-        outputTokens: data.usageMetadata?.candidatesTokenCount ?? 0,
-      },
-      stopReason: candidate?.finishReason ?? 'STOP',
-    };
-  }
-
-  async validateConnection(): Promise<boolean> {
-    try {
-      const response = await fetch(`${this.baseUrl}/models?key=${this.apiKey}`);
-      return response.ok;
-    } catch {
-      return false;
-    }
-  }
-
-  async listModels(): Promise<string[]> {
-    return [
-      'gemini-2.0-flash-exp',
-      'gemini-1.5-pro',
-      'gemini-1.5-flash',
-      'gemini-1.5-flash-8b',
-      'gemini-1.0-pro',
-    ];
-  }
-}
-
-// =============================================================================
-// Provider Registry
-// =============================================================================
-
-export type ProviderId = 'claude' | 'gpt' | 'gemini';
+export type ProviderId =
+  | 'anthropic'
+  | 'openai'
+  | 'qwen'
+  | 'cerebras'
+  | 'deepinfra'
+  | 'openrouter'
+  | 'ollama';
 
 /**
  * Provider configuration
@@ -1186,55 +884,40 @@ export interface ProviderConfig {
 }
 
 /**
- * Create a provider adapter
+ * Create a provider adapter.
+ *
+ * CerebrasAdapter / DeepInfraAdapter live in separate files but import from
+ * this module — using them here would create a circular dep. Instead we
+ * construct GPTAdapter with the correct defaults inline. The dedicated
+ * subclasses are still available for direct import when needed.
  */
 export function createProvider(
   id: ProviderId,
   config: ProviderConfig
 ): ProviderAdapter {
   switch (id) {
-    case 'claude':
+    case 'anthropic':
       return new ClaudeAdapter(config);
-    case 'gpt':
+    case 'openai':
+    case 'qwen':
+    case 'ollama':
       return new GPTAdapter(config);
-    case 'gemini':
-      return new GeminiAdapter(config);
+    case 'cerebras':
+      return new GPTAdapter({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl || 'https://api.cerebras.ai/v1',
+      });
+    case 'deepinfra':
+      return new GPTAdapter({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl || 'https://api.deepinfra.com/v1/openai',
+      });
+    case 'openrouter':
+      return new GPTAdapter({
+        apiKey: config.apiKey,
+        baseUrl: config.baseUrl || 'https://openrouter.ai/api',
+      });
     default:
-      throw new Error(`Unknown provider: ${id}`);
+      throw new Error(`No adapter for provider: ${id}`);
   }
 }
-
-/**
- * Provider registry for managing multiple providers
- */
-export class ProviderRegistry {
-  private providers = new Map<string, ProviderAdapter>();
-
-  register(adapter: ProviderAdapter): void {
-    this.providers.set(adapter.id, adapter);
-  }
-
-  get(id: string): ProviderAdapter | undefined {
-    return this.providers.get(id);
-  }
-
-  list(): ProviderAdapter[] {
-    return Array.from(this.providers.values());
-  }
-
-  has(id: string): boolean {
-    return this.providers.has(id);
-  }
-
-  /**
-   * Find providers that support a specific extension
-   */
-  findByExtension(extension: keyof ProviderExtensions): ProviderAdapter[] {
-    return this.list().filter((p) => p.supportsExtension(extension));
-  }
-}
-
-/**
- * Global provider registry
- */
-export const providerRegistry = new ProviderRegistry();

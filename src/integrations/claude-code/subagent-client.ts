@@ -12,6 +12,19 @@ import { promisify } from 'util';
 import * as fs from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { isFeatureEnabled } from '../../core/config/feature-flags.js';
+import {
+  getOptimalProvider,
+  type TaskType,
+} from '../../core/models/model-router.js';
+import { scoreComplexity } from '../../core/models/complexity-scorer.js';
+import {
+  createProvider,
+  type ProviderId,
+  type TextBlock,
+} from '../../core/extensions/provider-adapter.js';
+import { AnthropicBatchClient } from '../anthropic/batch-client.js';
+import type { BatchRequest } from '../anthropic/batch-client.js';
 
 const execAsync = promisify(exec);
 
@@ -68,8 +81,9 @@ export class ClaudeCodeSubagentClient {
   }
 
   /**
-   * Execute a subagent task using Claude Code's Task tool
-   * This will spawn a new Claude instance with specific instructions
+   * Execute a subagent task.
+   * When multiProvider is enabled, routes cheap tasks to external providers.
+   * Falls back to Claude Code CLI path when disabled or for complex tasks.
    */
   async executeSubagent(request: SubagentRequest): Promise<SubagentResponse> {
     const startTime = Date.now();
@@ -86,44 +100,175 @@ export class ClaudeCodeSubagentClient {
       return this.getMockResponse(request, startTime, subagentId);
     }
 
+    // Route to external providers when multiProvider is enabled
+    if (isFeatureEnabled('multiProvider')) {
+      const taskType = request.type as TaskType;
+      const complexity = scoreComplexity(request.task, request.context);
+      const optimal = getOptimalProvider(taskType, undefined, {
+        task: request.task,
+        context: request.context,
+      });
+
+      logger.debug('Complexity-based routing', {
+        subagentId,
+        taskType,
+        complexity: complexity.tier,
+        score: complexity.score,
+        signals: complexity.signals,
+        routed: optimal.provider,
+      });
+
+      if (
+        optimal.provider !== 'anthropic' &&
+        optimal.provider !== 'anthropic-batch'
+      ) {
+        return this.executeDirectAPI(request, optimal, startTime, subagentId);
+      }
+
+      if (optimal.provider === 'anthropic-batch') {
+        return this.executeBatch(request, startTime, subagentId);
+      }
+    }
+
+    // Default path: use Claude Code CLI
+    return this.executeSubagentViaCLI(request, startTime, subagentId);
+  }
+
+  /**
+   * Execute via external provider (Cerebras, DeepInfra, etc.) using OpenAI-compatible API
+   */
+  private async executeDirectAPI(
+    request: SubagentRequest,
+    optimal: {
+      provider: string;
+      model: string;
+      baseUrl?: string;
+      apiKeyEnv: string;
+    },
+    startTime: number,
+    subagentId: string
+  ): Promise<SubagentResponse> {
     try {
-      // Create subagent prompt based on type
+      const apiKey = process.env[optimal.apiKeyEnv] || '';
+      if (!apiKey) {
+        logger.warn(
+          `No API key for ${optimal.provider}, falling back to Claude`
+        );
+        return this.executeSubagentViaCLI(request, startTime, subagentId);
+      }
+
+      const adapter = createProvider(optimal.provider as ProviderId, {
+        apiKey,
+        baseUrl: optimal.baseUrl,
+      });
+
+      const prompt = this.buildSubagentPrompt(request);
+      const result = await adapter.complete(
+        [{ role: 'user', content: prompt }],
+        { model: optimal.model, maxTokens: 4096 }
+      );
+
+      const text = result.content
+        .filter((c): c is TextBlock => c.type === 'text')
+        .map((c) => c.text)
+        .join('');
+
+      let parsed: unknown;
+      try {
+        parsed = JSON.parse(text);
+      } catch {
+        parsed = { rawOutput: text };
+      }
+
+      return {
+        success: true,
+        result: parsed,
+        output: text,
+        duration: Date.now() - startTime,
+        subagentType: request.type,
+        tokens: result.usage.inputTokens + result.usage.outputTokens,
+      };
+    } catch (error: any) {
+      logger.warn(`Direct API failed for ${optimal.provider}, falling back`, {
+        error: error.message,
+      });
+      return this.executeSubagentViaCLI(request, startTime, subagentId);
+    }
+  }
+
+  /**
+   * Execute via Anthropic Batch API (async, 50% discount)
+   */
+  private async executeBatch(
+    request: SubagentRequest,
+    startTime: number,
+    subagentId: string
+  ): Promise<SubagentResponse> {
+    try {
+      const batchClient = new AnthropicBatchClient();
       const prompt = this.buildSubagentPrompt(request);
 
-      // Write context to temp file for large contexts
+      const batchReq: BatchRequest = {
+        custom_id: subagentId,
+        params: {
+          model: 'claude-sonnet-4-5-20250929',
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+        },
+      };
+
+      const batchId = await batchClient.submit([batchReq], request.type);
+
+      // Return the batch ID immediately — caller can poll later
+      return {
+        success: true,
+        result: { batchId, status: 'submitted', custom_id: subagentId },
+        output: `Batch submitted: ${batchId}`,
+        duration: Date.now() - startTime,
+        subagentType: request.type,
+      };
+    } catch (error: any) {
+      logger.warn('Batch submit failed, falling back to sync', {
+        error: error.message,
+      });
+      return this.executeSubagentViaCLI(request, startTime, subagentId);
+    }
+  }
+
+  /**
+   * Original CLI-based subagent execution (unchanged behavior)
+   */
+  private async executeSubagentViaCLI(
+    request: SubagentRequest,
+    startTime: number,
+    subagentId: string
+  ): Promise<SubagentResponse> {
+    try {
+      const prompt = this.buildSubagentPrompt(request);
       const contextFile = path.join(this.tempDir, `${subagentId}-context.json`);
       await fs.promises.writeFile(
         contextFile,
         JSON.stringify(request.context, null, 2)
       );
-
-      // Create result file path
       const resultFile = path.join(this.tempDir, `${subagentId}-result.json`);
-
-      // Build the Task tool command
-      // The Task tool will spawn a new Claude instance with the specified prompt
       const taskCommand = this.buildTaskCommand(
         request,
         prompt,
         contextFile,
         resultFile
       );
-
-      // Execute via Claude Code's Task tool
       const result = await this.executeTaskTool(taskCommand, request.timeout);
 
-      // Read result from file
       let subagentResult: any = {};
       if (fs.existsSync(resultFile)) {
         const resultContent = await fs.promises.readFile(resultFile, 'utf-8');
         try {
           subagentResult = JSON.parse(resultContent);
-        } catch (e) {
+        } catch {
           subagentResult = { rawOutput: resultContent };
         }
       }
 
-      // Cleanup temp files
       this.cleanup(subagentId);
 
       return {
@@ -135,7 +280,7 @@ export class ClaudeCodeSubagentClient {
         tokens: this.estimateTokens(prompt + JSON.stringify(subagentResult)),
       };
     } catch (error: any) {
-      logger.error(`Subagent execution failed: ${request.type}`, {
+      logger.error(`Subagent CLI execution failed: ${request.type}`, {
         error,
         subagentId,
       });

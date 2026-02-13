@@ -15,6 +15,7 @@ export interface FeatureFlags {
   aiSummaries: boolean;
   skills: boolean;
   ralph: boolean;
+  multiProvider: boolean;
 }
 
 /**
@@ -62,6 +63,11 @@ export function isFeatureEnabled(feature: keyof FeatureFlags): boolean {
       // Ralph enabled by default in development (unless explicitly disabled)
       // For npm package users, must be explicitly enabled
       return process.env['STACKMEMORY_RALPH'] !== 'false';
+    case 'multiProvider':
+      return (
+        process.env['STACKMEMORY_MULTI_PROVIDER'] === 'true' ||
+        process.env['STACKMEMORY_MULTI_PROVIDER'] === '1'
+      );
     default:
       return false;
   }
@@ -78,6 +84,7 @@ export function getFeatureFlags(): FeatureFlags {
     aiSummaries: isFeatureEnabled('aiSummaries'),
     skills: isFeatureEnabled('skills'),
     ralph: isFeatureEnabled('ralph'),
+    multiProvider: isFeatureEnabled('multiProvider'),
   };
 }
 
@@ -104,6 +111,9 @@ export function logFeatureStatus(): void {
     );
     console.log(
       `  Ralph: ${flags.ralph ? 'enabled' : 'disabled (set STACKMEMORY_RALPH=true)'}`
+    );
+    console.log(
+      `  MultiProvider: ${flags.multiProvider ? 'enabled' : 'disabled (set STACKMEMORY_MULTI_PROVIDER=true)'}`
     );
   }
 }

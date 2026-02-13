@@ -21,6 +21,10 @@ export const ModelProviderSchema = z.enum([
   'qwen',
   'openai',
   'ollama',
+  'cerebras',
+  'deepinfra',
+  'openrouter',
+  'anthropic-batch',
   'custom',
 ]);
 
@@ -42,6 +46,9 @@ export const ModelRouterConfigSchema = z.object({
       think: ModelProviderSchema.optional(),
       code: ModelProviderSchema.optional(),
       review: ModelProviderSchema.optional(),
+      linting: ModelProviderSchema.optional(),
+      context: ModelProviderSchema.optional(),
+      testing: ModelProviderSchema.optional(),
     })
     .optional()
     .default({}),
@@ -60,6 +67,10 @@ export const ModelRouterConfigSchema = z.object({
       qwen: ModelConfigSchema.optional(),
       openai: ModelConfigSchema.optional(),
       ollama: ModelConfigSchema.optional(),
+      cerebras: ModelConfigSchema.optional(),
+      deepinfra: ModelConfigSchema.optional(),
+      openrouter: ModelConfigSchema.optional(),
+      'anthropic-batch': ModelConfigSchema.optional(),
       custom: ModelConfigSchema.optional(),
     })
     .optional()

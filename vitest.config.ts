@@ -1,22 +1,31 @@
 import { defineConfig } from 'vitest/config';
 
+// E2E files — must be sequential (execSync, process.cwd/argv mutation)
+const e2eFiles = [
+  'src/cli/commands/__tests__/integration.test.ts',
+  'src/__tests__/integration/cli-integration.test.ts',
+  'src/cli/__tests__/index.test.ts',
+];
+
+// Slow files — individually slow (real subagent API calls)
+const slowFiles = [
+  'src/integrations/claude-code/__tests__/task-coordinator.test.ts',
+  'src/integrations/claude-code/__tests__/agent-bridge.test.ts',
+];
+
+// Live API files — skip unless LIVE_TEST env is set
+const liveFiles = [
+  'src/core/extensions/__tests__/openrouter-integration.test.ts',
+  'src/integrations/mcp/handlers/__tests__/delegate-openrouter.test.ts',
+];
+
+// Benchmark files — only run with BENCH=1
+const benchmarkFiles = ['src/core/database/__tests__/search-benchmark.test.ts'];
+
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
-    testTimeout: 30000,
-    hookTimeout: 30000,
-    include: ['**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
-    sequence: {
-      // Run CLI integration tests sequentially to avoid execSync resource contention
-      sequenceFiles: true,
-    },
-    poolOptions: {
-      forks: {
-        // Limit parallelism to prevent CLI integration test timeouts
-        maxForks: 6,
-      },
-    },
     exclude: [
       'node_modules',
       'dist',
@@ -47,5 +56,49 @@ export default defineConfig({
         lines: 25,
       },
     },
+    projects: [
+      {
+        extends: true,
+        test: {
+          name: 'unit',
+          include: ['src/**/*.{test,spec}.{ts,tsx}'],
+          exclude: [
+            ...e2eFiles,
+            ...slowFiles,
+            ...liveFiles,
+            ...benchmarkFiles,
+            'node_modules',
+            'dist',
+          ],
+          pool: 'forks',
+          maxWorkers: 10,
+          testTimeout: 30000,
+          hookTimeout: 30000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'integration',
+          include: [...e2eFiles, ...slowFiles],
+          pool: 'forks',
+          maxWorkers: 3,
+          fileParallelism: false,
+          testTimeout: 60000,
+          hookTimeout: 60000,
+        },
+      },
+      {
+        extends: true,
+        test: {
+          name: 'live',
+          include: [...liveFiles],
+          pool: 'forks',
+          maxWorkers: 1,
+          testTimeout: 30000,
+          env: { LIVE_TEST: '1' },
+        },
+      },
+    ],
   },
 });

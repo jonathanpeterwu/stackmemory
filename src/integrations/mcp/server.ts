@@ -84,6 +84,9 @@ class LocalStackMemoryMCP {
   private contextRetrieval: LLMContextRetrieval;
   private discoveryHandlers: DiscoveryHandlers;
   private diffMemHandlers: DiffMemHandlers;
+  private providerHandlers:
+    | import('./handlers/provider-handlers.js').ProviderHandlers
+    | null = null;
   private pendingPlans: Map<string, any> = new Map();
 
   constructor() {
@@ -180,6 +183,9 @@ class LocalStackMemoryMCP {
 
     // Initialize DiffMem Handlers
     this.diffMemHandlers = new DiffMemHandlers();
+
+    // Initialize Provider Handlers (lazy, only when multiProvider enabled)
+    this.initProviderHandlers();
 
     this.setupHandlers();
     this.loadInitialContext();
@@ -346,6 +352,18 @@ class LocalStackMemoryMCP {
     stored.forEach((ctx) => {
       this.contexts.set(ctx.id, ctx);
     });
+  }
+
+  private async initProviderHandlers(): Promise<void> {
+    if (!isFeatureEnabled('multiProvider')) return;
+    try {
+      const { ProviderHandlers } =
+        await import('./handlers/provider-handlers.js');
+      this.providerHandlers = new ProviderHandlers();
+      logger.info('Provider handlers initialized (multiProvider enabled)');
+    } catch (error) {
+      logger.warn('Failed to initialize provider handlers', { error });
+    }
   }
 
   private setupHandlers() {
@@ -1176,6 +1194,113 @@ class LocalStackMemoryMCP {
                 properties: {},
               },
             },
+            // Provider tools (only active when STACKMEMORY_MULTI_PROVIDER=true)
+            ...(isFeatureEnabled('multiProvider')
+              ? [
+                  {
+                    name: 'delegate_to_model',
+                    description:
+                      'Route a prompt to a specific provider/model. Uses smart cost-based routing by default.',
+                    inputSchema: {
+                      type: 'object',
+                      properties: {
+                        prompt: {
+                          type: 'string',
+                          description: 'The prompt to send',
+                        },
+                        provider: {
+                          type: 'string',
+                          enum: [
+                            'anthropic',
+                            'cerebras',
+                            'deepinfra',
+                            'openai',
+                            'openrouter',
+                          ],
+                          description:
+                            'Override provider (auto-routes if omitted)',
+                        },
+                        model: {
+                          type: 'string',
+                          description: 'Override model name',
+                        },
+                        taskType: {
+                          type: 'string',
+                          enum: [
+                            'linting',
+                            'context',
+                            'code',
+                            'testing',
+                            'review',
+                            'plan',
+                          ],
+                          description: 'Task type for auto-routing',
+                        },
+                        maxTokens: {
+                          type: 'number',
+                          description: 'Max tokens',
+                        },
+                        temperature: { type: 'number' },
+                        system: {
+                          type: 'string',
+                          description: 'System prompt',
+                        },
+                      },
+                      required: ['prompt'],
+                    },
+                  },
+                  {
+                    name: 'batch_submit',
+                    description:
+                      'Submit prompts to Anthropic Batch API (50% discount, async)',
+                    inputSchema: {
+                      type: 'object',
+                      properties: {
+                        prompts: {
+                          type: 'array',
+                          items: {
+                            type: 'object',
+                            properties: {
+                              id: { type: 'string' },
+                              prompt: { type: 'string' },
+                              model: { type: 'string' },
+                              maxTokens: { type: 'number' },
+                              system: { type: 'string' },
+                            },
+                            required: ['id', 'prompt'],
+                          },
+                          description: 'Array of prompts to batch',
+                        },
+                        description: {
+                          type: 'string',
+                          description: 'Batch job description',
+                        },
+                      },
+                      required: ['prompts'],
+                    },
+                  },
+                  {
+                    name: 'batch_check',
+                    description:
+                      'Check status or retrieve results for a batch job',
+                    inputSchema: {
+                      type: 'object',
+                      properties: {
+                        batchId: {
+                          type: 'string',
+                          description: 'Batch job ID',
+                        },
+                        retrieve: {
+                          type: 'boolean',
+                          description: 'Retrieve results if complete',
+                          default: false,
+                        },
+                      },
+                      required: ['batchId'],
+                    },
+                  },
+                ]
+              : []),
           ],
         };
       }
@@ -1370,6 +1495,58 @@ class LocalStackMemoryMCP {
 
             case 'sm_edit':
               result = await this.handleSmEdit(args);
+              break;
+
+            // Provider tools
+            case 'delegate_to_model':
+              if (!this.providerHandlers) {
+                result = {
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Multi-provider routing is disabled.',
+                    },
+                  ],
+                };
+              } else {
+                result = await this.providerHandlers.handleDelegateToModel(
+                  args as any
+                );
+              }
+              break;
+
+            case 'batch_submit':
+              if (!this.providerHandlers) {
+                result = {
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Multi-provider routing is disabled.',
+                    },
+                  ],
+                };
+              } else {
+                result = await this.providerHandlers.handleBatchSubmit(
+                  args as any
+                );
+              }
+              break;
+
+            case 'batch_check':
+              if (!this.providerHandlers) {
+                result = {
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Multi-provider routing is disabled.',
+                    },
+                  ],
+                };
+              } else {
+                result = await this.providerHandlers.handleBatchCheck(
+                  args as any
+                );
+              }
               break;
 
             default:

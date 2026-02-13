@@ -53,7 +53,7 @@ log_success "Package structure valid"
 
 # Core tests + search benchmark (100-frame smoke)
 log_info "Running tests..."
-npx vitest run --reporter=dot --bail=3 --retry 1 2>&1 | tail -5
+npm run test:all -- --reporter=dot --bail=3 --retry 1 2>&1 | tail -5
 if [ ${PIPESTATUS[0]} -ne 0 ]; then
     log_error "Tests failed"
 fi

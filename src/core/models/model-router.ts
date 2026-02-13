@@ -11,14 +11,32 @@ import {
   ModelRouterConfigSchema,
   parseConfigSafe,
 } from '../../hooks/schemas.js';
+import { isFeatureEnabled } from '../config/feature-flags.js';
+import { scoreComplexity, type ComplexityTier } from './complexity-scorer.js';
+import {
+  detectSensitiveContent,
+  isApprovedProvider,
+} from './sensitive-guard.js';
 
 export type ModelProvider =
   | 'anthropic'
   | 'qwen'
   | 'openai'
   | 'ollama'
+  | 'cerebras'
+  | 'deepinfra'
+  | 'openrouter'
+  | 'anthropic-batch'
   | 'custom';
-export type TaskType = 'default' | 'plan' | 'think' | 'code' | 'review';
+export type TaskType =
+  | 'default'
+  | 'plan'
+  | 'think'
+  | 'code'
+  | 'review'
+  | 'linting'
+  | 'context'
+  | 'testing';
 
 /**
  * Known context window sizes (max tokens) for popular models.
@@ -42,6 +60,10 @@ export const MODEL_TOKEN_LIMITS: Record<string, number> = {
   'o3-mini': 200000,
   // Qwen
   'qwen3-max-2025-01-23': 128000,
+  // Cerebras
+  'llama-4-scout-17b-16e-instruct': 131072,
+  // DeepInfra
+  'THUDM/glm-4-9b-chat': 128000,
 };
 
 /** Default context window when model is unknown */
@@ -75,6 +97,9 @@ export interface ModelRouterConfig {
     think?: ModelProvider; // Deep thinking/reasoning
     code?: ModelProvider; // Code generation
     review?: ModelProvider; // Code review
+    linting?: ModelProvider; // Lint checks
+    context?: ModelProvider; // Context retrieval
+    testing?: ModelProvider; // Test generation
   };
 
   // Fallback configuration
@@ -94,6 +119,10 @@ export interface ModelRouterConfig {
     qwen?: ModelConfig;
     openai?: ModelConfig;
     ollama?: ModelConfig;
+    cerebras?: ModelConfig;
+    deepinfra?: ModelConfig;
+    openrouter?: ModelConfig;
+    'anthropic-batch'?: ModelConfig;
     custom?: ModelConfig;
   };
 
@@ -137,6 +166,29 @@ const DEFAULT_CONFIG: ModelRouterConfig = {
         thinking_budget: 10000,
       },
     },
+    cerebras: {
+      provider: 'cerebras',
+      model: 'llama-4-scout-17b-16e-instruct',
+      baseUrl: 'https://api.cerebras.ai/v1',
+      apiKeyEnv: 'CEREBRAS_API_KEY',
+    },
+    deepinfra: {
+      provider: 'deepinfra',
+      model: 'THUDM/glm-4-9b-chat',
+      baseUrl: 'https://api.deepinfra.com/v1/openai',
+      apiKeyEnv: 'DEEPINFRA_API_KEY',
+    },
+    openrouter: {
+      provider: 'openrouter',
+      model: 'meta-llama/llama-4-scout',
+      baseUrl: 'https://openrouter.ai/api',
+      apiKeyEnv: 'OPENROUTER_API_KEY',
+    },
+    'anthropic-batch': {
+      provider: 'anthropic-batch',
+      model: 'claude-sonnet-4-5-20250929',
+      apiKeyEnv: 'ANTHROPIC_API_KEY',
+    },
   },
   thinkingMode: {
     enabled: true,
@@ -146,36 +198,61 @@ const DEFAULT_CONFIG: ModelRouterConfig = {
   },
 };
 
+/** Cached config with TTL to avoid repeated disk reads */
+let _configCache: { config: ModelRouterConfig; expiresAt: number } | null =
+  null;
+const CONFIG_CACHE_TTL_MS = 5_000;
+
 /**
- * Load model router configuration with Zod validation
+ * Load model router configuration with Zod validation.
+ * Results are cached for 5 seconds to avoid repeated disk reads.
  */
 export function loadModelRouterConfig(): ModelRouterConfig {
+  const now = Date.now();
+  if (_configCache && now < _configCache.expiresAt) {
+    return _configCache.config;
+  }
+
+  let config: ModelRouterConfig;
   try {
     if (existsSync(CONFIG_PATH)) {
       const data = JSON.parse(readFileSync(CONFIG_PATH, 'utf8'));
-      return parseConfigSafe(
+      config = parseConfigSafe(
         ModelRouterConfigSchema,
         { ...DEFAULT_CONFIG, ...data },
         DEFAULT_CONFIG,
         'model-router'
       );
+    } else {
+      config = { ...DEFAULT_CONFIG };
     }
   } catch {
-    // Use defaults
+    config = { ...DEFAULT_CONFIG };
   }
-  return { ...DEFAULT_CONFIG };
+
+  _configCache = { config, expiresAt: now + CONFIG_CACHE_TTL_MS };
+  return config;
 }
 
 /**
- * Save model router configuration
+ * Save model router configuration.
+ * Invalidates the config cache.
  */
 export function saveModelRouterConfig(config: ModelRouterConfig): void {
   try {
     ensureSecureDir(join(homedir(), '.stackmemory'));
     writeFileSecure(CONFIG_PATH, JSON.stringify(config, null, 2));
+    _configCache = null; // Invalidate cache on write
   } catch {
     // Silently fail
   }
+}
+
+/**
+ * Invalidate the config cache (for testing).
+ */
+export function invalidateConfigCache(): void {
+  _configCache = null;
 }
 
 /**
@@ -260,6 +337,236 @@ export function requiresDeepThinking(input: string): boolean {
   ];
 
   return thinkPatterns.some((pattern) => pattern.test(input));
+}
+
+/**
+ * Optimal provider routing for cost-effective task execution.
+ * Routes simple tasks to cheap/fast providers when multiProvider is enabled.
+ */
+export interface OptimalProviderResult {
+  provider: ModelProvider;
+  model: string;
+  baseUrl?: string;
+  apiKeyEnv: string;
+}
+
+const OPTIMAL_ROUTING: Record<
+  string,
+  {
+    provider: ModelProvider;
+    model: string;
+    apiKeyEnv: string;
+    baseUrl?: string;
+  }
+> = {
+  linting: {
+    provider: 'deepinfra',
+    model: 'THUDM/glm-4-9b-chat',
+    apiKeyEnv: 'DEEPINFRA_API_KEY',
+    baseUrl: 'https://api.deepinfra.com/v1/openai',
+  },
+  context: {
+    provider: 'deepinfra',
+    model: 'THUDM/glm-4-9b-chat',
+    apiKeyEnv: 'DEEPINFRA_API_KEY',
+    baseUrl: 'https://api.deepinfra.com/v1/openai',
+  },
+  code: {
+    provider: 'cerebras',
+    model: 'llama-4-scout-17b-16e-instruct',
+    apiKeyEnv: 'CEREBRAS_API_KEY',
+    baseUrl: 'https://api.cerebras.ai/v1',
+  },
+  testing: {
+    provider: 'cerebras',
+    model: 'llama-4-scout-17b-16e-instruct',
+    apiKeyEnv: 'CEREBRAS_API_KEY',
+    baseUrl: 'https://api.cerebras.ai/v1',
+  },
+  review: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-5-20250929',
+    apiKeyEnv: 'ANTHROPIC_API_KEY',
+  },
+  plan: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-5-20250929',
+    apiKeyEnv: 'ANTHROPIC_API_KEY',
+  },
+  think: {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-5-20250929',
+    apiKeyEnv: 'ANTHROPIC_API_KEY',
+  },
+};
+
+const FALLBACK_CHAIN: ModelProvider[] = ['deepinfra', 'cerebras', 'anthropic'];
+
+/** Cheap providers for low-complexity routing */
+const CHEAP_PROVIDERS: {
+  provider: ModelProvider;
+  model: string;
+  apiKeyEnv: string;
+  baseUrl?: string;
+}[] = [
+  {
+    provider: 'openrouter',
+    model: 'meta-llama/llama-4-scout',
+    apiKeyEnv: 'OPENROUTER_API_KEY',
+    baseUrl: 'https://openrouter.ai/api',
+  },
+  {
+    provider: 'deepinfra',
+    model: 'THUDM/glm-4-9b-chat',
+    apiKeyEnv: 'DEEPINFRA_API_KEY',
+    baseUrl: 'https://api.deepinfra.com/v1/openai',
+  },
+  {
+    provider: 'cerebras',
+    model: 'llama-4-scout-17b-16e-instruct',
+    apiKeyEnv: 'CEREBRAS_API_KEY',
+    baseUrl: 'https://api.cerebras.ai/v1',
+  },
+];
+
+/**
+ * Get optimal provider for a task type based on cost/speed trade-offs.
+ * Only active when multiProvider feature flag is enabled.
+ * Falls through to anthropic when provider API key is missing.
+ *
+ * @param taskType - The type of task being routed
+ * @param preference - Explicit provider preference (overrides all routing)
+ * @param complexityInput - Optional prompt+context for complexity-based routing.
+ *   When provided, low-complexity tasks route to cheap providers regardless of
+ *   task type, and high-complexity tasks route to Anthropic.
+ */
+export function getOptimalProvider(
+  taskType: TaskType,
+  preference?: ModelProvider,
+  complexityInput?: { task: string; context?: Record<string, unknown> }
+): OptimalProviderResult {
+  // Default fallback
+  const defaultResult: OptimalProviderResult = {
+    provider: 'anthropic',
+    model: 'claude-sonnet-4-5-20250929',
+    apiKeyEnv: 'ANTHROPIC_API_KEY',
+  };
+
+  if (!isFeatureEnabled('multiProvider')) {
+    return defaultResult;
+  }
+
+  // ── GATE 0: Sensitive content guard ──────────────────────────────
+  // Runs BEFORE all other routing. If the task or context contains
+  // credentials/secrets/PII, force an approved provider (Anthropic)
+  // to prevent data leaks to third-party LLM APIs.
+  if (complexityInput) {
+    const sensitiveCheck = detectSensitiveContent(
+      complexityInput.task,
+      complexityInput.context
+    );
+    if (sensitiveCheck.sensitive) {
+      return defaultResult;
+    }
+  }
+
+  // ── GATE 1: Explicit preference ──────────────────────────────────
+  if (preference) {
+    // Block non-approved preference when content is sensitive
+    if (!isApprovedProvider(preference) && complexityInput) {
+      const check = detectSensitiveContent(
+        complexityInput.task,
+        complexityInput.context
+      );
+      if (check.sensitive) {
+        return defaultResult;
+      }
+    }
+
+    const config = loadModelRouterConfig();
+    const providerConfig = config.providers[preference];
+    if (providerConfig && process.env[providerConfig.apiKeyEnv]) {
+      return {
+        provider: preference,
+        model: providerConfig.model,
+        baseUrl: providerConfig.baseUrl,
+        apiKeyEnv: providerConfig.apiKeyEnv,
+      };
+    }
+  }
+
+  // ── GATE 2: Complexity-based routing ─────────────────────────────
+  if (complexityInput) {
+    const complexity = scoreComplexity(
+      complexityInput.task,
+      complexityInput.context
+    );
+
+    if (complexity.tier === 'low') {
+      const cheap = findAvailableCheapProvider();
+      if (cheap) return cheap;
+    }
+
+    if (complexity.tier === 'high') {
+      // Always force Anthropic for high-complexity tasks — callers
+      // handle missing API key as an explicit error.
+      return defaultResult;
+    }
+    // Medium tier: fall through to task-type routing below
+  }
+
+  // Use optimal routing table (task-type-based)
+  const route = OPTIMAL_ROUTING[taskType];
+  if (route && process.env[route.apiKeyEnv]) {
+    return { ...route };
+  }
+
+  // Fallback chain: try each provider until one has a valid API key
+  const fallbackConfig = loadModelRouterConfig();
+  for (const provider of FALLBACK_CHAIN) {
+    const providerConfig = fallbackConfig.providers[provider];
+    if (providerConfig && process.env[providerConfig.apiKeyEnv]) {
+      return {
+        provider,
+        model: providerConfig.model,
+        baseUrl: providerConfig.baseUrl,
+        apiKeyEnv: providerConfig.apiKeyEnv,
+      };
+    }
+  }
+
+  return defaultResult;
+}
+
+/**
+ * Find the first available cheap provider with a valid API key.
+ */
+function findAvailableCheapProvider(): OptimalProviderResult | null {
+  for (const p of CHEAP_PROVIDERS) {
+    if (process.env[p.apiKeyEnv]) {
+      return {
+        provider: p.provider,
+        model: p.model,
+        apiKeyEnv: p.apiKeyEnv,
+        baseUrl: p.baseUrl,
+      };
+    }
+  }
+  return null;
+}
+
+/**
+ * Score task complexity and return the routing decision.
+ * Convenience wrapper for external callers.
+ */
+export function getComplexityRoutedProvider(
+  taskType: TaskType,
+  task: string,
+  context?: Record<string, unknown>
+): OptimalProviderResult & { complexity: ComplexityTier } {
+  const complexity = scoreComplexity(task, context);
+  const provider = getOptimalProvider(taskType, undefined, { task, context });
+  return { ...provider, complexity: complexity.tier };
 }
 
 /**
@@ -367,46 +674,6 @@ export class ModelRouter {
   }
 
   /**
-   * Check if error should trigger fallback
-   */
-  shouldFallback(error: {
-    status?: number;
-    code?: string;
-    message?: string;
-  }): boolean {
-    if (!this.isFallbackEnabled()) return false;
-    if (this.inFallbackMode) return false; // Already in fallback
-
-    const fallback = this.config.fallback;
-
-    // Rate limit (429)
-    if (fallback.onRateLimit && error.status === 429) {
-      return true;
-    }
-
-    // Server errors (5xx)
-    if (fallback.onError && error.status && error.status >= 500) {
-      return true;
-    }
-
-    // Timeout
-    if (fallback.onTimeout) {
-      const isTimeout =
-        error.code === 'ETIMEDOUT' ||
-        error.code === 'ESOCKETTIMEDOUT' ||
-        error.message?.toLowerCase().includes('timeout');
-      if (isTimeout) return true;
-    }
-
-    // Overloaded
-    if (error.message?.toLowerCase().includes('overloaded')) {
-      return true;
-    }
-
-    return false;
-  }
-
-  /**
    * Activate fallback mode
    */
   activateFallback(reason: FallbackTrigger): Record<string, string> {
@@ -480,24 +747,6 @@ export function getModelRouter(): ModelRouter {
     routerInstance = new ModelRouter();
   }
   return routerInstance;
-}
-
-/**
- * Quick helper to get env vars for plan mode
- */
-export function getPlanModeEnv(): Record<string, string> {
-  const router = getModelRouter();
-  const result = router.route('plan');
-  return result.env;
-}
-
-/**
- * Quick helper to get env vars for thinking mode
- */
-export function getThinkingModeEnv(): Record<string, string> {
-  const router = getModelRouter();
-  const result = router.route('think');
-  return result.env;
 }
 
 /**

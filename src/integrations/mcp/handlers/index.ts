@@ -20,6 +20,10 @@ export {
   DiscoveryHandlers,
   type DiscoveryDependencies,
 } from './discovery-handlers.js';
+export {
+  ProviderHandlers,
+  type ProviderHandlerDependencies,
+} from './provider-handlers.js';
 
 import {
   ContextHandlers,
@@ -31,6 +35,7 @@ import {
   LinearHandlerDependencies,
 } from './linear-handlers.js';
 import { TraceHandlers, TraceHandlerDependencies } from './trace-handlers.js';
+import { ProviderHandlers } from './provider-handlers.js';
 
 // Combined dependencies interface
 export interface MCPHandlerDependencies
@@ -48,6 +53,7 @@ export class MCPHandlerFactory {
   private taskHandlers: TaskHandlers;
   private linearHandlers: LinearHandlers;
   private traceHandlers: TraceHandlers;
+  private providerHandlers: ProviderHandlers;
 
   constructor(deps: MCPHandlerDependencies) {
     this.contextHandlers = new ContextHandlers({
@@ -69,6 +75,8 @@ export class MCPHandlerFactory {
       traceDetector: deps.traceDetector,
       browserMCP: deps.browserMCP,
     });
+
+    this.providerHandlers = new ProviderHandlers();
   }
 
   /**
@@ -140,6 +148,20 @@ export class MCPHandlerFactory {
           this.traceHandlers
         );
 
+      // Provider handlers
+      case 'delegate_to_model':
+        return this.providerHandlers.handleDelegateToModel.bind(
+          this.providerHandlers
+        );
+      case 'batch_submit':
+        return this.providerHandlers.handleBatchSubmit.bind(
+          this.providerHandlers
+        );
+      case 'batch_check':
+        return this.providerHandlers.handleBatchCheck.bind(
+          this.providerHandlers
+        );
+
       default:
         throw new Error(`Unknown tool: ${toolName}`);
     }
@@ -178,6 +200,11 @@ export class MCPHandlerFactory {
       'take_screenshot',
       'execute_script',
       'stop_browser_debug',
+
+      // Provider tools (conditionally active)
+      'delegate_to_model',
+      'batch_submit',
+      'batch_check',
     ];
   }
 

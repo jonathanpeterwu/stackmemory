@@ -35,13 +35,19 @@ export type SubagentType =
   | 'publish'
   | 'improve';
 
+import type { ModelProvider } from '../core/models/model-router.js';
+
+// Subagent model target — either a Claude model string or provider+model pair
+export type SubagentModelTarget =
+  | 'claude-sonnet-4-5-20250929'
+  | 'claude-haiku-4-5-20251001'
+  | 'claude-opus-4-6'
+  | { provider: ModelProvider; model: string };
+
 // Subagent configuration
 export interface SubagentConfig {
   type: SubagentType;
-  model:
-    | 'claude-sonnet-4-5-20250929'
-    | 'claude-haiku-4-5-20251001'
-    | 'claude-opus-4-6';
+  model: SubagentModelTarget;
   maxTokens: number;
   temperature: number;
   systemPrompt: string;
@@ -849,14 +855,21 @@ Rules:
     return total;
   }
 
-  private calculateNodeCost(tokens: number, model: string): number {
+  private calculateNodeCost(
+    tokens: number,
+    model: SubagentModelTarget
+  ): number {
     // Pricing per 1M tokens (input+output blended approximate)
     const pricing: Record<string, number> = {
       'claude-sonnet-4-5-20250929': 15.0,
       'claude-haiku-4-5-20251001': 1.0,
       'claude-opus-4-6': 75.0,
+      // External providers — much cheaper
+      'llama-4-scout-17b-16e-instruct': 0.35,
+      'THUDM/glm-4-9b-chat': 0.06,
     };
-    return (tokens / 1000000) * (pricing[model] || 10);
+    const modelName = typeof model === 'string' ? model : model.model;
+    return (tokens / 1000000) * (pricing[modelName] || 10);
   }
 
   private countGeneratedTests(node: TaskNode): number {
