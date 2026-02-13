@@ -17,7 +17,13 @@ const cli = (cmd: string) => `node ${cliPath} ${cmd}`;
 // NOTE: These tests have implementation dependencies
 // Simpler tests are in src/__tests__/integration/cli-integration.test.ts
 
-describe('CLI Integration Tests', { timeout: 60_000 }, () => {
+// Per-command execSync timeout must be strictly less than the per-test vitest
+// timeout so that execSync self-aborts before vitest tries (and fails) to
+// interrupt the blocked event loop.  25 s per command, 30 s per single-command
+// test, 55 s per two-command test, 120 s suite-level cap.
+const EXEC_TIMEOUT = 25_000;
+
+describe('CLI Integration Tests', { timeout: 120_000 }, () => {
   let testDir: string;
 
   beforeEach(() => {
@@ -27,7 +33,7 @@ describe('CLI Integration Tests', { timeout: 60_000 }, () => {
     process.chdir(testDir);
 
     // Initialize StackMemory in test directory
-    execSync(cli('init'), { cwd: testDir, timeout: 30000 });
+    execSync(cli('init'), { cwd: testDir, timeout: EXEC_TIMEOUT });
 
     // Create context.db since init skips DB creation in test mode
     const dbDir = path.join(testDir, '.stackmemory');
@@ -98,7 +104,7 @@ describe('CLI Integration Tests', { timeout: 60_000 }, () => {
       const result = execSync(cli('clear --status'), {
         cwd: testDir,
         encoding: 'utf8',
-        timeout: 30000,
+        timeout: EXEC_TIMEOUT,
       });
 
       // Updated expectations to match actual output
@@ -112,7 +118,7 @@ describe('CLI Integration Tests', { timeout: 60_000 }, () => {
       const result = execSync(cli('capture'), {
         cwd: testDir,
         encoding: 'utf8',
-        timeout: 30000,
+        timeout: EXEC_TIMEOUT,
       });
 
       // Check for any successful output
@@ -126,29 +132,29 @@ describe('CLI Integration Tests', { timeout: 60_000 }, () => {
       }
     });
 
-    it('should load handoff document', { timeout: 30000 }, () => {
+    it('should load handoff document', { timeout: 55000 }, () => {
       // First generate a handoff
-      execSync(cli('capture'), { cwd: testDir, timeout: 30000 });
+      execSync(cli('capture'), { cwd: testDir, timeout: EXEC_TIMEOUT });
 
       // Then load it
       const result = execSync(cli('restore'), {
         cwd: testDir,
         encoding: 'utf8',
-        timeout: 30000,
+        timeout: EXEC_TIMEOUT,
       });
 
       // Just check it ran without error
       expect(result).toBeDefined();
     });
 
-    it('should capture handoff document', { timeout: 30000 }, () => {
+    it('should capture handoff document', { timeout: 55000 }, () => {
       // Generate a capture
-      execSync(cli('capture'), { cwd: testDir, timeout: 30000 });
+      execSync(cli('capture'), { cwd: testDir, timeout: EXEC_TIMEOUT });
 
       const result = execSync(cli('capture'), {
         cwd: testDir,
         encoding: 'utf8',
-        timeout: 30000,
+        timeout: EXEC_TIMEOUT,
       });
 
       // Just check it ran without error
