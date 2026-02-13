@@ -99,6 +99,17 @@ export default defineConfig({
           env: { LIVE_TEST: '1' },
         },
       },
+      {
+        extends: true,
+        test: {
+          name: 'bench',
+          include: [...benchmarkFiles],
+          pool: 'forks',
+          maxWorkers: 1,
+          testTimeout: 600000,
+          hookTimeout: 60000,
+        },
+      },
     ],
   },
 });
