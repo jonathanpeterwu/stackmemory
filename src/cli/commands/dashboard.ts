@@ -10,6 +10,7 @@ import { FrameManager } from '../../core/context/index.js';
 import Database from 'better-sqlite3';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { getModelTokenLimit } from '../../core/models/model-router.js';
 
 /** Frame statistics row */
 interface FrameStatsRow {
@@ -280,7 +281,7 @@ async function estimateContextUsage(db: Database): Promise<number> {
   // Rough estimate: assume average token is 4 bytes
   const totalBytes = (result?.input_size || 0) + (result?.output_size || 0);
   const estimatedTokens = totalBytes / 4;
-  const maxTokens = 128000; // Claude's context window
+  const maxTokens = getModelTokenLimit(process.env.ANTHROPIC_MODEL);
 
   return Math.round((estimatedTokens / maxTokens) * 100);
 }

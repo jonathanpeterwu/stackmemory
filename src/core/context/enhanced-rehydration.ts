@@ -11,6 +11,10 @@ import * as path from 'path';
 import { logger } from '../monitoring/logger.js';
 import { FrameManager } from './index.js';
 import type { Anchor, Event } from './index.js';
+import {
+  getModelTokenLimit,
+  DEFAULT_MODEL_TOKEN_LIMIT,
+} from '../models/model-router.js';
 
 // ============================================================================
 // Compaction Handler Types
@@ -72,15 +76,38 @@ export class CompactionHandler {
   private metrics: CompactionMetrics;
   private tokenAccumulator: number = 0;
   private preservedAnchors: Map<string, CriticalContextAnchor> = new Map();
+  private modelTokenLimit: number;
 
-  constructor(frameManager: FrameManager) {
+  /**
+   * @param frameManager - Frame manager instance
+   * @param modelOrLimit - Model name string (looked up in MODEL_TOKEN_LIMITS)
+   *                       or explicit numeric token limit.
+   *                       Defaults to DEFAULT_MODEL_TOKEN_LIMIT (200K).
+   *
+   * Thresholds are derived from the model limit:
+   *   warning  = 90% of limit
+   *   critical = 95% of limit (auto-compact trigger)
+   */
+  constructor(frameManager: FrameManager, modelOrLimit?: string | number) {
     this.frameManager = frameManager;
+    this.modelTokenLimit =
+      typeof modelOrLimit === 'number'
+        ? modelOrLimit
+        : getModelTokenLimit(modelOrLimit ?? undefined);
+
     this.metrics = {
       estimatedTokens: 0,
-      warningThreshold: 150000, // 150K tokens
-      criticalThreshold: 170000, // 170K tokens
+      warningThreshold: Math.floor(this.modelTokenLimit * 0.9),
+      criticalThreshold: Math.floor(this.modelTokenLimit * 0.95),
       anchorsPreserved: 0,
     };
+  }
+
+  /**
+   * Get the resolved model token limit
+   */
+  getModelTokenLimit(): number {
+    return this.modelTokenLimit;
   }
 
   /**
