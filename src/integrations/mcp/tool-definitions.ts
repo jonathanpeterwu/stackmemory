@@ -25,6 +25,7 @@ export class MCPToolDefinitions {
       ...this.getTraceTools(),
       ...this.getDiscoveryTools(),
       ...this.getEditTools(),
+      ...this.getGraphitiTools(),
     ];
   }
 
@@ -734,6 +735,59 @@ export class MCPToolDefinitions {
   }
 
   /**
+   * Graphiti knowledge graph tools
+   */
+  getGraphitiTools(): MCPToolDefinition[] {
+    return [
+      {
+        name: 'graphiti_status',
+        description:
+          'Check Graphiti temporal knowledge graph connection status',
+        inputSchema: {
+          type: 'object',
+          properties: {},
+        },
+      },
+      {
+        name: 'graphiti_query',
+        description:
+          'Query the Graphiti temporal knowledge graph for entities, relations, and episodes',
+        inputSchema: {
+          type: 'object',
+          properties: {
+            query: {
+              type: 'string',
+              description: 'Semantic text query',
+            },
+            entityTypes: {
+              type: 'array',
+              items: { type: 'string' },
+              description:
+                'Entity types to filter (e.g., ["Person", "File", "Issue"])',
+            },
+            validFrom: {
+              type: 'number',
+              description: 'Start of time window (epoch ms)',
+            },
+            validTo: {
+              type: 'number',
+              description: 'End of time window (epoch ms)',
+            },
+            maxHops: {
+              type: 'number',
+              description: 'Graph traversal depth (default 2)',
+            },
+            k: {
+              type: 'number',
+              description: 'Top-k results (default 20)',
+            },
+          },
+        },
+      },
+    ];
+  }
+
+  /**
    * Get tool definition by name
    */
   getToolDefinition(name: string): MCPToolDefinition | undefined {
@@ -744,7 +798,14 @@ export class MCPToolDefinitions {
    * Get tool names by category
    */
   getToolsByCategory(
-    category: 'context' | 'task' | 'linear' | 'trace' | 'discovery' | 'edit'
+    category:
+      | 'context'
+      | 'task'
+      | 'linear'
+      | 'trace'
+      | 'discovery'
+      | 'edit'
+      | 'graphiti'
   ): MCPToolDefinition[] {
     switch (category) {
       case 'context':
@@ -759,6 +820,8 @@ export class MCPToolDefinitions {
         return this.getDiscoveryTools();
       case 'edit':
         return this.getEditTools();
+      case 'graphiti':
+        return this.getGraphitiTools();
       default:
         return [];
     }

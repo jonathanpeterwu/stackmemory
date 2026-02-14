@@ -44,6 +44,7 @@ import { ToolCall, Trace } from '../../core/trace/types.js';
 import { LLMContextRetrieval } from '../../core/retrieval/index.js';
 import { DiscoveryHandlers } from './handlers/discovery-handlers.js';
 import { DiffMemHandlers } from './handlers/diffmem-handlers.js';
+import { GraphitiClient } from '../graphiti/client.js';
 import { fuzzyEdit } from '../../utils/fuzzy-edit.js';
 import { v4 as uuidv4 } from 'uuid';
 import {
@@ -87,6 +88,7 @@ class LocalStackMemoryMCP {
   private providerHandlers:
     | import('./handlers/provider-handlers.js').ProviderHandlers
     | null = null;
+  private graphitiClient: GraphitiClient | null = null;
   private pendingPlans: Map<string, any> = new Map();
 
   constructor() {
@@ -186,6 +188,17 @@ class LocalStackMemoryMCP {
 
     // Initialize Provider Handlers (lazy, only when multiProvider enabled)
     this.initProviderHandlers();
+
+    // Initialize Graphiti client (if endpoint configured)
+    if (process.env.GRAPHITI_ENDPOINT) {
+      this.graphitiClient = new GraphitiClient({
+        endpoint: process.env.GRAPHITI_ENDPOINT,
+        projectNamespace: process.env.STACKMEMORY_PROJECT_ID || this.projectId,
+      });
+      logger.info('Graphiti client initialized', {
+        endpoint: process.env.GRAPHITI_ENDPOINT,
+      });
+    }
 
     this.setupHandlers();
     this.loadInitialContext();
@@ -1194,6 +1207,56 @@ class LocalStackMemoryMCP {
                 properties: {},
               },
             },
+            // Graphiti tools (only active when GRAPHITI_ENDPOINT is set)
+            ...(this.graphitiClient
+              ? [
+                  {
+                    name: 'graphiti_status',
+                    description:
+                      'Check Graphiti temporal knowledge graph connection status',
+                    inputSchema: {
+                      type: 'object',
+                      properties: {},
+                    },
+                  },
+                  {
+                    name: 'graphiti_query',
+                    description:
+                      'Query the Graphiti temporal knowledge graph for entities, relations, and episodes',
+                    inputSchema: {
+                      type: 'object',
+                      properties: {
+                        query: {
+                          type: 'string',
+                          description: 'Semantic text query',
+                        },
+                        entityTypes: {
+                          type: 'array',
+                          items: { type: 'string' },
+                          description:
+                            'Entity types to filter (e.g., ["Person", "File", "Issue"])',
+                        },
+                        validFrom: {
+                          type: 'number',
+                          description: 'Start of time window (epoch ms)',
+                        },
+                        validTo: {
+                          type: 'number',
+                          description: 'End of time window (epoch ms)',
+                        },
+                        maxHops: {
+                          type: 'number',
+                          description: 'Graph traversal depth (default 2)',
+                        },
+                        k: {
+                          type: 'number',
+                          description: 'Top-k results (default 20)',
+                        },
+                      },
+                    },
+                  },
+                ]
+              : []),
             // Provider tools (only active when STACKMEMORY_MULTI_PROVIDER=true)
             ...(isFeatureEnabled('multiProvider')
               ? [
@@ -1546,6 +1609,66 @@ class LocalStackMemoryMCP {
                 result = await this.providerHandlers.handleBatchCheck(
                   args as any
                 );
+              }
+              break;
+
+            // Graphiti tools
+            case 'graphiti_status':
+              if (!this.graphitiClient) {
+                result = {
+                  content: [
+                    {
+                      type: 'text',
+                      text: JSON.stringify({
+                        connected: false,
+                        message:
+                          'Graphiti integration disabled (GRAPHITI_ENDPOINT not set)',
+                      }),
+                    },
+                  ],
+                };
+              } else {
+                const status = await this.graphitiClient.getStatus();
+                result = {
+                  content: [
+                    { type: 'text', text: JSON.stringify(status, null, 2) },
+                  ],
+                };
+              }
+              break;
+
+            case 'graphiti_query':
+              if (!this.graphitiClient) {
+                result = {
+                  content: [
+                    {
+                      type: 'text',
+                      text: 'Graphiti integration disabled (GRAPHITI_ENDPOINT not set)',
+                    },
+                  ],
+                };
+              } else {
+                const gCtx = await this.graphitiClient.queryTemporal({
+                  query: args.query,
+                  entityTypes: args.entityTypes,
+                  validFrom: args.validFrom,
+                  validTo: args.validTo,
+                  maxHops: args.maxHops,
+                  k: args.k,
+                });
+                const text = gCtx.chunks
+                  .map((c: { text: string }) => c.text)
+                  .join('\n\n');
+                result = {
+                  content: [
+                    {
+                      type: 'text',
+                      text:
+                        text ||
+                        `No results found (${gCtx.totalTokens} tokens searched)`,
+                    },
+                  ],
+                };
               }
               break;
 
